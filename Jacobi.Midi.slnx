@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Jacobi.Midi.Cli/Jacobi.Midi.Cli.csproj" />
+  <Project Path="Jacobi.Midi.Core/Jacobi.Midi.Core.csproj" />
+  <Project Path="Jacobi.Midi.Device/Jacobi.Midi.Device.csproj" />
+  <Project Path="Jacobi.Midi.Processors/Jacobi.Midi.Processors.csproj" />
+  <Project Path="Jacobi.Midi.Tests/Jacobi.Midi.Tests.csproj" />
+</Solution>
