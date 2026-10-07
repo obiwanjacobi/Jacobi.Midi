@@ -327,13 +327,42 @@ public class MidiEventReaderTests
     }
 
     [Fact]
-    public void RealTimeInsideMessage_DropsTheInterruptedMessage()
+    public void RealTimeInsideMessage_IsEmittedFirst_AndMessageCompletes()
     {
-        // known limitation: the interleaved real-time byte is not emitted separately yet
-        var events = ReadAll(new MidiEventReader(), [0x90, 60, 0xF8, 100]);
+        var events = ReadAll(new MidiEventReader(), [0x90, 0xF8, 60, 0xFA, 100]);
 
-        Assert.DoesNotContain(events, e => e.Kind == MidiEventKind.Message
-            && Message(e).Kind == MidiMessageKind.NoteOn);
+        Assert.Equal(
+            [MidiMessageKind.TimingClock, MidiMessageKind.Start, MidiMessageKind.NoteOn],
+            events.Select(e => Message(e).Kind));
+        Assert.True(Message(events[2]).TryGetValue(out NoteOnMessage? noteOn));
+        Assert.Equal(60, noteOn!.Value.Note);
+        Assert.Equal(100, noteOn.Value.Velocity);
+    }
+
+    [Fact]
+    public void RealTimeInsideMessage_ThenOtherStatus_DropsPartialMessage()
+    {
+        var events = ReadAll(new MidiEventReader(), [0x90, 60, 0xF8, 0x80, 60, 0]);
+
+        Assert.Equal(
+            [MidiMessageKind.TimingClock, MidiMessageKind.NoteOff],
+            events.Select(e => Message(e).Kind));
+    }
+
+    [Fact]
+    public void RealTimeInsideMessage_PartialMessageSurvivesAcrossCalls()
+    {
+        var reader = new MidiEventReader();
+        var first = new ReadOnlyMemory<byte>([0x90, 60, 0xF8]);
+        var kinds = new List<MidiMessageKind>();
+        while (reader.TryRead(ref first, out var e))
+            kinds.Add(Message(e).Kind);
+
+        var second = new ReadOnlyMemory<byte>([100]);
+        Assert.True(reader.TryRead(ref second, out var noteOn));
+
+        Assert.Equal([MidiMessageKind.TimingClock], kinds);
+        Assert.Equal(MidiMessageKind.NoteOn, Message(noteOn).Kind);
     }
 
     private sealed class Segment : ReadOnlySequenceSegment<byte>

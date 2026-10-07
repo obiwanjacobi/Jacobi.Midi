@@ -11,11 +11,15 @@ namespace Jacobi.Midi.Messages;
 /// the event, so an event never refers to the buffer it was read from.
 /// When a message is incomplete the buffer is left at the start of that message and false is returned,
 /// so the call can be repeated once more data has arrived.
-/// Not yet handled: real-time messages interleaved inside another message.
+/// A real-time byte inside a short message is returned first; the reader remembers the partial message
+/// and completes it on the following read calls.
 /// </remarks>
 public sealed class MidiEventReader
 {
     private byte _runningStatus;
+    private byte _pendingStatus;
+    private uint _pendingPacked;
+    private int _pendingCount;
 
     /// <summary>
     /// When true, 0xFF starts a meta event (0xFF, type, variable-length size, data) as in a MIDI file,
@@ -24,7 +28,14 @@ public sealed class MidiEventReader
     public bool ReadMetaEvents { get; set; }
 
     /// <summary>Forgets the running status, for example when starting on a new stream.</summary>
-    public void Reset() => _runningStatus = 0;
+    public void Reset()
+    {
+        _runningStatus = 0;
+        _pendingStatus = 0;
+    }
+
+    private bool IsInterleavedRealTime(byte b)
+        => b >= 0xF8 && MidiWire.LengthOf(b) == 1 && !(b == MetaMessageFormat.Status && ReadMetaEvents);
 
     /// <summary>Reads the next event and advances <paramref name="buffer"/> past it.</summary>
     public bool TryRead(ref ReadOnlyMemory<byte> buffer, out MidiEvent midiEvent)
@@ -51,6 +62,14 @@ public sealed class MidiEventReader
 
         while (reader.TryPeek(out var first))
         {
+            if (_pendingStatus != 0)
+            {
+                if (!MidiWire.IsStatus(first))
+                    return TryReadShort(ref reader, _pendingStatus, _pendingPacked, _pendingCount, statusInBuffer: false, out midiEvent);
+                if (!IsInterleavedRealTime(first))
+                    _pendingStatus = 0; // the partial message was interrupted by another status
+            }
+
             if (first == SysEx.Start)
             {
                 if (TryReadSysEx(ref reader, out midiEvent, out var skipped))
@@ -71,7 +90,7 @@ public sealed class MidiEventReader
                     reader.Advance(1); // stray data byte, skip
                     continue;
                 }
-                return TryReadShort(ref reader, _runningStatus, statusInBuffer: false, out midiEvent);
+                return TryReadShort(ref reader, _runningStatus, _runningStatus, 0, statusInBuffer: false, out midiEvent);
             }
 
             if (MidiWire.LengthOf(first) < 0)
@@ -80,13 +99,13 @@ public sealed class MidiEventReader
                 continue;
             }
 
-            return TryReadShort(ref reader, first, statusInBuffer: true, out midiEvent);
+            return TryReadShort(ref reader, first, first, 0, statusInBuffer: true, out midiEvent);
         }
 
         return false;
     }
 
-    private bool TryReadShort(ref SequenceReader<byte> reader, byte status, bool statusInBuffer, out MidiEvent midiEvent)
+    private bool TryReadShort(ref SequenceReader<byte> reader, byte status, uint packed, int have, bool statusInBuffer, out MidiEvent midiEvent)
     {
         midiEvent = default;
         var start = reader.Consumed;
@@ -94,8 +113,7 @@ public sealed class MidiEventReader
             reader.Advance(1);
 
         var dataLength = MidiWire.LengthOf(status) - 1;
-        uint packed = status;
-        for (var i = 0; i < dataLength; i++)
+        for (var i = have; i < dataLength; i++)
         {
             if (!reader.TryPeek(out var b))
             {
@@ -105,7 +123,19 @@ public sealed class MidiEventReader
 
             if (MidiWire.IsStatus(b))
             {
-                // TODO: real-time byte inside a message; for now treat the message as corrupt and drop it.
+                if (IsInterleavedRealTime(b))
+                {
+                    // emit the real-time byte now and remember the partial message
+                    reader.Advance(1);
+                    _pendingStatus = status;
+                    _pendingPacked = packed;
+                    _pendingCount = i;
+                    midiEvent = new MidiEvent(new MidiMessage(b));
+                    return true;
+                }
+
+                // another status byte: the message is corrupt, drop it
+                _pendingStatus = 0;
                 return TryRead(ref reader, out midiEvent);
             }
 
@@ -113,7 +143,10 @@ public sealed class MidiEventReader
             packed |= (uint)b << ((i + 1) * 8);
         }
 
-        // running status: channel messages keep it; system common cancels it; real-time leaves it alone
+        if (!MidiWire.IsRealTime(status))
+            _pendingStatus = 0;
+
+        // running status: channel messages keep it;
         if (MidiWire.IsChannelStatus(status))
             _runningStatus = status;
         else if (!MidiWire.IsRealTime(status))
