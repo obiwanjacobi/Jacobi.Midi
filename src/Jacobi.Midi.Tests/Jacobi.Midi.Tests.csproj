@@ -6,6 +6,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+      <!--PackageReference Include="Jacobi.BinarySerializer" Version="1.0.0" />
+    <PackageReference Include="Jacobi.BinarySerializer.Processors" Version="1.0.0" /-->
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0">
       <PrivateAssets>all</PrivateAssets>
@@ -14,7 +16,13 @@
     <PackageReference Include="xunit.v3" Version="4.0.1" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\..\Jacobi.BinarySerializer\src\Jacobi.BinarySerializer.Processors\Jacobi.BinarySerializer.Processors.csproj" />
+    <ProjectReference Include="..\..\..\Jacobi.BinarySerializer\src\Jacobi.BinarySerializer\Jacobi.BinarySerializer.csproj" />
     <ProjectReference Include="..\..\src\Jacobi.Midi.Device\Jacobi.Midi.Device.csproj" />
+    <ProjectReference Include="..\Jacobi.Midi.Core\Jacobi.Midi.Core.csproj" />
+    <ProjectReference Include="..\Jacobi.Midi.File\Jacobi.Midi.File.csproj" />
     <ProjectReference Include="..\Jacobi.Midi.Messages\Jacobi.Midi.Messages.csproj" />
+    <ProjectReference Include="..\Jacobi.Midi.Processors\Jacobi.Midi.Processors.csproj" />
+    <ProjectReference Include="..\Jacobi.Midi.Roland\Jacobi.Midi.Roland.csproj" />
   </ItemGroup>
 </Project>

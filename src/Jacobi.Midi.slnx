@@ -1,9 +1,16 @@
 <Solution>
+  <Folder Name="/BinarySerializer/">
+    <Project Path="../../Jacobi.BinarySerializer/src/Jacobi.BinarySerializer.Processors/Jacobi.BinarySerializer.Processors.csproj" />
+    <Project Path="../../Jacobi.BinarySerializer/src/Jacobi.BinarySerializer.Tests/Jacobi.BinarySerializer.Tests.csproj" />
+    <Project Path="../../Jacobi.BinarySerializer/src/Jacobi.BinarySerializer/Jacobi.BinarySerializer.csproj" />
+  </Folder>
   <Project Path="Jacobi.Midi.Cli/Jacobi.Midi.Cli.csproj" />
   <Project Path="Jacobi.Midi.Core/Jacobi.Midi.Core.csproj" />
   <Project Path="Jacobi.Midi.Device/Jacobi.Midi.Device.csproj" />
   <Project Path="Jacobi.Midi.File/Jacobi.Midi.File.csproj" Id="64dc7b4f-3207-429f-b41b-0fb24018cc89" />
   <Project Path="Jacobi.Midi.Messages/Jacobi.Midi.Messages.csproj" Id="f04514cf-2799-4aa9-8027-4308e8b78597" />
   <Project Path="Jacobi.Midi.Processors/Jacobi.Midi.Processors.csproj" />
+  <Project Path="Jacobi.Midi.Roland/Jacobi.Midi.Roland.csproj" />
   <Project Path="Jacobi.Midi.Tests/Jacobi.Midi.Tests.csproj" />
 </Solution>
+

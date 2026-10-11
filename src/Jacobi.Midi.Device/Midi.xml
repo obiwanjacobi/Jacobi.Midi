@@ -1,0 +1,6 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<schema name="Midi">
+  <processorDefs>
+    <processor name="sysexbyte" processor="sys.bitslicer" bits="7" byteorder="big" />
+  </processorDefs>
+</schema>
