@@ -21,13 +21,17 @@
   </includes>
   <nodeDefs>
     <nodeDef name="messageBody" kind="group" />
-    <nodeDef name="sysex16" kind="field" datatype="sys.uint16" ><processor name="ref:midi.sysexbyte" /></nodeDef>
+    <nodeDef name="sysex16" kind="field" datatype="sys.uint16" byteLength="2" >
+      <processor name="ref:midi.sysexbyte" />
+    </nodeDef>
   </nodeDefs>
   
   <members>
     <group name="Message">
       <processors>
         <processor name="sys.bytepacker" byteorder="big" />
+        <processor name="roland.checksum" />
+        <processor name="midi.sysex" />
       </processors>
       <members>
         <group name="RQ1">
@@ -37,6 +41,7 @@
           <field name="Command" datatype="sys.uint8" value="0x11" />
           <field name="Address" nodeDef="sysex16" />
           <field name="Size" nodeDef="sysex16" />
+          <choice name="Data" memberNodeDef="messageBody" />
         </group>
         <group name="DT1">
           <field name="RolandId" datatype="sys.uint8" value="0x41" />
@@ -44,6 +49,7 @@
           <field name="ModelId" datatype="sys.uint8" />
           <field name="Command" datatype="sys.uint8" value="0x12" />
           <field name="Address" nodeDef="sysex16" />
+          <choice name="Data" memberNodeDef="messageBody" />
         </group>
       </members>
     </group>

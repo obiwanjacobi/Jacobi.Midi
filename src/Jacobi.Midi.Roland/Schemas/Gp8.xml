@@ -18,6 +18,10 @@
     [TODO] not available yet
 -->
 <schema name="Gp8">
+  <nodeDefs>
+    <!-- GP-8 Model ID for reference -->
+    <nodeDef name="GP8-ModelId" kind="field" datatype="sys.uint8" value="0x13" />
+  </nodeDefs>
   <dataTypeDefs>
     <dataTypeDef name="paramVal" basedOn="sys.uint8" min="0" max="100" />
     <dataTypeDef name="boolVal" basedOn="sys.bool" min="0" max="1" />

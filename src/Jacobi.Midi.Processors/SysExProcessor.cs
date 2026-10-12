@@ -3,7 +3,8 @@ using Jacobi.BinarySerializer.Processor;
 
 namespace Jacobi.Midi.Processors;
 
-public sealed class SysExProcessor : ILayoutProcessor
+public sealed class SysExProcessor : ILayoutProcessor,
+    ILayoutReader<ReadOnlyMemory<byte>>, ILayoutWriter<ReadOnlySpan<byte>>
 {
     public void BeginWrite(IBufferWriter<byte> writer, LayoutProcessorContext context)
     {
@@ -49,7 +50,12 @@ public sealed class SysExProcessor : ILayoutProcessor
 
     public ProcessorKey Key => new("midi.sysex");
     public string Name => "System Exclusive Stream Processor";
-    public PipelineStage Stage => PipelineStage.Stream;
+    public PipelineStage Stage => PipelineStage.Layout;
     public IReadOnlyList<PropertyDescriptor> Properties { get; } = [];
 
+    LayoutReadResult<ReadOnlyMemory<byte>> ILayoutReader<ReadOnlyMemory<byte>>.Read(ref SequenceReader<byte> reader, LayoutProcessorContext context)
+        => LayoutChain.PassThroughRead(ref reader);
+
+    public WriteResult Write(IBufferWriter<byte> writer, ReadOnlySpan<byte> encodedValue, LayoutProcessorContext context)
+        => LayoutChain.PassThroughWrite(writer, encodedValue);
 }
