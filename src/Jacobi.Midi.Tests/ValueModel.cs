@@ -5,12 +5,12 @@ namespace Jacobi.Midi.Tests;
 
 internal sealed class ValueSource : IValueSource
 {
-    private readonly Dictionary<string, object> _values = new();
+    private readonly Dictionary<string, object> _values = new(StringComparer.InvariantCultureIgnoreCase);
     public IDictionary<string, object> Values => _values;
 
     public SourceResult GetField(FieldContext context)
     {
-        if (!TryGetValue(context.Field.Name, out var value))
+        if (!TryGetValue(context.Path, out var value))
         {
             return SourceResult.NoValue();
         }
@@ -49,7 +49,7 @@ internal sealed class ValueSource : IValueSource
 
 internal sealed class ValueSink : IValueSink
 {
-    private readonly Dictionary<string, object?> _values = new();
+    private readonly Dictionary<string, object?> _values = new(StringComparer.InvariantCultureIgnoreCase);
     public IDictionary<string, object?> Values => _values;
 
     public void SetField(FieldContext context, LogicalField value)
