@@ -40,4 +40,3 @@ Links & references
 Notes
 
 - Profiles for Elektron should favor parameter-id templates and explicit checksum/fragmentation descriptors when needed.
-
