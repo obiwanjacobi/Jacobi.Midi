@@ -72,7 +72,15 @@ internal sealed class ValueSink : IValueSink
         return this;
     }
 
-    public void Complete()
+    public void ExitGroup(GroupContext context)
+    {
+    }
+
+    public void ExitItem(RepeatContext context, int index, int count)
+    {
+    }
+
+    public void ExitChoice(ChoiceContext context, int selectedIndex)
     {
     }
 }

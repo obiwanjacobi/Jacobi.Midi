@@ -31,6 +31,8 @@ public sealed class SysExProcessor : ILayoutProcessor,
         {
             throw new InvalidOperationException($"Invalid start byte for SysEx message: {startByte:X2}");
         }
+
+        context.ReserveTail(1);
     }
 
     public LayoutReadResult<EncodedField> Read(ref SequenceReader<byte> reader, LayoutProcessorContext context)

@@ -30,26 +30,43 @@
     <group name="Message">
       <processors>
         <processor name="sys.bytepacker" byteorder="big" />
-        <processor name="roland.checksum" />
         <processor name="midi.sysex" />
       </processors>
       <members>
         <group name="RQ1">
-          <field name="RolandId" datatype="sys.uint8" value="0x41" />
-          <field name="DeviceId" datatype="sys.uint8" />
-          <field name="ModelId" datatype="sys.uint8" />
-          <field name="Command" datatype="sys.uint8" value="0x11" />
-          <field name="Address" nodeDef="sysex16" />
-          <field name="Size" nodeDef="sysex16" />
-          <choice name="Data" memberNodeDef="messageBody" />
+          <members>
+            <field name="RolandId" datatype="sys.uint8" value="0x41" />
+            <field name="DeviceId" datatype="sys.uint8" />
+            <field name="ModelId" datatype="sys.uint8" />
+            <field name="Command" datatype="sys.uint8" value="0x11" />
+            <group name="ChecksumBlock">
+              <processors>
+                <processor name="roland.checksum" />
+              </processors>
+              <members>
+                <field name="Address" nodeDef="sysex16" />
+                <field name="Size" nodeDef="sysex16" />
+                <choice name="Data" memberNodeDef="messageBody" />
+              </members>
+            </group>
+          </members>
         </group>
         <group name="DT1">
-          <field name="RolandId" datatype="sys.uint8" value="0x41" />
-          <field name="DeviceId" datatype="sys.uint8" />
-          <field name="ModelId" datatype="sys.uint8" />
-          <field name="Command" datatype="sys.uint8" value="0x12" />
-          <field name="Address" nodeDef="sysex16" />
-          <choice name="Data" memberNodeDef="messageBody" />
+          <members>
+            <field name="RolandId" datatype="sys.uint8" value="0x41" />
+            <field name="DeviceId" datatype="sys.uint8" />
+            <field name="ModelId" datatype="sys.uint8" />
+            <field name="Command" datatype="sys.uint8" value="0x12" />
+            <group name="ChecksumBlock">
+              <processors>
+                <processor name="roland.checksum" />
+              </processors>
+              <members>
+                <field name="Address" nodeDef="sysex16" />
+                <choice name="Data" memberNodeDef="messageBody" />
+              </members>
+            </group>
+          </members>
         </group>
       </members>
     </group>

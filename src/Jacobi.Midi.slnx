@@ -4,6 +4,9 @@
     <Project Path="../../Jacobi.BinarySerializer/src/Jacobi.BinarySerializer.Tests/Jacobi.BinarySerializer.Tests.csproj" />
     <Project Path="../../Jacobi.BinarySerializer/src/Jacobi.BinarySerializer/Jacobi.BinarySerializer.csproj" />
   </Folder>
+  <Folder Name="/Solution Files/">
+    <File Path="readme.md" />
+  </Folder>
   <Project Path="Jacobi.Midi.Cli/Jacobi.Midi.Cli.csproj" />
   <Project Path="Jacobi.Midi.Core/Jacobi.Midi.Core.csproj" />
   <Project Path="Jacobi.Midi.Device/Jacobi.Midi.Device.csproj" />

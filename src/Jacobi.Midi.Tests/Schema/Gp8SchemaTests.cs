@@ -7,7 +7,7 @@ namespace Jacobi.Midi.Tests.Schema;
 public class Gp8SchemaTests
 {
     [Fact]
-    public void Gp8_PatchPlan()
+    public void Gp8_ValidateSchema()
     {
         var schemaSet = TestHelpers.CreateSchemas();
         var processors = TestHelpers.CreateProcessors();

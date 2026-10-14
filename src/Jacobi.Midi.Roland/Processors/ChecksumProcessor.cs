@@ -25,31 +25,34 @@ public sealed class ChecksumProcessor : ILayoutProcessor,
     }
 
     public void BeginRead(ref SequenceReader<byte> reader, LayoutProcessorContext context)
-        => DefaultProcessors.LayoutProcessor.BeginRead(ref reader, context);
+    {
+        context.ReserveTail(1);
+        DefaultProcessors.LayoutProcessor.BeginRead(ref reader, context);
+    }
 
     public LayoutReadResult<EncodedField> Read(ref SequenceReader<byte> reader, LayoutProcessorContext context)
-    {
-        var result = DefaultProcessors.LayoutProcessor.Read(ref reader, context);
-        AddToSum(result.Value.Value, context); // EncodedField.Value
-        return result;
-    }
+        => DefaultProcessors.LayoutProcessor.Read(ref reader, context);
 
     public void EndRead(ref SequenceReader<byte> reader, LayoutProcessorContext context)
     {
         DefaultProcessors.LayoutProcessor.EndRead(ref reader, context);
 
-        if (reader.TryRead(out var readChecksum))
+        var length = context.GroupData.Position;
+        var data = reader.Sequence.Slice(reader.Consumed - length, length);
+        var state = new ChecksumState();
+        foreach (var segment in data)
         {
-            var state = context.GetOrCreateState<ChecksumState>();
-            var checksum = state.CalcChecksum();
-            if (readChecksum != checksum)
-            {
-                throw new InvalidOperationException($"Checksum mismatch: expected {checksum:X2}, but read {readChecksum:X2}.");
-            }
+            state.AddToSum(segment.Span);
         }
-        else
+        var checksum = state.CalcChecksum();
+
+        if (!reader.TryRead(out var readChecksum))
         {
             throw new InvalidOperationException("Failed to read checksum.");
+        }
+        if (readChecksum != checksum)
+        {
+            throw new InvalidOperationException($"Checksum mismatch: expected {checksum:X2}, but read {readChecksum:X2}.");
         }
     }
 
@@ -59,11 +62,7 @@ public sealed class ChecksumProcessor : ILayoutProcessor,
     public IReadOnlyList<PropertyDescriptor> Properties { get; } = [];
 
     LayoutReadResult<ReadOnlyMemory<byte>> ILayoutReader<ReadOnlyMemory<byte>>.Read(ref SequenceReader<byte> reader, LayoutProcessorContext context)
-    {
-        var state = context.GetOrCreateState<ChecksumState>();
-        state.AddToSum(reader.UnreadSpan);
-        return LayoutChain.PassThroughRead(ref reader);
-    }
+        => LayoutChain.PassThroughRead(ref reader);
 
     public WriteResult Write(IBufferWriter<byte> writer, ReadOnlySpan<byte> encodedValue, LayoutProcessorContext context)
     {
@@ -108,6 +107,6 @@ public sealed class ChecksumProcessor : ILayoutProcessor,
         }
 
         public byte CalcChecksum()
-            => (byte)(0x80 - (_sum % 0x80));
+            => (byte)((0x80 - (_sum % 0x80)) % 128);
     }
 }

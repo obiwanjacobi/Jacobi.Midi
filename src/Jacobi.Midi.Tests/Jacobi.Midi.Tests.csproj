@@ -25,4 +25,9 @@
     <ProjectReference Include="..\Jacobi.Midi.Processors\Jacobi.Midi.Processors.csproj" />
     <ProjectReference Include="..\Jacobi.Midi.Roland\Jacobi.Midi.Roland.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Update="Schema\gp8-sysex.syx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>
