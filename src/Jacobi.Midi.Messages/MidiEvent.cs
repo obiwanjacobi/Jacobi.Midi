@@ -58,8 +58,14 @@ public readonly record struct MidiEvent : IUnion
         _long = ownedBytes;
     }
 
+    /// <summary>
+    /// MidiEvent midiEvent = new(noteOn) { Timestamp = timestamp };
+    /// </summary>
+    public ulong Timestamp { get; init; }
+
     /// <summary>Wraps already validated sysex or meta bytes without copying; the event takes ownership of the array.</summary>
-    internal static MidiEvent FromOwnedBytes(byte[] bytes) => new(bytes);
+    internal static MidiEvent FromOwnedBytes(byte[] bytes, ulong timestamp = 0)
+        => new(bytes) { Timestamp = timestamp };
 
     public static implicit operator MidiEvent(MidiMessage message) => new(message);
     public static implicit operator MidiEvent(SystemExclusiveMessage message) => new(message);

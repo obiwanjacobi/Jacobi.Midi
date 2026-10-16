@@ -17,7 +17,7 @@ public class Gp8SchemaTests
             .AddProcessors(processors)
             .Build();
 
-        var plan = serializer.GetPlan(new SchemaName("Gp8.Patch"));
+        var plan = serializer.GetPlan(new SchemaName("Gp8.AddressMap"));
         Assert.NotNull(plan);
     }
 }
