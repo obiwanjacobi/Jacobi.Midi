@@ -1,0 +1,199 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:Jacobi.Midi.SchemaEditor.ViewModels"
+             xmlns:models="using:Jacobi.Midi.SchemaEditor.Models"
+             mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="900"
+             x:Class="Jacobi.Midi.SchemaEditor.Views.MainView"
+             x:DataType="vm:MainViewModel">
+    <Grid RowDefinitions="Auto,Auto,*,300,Auto" Background="#0B1220">
+        <Border Grid.Row="0" Padding="24,16" Background="#111B2C" BorderBrush="#25334A" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="10">
+                <StackPanel Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="MIDI SCHEMA STUDIO" FontSize="18" FontWeight="Bold" Foreground="#E7EEF8" />
+                    <TextBlock Text="Author, inspect and reverse-engineer SysEx schemas" FontSize="12" Foreground="#94A4BA" />
+                </StackPanel>
+                <Button Grid.Column="1" Content="New schema" Command="{Binding NewDocumentCommand}" />
+                <Button Grid.Column="2" Content="Open files" Command="{Binding OpenFilesCommand}" />
+                <Button Grid.Column="3" Content="Save" Command="{Binding SaveDocumentCommand}" IsEnabled="{Binding HasSelectedDocument}" />
+                <Button Grid.Column="4" Content="Save as…" Command="{Binding SaveDocumentAsCommand}" IsEnabled="{Binding HasSelectedDocument}" />
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1" Padding="12,8" Background="#0E1828" BorderBrush="#25334A" BorderThickness="0,0,0,1">
+            <ListBox ItemsSource="{Binding Documents}"
+                     SelectedItem="{Binding SelectedDocument, Mode=TwoWay}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                     ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="8" />
+                    </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="models:SchemaWorkspaceDocument">
+                        <TextBlock Text="{Binding DisplayName}" Margin="12,7" />
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+
+        <Grid Grid.Row="2" ColumnDefinitions="280,*,320" ColumnSpacing="1" Background="#25334A">
+            <Border Grid.Column="0" Padding="18" Background="#101A2A">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Spacing="3" Margin="0,0,0,16">
+                        <TextBlock Text="SCHEMA TREE" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="#94A4BA" />
+                        <TextBlock Text="{Binding SelectedDocument.Schema.Name}" FontSize="18" FontWeight="SemiBold" Foreground="#E7EEF8" />
+                    </StackPanel>
+                    <TextBlock DockPanel.Dock="Bottom"
+                               Text="Select a node to edit its name, type and documentation."
+                               TextWrapping="Wrap" Margin="0,14,0,0" FontSize="11" Foreground="#7588A2" />
+                    <TreeView ItemsSource="{Binding SchemaNodes}" SelectedItem="{Binding SelectedNode, Mode=TwoWay}">
+                        <TreeView.ItemTemplate>
+                            <TreeDataTemplate ItemsSource="{Binding Children}">
+                                <TextBlock Text="{Binding DisplayName}" Padding="4,5" Foreground="#D0D9E6" />
+                            </TreeDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Column="1" Padding="24" Background="#0B1220">
+                <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="NODE EDITOR" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="#94A4BA" />
+                        <TextBlock Text="Shape your message structure" FontSize="22" FontWeight="SemiBold" Foreground="#E7EEF8" />
+                    </StackPanel>
+                    <Border Grid.Row="1" Padding="12" Margin="0,18,0,0" CornerRadius="6" Background="#142238">
+                        <TextBlock Text="New schemas start with a SysEx group. Add fields directly or isolate selected bytes in the reverse-engineering workbench below."
+                                   TextWrapping="Wrap" Foreground="#B7C5D8" FontSize="12" />
+                    </Border>
+                    <StackPanel Grid.Row="2" Spacing="12" Margin="0,22,0,0">
+                        <TextBlock Text="Selected node properties" FontSize="13" FontWeight="SemiBold" Foreground="#DCE6F3" />
+                        <TextBox PlaceholderText="Node name" Text="{Binding NodeName}" />
+                        <ComboBox ItemsSource="{Binding DataTypeOptions}" IsEditable="True" Text="{Binding NodeDataType}" />
+                        <TextBox PlaceholderText="Description"
+                                 Text="{Binding NodeDescription}"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 MinHeight="66" />
+                        <TextBox PlaceholderText="Sample value" Text="{Binding NodeSampleValue}" />
+                        <Button Content="Apply node changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
+                    </StackPanel>
+                    <TextBlock Grid.Row="3"
+                               Text="Choose a group or field in the schema tree to inspect and edit it."
+                               VerticalAlignment="Center"
+                               HorizontalAlignment="Center"
+                               Foreground="#7588A2" />
+                    <TextBlock Grid.Row="4" Text="{Binding SelectedDocument.FileName}" FontSize="11" Foreground="#7588A2" />
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="2" Padding="18" Background="#101A2A">
+                <StackPanel Spacing="12">
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="ADD A FIELD" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="#94A4BA" />
+                        <TextBlock Text="Build the schema or capture bytes" FontSize="16" FontWeight="SemiBold" Foreground="#E7EEF8" />
+                    </StackPanel>
+                        <TextBox PlaceholderText="Group name" Text="{Binding NewGroupName}" />
+                        <Button Content="Add nested group" Command="{Binding AddGroupCommand}" />
+                        <Border Height="1" Background="#25334A" Margin="0,4" />
+                        <TextBox PlaceholderText="Field name" Text="{Binding NewFieldName}" />
+                    <ComboBox ItemsSource="{Binding DataTypeOptions}" IsEditable="True" Text="{Binding NewFieldDataType}" />
+                    <TextBox PlaceholderText="Sample value (optional)" Text="{Binding NewFieldSampleValue}" />
+                    <Button Content="Add field to selected group" Command="{Binding AddFieldCommand}" />
+                    <Border Height="1" Background="#25334A" Margin="0,4" />
+                    <TextBlock Text="Descriptions and sample values are stored as schema properties so they stay with the file."
+                               TextWrapping="Wrap" FontSize="11" Foreground="#94A4BA" />
+                    <TextBlock Text="Supported files: .json · .xml · .yaml · .yml"
+                               TextWrapping="Wrap" FontSize="11" Foreground="#94A4BA" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="3" Margin="0,1,0,0" Padding="18,14" Background="#101A2A">
+            <Grid RowDefinitions="Auto,*,Auto" ColumnDefinitions="*,340" ColumnSpacing="20" RowSpacing="12">
+                <Grid Grid.ColumnSpan="2" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="REVERSE-ENGINEERING WORKBENCH" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="#94A4BA" />
+                        <TextBlock Text="Import messages, detect boundaries and compare bytes" FontSize="14" FontWeight="SemiBold" Foreground="#E7EEF8" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Copy first message" Command="{Binding ExportSysExCommand}" />
+                    <Button Grid.Column="2" Content="Import hex" Command="{Binding ImportSysExCommand}" />
+                    <TextBox Grid.Column="3" Width="275" PlaceholderText="F0 41 13 12 … F7" Text="{Binding HexInput}" />
+                </Grid>
+
+                <Grid Grid.Row="1" ColumnDefinitions="220,*" ColumnSpacing="14">
+                    <ListBox ItemsSource="{Binding SysExMessages}" SelectedItem="{Binding SelectedSysExMessage}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="models:SysExMessage">
+                                <StackPanel Spacing="3" Margin="4">
+                                    <TextBlock Text="{Binding BoundarySummary}" FontSize="10" Foreground="#8CCFC0" />
+                                    <TextBlock Text="{Binding Hex}" FontFamily="Consolas" FontSize="11" Foreground="#D0D9E6" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <Border Grid.Column="1" Padding="10" CornerRadius="6" Background="#0B1220">
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding SelectedSysExMessage.ByteCells}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="models:SysExByteCell">
+                                        <Button Tag="{Binding Index}" Click="OnByteClicked" Background="{Binding Background}" Padding="5,3" Margin="2" MinWidth="36">
+                                            <StackPanel Spacing="1">
+                                                <TextBlock Text="{Binding Index}" FontSize="9" HorizontalAlignment="Center" Foreground="#8294AC" />
+                                                <TextBlock Text="{Binding Hex}" FontFamily="Consolas" FontSize="12" HorizontalAlignment="Center" Foreground="#E7EEF8" />
+                                                <TextBlock Text="{Binding Marker}" FontSize="8" HorizontalAlignment="Center" Foreground="#8CCFC0" />
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+
+                <StackPanel Grid.Row="1" Grid.Column="1" Spacing="5">
+                    <TextBlock Text="COMPARE FIRST TWO MESSAGES" FontSize="10" FontWeight="Bold" Foreground="#94A4BA" />
+                    <ScrollViewer MaxHeight="110">
+                        <ItemsControl ItemsSource="{Binding ComparedBytes}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="models:SysExComparisonRow">
+                                    <Border Background="{Binding Background}" Padding="6,3" Margin="0,1" CornerRadius="3">
+                                        <Grid ColumnDefinitions="38,*,*" ColumnSpacing="8">
+                                            <TextBlock Text="{Binding Index}" FontSize="10" Foreground="#94A4BA" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Left}" FontFamily="Consolas" FontSize="11" Foreground="#D0D9E6" />
+                                            <TextBlock Grid.Column="2" Text="{Binding Right}" FontFamily="Consolas" FontSize="11" Foreground="#D0D9E6" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    <TextBlock Text="Click a byte to select it, or adjust the range below." FontSize="10" Foreground="#7588A2" />
+                </StackPanel>
+
+                <Grid Grid.Row="2" Grid.ColumnSpan="2" ColumnDefinitions="Auto,90,Auto,90,*,Auto,Auto,Auto" ColumnSpacing="8">
+                    <TextBlock Text="Start byte" VerticalAlignment="Center" FontSize="11" Foreground="#B7C5D8" />
+                    <TextBox Grid.Column="1" Text="{Binding SelectedByteStart}" />
+                    <TextBlock Grid.Column="2" Text="Length" VerticalAlignment="Center" FontSize="11" Foreground="#B7C5D8" />
+                    <TextBox Grid.Column="3" Text="{Binding SelectedByteLength}" />
+                    <TextBlock Grid.Column="4" Text="Selected range is added to the current schema as a field sample." VerticalAlignment="Center" FontSize="10" Foreground="#7588A2" />
+                    <TextBox Grid.Column="5" Width="150" PlaceholderText="Captured field name" Text="{Binding ReverseFieldName}" />
+                    <ComboBox Grid.Column="6" Width="140" ItemsSource="{Binding DataTypeOptions}" IsEditable="True" Text="{Binding ReverseFieldDataType}" />
+                    <Button Grid.Column="7" Content="Isolate as field" Command="{Binding AddSelectedBytesCommand}" />
+                </Grid>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="4" Padding="16,8" Background="#111B2C">
+            <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="#B7C5D8" />
+        </Border>
+    </Grid>
+</UserControl>
