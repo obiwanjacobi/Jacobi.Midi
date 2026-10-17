@@ -16,10 +16,10 @@
     <include schema="midi"/>
   </includes>
   <nodeDefs>
-    <nodeDef name="messageBody" kind="group"/>
-    <nodeDef name="sysex16" kind="field" datatype="sys.uint16">
-      <processor name="ref:midi.sysexbyte" byteLength="2"/>
-    </nodeDef>
+    <group name="messageBody"/>
+    <field name="sysex16" datatype="sys.uint16" byteLength="2">
+      <processor name="ref:midi.sysexbyte"/>
+    </field>
   </nodeDefs>
   
   <members>

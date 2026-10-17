@@ -242,7 +242,7 @@ internal sealed class XmlSchemaSource
     {
         var nodes = new Dictionary<XElement, EditNode>();
         BindNode(root, document, nodes);
-        foreach (var (element, definition) in (root.Element("nodeDefs")?.Elements("nodeDef") ?? []).Zip(document.NodeDefs))
+        foreach (var (element, definition) in (root.Element("nodeDefs")?.Elements() ?? []).Zip(document.NodeDefs))
         {
             BindNode(element, definition, nodes);
         }
@@ -255,7 +255,6 @@ internal sealed class XmlSchemaSource
         IReadOnlyList<EditNode> members = node switch
         {
             EditGroup group => group.Members,
-            EditNodeDef definition => definition.Members,
             _ => []
         };
         foreach (var (child, member) in (element.Element("members")?.Elements() ?? []).Zip(members))

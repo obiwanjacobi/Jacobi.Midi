@@ -110,9 +110,9 @@ public class SchemaEditorTests
                             <includes><include schema="midi" /></includes>
                             <nodeDefs>
                                 <!-- Shared 7-bit representation. -->
-                                <nodeDef name="sysex16" kind="field" datatype="sys.uint16" byteLength="2">
+                                <field name="sysex16" datatype="sys.uint16" byteLength="2">
                                     <processor name="ref:midi.sysexbyte" />
-                                </nodeDef>
+                                </field>
                             </nodeDefs>
                             <members><group name="Message"><members>
                                 <!-- Checksum includes only this scope. -->
@@ -134,8 +134,9 @@ public class SchemaEditorTests
                 var saved = SchemaFileService.Serialize(schema, SchemaFormat.Xml);
                 Assert.Equal(source.Replace("ChecksumBlock", "ChecksumScope", StringComparison.Ordinal), saved);
                 var restored = SchemaFileService.Parse(saved, SchemaFormat.Xml);
-                Assert.Equal("ref:midi.sysexbyte", Assert.Single(Assert.Single(restored.NodeDefs).Processors).Processor.ToString());
-                Assert.Equal("2", Assert.Single(Assert.Single(restored.NodeDefs).Properties).Value);
+                var definition = Assert.IsType<EditField>(Assert.Single(restored.NodeDefs));
+                Assert.Equal("ref:midi.sysexbyte", Assert.Single(definition.Processors).Processor.ToString());
+                Assert.True(definition.ByteLength is int length && length == 2);
                 Assert.Equal(saved, SchemaFileService.Serialize(schema, SchemaFormat.Xml));
         }
 
@@ -165,10 +166,10 @@ public class SchemaEditorTests
                                 <include schema="midi" />
                             </includes>
                             <nodeDefs>
-                                <nodeDef name="messageBody" kind="group" />
-                                <nodeDef name="sysex16" kind="field" datatype="sys.uint16" byteLength="2" >
+                                <group name="messageBody" />
+                                <field name="sysex16" datatype="sys.uint16" byteLength="2" >
                                     <processor name="ref:midi.sysexbyte" />
-                                </nodeDef>
+                                </field>
                             </nodeDefs>
 
                             <members>
@@ -237,9 +238,9 @@ public class SchemaEditorTests
                 Assert.DoesNotContain("<properties", saved);
                 Assert.DoesNotContain("<valueProcessors", saved);
                 var restored = SchemaFileService.Parse(saved, SchemaFormat.Xml);
-                var definition = restored.NodeDefs.Single(node => node.Name == "sysex16");
+                var definition = Assert.IsType<EditField>(restored.NodeDefs.Single(node => node.Name == "sysex16"));
                 Assert.Equal("ref:midi.sysexbyte", Assert.Single(definition.Processors).Processor.ToString());
-                Assert.Equal("2", Assert.Single(definition.Properties).Value);
+                Assert.True(definition.ByteLength is int length && length == 2);
                 Assert.Equal(saved, SchemaFileService.Serialize(restored, SchemaFormat.Xml));
         }
 
@@ -319,17 +320,17 @@ public class SchemaEditorTests
         public void XmlRemoveInlineProcessor_DoesNotResurrectOriginalDeclaration()
         {
             const string source = """
-                <schema name="Test"><nodeDefs><nodeDef name="Byte" kind="field" datatype="sys.uint8">
+                <schema name="Test"><nodeDefs><field name="Byte" datatype="sys.uint8">
                   <!-- Keep this definition note. -->
                   <processor name="sys.scale" scale="2" />
-                </nodeDef></nodeDefs><members><group name="Root" /></members></schema>
+                </field></nodeDefs><members><group name="Root" /></members></schema>
                 """;
             var schema = SchemaFileService.Parse(source, SchemaFormat.Xml);
-            schema.NodeDefs[0].Processors.Clear();
+            Assert.IsType<EditField>(schema.NodeDefs[0]).Processors.Clear();
             var saved = SchemaFileService.Serialize(schema, SchemaFormat.Xml);
             Assert.Contains("<!-- Keep this definition note. -->", saved);
             Assert.DoesNotContain("sys.scale", saved);
-            Assert.Empty(SchemaFileService.Parse(saved, SchemaFormat.Xml).NodeDefs[0].Processors);
+            Assert.Empty(Assert.IsType<EditField>(SchemaFileService.Parse(saved, SchemaFormat.Xml).NodeDefs[0]).Processors);
         }
 
         [Fact]
