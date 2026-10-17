@@ -83,7 +83,7 @@
           </processors>
           <members>
             <!-- 0x00: effect on/off (MSB) -->
-            <packedGroup name="EffectSwiches1" byteLength="1">
+            <packed name="EffectSwiches1" byteLength="1">
               <processors>
                 <processor name="sys.bitpacker" />
               </processors>
@@ -93,10 +93,10 @@
                 <field name="DelayOn" datatype="boolVal" bits="1"/>
                 <field name="ChorusOn" datatype="boolVal" bits="1"/>
               </members>
-            </packedGroup>
+            </packed>
 
             <!-- 0x01: effect on/off (LSB) -->
-            <packedGroup name="EffectSwiches2" byteLength="1">
+            <packed name="EffectSwiches2" byteLength="1">
               <processors>
                 <processor name="sys.bitpacker" />
               </processors>
@@ -106,7 +106,7 @@
                 <field name="TurboOverdriveOn" datatype="boolVal" bits="1"/>
                 <field name="DistortionOn" datatype="boolVal" bits="1"/>
               </members>
-            </packedGroup>
+            </packed>
 
             <group name="DynamicFilter">
               <members>

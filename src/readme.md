@@ -45,7 +45,7 @@ it: comments, the declaration, section ordering, compact properties/processors a
 ordinary edits. No-op saves return the original text; edited saves may normalize lexical details such
 as attribute quotes or spacing before a closing bracket. Comments are not yet retained for JSON/YAML.
 Loading does not compile schemas or require their included documents to be open.
-XML `nodeDefs` now contains typed `field`, `group`, `packedGroup`, `repeat` or `choice` elements,
+XML `nodeDefs` now contains typed `field`, `group`, `packed`, `repeat` or `choice` elements,
 not the retired `nodeDef kind="..."` form. The Roland/GP-8 schemas use the new contract.
 
 Run the desktop editor with `dotnet run --project src/Jacobi.Midi.SchemaEditor/Jacobi.Midi.SchemaEditor.Desktop/Jacobi.Midi.SchemaEditor.Desktop.csproj`.

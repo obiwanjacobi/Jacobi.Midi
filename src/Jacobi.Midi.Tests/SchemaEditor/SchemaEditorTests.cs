@@ -73,7 +73,7 @@ public class SchemaEditorTests
                                     { "name": "Items", "kind": "repeat", "count": { "ref": "Root.Inherited" },
                                         "valueProcessors": [{ "name": "ref:mapping" }], "members": [
                                             { "name": "Length", "kind": "field", "datatype": "Scaled" }] },
-                                    { "name": "Flags", "kind": "packedGroup", "byteSize": 2,
+                                    { "name": "Flags", "kind": "packed", "byteSize": 2,
                                         "processors": [{ "name": "sys.bitpacker", "bitorder": "little" }],
                                         "members": [{ "name": "Bit", "kind": "field", "datatype": "sys.bool" }] },
                                     { "name": "Body", "kind": "choice", "memberNodeDef": "Body", "pipeline": "isolate" }
