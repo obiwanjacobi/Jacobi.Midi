@@ -7,7 +7,7 @@
              mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="900"
              x:Class="Jacobi.Midi.SchemaEditor.Views.MainView"
              x:DataType="vm:MainViewModel">
-    <Grid RowDefinitions="Auto,Auto,*,300,Auto" Background="#0B1220">
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Background="#0B1220">
         <Border Grid.Row="0" Padding="24,16" Background="#111B2C" BorderBrush="#25334A" BorderThickness="0,0,0,1">
             <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="10">
                 <StackPanel Spacing="2" VerticalAlignment="Center">
@@ -66,7 +66,7 @@
                         <TextBlock Text="Shape your message structure" FontSize="22" FontWeight="SemiBold" Foreground="#E7EEF8" />
                     </StackPanel>
                     <Border Grid.Row="1" Padding="12" Margin="0,18,0,0" CornerRadius="6" Background="#142238">
-                        <TextBlock Text="New schemas start with a SysEx group. Add fields directly or isolate selected bytes in the reverse-engineering workbench below."
+                        <TextBlock Text="New schemas start with a SysEx group. Add fields directly to define the message structure."
                                    TextWrapping="Wrap" Foreground="#B7C5D8" FontSize="12" />
                     </Border>
                     <StackPanel Grid.Row="2" Spacing="12" Margin="0,22,0,0">
@@ -112,87 +112,7 @@
             </Border>
         </Grid>
 
-        <Border Grid.Row="3" Margin="0,1,0,0" Padding="18,14" Background="#101A2A">
-            <Grid RowDefinitions="Auto,*,Auto" ColumnDefinitions="*,340" ColumnSpacing="20" RowSpacing="12">
-                <Grid Grid.ColumnSpan="2" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
-                    <StackPanel Spacing="2">
-                        <TextBlock Text="REVERSE-ENGINEERING WORKBENCH" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="#94A4BA" />
-                        <TextBlock Text="Import messages, detect boundaries and compare bytes" FontSize="14" FontWeight="SemiBold" Foreground="#E7EEF8" />
-                    </StackPanel>
-                    <Button Grid.Column="1" Content="Copy first message" Command="{Binding ExportSysExCommand}" />
-                    <Button Grid.Column="2" Content="Import hex" Command="{Binding ImportSysExCommand}" />
-                    <TextBox Grid.Column="3" Width="275" PlaceholderText="F0 41 13 12 … F7" Text="{Binding HexInput}" />
-                </Grid>
-
-                <Grid Grid.Row="1" ColumnDefinitions="220,*" ColumnSpacing="14">
-                    <ListBox ItemsSource="{Binding SysExMessages}" SelectedItem="{Binding SelectedSysExMessage}">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate x:DataType="models:SysExMessage">
-                                <StackPanel Spacing="3" Margin="4">
-                                    <TextBlock Text="{Binding BoundarySummary}" FontSize="10" Foreground="#8CCFC0" />
-                                    <TextBlock Text="{Binding Hex}" FontFamily="Consolas" FontSize="11" Foreground="#D0D9E6" TextTrimming="CharacterEllipsis" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                    <Border Grid.Column="1" Padding="10" CornerRadius="6" Background="#0B1220">
-                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                            <ItemsControl ItemsSource="{Binding SelectedSysExMessage.ByteCells}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <WrapPanel Orientation="Horizontal" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="models:SysExByteCell">
-                                        <Button Tag="{Binding Index}" Click="OnByteClicked" Background="{Binding Background}" Padding="5,3" Margin="2" MinWidth="36">
-                                            <StackPanel Spacing="1">
-                                                <TextBlock Text="{Binding Index}" FontSize="9" HorizontalAlignment="Center" Foreground="#8294AC" />
-                                                <TextBlock Text="{Binding Hex}" FontFamily="Consolas" FontSize="12" HorizontalAlignment="Center" Foreground="#E7EEF8" />
-                                                <TextBlock Text="{Binding Marker}" FontSize="8" HorizontalAlignment="Center" Foreground="#8CCFC0" />
-                                            </StackPanel>
-                                        </Button>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </Border>
-                </Grid>
-
-                <StackPanel Grid.Row="1" Grid.Column="1" Spacing="5">
-                    <TextBlock Text="COMPARE FIRST TWO MESSAGES" FontSize="10" FontWeight="Bold" Foreground="#94A4BA" />
-                    <ScrollViewer MaxHeight="110">
-                        <ItemsControl ItemsSource="{Binding ComparedBytes}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="models:SysExComparisonRow">
-                                    <Border Background="{Binding Background}" Padding="6,3" Margin="0,1" CornerRadius="3">
-                                        <Grid ColumnDefinitions="38,*,*" ColumnSpacing="8">
-                                            <TextBlock Text="{Binding Index}" FontSize="10" Foreground="#94A4BA" />
-                                            <TextBlock Grid.Column="1" Text="{Binding Left}" FontFamily="Consolas" FontSize="11" Foreground="#D0D9E6" />
-                                            <TextBlock Grid.Column="2" Text="{Binding Right}" FontFamily="Consolas" FontSize="11" Foreground="#D0D9E6" />
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                    <TextBlock Text="Click a byte to select it, or adjust the range below." FontSize="10" Foreground="#7588A2" />
-                </StackPanel>
-
-                <Grid Grid.Row="2" Grid.ColumnSpan="2" ColumnDefinitions="Auto,90,Auto,90,*,Auto,Auto,Auto" ColumnSpacing="8">
-                    <TextBlock Text="Start byte" VerticalAlignment="Center" FontSize="11" Foreground="#B7C5D8" />
-                    <TextBox Grid.Column="1" Text="{Binding SelectedByteStart}" />
-                    <TextBlock Grid.Column="2" Text="Length" VerticalAlignment="Center" FontSize="11" Foreground="#B7C5D8" />
-                    <TextBox Grid.Column="3" Text="{Binding SelectedByteLength}" />
-                    <TextBlock Grid.Column="4" Text="Selected range is added to the current schema as a field sample." VerticalAlignment="Center" FontSize="10" Foreground="#7588A2" />
-                    <TextBox Grid.Column="5" Width="150" PlaceholderText="Captured field name" Text="{Binding ReverseFieldName}" />
-                    <ComboBox Grid.Column="6" Width="140" ItemsSource="{Binding DataTypeOptions}" IsEditable="True" Text="{Binding ReverseFieldDataType}" />
-                    <Button Grid.Column="7" Content="Isolate as field" Command="{Binding AddSelectedBytesCommand}" />
-                </Grid>
-            </Grid>
-        </Border>
-
-        <Border Grid.Row="4" Padding="16,8" Background="#111B2C">
+        <Border Grid.Row="3" Padding="16,8" Background="#111B2C">
             <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="#B7C5D8" />
         </Border>
     </Grid>

@@ -35,6 +35,17 @@ The Avalonia desktop and WebAssembly applications share the same schema editor:
 - Edit data types, descriptions, and sample values for individual nodes.
 - Import SysEx bytes as hexadecimal, recognize F0/F7 boundaries, compare messages, and add selected bytes to a schema field.
 
+Each workspace document owns a mutable `EditDocument` from the serializer's schema editing model.
+Commands edit this draft directly; tree items reference its nodes rather than reparsing source text.
+`SchemaFileService` only creates drafts and handles format detection, loading and serialization.
+Saving builds an independent `SchemaDocument` snapshot and uses the library's shared JSON, XML or
+YAML writer. Definitions, references and other features not exposed by the current UI are preserved.
+For loaded XML, the editor retains source presentation metadata and merges snapshot differences into
+it: comments, the declaration, section ordering, compact properties/processors and line endings survive
+ordinary edits. No-op saves return the original text; edited saves may normalize lexical details such
+as attribute quotes or spacing before a closing bracket. Comments are not yet retained for JSON/YAML.
+Loading does not compile schemas or require their included documents to be open.
+
 Run the desktop editor with `dotnet run --project src/Jacobi.Midi.SchemaEditor/Jacobi.Midi.SchemaEditor.Desktop/Jacobi.Midi.SchemaEditor.Desktop.csproj`.
 Run the browser editor locally with `dotnet run --project src/Jacobi.Midi.SchemaEditor/Jacobi.Midi.SchemaEditor.Browser/Jacobi.Midi.SchemaEditor.Browser.csproj`.
 Both targets currently use the repository's .NET 11 target framework. Live MIDI connections and device/processor assembly registration are not part of this MVP.

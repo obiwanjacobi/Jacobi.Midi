@@ -1,7 +1,6 @@
 
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using Jacobi.Midi.SchemaEditor.ViewModels;
 
@@ -23,11 +22,4 @@ public partial class MainView : UserControl
         }
     }
 
-    private void OnByteClicked(object? sender, RoutedEventArgs e)
-    {
-        if (sender is Button { Tag: int index } && DataContext is MainViewModel viewModel)
-        {
-            viewModel.SelectByte(index);
-        }
-    }
 }

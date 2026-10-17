@@ -7,7 +7,7 @@ using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Jacobi.BinarySerializer.Schema;
+using Jacobi.BinarySerializer.Schema.Editing;
 using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.SchemaEditor.Services;
 using YamlDotNet.Core;
@@ -103,9 +103,9 @@ public sealed partial class MainViewModel : ViewModelBase
         }
 
         var format = SchemaFormat.Json;
-        var source = SchemaFileService.CreateTemplate(name, format);
-        AddDocument(source, format, null, null);
-        StatusMessage = $"Created {name}. Add fields to the SysEx group or import a message below.";
+        AddDocument(SchemaFileService.CreateDocument(name), format, null, null);
+        SelectedDocument!.IsDirty = true;
+        StatusMessage = $"Created {name}. Add fields to the SysEx group.";
     }
 
     [RelayCommand]
@@ -134,7 +134,7 @@ public sealed partial class MainViewModel : ViewModelBase
                     await using var stream = await file.OpenReadAsync();
                     using var reader = new StreamReader(stream);
                     var source = await reader.ReadToEndAsync();
-                    AddDocument(source, format, file.Name, file);
+                    AddDocument(SchemaFileService.Parse(source, format), format, file.Name, file);
                     StatusMessage = $"Opened {file.Name}.";
                 }
                 catch (Exception exception) when (IsSchemaOrFileError(exception))
@@ -172,16 +172,14 @@ public sealed partial class MainViewModel : ViewModelBase
 
         try
         {
-            var path = SelectedNode.MemberPath;
-            var source = SchemaFileService.UpdateNode(
-                SelectedDocument.Source,
-                SelectedDocument.Format,
-                path,
+            var node = SelectedNode.Node;
+            SelectedDocument.ApplyNodeEdits(
+                node,
                 NodeName.Trim(),
                 NodeDataType.Trim(),
                 NodeDescription.Trim(),
                 NodeSampleValue.Trim());
-            UpdateSelectedDocument(source, path);
+            UpdateSelectedDocument(node);
             StatusMessage = $"Updated {NodeName}.";
         }
         catch (Exception exception) when (IsSchemaError(exception))
@@ -201,20 +199,12 @@ public sealed partial class MainViewModel : ViewModelBase
 
         try
         {
-            var groupPath = SelectedNode is null
-                ? []
-                : String.Equals(SelectedNode.Kind, "Field", StringComparison.OrdinalIgnoreCase)
-                    ? SelectedNode.MemberPath[..^1]
-                    : SelectedNode.MemberPath;
-            var source = SchemaFileService.AddField(
-                SelectedDocument.Source,
-                SelectedDocument.Format,
-                groupPath,
+            var field = SelectedDocument.AddField(
+                GetTargetGroup(),
                 NewFieldName.Trim(),
                 NewFieldDataType.Trim(),
                 NewFieldSampleValue.Trim());
-            var newPath = GetAppendedNodePath(groupPath);
-            UpdateSelectedDocument(source, newPath);
+            UpdateSelectedDocument(field);
             StatusMessage = $"Added {NewFieldName} to {SelectedDocument.Schema.Name}.";
         }
         catch (Exception exception) when (IsSchemaError(exception))
@@ -234,18 +224,10 @@ public sealed partial class MainViewModel : ViewModelBase
 
         try
         {
-            var groupPath = SelectedNode is null
-                ? []
-                : String.Equals(SelectedNode.Kind, "Field", StringComparison.OrdinalIgnoreCase)
-                    ? SelectedNode.MemberPath[..^1]
-                    : SelectedNode.MemberPath;
-            var source = SchemaFileService.AddGroup(
-                SelectedDocument.Source,
-                SelectedDocument.Format,
-                groupPath,
+            var group = SelectedDocument.AddGroup(
+                GetTargetGroup(),
                 NewGroupName.Trim());
-            var newPath = GetAppendedNodePath(groupPath);
-            UpdateSelectedDocument(source, newPath);
+            UpdateSelectedDocument(group);
             StatusMessage = $"Added group {NewGroupName} to {SelectedDocument.Schema.Name}.";
         }
         catch (Exception exception) when (IsSchemaError(exception))
@@ -338,23 +320,14 @@ public sealed partial class MainViewModel : ViewModelBase
 
         var selectedBytes = bytes.AsSpan(SelectedByteStart, SelectedByteLength).ToArray();
         var sample = String.Join(' ', selectedBytes.Select(value => value.ToString("X2")));
-        var groupPath = SelectedNode is null
-            ? []
-            : String.Equals(SelectedNode.Kind, "Field", StringComparison.OrdinalIgnoreCase)
-                ? SelectedNode.MemberPath[..^1]
-                : SelectedNode.MemberPath;
-
         try
         {
-            var source = SchemaFileService.AddField(
-                SelectedDocument.Source,
-                SelectedDocument.Format,
-                groupPath,
+            var field = SelectedDocument.AddField(
+                GetTargetGroup(),
                 ReverseFieldName.Trim(),
                 ReverseFieldDataType.Trim(),
                 sample);
-            var newPath = GetAppendedNodePath(groupPath);
-            UpdateSelectedDocument(source, newPath);
+            UpdateSelectedDocument(field);
             StatusMessage = $"Added {ReverseFieldName} from bytes {SelectedByteStart}–{SelectedByteStart + SelectedByteLength - 1}.";
         }
         catch (Exception exception) when (IsSchemaError(exception))
@@ -384,7 +357,7 @@ public sealed partial class MainViewModel : ViewModelBase
     partial void OnSelectedNodeChanged(SchemaTreeItem? value)
     {
         NodeName = value?.Name ?? String.Empty;
-        NodeDataType = value is null || String.IsNullOrEmpty(value.DataType) ? "sys.uint8" : value.DataType;
+        NodeDataType = value?.DataType ?? String.Empty;
         NodeDescription = value?.Description ?? String.Empty;
         NodeSampleValue = value?.SampleValue ?? String.Empty;
     }
@@ -393,10 +366,9 @@ public sealed partial class MainViewModel : ViewModelBase
     partial void OnSelectedByteLengthChanged(int value) => UpdateByteSelection();
     partial void OnSelectedSysExMessageChanged(SysExMessage? value) => UpdateByteSelection();
 
-    private void AddDocument(string source, SchemaFormat format, string? fileName, IStorageFile? storageFile)
+    private void AddDocument(EditDocument schema, SchemaFormat format, string? fileName, IStorageFile? storageFile)
     {
-        var schema = SchemaFileService.Parse(source, format);
-        var document = new SchemaWorkspaceDocument(schema, source, format, fileName);
+        var document = new SchemaWorkspaceDocument(schema, format, fileName);
         Documents.Add(document);
         if (storageFile is not null)
         {
@@ -407,7 +379,8 @@ public sealed partial class MainViewModel : ViewModelBase
 
     private async Task SaveSelectedDocument(bool saveAs)
     {
-        if (SelectedDocument is null)
+        var document = SelectedDocument;
+        if (document is null)
         {
             StatusMessage = "Create or open a schema before saving.";
             return;
@@ -423,17 +396,17 @@ public sealed partial class MainViewModel : ViewModelBase
             IStorageFile? file = null;
             if (!saveAs)
             {
-                _storageFiles.TryGetValue(SelectedDocument, out file);
+                _storageFiles.TryGetValue(document, out file);
             }
             if (file is null)
             {
-                var extension = SchemaFileService.Extension(SelectedDocument.Format);
+                var extension = SchemaFileService.Extension(document.Format);
                 file = await _storageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
                 {
                     Title = "Save MIDI schema",
-                    SuggestedFileName = $"{SelectedDocument.Schema.Name}{extension}",
+                    SuggestedFileName = $"{document.Schema.Name}{extension}",
                     DefaultExtension = extension.TrimStart('.'),
-                    FileTypeChoices = [GetSchemaFileType(SelectedDocument.Format)]
+                    FileTypeChoices = [GetSchemaFileType(document.Format)]
                 });
                 if (file is null)
                 {
@@ -441,21 +414,32 @@ public sealed partial class MainViewModel : ViewModelBase
                 }
             }
 
-            if (SchemaFileService.FromFileName(file.Name) != SelectedDocument.Format)
+            if (SchemaFileService.FromFileName(file.Name) != document.Format)
             {
-                StatusMessage = $"The selected file extension must match the document format ({SchemaFileService.Extension(SelectedDocument.Format)}).";
+                StatusMessage = $"The selected file extension must match the document format ({SchemaFileService.Extension(document.Format)}).";
                 return;
             }
 
-            SchemaFileService.Parse(SelectedDocument.Source, SelectedDocument.Format);
-            await using var stream = await file.OpenWriteAsync();
-            using var writer = new StreamWriter(stream);
-            await writer.WriteAsync(SelectedDocument.Source);
-            await writer.FlushAsync();
+            var revision = document.Revision;
+            var source = SchemaFileService.Serialize(document.Schema, document.Format);
+            await using (var stream = await file.OpenWriteAsync())
+            {
+                if (stream.CanSeek)
+                {
+                    stream.Position = 0;
+                    stream.SetLength(0);
+                }
+                using var writer = new StreamWriter(stream);
+                await writer.WriteAsync(source);
+                await writer.FlushAsync();
+            }
 
-            _storageFiles[SelectedDocument] = file;
-            SelectedDocument.FileName = file.Name;
-            SelectedDocument.IsDirty = false;
+            _storageFiles[document] = file;
+            document.FileName = file.Name;
+            if (document.Revision == revision)
+            {
+                document.IsDirty = false;
+            }
             StatusMessage = $"Saved {file.Name}.";
         }
         catch (Exception exception) when (IsSchemaOrFileError(exception))
@@ -464,16 +448,23 @@ public sealed partial class MainViewModel : ViewModelBase
         }
     }
 
-    private int[] GetAppendedNodePath(IReadOnlyList<int> groupPath)
+    private EditGroup GetTargetGroup()
     {
-        var parent = groupPath.Count == 0
-            ? SchemaNodes.FirstOrDefault()
-            : FindNode(SchemaNodes, groupPath);
-        if (parent is null)
+        if (SelectedNode?.Node is EditGroup group)
         {
-            throw new InvalidOperationException("The target group could not be found after editing.");
+            return group;
         }
-        return [.. parent.MemberPath, parent.Children.Count];
+        if (SelectedNode?.Node is EditField)
+        {
+            var parentPath = SelectedNode.MemberPath[..^1];
+            if (parentPath.Length > 0 && FindNode(SchemaNodes, parentPath)?.Node is EditGroup parent)
+            {
+                return parent;
+            }
+            throw new InvalidOperationException("Select a group before adding a node.");
+        }
+        return SelectedDocument?.Schema.Members.OfType<EditGroup>().FirstOrDefault()
+            ?? throw new InvalidOperationException("Select a group before adding a node.");
     }
 
     private static FilePickerFileType GetSchemaFileType(SchemaFormat format) => format switch
@@ -484,29 +475,40 @@ public sealed partial class MainViewModel : ViewModelBase
         _ => throw new ArgumentOutOfRangeException(nameof(format))
     };
 
-    private void UpdateSelectedDocument(string source, int[]? selectedPath)
+    private void UpdateSelectedDocument(EditNode selectedNode)
     {
         if (SelectedDocument is null)
         {
             return;
         }
 
-        var schema = SchemaFileService.Parse(source, SelectedDocument.Format);
-        SelectedDocument.Source = source;
-        SelectedDocument.Schema = schema;
-        SelectedDocument.IsDirty = true;
-
         SchemaNodes.Clear();
-        AddSchemaNodes(schema.Members, []);
-        SelectedNode = selectedPath is null ? null : FindNode(SchemaNodes, selectedPath);
+        AddSchemaNodes(SelectedDocument.Schema.Members, []);
+        SelectedNode = FindNode(SchemaNodes, selectedNode);
     }
 
-    private void AddSchemaNodes(IReadOnlyList<SchemaNode> nodes, int[] parentPath)
+    private void AddSchemaNodes(IReadOnlyList<EditNode> nodes, int[] parentPath)
     {
         for (var index = 0; index < nodes.Count; index++)
         {
             SchemaNodes.Add(new SchemaTreeItem(nodes[index], [.. parentPath, index], 0));
         }
+    }
+
+    private static SchemaTreeItem? FindNode(IEnumerable<SchemaTreeItem> roots, EditNode node)
+    {
+        foreach (var root in roots)
+        {
+            if (ReferenceEquals(root.Node, node))
+            {
+                return root;
+            }
+            if (FindNode(root.Children, node) is { } found)
+            {
+                return found;
+            }
+        }
+        return null;
     }
 
     private static SchemaTreeItem? FindNode(IEnumerable<SchemaTreeItem> roots, IReadOnlyList<int> path)
