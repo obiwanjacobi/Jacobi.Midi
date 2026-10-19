@@ -48,21 +48,45 @@ internal partial class SchemaTreeControl : UserControl
         base.OnPropertyChanged(change);
         if (change.Property == EditDocumentProperty)
         {
-            _viewModel.Initialize(EditDocument);
+            _viewModel.Document = EditDocument;
         }
-        else if (change.Property == SelectedNodeProperty
-            && !ReferenceEquals(_viewModel.SelectedNode?.Node, SelectedNode))
+        else if (change.Property == SelectedNodeProperty && !ReferenceEquals(_viewModel.SelectedNode, SelectedNode))
         {
-            _viewModel.Select(SelectedNode);
+            ExpandTo(SelectedNode);
+            _viewModel.SelectedNode = SelectedNode;
         }
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(SchemaTreeViewModel.SelectedNode)
-            && !ReferenceEquals(_viewModel.SelectedNode?.Node, SelectedNode))
+        if (e.PropertyName == nameof(SchemaTreeViewModel.SelectedNode))
         {
-            SelectedNode = _viewModel.SelectedNode?.Node;
+            SelectedNode = _viewModel.SelectedNode;
+        }
+    }
+
+    /// <summary>
+    /// Expands the tree items of all ancestors of <paramref name="node"/> so it becomes visible.
+    /// </summary>
+    private void ExpandTo(EditNode? node)
+    {
+        var ancestors = new Stack<EditGroup>();
+        for (var parent = node?.Parent; parent is not null and not Models.EditDocument; parent = parent.Parent)
+        {
+            ancestors.Push(parent);
+        }
+
+        ItemsControl level = Tree;
+        foreach (var ancestor in ancestors)
+        {
+            if (level.ContainerFromItem(ancestor) is not TreeViewItem item)
+            {
+                return;
+            }
+            item.IsExpanded = true;
+            // realize the child containers so the next level can be found
+            item.UpdateLayout();
+            level = item;
         }
     }
 }
