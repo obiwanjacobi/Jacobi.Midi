@@ -10,3 +10,51 @@
 - Don't call static methods on compiler aliases: e.g. use `String.IsNullOrEmpty()` instead of `string.IsNullOrEmpty()`.
 - Write doc-comments on new lines. Not ///<summary>...</summary> on the same line. Except for very short descriptions.
 - Add a doc-comment for every type newly created to describe its purpose and responsibilty.
+- If a request is ambiguous, can be interpretted multiple ways -or- when the request mentions specifics that are not the complete picture: summarize and list the problems and ask for clarity from the user before continuing.
+
+## Project Overview
+
+Jacobi.Midi is a .NET library and tool set for working with MIDI devices, with a focus on
+describing manufacturer-specific SysEx messages through schemas. The main goals are:
+
+- A schema-driven way to read and write device SysEx data (built on Jacobi.BinarySerializer).
+- A Schema Editor application to author those schemas, including reverse engineering of existing SysEx dumps.
+- Cross-platform MIDI I/O, preferring MIDI 2.0 (UMP) where available.
+- Later: a device console / patch librarian and remote MIDI access (see the vision in `src/readme.md`).
+
+The code is in active development: APIs, file formats and project boundaries change frequently.
+Treat the code itself as the source of truth and check the readme files for current details. But note that the readme files may be out of date.
+
+## Repository Layout
+
+- `src/` — the solution (`Jacobi.Midi.slnx`) and all projects. `src/readme.md` holds the product vision and backend notes.
+- `docs/analysis/` — research notes on SysEx conventions per vendor (Roland, Yamaha, Korg, ...), common packing primitives and schema proposals.
+- `.vscode/` — build/launch configuration for the desktop Schema Editor.
+- `../Jacobi.BinarySerializer` — sibling repository referenced by project references (not packages); its projects are included in the solution.
+
+## Projects
+
+- **Core** — platform-neutral MIDI abstractions: API, sessions, endpoint discovery, connections and universal (UMP) packets.
+- **Windows** — implementation of the Core contracts on Windows MIDI Services (MIDI 2.0 SDK preview). Windows-only target.
+- **Messages** — typed MIDI message models: MIDI 1.0 channel/system/SysEx/meta messages, MIDI 2.0 UMP messages (`V2` namespace), and byte-stream event reading/writing. See its readme.
+- **Device** — base `midi` schema (embedded resource) shared by device schemas. Will contain the main API to work with MIDI device capabilities.
+- **Processors** — MIDI-specific BinarySerializer processors (e.g. SysEx framing) under the `midi` namespace. See its readme for design notes.
+- **Roland** — Roland-specific processors (e.g. checksum) and embedded schemas for the Roland message format and specific devices.
+- **File** — placeholder for Standard MIDI File support (MIDI v1 & v2).
+- **Cli** — prototype command line tool.
+- **SchemaEditor** — Avalonia (MVVM) application with a shared UI library and Desktop and Browser (WebAssembly) hosts. Uses central package management within its folder.
+- **Tests** — single xUnit test project covering messages, processors, schemas and the schema editor models.
+
+## Key Concepts
+
+- **Schemas** describe binary structure (fields, groups, repeats, choices) in XML, JSON or YAML; behaviour such as framing, 7-bit packing or checksums is handled by pluggable **processors**.
+- Processors are discovered through a processor factory per assembly, each owning a namespace prefix (`sys`, `midi`, `roland`, ...).
+- Schemas can include other schemas: device schemas build on vendor message schemas, which build on the base `midi` schema.
+- The Schema Editor works on an editable draft model of a schema and maps it to the serializer's schema document when saving, preserving source formatting where possible.
+
+## Build & Test
+
+- Target framework is .NET 11 (preview) with C# 15 language features.
+- Build and test from `src/`: `dotnet build Jacobi.Midi.slnx` and `dotnet test Jacobi.Midi.slnx`.
+- The sibling `Jacobi.BinarySerializer` repository must be present next to this one for the build to succeed.
+- Changes in the schema format or processor API usually originate in Jacobi.BinarySerializer; keep the schemas in this repo (Roland, Device) and the Schema Editor in sync with it.
