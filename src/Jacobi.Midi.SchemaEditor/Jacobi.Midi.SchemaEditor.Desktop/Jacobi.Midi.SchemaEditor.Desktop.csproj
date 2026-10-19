@@ -1,9 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <!--If you are willing to use platform-specific APIs, use conditional compilation.
-    See https://docs.avaloniaui.net/docs/guides/platforms/platform-specific-code/dotnet for more details.-->
-    <TargetFramework>net11.0</TargetFramework>
+    <!-- One build per OS family: the Windows TFM references the Windows MIDI backend,
+         plain net11.0 is used for Linux and macOS. See the root readme (Platform-specific backends). -->
+    <TargetFrameworks>net11.0;net11.0-windows10.0.26100.0</TargetFrameworks>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
@@ -17,5 +17,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Jacobi.Midi.SchemaEditor\Jacobi.Midi.SchemaEditor.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'windows'">
+    <ProjectReference Include="..\..\Jacobi.Midi.Windows\Jacobi.Midi.Windows.csproj" />
   </ItemGroup>
 </Project>

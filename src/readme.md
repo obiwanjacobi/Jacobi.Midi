@@ -49,9 +49,10 @@ Loading does not compile schemas or require their included documents to be open.
 XML `nodeDefs` now contains typed `field`, `group`, `packed`, `repeat` or `choice` elements,
 not the retired `nodeDef kind="..."` form. The Roland/GP-8 schemas use the new contract.
 
-Run the desktop editor with `dotnet run --project src/Jacobi.Midi.SchemaEditor/Jacobi.Midi.SchemaEditor.Desktop/Jacobi.Midi.SchemaEditor.Desktop.csproj`.
+Run the desktop editor with `dotnet run --project src/Jacobi.Midi.SchemaEditor/Jacobi.Midi.SchemaEditor.Desktop/Jacobi.Midi.SchemaEditor.Desktop.csproj -f <tfm>`,
+using `net11.0-windows10.0.26100.0` on Windows (with live MIDI) or `net11.0` on Linux/macOS (see the root readme).
 Run the browser editor locally with `dotnet run --project src/Jacobi.Midi.SchemaEditor/Jacobi.Midi.SchemaEditor.Browser/Jacobi.Midi.SchemaEditor.Browser.csproj`.
-Both targets currently use the repository's .NET 11 target framework. Live MIDI connections and device/processor assembly registration are not part of this MVP.
+Live MIDI connections and device/processor assembly registration are not part of this MVP.
 
 ## Midi Device Console
 

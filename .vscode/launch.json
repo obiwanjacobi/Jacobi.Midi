@@ -6,7 +6,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build SchemaEditor.Desktop",
-            "program": "${workspaceFolder}/src/Jacobi.Midi.SchemaEditor/Jacobi.Midi.SchemaEditor.Desktop/bin/Debug/net11.0/Jacobi.Midi.SchemaEditor.Desktop.dll",
+            "program": "${workspaceFolder}/src/Jacobi.Midi.SchemaEditor/Jacobi.Midi.SchemaEditor.Desktop/bin/Debug/net11.0-windows10.0.26100.0/Jacobi.Midi.SchemaEditor.Desktop.dll",
             "args": [],
             "cwd": "${workspaceFolder}/src/Jacobi.Midi.SchemaEditor/Jacobi.Midi.SchemaEditor.Desktop",
             "console": "internalConsole",
