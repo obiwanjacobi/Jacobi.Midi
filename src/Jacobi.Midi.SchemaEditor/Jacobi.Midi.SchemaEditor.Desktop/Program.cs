@@ -27,8 +27,10 @@ sealed class Program
 #if WINDOWS
         return new Jacobi.Midi.Windows.WindowsMidiApi();
 #else
-        // Linux (ALSA) and macOS (CoreMIDI) backends go here, selected with OperatingSystem.IsLinux() / IsMacOS().
+        // if (OperatingSystem.IsLinux())  return new Jacobi.Midi.Linux.AlsaMidiApi();      // later
+        // if (OperatingSystem.IsMacOS())  return new Jacobi.Midi.MacOS.CoreMidiApi();      // later
         return null;
 #endif
+        throw new PlatformNotSupportedException("MacOS and Linux are planned.");
     }
 }
