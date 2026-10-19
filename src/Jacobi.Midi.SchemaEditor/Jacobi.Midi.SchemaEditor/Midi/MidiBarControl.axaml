@@ -1,0 +1,51 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:midi="using:Jacobi.Midi.SchemaEditor.Midi"
+             xmlns:core="using:Jacobi.Midi.Core"
+             x:Class="Jacobi.Midi.SchemaEditor.Midi.MidiBarControl"
+             x:DataType="midi:MidiBarViewModel">
+
+    <UserControl.Styles>
+        <Style Selector="Ellipse.indicator">
+            <Setter Property="Fill" Value="#3A4A62" />
+        </Style>
+        <Style Selector="Ellipse.indicator.connected">
+            <Setter Property="Fill" Value="#3DDC84" />
+        </Style>
+    </UserControl.Styles>
+
+    <Border Padding="24,8" Background="#0E1828" BorderBrush="#25334A" BorderThickness="0,0,0,1">
+        <Grid ColumnDefinitions="Auto,320,Auto,Auto,Auto,Auto,*" ColumnSpacing="10">
+            <TextBlock Grid.Column="0" Text="MIDI" VerticalAlignment="Center"
+                       FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="#94A4BA" />
+
+            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch"
+                      ItemsSource="{Binding Endpoints}"
+                      SelectedItem="{Binding SelectedEndpoint, Mode=TwoWay}"
+                      IsEnabled="{Binding CanSelectEndpoint}"
+                      PlaceholderText="No MIDI endpoint">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="core:MidiEndpointInfo">
+                        <TextBlock Text="{Binding Name}" />
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+
+            <TextBlock Grid.Column="2" Text="Group" VerticalAlignment="Center" Foreground="#94A4BA" />
+            <ComboBox Grid.Column="3" MinWidth="72"
+                      ItemsSource="{Binding GroupNumbers}"
+                      SelectedIndex="{Binding SelectedGroupIndex, Mode=TwoWay}"
+                      IsEnabled="{Binding IsAvailable}" />
+
+            <Button Grid.Column="4" MinWidth="72" HorizontalContentAlignment="Center"
+                    Content="{Binding ConnectButtonText}"
+                    Command="{Binding ToggleConnectionCommand}" />
+
+            <Ellipse Grid.Column="5" Width="10" Height="10" VerticalAlignment="Center"
+                     Classes="indicator" Classes.connected="{Binding IsConnected}" />
+
+            <TextBlock Grid.Column="6" Text="{Binding StatusText}" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" FontSize="11" Foreground="#B7C5D8" />
+        </Grid>
+    </Border>
+</UserControl>

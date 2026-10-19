@@ -6,6 +6,7 @@ using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Jacobi.Midi.SchemaEditor.Midi;
 using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.SchemaEditor.Services;
 using YamlDotNet.Core;
@@ -25,6 +26,11 @@ internal sealed partial class MainViewModel : ViewModelBase
     private readonly Dictionary<SchemaWorkspaceDocument, IStorageFile> _storageFiles = [];
     private IStorageProvider? _storageProvider;
     private IClipboard? _clipboard;
+
+    /// <summary>
+    /// MIDI endpoint/group selection and connection. Disabled when no MIDI API is provided.
+    /// </summary>
+    public MidiBarViewModel MidiBar { get; init; } = new(null);
 
     public ObservableCollection<SchemaWorkspaceDocument> Documents { get; } = [];
 

@@ -116,7 +116,7 @@ public sealed class MidiConnectionOptions
 /// Packet spans are valid only during the synchronous callback. Copy packets to retain them.
 /// Callbacks are serialized per connection and may start before Connect returns.
 /// </summary>
-public delegate void MidiPackedReceivedHandler(ReadOnlySpan<StampedPacket> packets);
+public delegate void MidiPacketReceivedHandler(ReadOnlySpan<StampedPacket> packets);
 
 /// <summary>
 /// Session owns all connections. Closing the session closes all connections.
@@ -125,7 +125,7 @@ public interface IMidiSession : IAsyncDisposable
 {
     Task<IMidiConnection> Connect(
         string endpointId, MidiConnectionOptions options,
-        MidiPackedReceivedHandler? reciever, CancellationToken ct);
+        MidiPacketReceivedHandler? reciever, CancellationToken ct);
 
     /// <summary>
     /// Stable snapshot. Faulted connections remain until explicitly disposed.

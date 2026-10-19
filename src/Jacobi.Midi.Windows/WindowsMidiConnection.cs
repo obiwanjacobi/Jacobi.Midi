@@ -15,7 +15,7 @@ internal sealed class WindowsMidiConnection : IMidiConnection
     private readonly SemaphoreSlim _sending = new(1, 1);
     private readonly Native.MidiEndpointConnection _native;
     private readonly Guid _id;
-    private readonly MidiPackedReceivedHandler? _receiver;
+    private readonly MidiPacketReceivedHandler? _receiver;
     private readonly Action<WindowsMidiConnection, Guid> _remove;
     private readonly Channel<StampedPacket> _received = Channel.CreateBounded<StampedPacket>(
         new BoundedChannelOptions(4096) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
@@ -26,7 +26,7 @@ internal sealed class WindowsMidiConnection : IMidiConnection
     private Exception? _error;
 
     internal WindowsMidiConnection(Native.MidiEndpointConnection native, MidiEndpointInfo endpoint,
-        MidiDirections directions, MidiPackedReceivedHandler? receiver, Action<WindowsMidiConnection, Guid> remove)
+        MidiDirections directions, MidiPacketReceivedHandler? receiver, Action<WindowsMidiConnection, Guid> remove)
     {
         _native = native;
         _id = native.ConnectionId;

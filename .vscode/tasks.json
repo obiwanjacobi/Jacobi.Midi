@@ -14,5 +14,18 @@
             "problemMatcher": "$msCompile",
             "group": "build"
         }
+        {
+            "label": "build Jacobi.Midi",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/src/Jacobi.Midi.slnx",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary"
+            ],
+            "problemMatcher": "$msCompile",
+            "group": "build"
+        }
     ]
 }

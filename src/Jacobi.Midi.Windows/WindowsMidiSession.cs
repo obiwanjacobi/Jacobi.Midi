@@ -22,7 +22,7 @@ internal sealed class WindowsMidiSession(Native.MidiSession native) : IMidiSessi
     }
 
     public async Task<IMidiConnection> Connect(
-        string endpointId, MidiConnectionOptions options, MidiPackedReceivedHandler? reciever, CancellationToken ct)
+        string endpointId, MidiConnectionOptions options, MidiPacketReceivedHandler? reciever, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(endpointId);
         ArgumentNullException.ThrowIfNull(options);

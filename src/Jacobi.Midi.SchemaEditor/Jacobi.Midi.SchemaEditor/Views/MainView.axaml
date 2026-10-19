@@ -6,12 +6,15 @@
              xmlns:models="using:Jacobi.Midi.SchemaEditor.Models"
              xmlns:st="clr-namespace:Jacobi.Midi.SchemaEditor.SchemaTree"
              xmlns:ne="clr-namespace:Jacobi.Midi.SchemaEditor.NodeEditor"
+             xmlns:midi="clr-namespace:Jacobi.Midi.SchemaEditor.Midi"
              mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="900"
              x:Class="Jacobi.Midi.SchemaEditor.Views.MainView"
              x:DataType="vm:MainViewModel">
-  
-    <Grid RowDefinitions="Auto,Auto,*,Auto" Background="#0B1220">
-        <Border Grid.Row="0" Padding="24,16" Background="#111B2C" BorderBrush="#25334A" BorderThickness="0,0,0,1">
+
+    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Background="#0B1220">
+        <midi:MidiBarControl Grid.Row="0" DataContext="{Binding MidiBar}" />
+
+        <Border Grid.Row="1" Padding="24,16" Background="#111B2C" BorderBrush="#25334A" BorderThickness="0,0,0,1">
             <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="10">
                 <StackPanel Spacing="2" VerticalAlignment="Center">
                     <TextBlock Text="MIDI SCHEMA STUDIO" FontSize="18" FontWeight="Bold" Foreground="#E7EEF8" />
@@ -24,7 +27,7 @@
             </Grid>
         </Border>
 
-        <Border Grid.Row="1" Padding="12,8" Background="#0E1828" BorderBrush="#25334A" BorderThickness="0,0,0,1">
+        <Border Grid.Row="2" Padding="12,8" Background="#0E1828" BorderBrush="#25334A" BorderThickness="0,0,0,1">
             <ListBox ItemsSource="{Binding Documents}"
                      SelectedItem="{Binding SelectedDocument, Mode=TwoWay}"
                      ScrollViewer.HorizontalScrollBarVisibility="Auto"
@@ -42,7 +45,7 @@
             </ListBox>
         </Border>
 
-        <Grid Grid.Row="2" ColumnDefinitions="280,*,320" ColumnSpacing="1" Background="#25334A">
+        <Grid Grid.Row="3" ColumnDefinitions="280,*,320" ColumnSpacing="1" Background="#25334A">
             <Border Grid.Column="0" Padding="18" Background="#101A2A">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Spacing="3" Margin="0,0,0,16">
@@ -83,7 +86,7 @@
             </Border>
         </Grid>
 
-        <Border Grid.Row="3" Padding="16,8" Background="#111B2C">
+        <Border Grid.Row="4" Padding="16,8" Background="#111B2C">
             <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="#B7C5D8" />
         </Border>
     </Grid>

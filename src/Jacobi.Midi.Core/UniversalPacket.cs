@@ -143,7 +143,10 @@ public readonly record struct UniversalPacket96 : IUniversalPacket
     private readonly UInt128 _data;
 
     public UniversalPacket96(UInt128 data)
-        => _data = data & (0x0000_0000_FFFF_FFFF << 64 | 0xFFFF_FFFF_FFFF_FFFF);
+        => _data = data & Mask96;
+
+    // lower 96 bits (3 words)
+    private static readonly UInt128 Mask96 = new(0x0000_0000_FFFF_FFFF, 0xFFFF_FFFF_FFFF_FFFF);
     internal UniversalPacket96(UInt32[] data)
         => _data = PacketPacker.ToUInt96(data);
 
@@ -201,7 +204,7 @@ internal static class PacketPacker
         if (data.Length != 2)
             throw new ArgumentException($"Expected a length of exactly 2 but got {data.Length}", nameof(data));
 
-        return data[0] | data[1] << 32;
+        return (UInt64)data[0] | (UInt64)data[1] << 32;
     }
 
     public static UInt128 ToUInt96(UInt32[] data)
@@ -210,7 +213,7 @@ internal static class PacketPacker
         if (data.Length != 3)
             throw new ArgumentException($"Expected a length of exactly 3 but got {data.Length}", nameof(data));
 
-        return data[0] | data[1] << 32 | data[2] << 64;
+        return (UInt128)data[0] | (UInt128)data[1] << 32 | (UInt128)data[2] << 64;
     }
 
     public static UInt128 ToUInt128(UInt32[] data)
@@ -219,7 +222,7 @@ internal static class PacketPacker
         if (data.Length != 4)
             throw new ArgumentException($"Expected a length of exactly 4 but got {data.Length}", nameof(data));
 
-        return data[0] | data[1] << 32 | data[2] << 64 | data[3] << 96;
+        return (UInt128)data[0] | (UInt128)data[1] << 32 | (UInt128)data[2] << 64 | (UInt128)data[3] << 96;
     }
 
     public static UInt32 FromIndex32(UInt32 value, int index)
