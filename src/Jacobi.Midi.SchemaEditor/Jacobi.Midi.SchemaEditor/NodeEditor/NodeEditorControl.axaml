@@ -1,0 +1,93 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Jacobi.Midi.SchemaEditor.ViewModels"
+             xmlns:models="using:Jacobi.Midi.SchemaEditor.Models"
+             xmlns:ne="using:Jacobi.Midi.SchemaEditor.NodeEditor"
+             x:Class="Jacobi.Midi.SchemaEditor.NodeEditor.NodeEditorControl"
+             x:DataType="vm:MainViewModel">
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.caption">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#DCE6F3" />
+        </Style>
+        <Style Selector="TextBlock.kind">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="#7588A2" />
+        </Style>
+        <Style Selector="TextBox.description">
+            <Setter Property="AcceptsReturn" Value="True" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="MinHeight" Value="66" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+        <StackPanel Spacing="4">
+            <TextBlock Text="NODE EDITOR" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="#94A4BA" />
+            <TextBlock Text="Shape your message structure" FontSize="22" FontWeight="SemiBold" Foreground="#E7EEF8" />
+        </StackPanel>
+        <Border Grid.Row="1" Padding="12" Margin="0,18,0,0" CornerRadius="6" Background="#142238">
+            <TextBlock Text="New schemas start with a SysEx group. Add fields directly to define the message structure."
+                       TextWrapping="Wrap" Foreground="#B7C5D8" FontSize="12" />
+        </Border>
+
+        <!-- The selected node picks its editor template by type. The template roots rebind their
+             DataContext to the MainViewModel so the editors bind to its staged node values. -->
+        <ContentControl Grid.Row="2" Margin="0,22,0,0" Content="{Binding SelectedNode}">
+            <ContentControl.DataTemplates>
+                <!-- most specific types first: the first matching template wins -->
+                <DataTemplate x:DataType="models:EditRepeat">
+                    <StackPanel Spacing="12" x:DataType="vm:MainViewModel"
+                                DataContext="{Binding $parent[ne:NodeEditorControl].DataContext}">
+                        <TextBlock Text="Selected repeat properties" Classes="caption" />
+                        <TextBlock Text="Repeats its members a number of times." Classes="kind" />
+                        <TextBox PlaceholderText="Repeat name" Text="{Binding NodeName}" />
+                        <TextBox PlaceholderText="Description" Text="{Binding NodeDescription}" Classes="description" />
+                        <Button Content="Apply repeat changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
+                    </StackPanel>
+                </DataTemplate>
+                <DataTemplate x:DataType="models:EditChoice">
+                    <StackPanel Spacing="12" x:DataType="vm:MainViewModel"
+                                DataContext="{Binding $parent[ne:NodeEditorControl].DataContext}">
+                        <TextBlock Text="Selected choice properties" Classes="caption" />
+                        <TextBlock Text="Selects one of its members at runtime." Classes="kind" />
+                        <TextBox PlaceholderText="Choice name" Text="{Binding NodeName}" />
+                        <TextBox PlaceholderText="Description" Text="{Binding NodeDescription}" Classes="description" />
+                        <Button Content="Apply choice changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
+                    </StackPanel>
+                </DataTemplate>
+                <DataTemplate x:DataType="models:EditGroup">
+                    <StackPanel Spacing="12" x:DataType="vm:MainViewModel"
+                                DataContext="{Binding $parent[ne:NodeEditorControl].DataContext}">
+                        <TextBlock Text="Selected group properties" Classes="caption" />
+                        <TextBlock Text="Groups a sequence of fields and nested nodes." Classes="kind" />
+                        <TextBox PlaceholderText="Group name" Text="{Binding NodeName}" />
+                        <TextBox PlaceholderText="Description" Text="{Binding NodeDescription}" Classes="description" />
+                        <Button Content="Apply group changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
+                    </StackPanel>
+                </DataTemplate>
+                <DataTemplate x:DataType="models:EditField">
+                    <StackPanel Spacing="12" x:DataType="vm:MainViewModel"
+                                DataContext="{Binding $parent[ne:NodeEditorControl].DataContext}">
+                        <TextBlock Text="Selected field properties" Classes="caption" />
+                        <TextBox PlaceholderText="Field name" Text="{Binding NodeName}" />
+                        <ComboBox ItemsSource="{Binding DataTypeOptions}" IsEditable="True" Text="{Binding NodeDataType}" />
+                        <TextBox PlaceholderText="Description" Text="{Binding NodeDescription}" Classes="description" />
+                        <TextBox PlaceholderText="Sample value" Text="{Binding NodeSampleValue}" />
+                        <Button Content="Apply field changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
+                    </StackPanel>
+                </DataTemplate>
+            </ContentControl.DataTemplates>
+        </ContentControl>
+
+        <TextBlock Grid.Row="2"
+                   Text="Choose a group or field in the schema tree to inspect and edit it."
+                   IsVisible="{Binding SelectedNode, Converter={x:Static ObjectConverters.IsNull}}"
+                   VerticalAlignment="Center"
+                   HorizontalAlignment="Center"
+                   Foreground="#7588A2" />
+        <TextBlock Grid.Row="3" Text="{Binding SelectedDocument.FileName}" FontSize="11" Foreground="#7588A2" />
+    </Grid>
+</UserControl>

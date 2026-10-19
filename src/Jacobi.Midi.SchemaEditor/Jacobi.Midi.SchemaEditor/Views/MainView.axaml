@@ -5,6 +5,7 @@
              xmlns:vm="using:Jacobi.Midi.SchemaEditor.ViewModels"
              xmlns:models="using:Jacobi.Midi.SchemaEditor.Models"
              xmlns:st="clr-namespace:Jacobi.Midi.SchemaEditor.SchemaTree"
+             xmlns:ne="clr-namespace:Jacobi.Midi.SchemaEditor.NodeEditor"
              mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="900"
              x:Class="Jacobi.Midi.SchemaEditor.Views.MainView"
              x:DataType="vm:MainViewModel">
@@ -57,34 +58,7 @@
             </Border>
 
             <Border Grid.Column="1" Padding="24" Background="#0B1220">
-                <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="NODE EDITOR" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="#94A4BA" />
-                        <TextBlock Text="Shape your message structure" FontSize="22" FontWeight="SemiBold" Foreground="#E7EEF8" />
-                    </StackPanel>
-                    <Border Grid.Row="1" Padding="12" Margin="0,18,0,0" CornerRadius="6" Background="#142238">
-                        <TextBlock Text="New schemas start with a SysEx group. Add fields directly to define the message structure."
-                                   TextWrapping="Wrap" Foreground="#B7C5D8" FontSize="12" />
-                    </Border>
-                    <StackPanel Grid.Row="2" Spacing="12" Margin="0,22,0,0">
-                        <TextBlock Text="Selected node properties" FontSize="13" FontWeight="SemiBold" Foreground="#DCE6F3" />
-                        <TextBox PlaceholderText="Node name" Text="{Binding NodeName}" />
-                        <ComboBox ItemsSource="{Binding DataTypeOptions}" IsEditable="True" Text="{Binding NodeDataType}" />
-                        <TextBox PlaceholderText="Description"
-                                 Text="{Binding NodeDescription}"
-                                 AcceptsReturn="True"
-                                 TextWrapping="Wrap"
-                                 MinHeight="66" />
-                        <TextBox PlaceholderText="Sample value" Text="{Binding NodeSampleValue}" />
-                        <Button Content="Apply node changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
-                    </StackPanel>
-                    <TextBlock Grid.Row="3"
-                               Text="Choose a group or field in the schema tree to inspect and edit it."
-                               VerticalAlignment="Center"
-                               HorizontalAlignment="Center"
-                               Foreground="#7588A2" />
-                    <TextBlock Grid.Row="4" Text="{Binding SelectedDocument.FileName}" FontSize="11" Foreground="#7588A2" />
-                </Grid>
+                <ne:NodeEditorControl />
             </Border>
 
             <Border Grid.Column="2" Padding="18" Background="#101A2A">
