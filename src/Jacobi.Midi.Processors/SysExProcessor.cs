@@ -21,11 +21,11 @@ public sealed class SysExProcessor : ILayoutProcessor,
         writer.Advance(1);
     }
 
-    public void BeginRead(ref SequenceReader<byte> reader, LayoutProcessorContext context)
+    public LayoutReadResult BeginRead(ref SequenceReader<byte> reader, LayoutProcessorContext context)
     {
         if (!reader.TryRead(out byte startByte))
         {
-            throw new InvalidOperationException("Unable to read start byte of SysEx message.");
+            return LayoutReadResult.NeedMoreData(1);
         }
         if (startByte != 0xF0)
         {
@@ -33,21 +33,23 @@ public sealed class SysExProcessor : ILayoutProcessor,
         }
 
         context.ReserveTail(1);
+        return LayoutReadResult.Success();
     }
 
     public LayoutReadResult<EncodedField> Read(ref SequenceReader<byte> reader, LayoutProcessorContext context)
         => DefaultProcessors.LayoutProcessor.Read(ref reader, context);
 
-    public void EndRead(ref SequenceReader<byte> reader, LayoutProcessorContext context)
+    public LayoutReadResult EndRead(ref SequenceReader<byte> reader, LayoutProcessorContext context)
     {
         if (!reader.TryRead(out byte endByte))
         {
-            throw new InvalidOperationException("Unable to read end byte of SysEx message.");
+            return LayoutReadResult.NeedMoreData(1);
         }
         if (endByte != 0xF7)
         {
             throw new InvalidOperationException($"Invalid end byte for SysEx message: {endByte:X2}");
         }
+        return LayoutReadResult.Success();
     }
 
     public ProcessorKey Key => new("midi.sysex");

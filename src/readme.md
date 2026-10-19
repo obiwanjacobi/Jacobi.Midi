@@ -35,10 +35,11 @@ The Avalonia desktop and WebAssembly applications share the same schema editor:
 - Edit data types, descriptions, and sample values for individual nodes.
 - Import SysEx bytes as hexadecimal, recognize F0/F7 boundaries, compare messages, and add selected bytes to a schema field.
 
-Each workspace document owns a mutable `EditDocument` from the serializer's schema editing model.
+Each workspace document owns a mutable `EditDocument` from the schema editor's `Models` namespace.
 Commands edit this draft directly; tree items reference its nodes rather than reparsing source text.
 `SchemaFileService` only creates drafts and handles format detection, loading and serialization.
-Saving builds an independent `SchemaDocument` snapshot and uses the library's shared JSON, XML or
+Saving calls `EditNodeMapper.ToSchemaDocument` to create an independent `SchemaDocument` snapshot
+through `SchemaDocumentBuilder` and uses the library's shared JSON, XML or
 YAML writer. Definitions, references and other features not exposed by the current UI are preserved.
 For loaded XML, the editor retains source presentation metadata and merges snapshot differences into
 it: comments, the declaration, section ordering, compact properties/processors and line endings survive
@@ -74,6 +75,8 @@ A (server+client) tool to let an authenticated user (or application) interact wi
 - The client tool starts the (outgoing) connection to the remote server tool.
 - The server and client tools are cross-platform (win/mac/lin)
 - The server tool should be a single package that simply works and contains code for Midi, Network and Security (certificate?)
+
+> Web-MIDI could be an option.
 
 ## MIDI v2 Support
 
@@ -180,3 +183,4 @@ MIDI v2: https://github.com/atsushieno/cmidi2
 https://github.com/celtera/libremidi
 
 Windows Specific MIDI v2: https://microsoft.github.io/MIDI/
+https://midi2.dev/

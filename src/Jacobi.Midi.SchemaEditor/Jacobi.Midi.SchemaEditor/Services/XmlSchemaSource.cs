@@ -1,8 +1,11 @@
 using System.Xml.Linq;
-using Jacobi.BinarySerializer.Schema.Editing;
+using Jacobi.Midi.SchemaEditor.Models;
 
 namespace Jacobi.Midi.SchemaEditor.Services;
 
+/// <summary>
+/// Preserves xml comments and only applies changes.
+/// </summary>
 internal sealed class XmlSchemaSource
 {
     private readonly string _text;

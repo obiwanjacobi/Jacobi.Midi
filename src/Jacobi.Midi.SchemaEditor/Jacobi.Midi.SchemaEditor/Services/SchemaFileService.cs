@@ -1,20 +1,19 @@
 using System.Runtime.CompilerServices;
-using Jacobi.BinarySerializer.Schema;
-using Jacobi.BinarySerializer.Schema.Editing;
 using Jacobi.BinarySerializer.Yaml;
+using Jacobi.Midi.SchemaEditor.Models;
 using JsonSchemaSerializer = Jacobi.BinarySerializer.Schema.Json.JsonSerializer;
 using XmlSchemaSerializer = Jacobi.BinarySerializer.Schema.Xml.XmlSerializer;
 
 namespace Jacobi.Midi.SchemaEditor.Services;
 
-public enum SchemaFormat
+internal enum SchemaFormat
 {
     Json,
     Xml,
     Yaml
 }
 
-public static class SchemaFileService
+internal static class SchemaFileService
 {
     private static readonly ConditionalWeakTable<EditDocument, XmlSchemaSource> XmlSources = new();
 
@@ -38,8 +37,24 @@ public static class SchemaFileService
     public static EditDocument CreateDocument(string name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        var document = new EditDocument { Name = name };
-        document.Members.Add(new EditGroup { Name = "SysEx" });
+        var document = new EditDocument
+        {
+            Name = name,
+            DataTypeDefs = [],
+            Includes = [],
+            Members = [],
+            NodeDefs = [],
+            ProcessorDefs = [],
+            Processors = [],
+            Properties = [],
+        };
+        document.Members.Add(new EditGroup(document)
+        {
+            Name = "SysEx",
+            Members = [],
+            Processors = [],
+            Properties = [],
+        });
         return document;
     }
 
@@ -56,7 +71,7 @@ public static class SchemaFileService
         var document = EditNodeMapper.ToEditDocument(schema);
         if (format == SchemaFormat.Xml)
         {
-            var canonical = XmlSchemaSerializer.Serialize(new SchemaDocumentBuilder(document).Build());
+            var canonical = XmlSchemaSerializer.Serialize(EditNodeMapper.ToSchemaDocument(document));
             XmlSources.Add(document, new XmlSchemaSource(source, canonical, document));
         }
         return document;
@@ -64,7 +79,7 @@ public static class SchemaFileService
 
     public static string Serialize(EditDocument document, SchemaFormat format)
     {
-        var snapshot = new SchemaDocumentBuilder(document).Build();
+        var snapshot = EditNodeMapper.ToSchemaDocument(document);
         return format switch
         {
             SchemaFormat.Json => JsonSchemaSerializer.Serialize(snapshot),

@@ -4,7 +4,7 @@ using Jacobi.Midi.SchemaEditor.ViewModels;
 
 namespace Jacobi.Midi.SchemaEditor.Views;
 
-public partial class ReverseEngineeringWorkbenchView : UserControl
+internal partial class ReverseEngineeringWorkbenchView : UserControl
 {
     public ReverseEngineeringWorkbenchView()
     {

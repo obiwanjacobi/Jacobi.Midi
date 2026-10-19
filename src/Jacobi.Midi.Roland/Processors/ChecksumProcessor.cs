@@ -24,18 +24,22 @@ public sealed class ChecksumProcessor : ILayoutProcessor,
         DefaultProcessors.LayoutProcessor.EndWrite(writer, context);
     }
 
-    public void BeginRead(ref SequenceReader<byte> reader, LayoutProcessorContext context)
+    public LayoutReadResult BeginRead(ref SequenceReader<byte> reader, LayoutProcessorContext context)
     {
         context.ReserveTail(1);
-        DefaultProcessors.LayoutProcessor.BeginRead(ref reader, context);
+        return DefaultProcessors.LayoutProcessor.BeginRead(ref reader, context);
     }
 
     public LayoutReadResult<EncodedField> Read(ref SequenceReader<byte> reader, LayoutProcessorContext context)
         => DefaultProcessors.LayoutProcessor.Read(ref reader, context);
 
-    public void EndRead(ref SequenceReader<byte> reader, LayoutProcessorContext context)
+    public LayoutReadResult EndRead(ref SequenceReader<byte> reader, LayoutProcessorContext context)
     {
-        DefaultProcessors.LayoutProcessor.EndRead(ref reader, context);
+        var result = DefaultProcessors.LayoutProcessor.EndRead(ref reader, context);
+        if (result.Status != ReadResult.Success)
+        {
+            return result;
+        }
 
         var length = context.GroupData.Position;
         var data = reader.Sequence.Slice(reader.Consumed - length, length);
@@ -48,12 +52,14 @@ public sealed class ChecksumProcessor : ILayoutProcessor,
 
         if (!reader.TryRead(out var readChecksum))
         {
-            throw new InvalidOperationException("Failed to read checksum.");
+            return LayoutReadResult.NeedMoreData(1);
         }
         if (readChecksum != checksum)
         {
             throw new InvalidOperationException($"Checksum mismatch: expected {checksum:X2}, but read {readChecksum:X2}.");
         }
+
+        return LayoutReadResult.Success();
     }
 
     public ProcessorKey Key => new("roland.checksum");

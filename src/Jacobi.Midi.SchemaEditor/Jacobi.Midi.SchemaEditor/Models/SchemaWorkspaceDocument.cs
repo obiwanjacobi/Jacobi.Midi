@@ -1,11 +1,10 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Jacobi.BinarySerializer.Schema;
-using Jacobi.BinarySerializer.Schema.Editing;
 using Jacobi.Midi.SchemaEditor.Services;
 
 namespace Jacobi.Midi.SchemaEditor.Models;
 
-public sealed partial class SchemaWorkspaceDocument : ObservableObject
+internal sealed partial class SchemaWorkspaceDocument : ObservableObject
 {
     public SchemaWorkspaceDocument(EditDocument schema, SchemaFormat format, string? fileName = null)
     {
@@ -50,7 +49,13 @@ public sealed partial class SchemaWorkspaceDocument : ObservableObject
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(dataType);
         EnsureCanAddMembers(parent);
-        var field = new EditField { Name = name, DataType = new SchemaName(dataType) };
+        var field = new EditField(parent)
+        {
+            Name = name,
+            DataType = new SchemaName(dataType),
+            Processors = [],
+            Properties = [],
+        };
         SetProperty(field, "sample", sampleValue);
         parent.Members.Add(field);
         MarkChanged();
@@ -61,11 +66,13 @@ public sealed partial class SchemaWorkspaceDocument : ObservableObject
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         EnsureCanAddMembers(parent);
-        if (parent is EditPackedGroup)
+        var group = new EditGroup(parent)
         {
-            throw new InvalidOperationException("Packed groups can contain only fields.");
-        }
-        var group = new EditGroup { Name = name };
+            Name = name,
+            Members = [],
+            Processors = [],
+            Properties = [],
+        };
         parent.Members.Add(group);
         MarkChanged();
         return group;

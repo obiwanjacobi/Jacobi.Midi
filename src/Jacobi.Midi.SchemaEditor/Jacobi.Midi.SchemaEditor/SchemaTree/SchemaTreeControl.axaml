@@ -1,0 +1,21 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:st="using:Jacobi.Midi.SchemaEditor.SchemaTree"
+             x:Class="Jacobi.Midi.SchemaEditor.SchemaTree.SchemaTreeControl">
+
+    <TreeView x:Name="Tree"
+              x:DataType="st:SchemaTreeViewModel"
+              ItemsSource="{Binding SchemaNodes}"
+              SelectedItem="{Binding SelectedNode, Mode=TwoWay}">
+        <TreeView.Styles>
+            <Style Selector="TreeViewItem" x:DataType="st:SchemaTreeItem">
+                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+            </Style>
+        </TreeView.Styles>
+        <TreeView.ItemTemplate>
+            <TreeDataTemplate x:DataType="st:SchemaTreeItem" ItemsSource="{Binding Children}">
+                <TextBlock Text="{Binding DisplayName}" Padding="4,5" Foreground="#D0D9E6" />
+            </TreeDataTemplate>
+        </TreeView.ItemTemplate>
+    </TreeView>
+</UserControl>

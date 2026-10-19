@@ -2,6 +2,6 @@
 
 namespace Jacobi.Midi.SchemaEditor.ViewModels;
 
-public abstract class ViewModelBase : ObservableObject
+internal abstract class ViewModelBase : ObservableObject
 {
 }

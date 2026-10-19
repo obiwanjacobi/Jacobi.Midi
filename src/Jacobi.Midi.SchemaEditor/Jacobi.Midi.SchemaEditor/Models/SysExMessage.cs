@@ -1,9 +1,9 @@
-using CommunityToolkit.Mvvm.ComponentModel;
 using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Jacobi.Midi.SchemaEditor.Models;
 
-public sealed class SysExMessage
+internal sealed class SysExMessage
 {
     public SysExMessage(byte[] bytes)
     {

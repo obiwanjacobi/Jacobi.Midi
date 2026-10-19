@@ -2,19 +2,17 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text.Json;
 using System.Xml;
-using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Jacobi.BinarySerializer.Schema.Editing;
 using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.SchemaEditor.Services;
 using YamlDotNet.Core;
 
 namespace Jacobi.Midi.SchemaEditor.ViewModels;
 
-public sealed partial class MainViewModel : ViewModelBase
+internal sealed partial class MainViewModel : ViewModelBase
 {
     private static readonly FilePickerFileType[] SchemaFileTypes =
     [
@@ -29,7 +27,7 @@ public sealed partial class MainViewModel : ViewModelBase
     private IClipboard? _clipboard;
 
     public ObservableCollection<SchemaWorkspaceDocument> Documents { get; } = [];
-    public ObservableCollection<SchemaTreeItem> SchemaNodes { get; } = [];
+
     public ObservableCollection<SysExMessage> SysExMessages { get; } = [];
     public ObservableCollection<SysExComparisonRow> ComparedBytes { get; } = [];
     public IReadOnlyList<string> DataTypeOptions { get; } = ["sys.uint8", "sys.uint16", "sys.bool", "sys.bytes", "sys.string"];
@@ -39,7 +37,7 @@ public sealed partial class MainViewModel : ViewModelBase
     public partial SchemaWorkspaceDocument? SelectedDocument { get; set; }
 
     [ObservableProperty]
-    public partial SchemaTreeItem? SelectedNode { get; set; }
+    public partial EditNode? SelectedNode { get; set; }
 
     [ObservableProperty]
     public partial string NodeName { get; set; } = String.Empty;
@@ -172,14 +170,13 @@ public sealed partial class MainViewModel : ViewModelBase
 
         try
         {
-            var node = SelectedNode.Node;
+            var node = SelectedNode;
             SelectedDocument.ApplyNodeEdits(
                 node,
                 NodeName.Trim(),
                 NodeDataType.Trim(),
                 NodeDescription.Trim(),
                 NodeSampleValue.Trim());
-            UpdateSelectedDocument(node);
             StatusMessage = $"Updated {NodeName}.";
         }
         catch (Exception exception) when (IsSchemaError(exception))
@@ -204,7 +201,7 @@ public sealed partial class MainViewModel : ViewModelBase
                 NewFieldName.Trim(),
                 NewFieldDataType.Trim(),
                 NewFieldSampleValue.Trim());
-            UpdateSelectedDocument(field);
+            SelectedNode = field;
             StatusMessage = $"Added {NewFieldName} to {SelectedDocument.Schema.Name}.";
         }
         catch (Exception exception) when (IsSchemaError(exception))
@@ -227,7 +224,7 @@ public sealed partial class MainViewModel : ViewModelBase
             var group = SelectedDocument.AddGroup(
                 GetTargetGroup(),
                 NewGroupName.Trim());
-            UpdateSelectedDocument(group);
+            SelectedNode = group;
             StatusMessage = $"Added group {NewGroupName} to {SelectedDocument.Schema.Name}.";
         }
         catch (Exception exception) when (IsSchemaError(exception))
@@ -327,7 +324,7 @@ public sealed partial class MainViewModel : ViewModelBase
                 ReverseFieldName.Trim(),
                 ReverseFieldDataType.Trim(),
                 sample);
-            UpdateSelectedDocument(field);
+            SelectedNode = field;
             StatusMessage = $"Added {ReverseFieldName} from bytes {SelectedByteStart}–{SelectedByteStart + SelectedByteLength - 1}.";
         }
         catch (Exception exception) when (IsSchemaError(exception))
@@ -347,19 +344,14 @@ public sealed partial class MainViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(HasSelectedDocument));
         SelectedNode = null;
-        SchemaNodes.Clear();
-        if (value is not null)
-        {
-            AddSchemaNodes(value.Schema.Members, []);
-        }
     }
 
-    partial void OnSelectedNodeChanged(SchemaTreeItem? value)
+    partial void OnSelectedNodeChanged(EditNode? value)
     {
         NodeName = value?.Name ?? String.Empty;
-        NodeDataType = value?.DataType ?? String.Empty;
-        NodeDescription = value?.Description ?? String.Empty;
-        NodeSampleValue = value?.SampleValue ?? String.Empty;
+        NodeDataType = (value as EditField)?.DataType?.ToString() ?? String.Empty;
+        NodeDescription = GetProperty(value, "description");
+        NodeSampleValue = GetProperty(value, "sample");
     }
 
     partial void OnSelectedByteStartChanged(int value) => UpdateByteSelection();
@@ -448,24 +440,17 @@ public sealed partial class MainViewModel : ViewModelBase
         }
     }
 
-    private EditGroup GetTargetGroup()
+    private EditGroup GetTargetGroup() => SelectedNode switch
     {
-        if (SelectedNode?.Node is EditGroup group)
-        {
-            return group;
-        }
-        if (SelectedNode?.Node is EditField)
-        {
-            var parentPath = SelectedNode.MemberPath[..^1];
-            if (parentPath.Length > 0 && FindNode(SchemaNodes, parentPath)?.Node is EditGroup parent)
-            {
-                return parent;
-            }
-            throw new InvalidOperationException("Select a group before adding a node.");
-        }
-        return SelectedDocument?.Schema.Members.OfType<EditGroup>().FirstOrDefault()
-            ?? throw new InvalidOperationException("Select a group before adding a node.");
-    }
+        EditGroup group and not EditDocument => group,
+        EditField { Parent: { } parent } => parent,
+        _ => SelectedDocument?.Schema.Members.OfType<EditGroup>().FirstOrDefault()
+            ?? throw new InvalidOperationException("Select a group before adding a node.")
+    };
+
+    private static string GetProperty(EditNode? node, string name)
+        => node?.Properties.FirstOrDefault(property => String.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))?.Value
+            ?? String.Empty;
 
     private static FilePickerFileType GetSchemaFileType(SchemaFormat format) => format switch
     {
@@ -474,52 +459,6 @@ public sealed partial class MainViewModel : ViewModelBase
         SchemaFormat.Yaml => SchemaFileTypes[3],
         _ => throw new ArgumentOutOfRangeException(nameof(format))
     };
-
-    private void UpdateSelectedDocument(EditNode selectedNode)
-    {
-        if (SelectedDocument is null)
-        {
-            return;
-        }
-
-        SchemaNodes.Clear();
-        AddSchemaNodes(SelectedDocument.Schema.Members, []);
-        SelectedNode = FindNode(SchemaNodes, selectedNode);
-    }
-
-    private void AddSchemaNodes(IReadOnlyList<EditNode> nodes, int[] parentPath)
-    {
-        for (var index = 0; index < nodes.Count; index++)
-        {
-            SchemaNodes.Add(new SchemaTreeItem(nodes[index], [.. parentPath, index], 0));
-        }
-    }
-
-    private static SchemaTreeItem? FindNode(IEnumerable<SchemaTreeItem> roots, EditNode node)
-    {
-        foreach (var root in roots)
-        {
-            if (ReferenceEquals(root.Node, node))
-            {
-                return root;
-            }
-            if (FindNode(root.Children, node) is { } found)
-            {
-                return found;
-            }
-        }
-        return null;
-    }
-
-    private static SchemaTreeItem? FindNode(IEnumerable<SchemaTreeItem> roots, IReadOnlyList<int> path)
-    {
-        var current = roots.FirstOrDefault(node => node.MemberPath.Length > 0 && node.MemberPath[0] == path[0]);
-        for (var depth = 1; current is not null && depth < path.Count; depth++)
-        {
-            current = current.Children.FirstOrDefault(node => node.MemberPath[depth] == path[depth]);
-        }
-        return current;
-    }
 
     private void UpdateByteSelection()
     {

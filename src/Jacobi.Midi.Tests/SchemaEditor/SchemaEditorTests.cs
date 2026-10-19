@@ -1,5 +1,4 @@
 using System.Xml.Linq;
-using Jacobi.BinarySerializer.Schema.Editing;
 using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.SchemaEditor.Services;
 using Jacobi.Midi.SchemaEditor.ViewModels;
@@ -10,11 +9,12 @@ namespace Jacobi.Midi.Tests.SchemaEditor;
 public class SchemaEditorTests
 {
     [Theory]
-    [InlineData(SchemaFormat.Json)]
-    [InlineData(SchemaFormat.Xml)]
-    [InlineData(SchemaFormat.Yaml)]
-    public void NewSchema_CanAddDocumentedFieldAndReload(SchemaFormat format)
+    [InlineData(nameof(SchemaFormat.Json))]
+    [InlineData(nameof(SchemaFormat.Xml))]
+    [InlineData(nameof(SchemaFormat.Yaml))]
+    public void NewSchema_CanAddDocumentedFieldAndReload(string formatName)
     {
+        var format = Enum.Parse<SchemaFormat>(formatName);
         var schema = SchemaFileService.CreateDocument("TestSchema");
         var document = new SchemaWorkspaceDocument(schema, format);
 
@@ -50,11 +50,12 @@ public class SchemaEditorTests
     }
 
     [Theory]
-        [InlineData(SchemaFormat.Json)]
-        [InlineData(SchemaFormat.Xml)]
-        [InlineData(SchemaFormat.Yaml)]
-        public void ApplyUnchangedFieldAndSave_PreservesUnexposedSchemaFeatures(SchemaFormat format)
+        [InlineData(nameof(SchemaFormat.Json))]
+        [InlineData(nameof(SchemaFormat.Xml))]
+        [InlineData(nameof(SchemaFormat.Yaml))]
+        public void ApplyUnchangedFieldAndSave_PreservesUnexposedSchemaFeatures(string formatName)
         {
+                var format = Enum.Parse<SchemaFormat>(formatName);
                 var schema = SchemaFileService.Parse("""
                         {
                             "name": "Advanced",
@@ -73,7 +74,7 @@ public class SchemaEditorTests
                                     { "name": "Items", "kind": "repeat", "count": { "ref": "Root.Inherited" },
                                         "valueProcessors": [{ "name": "ref:mapping" }], "members": [
                                             { "name": "Length", "kind": "field", "datatype": "Scaled" }] },
-                                    { "name": "Flags", "kind": "packed", "byteSize": 2,
+                                    { "name": "Flags", "kind": "group", "byteSize": 2,
                                         "processors": [{ "name": "sys.bitpacker", "bitorder": "little" }],
                                         "members": [{ "name": "Bit", "kind": "field", "datatype": "sys.bool" }] },
                                     { "name": "Body", "kind": "choice", "memberNodeDef": "Body", "pipeline": "isolate" }
@@ -84,14 +85,14 @@ public class SchemaEditorTests
                 var loaded = SchemaFileService.Parse(SchemaFileService.Serialize(schema, format), format);
                 var document = new SchemaWorkspaceDocument(loaded, format);
                 var viewModel = new MainViewModel { SelectedDocument = document };
-                viewModel.SelectedNode = Assert.Single(viewModel.SchemaNodes).Children[0];
+                var selectedField = Assert.IsType<EditGroup>(Assert.Single(loaded.Members)).Members[0];
+                viewModel.SelectedNode = selectedField;
 
                 Assert.Equal(String.Empty, viewModel.NodeDataType);
-                var selectedField = viewModel.SelectedNode.Node;
                 viewModel.ApplyNodeEditsCommand.Execute(null);
 
                 Assert.Same(loaded, document.Schema);
-                Assert.Same(selectedField, viewModel.SelectedNode!.Node);
+                Assert.Same(selectedField, viewModel.SelectedNode);
                 Assert.Null(Assert.IsType<EditField>(selectedField).DataType);
                 Assert.True(document.IsDirty);
                 var saved = SchemaFileService.Serialize(document.Schema, format);
@@ -222,9 +223,9 @@ public class SchemaEditorTests
                 var schema = SchemaFileService.Parse(source, SchemaFormat.Xml);
                 var document = new SchemaWorkspaceDocument(schema, SchemaFormat.Xml);
                 var viewModel = new MainViewModel { SelectedDocument = document };
-                foreach (var branch in Assert.Single(viewModel.SchemaNodes).Children)
+                foreach (var branch in Assert.IsType<EditGroup>(Assert.Single(schema.Members)).Members.OfType<EditGroup>())
                 {
-                        viewModel.SelectedNode = branch.Children.Single(node => node.Name == "ChecksumBlock");
+                        viewModel.SelectedNode = branch.Members.Single(node => node.Name == "ChecksumBlock");
                         viewModel.NodeName = "ChecksumScope";
                         viewModel.ApplyNodeEditsCommand.Execute(null);
                 }
@@ -304,8 +305,8 @@ public class SchemaEditorTests
                 """;
             var schema = SchemaFileService.Parse(source, SchemaFormat.Xml);
             var root = Assert.IsType<EditGroup>(schema.Members[0]);
-            root.Members.Reverse();
-            root.Members.Insert(1, new EditField { Name = "Inserted", DataType = new("sys.uint8") });
+            root.Members.Move(1, 0);
+            root.Members.Insert(1, new EditField(root) { Name = "Inserted", DataType = new("sys.uint8"), Processors = [], Properties = [] });
             var saved = SchemaFileService.Serialize(schema, SchemaFormat.Xml);
             var members = XDocument.Parse(saved).Descendants("group").Single().Element("members")!;
             Assert.Equal(new[] { "Second", "Inserted", "First" }, members.Elements().Select(element => (string?)element.Attribute("name")));
@@ -342,53 +343,51 @@ public class SchemaEditorTests
                 var schema = document.Schema;
                 var root = Assert.IsType<EditGroup>(Assert.Single(schema.Members));
                 Assert.True(document.IsDirty);
-                Assert.Same(root, Assert.Single(viewModel.SchemaNodes).Node);
 
                 viewModel.NewGroupName = "Header";
                 viewModel.AddGroupCommand.Execute(null);
                 var header = Assert.IsType<EditGroup>(Assert.Single(root.Members));
-                Assert.Same(header, viewModel.SelectedNode!.Node);
+                Assert.Same(header, viewModel.SelectedNode);
+                Assert.Equal("Header", viewModel.NodeName);
                 viewModel.NewFieldName = "Parameter";
                 viewModel.NewFieldSampleValue = "2A";
                 viewModel.AddFieldCommand.Execute(null);
                 var field = Assert.IsType<EditField>(Assert.Single(header.Members));
-                Assert.Same(field, viewModel.SelectedNode!.Node);
+                Assert.Same(field, viewModel.SelectedNode);
+                Assert.Equal("2A", viewModel.NodeSampleValue);
 
                 viewModel.NodeName = "Renamed";
                 viewModel.NodeDescription = "A parameter";
                 viewModel.ApplyNodeEditsCommand.Execute(null);
                 Assert.Equal("Renamed", field.Name);
                 Assert.Equal("A parameter", Assert.Single(field.Properties, property => property.Name == "description").Value);
-                Assert.Equal("Renamed", viewModel.SelectedNode!.Name);
-                Assert.Same(field, viewModel.SelectedNode.Node);
+                Assert.Same(field, viewModel.SelectedNode);
 
                 viewModel.NewFieldName = "Sibling";
                 viewModel.AddFieldCommand.Execute(null);
                 Assert.Equal(2, header.Members.Count);
-                Assert.Same(header.Members[1], viewModel.SelectedNode!.Node);
+                Assert.Same(header.Members[1], viewModel.SelectedNode);
                 Assert.Same(schema, document.Schema);
                 Assert.Equal(4, document.Revision);
         }
 
         [Fact]
-        public void SwitchingDocuments_RebuildsTreeFromEachDraft()
+        public void SwitchingDocuments_ClearsSelection()
         {
                 var viewModel = new MainViewModel();
                 viewModel.NewDocumentCommand.Execute(null);
                 var first = Assert.Single(viewModel.Documents);
                 viewModel.NewFieldName = "FirstField";
                 viewModel.AddFieldCommand.Execute(null);
+                Assert.NotNull(viewModel.SelectedNode);
                 viewModel.NewDocumentCommand.Execute(null);
                 var second = viewModel.SelectedDocument;
                 Assert.Equal("NewSchema2", second!.Schema.Name);
                 Assert.Null(viewModel.SelectedNode);
-                Assert.Empty(Assert.Single(viewModel.SchemaNodes).Children);
+                Assert.Equal(String.Empty, viewModel.NodeName);
 
                 viewModel.SelectedDocument = first;
                 Assert.Null(viewModel.SelectedNode);
-                var field = Assert.Single(Assert.Single(viewModel.SchemaNodes).Children);
-                Assert.Equal("FirstField", field.Name);
-                Assert.Same(Assert.Single(Assert.IsType<EditGroup>(first.Schema.Members[0]).Members), field.Node);
         }
 
         [Fact]
@@ -401,7 +400,7 @@ public class SchemaEditorTests
                 document.IsDirty = false;
                 var revision = document.Revision;
                 var viewModel = new MainViewModel { SelectedDocument = document };
-                viewModel.SelectedNode = Assert.Single(Assert.Single(viewModel.SchemaNodes).Children);
+                viewModel.SelectedNode = field;
                 viewModel.NodeName = "Changed";
                 viewModel.NodeDataType = String.Empty;
                 viewModel.ApplyNodeEditsCommand.Execute(null);
@@ -418,31 +417,32 @@ public class SchemaEditorTests
         }
 
         [Fact]
-        public void SpecializedGroups_RejectUnsupportedChildrenWithoutMutation()
+        public void OpenChoice_RejectsExplicitMembersWithoutMutation()
         {
-                var schema = new EditDocument { Name = "Special" };
-                var packed = new EditPackedGroup { Name = "Flags" };
-                var open = new EditChoice { Name = "Body", MemberNodeDef = new("BodyType") };
-                schema.Members.Add(packed);
-                schema.Members.Add(open);
+                var schema = SchemaFileService.CreateDocument("Special");
+                var root = Assert.IsType<EditGroup>(Assert.Single(schema.Members));
+                var open = new EditChoice(root)
+                {
+                        Name = "Body",
+                        MemberNodeDef = new("BodyType"),
+                        Members = [],
+                        Processors = [],
+                        Properties = [],
+                        ValueProcessors = [],
+                };
+                root.Members.Add(open);
                 var document = new SchemaWorkspaceDocument(schema, SchemaFormat.Json);
                 var viewModel = new MainViewModel { SelectedDocument = document };
 
-                Assert.Equal("PackedGroup", viewModel.SchemaNodes[0].Kind);
-                Assert.Equal("Choice", viewModel.SchemaNodes[1].Kind);
-                viewModel.SelectedNode = viewModel.SchemaNodes[0];
-                viewModel.AddGroupCommand.Execute(null);
-                Assert.Empty(packed.Members);
-                Assert.False(document.IsDirty);
-                viewModel.SelectedNode = viewModel.SchemaNodes[1];
+                viewModel.SelectedNode = open;
                 viewModel.AddFieldCommand.Execute(null);
                 viewModel.AddGroupCommand.Execute(null);
                 Assert.Empty(open.Members);
                 Assert.False(document.IsDirty);
 
-                viewModel.SelectedNode = viewModel.SchemaNodes[0];
+                viewModel.SelectedNode = root;
                 viewModel.AddFieldCommand.Execute(null);
-                Assert.IsType<EditField>(Assert.Single(packed.Members));
+                Assert.IsType<EditField>(root.Members[1]);
                 Assert.True(document.IsDirty);
         }
 
@@ -460,17 +460,17 @@ public class SchemaEditorTests
                 var field = Assert.IsType<EditField>(Assert.Single(root.Members));
                 Assert.Equal("Captured", field.Name);
                 Assert.Equal("41 13", Assert.Single(field.Properties, property => property.Name == "sample").Value);
-                Assert.Same(field, viewModel.SelectedNode!.Node);
+                Assert.Same(field, viewModel.SelectedNode);
         }
 
         [Theory]
-    [InlineData("schema.json", SchemaFormat.Json)]
-    [InlineData("schema.xml", SchemaFormat.Xml)]
-    [InlineData("schema.yaml", SchemaFormat.Yaml)]
-    [InlineData("schema.yml", SchemaFormat.Yaml)]
-    public void FromFileName_RecognizesSupportedFormats(string fileName, SchemaFormat expected)
+    [InlineData("schema.json", nameof(SchemaFormat.Json))]
+    [InlineData("schema.xml", nameof(SchemaFormat.Xml))]
+    [InlineData("schema.yaml", nameof(SchemaFormat.Yaml))]
+    [InlineData("schema.yml", nameof(SchemaFormat.Yaml))]
+    public void FromFileName_RecognizesSupportedFormats(string fileName, string expected)
     {
-        Assert.Equal(expected, SchemaFileService.FromFileName(fileName));
+        Assert.Equal(Enum.Parse<SchemaFormat>(expected), SchemaFileService.FromFileName(fileName));
     }
 
     [Fact]

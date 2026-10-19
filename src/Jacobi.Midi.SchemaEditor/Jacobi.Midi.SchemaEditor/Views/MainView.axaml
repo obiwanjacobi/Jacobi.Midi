@@ -4,9 +4,11 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:Jacobi.Midi.SchemaEditor.ViewModels"
              xmlns:models="using:Jacobi.Midi.SchemaEditor.Models"
+             xmlns:st="clr-namespace:Jacobi.Midi.SchemaEditor.SchemaTree"
              mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="900"
              x:Class="Jacobi.Midi.SchemaEditor.Views.MainView"
              x:DataType="vm:MainViewModel">
+  
     <Grid RowDefinitions="Auto,Auto,*,Auto" Background="#0B1220">
         <Border Grid.Row="0" Padding="24,16" Background="#111B2C" BorderBrush="#25334A" BorderThickness="0,0,0,1">
             <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="10">
@@ -49,13 +51,8 @@
                     <TextBlock DockPanel.Dock="Bottom"
                                Text="Select a node to edit its name, type and documentation."
                                TextWrapping="Wrap" Margin="0,14,0,0" FontSize="11" Foreground="#7588A2" />
-                    <TreeView ItemsSource="{Binding SchemaNodes}" SelectedItem="{Binding SelectedNode, Mode=TwoWay}">
-                        <TreeView.ItemTemplate>
-                            <TreeDataTemplate ItemsSource="{Binding Children}">
-                                <TextBlock Text="{Binding DisplayName}" Padding="4,5" Foreground="#D0D9E6" />
-                            </TreeDataTemplate>
-                        </TreeView.ItemTemplate>
-                    </TreeView>
+                <st:SchemaTreeControl EditDocument="{Binding SelectedDocument.Schema}"
+                                      SelectedNode="{Binding SelectedNode, Mode=TwoWay}" />
                 </DockPanel>
             </Border>
 

@@ -1,12 +1,11 @@
 
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.VisualTree;
 using Jacobi.Midi.SchemaEditor.ViewModels;
 
 namespace Jacobi.Midi.SchemaEditor.Views;
 
-public partial class MainView : UserControl
+internal partial class MainView : UserControl
 {
     public MainView()
     {
@@ -21,5 +20,4 @@ public partial class MainView : UserControl
             viewModel.SetStorageProvider(topLevel.StorageProvider, topLevel.Clipboard);
         }
     }
-
 }
