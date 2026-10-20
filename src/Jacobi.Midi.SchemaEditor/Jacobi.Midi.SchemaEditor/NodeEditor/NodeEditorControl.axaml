@@ -24,6 +24,44 @@
         </Style>
     </UserControl.Styles>
 
+    <UserControl.DataTemplates>
+        <!-- one effective property; own properties are editable, inherited ones can be overridden -->
+        <DataTemplate x:DataType="ne:PropertyRow">
+            <Grid ColumnDefinitions="160,*,Auto,Auto" ColumnSpacing="8" Margin="0,2">
+                <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" IsVisible="{Binding IsOwn}" />
+                <TextBlock Text="{Binding Name}" IsVisible="{Binding IsInherited}" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextSecondaryBrush}" />
+                <TextBox Grid.Column="1" Text="{Binding Value}" PlaceholderText="(no value)" IsVisible="{Binding IsOwn}" />
+                <TextBlock Grid.Column="1" Text="{Binding Value}" IsVisible="{Binding IsInherited}" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextSecondaryBrush}" />
+                <TextBlock Grid.Column="2" Text="{Binding Source}" Classes="kind" VerticalAlignment="Center" />
+                <Button Grid.Column="3" Content="Remove" IsVisible="{Binding IsOwn}" CommandParameter="{Binding}"
+                        Command="{Binding $parent[ne:NodeEditorControl].((vm:MainViewModel)DataContext).NodeDetails.RemovePropertyCommand}" />
+                <Button Grid.Column="3" Content="Override" IsVisible="{Binding CanOverride}" CommandParameter="{Binding}"
+                        Command="{Binding $parent[ne:NodeEditorControl].((vm:MainViewModel)DataContext).NodeDetails.OverridePropertyCommand}" />
+            </Grid>
+        </DataTemplate>
+        <!-- one effective processor with its effective properties; only own processors are editable -->
+        <DataTemplate x:DataType="ne:ProcessorRow">
+            <Border Padding="10" Margin="0,0,0,8" CornerRadius="6" Background="{DynamicResource AppBackgroundCardBrush}">
+                <StackPanel Spacing="6">
+                    <Grid ColumnDefinitions="*,140,Auto,Auto" ColumnSpacing="8">
+                        <TextBox Text="{Binding Processor, UpdateSourceTrigger=LostFocus}" PlaceholderText="namespace.id or ref:name" IsVisible="{Binding IsOwn}" />
+                        <TextBlock Text="{Binding Processor}" Classes="caption" VerticalAlignment="Center" IsVisible="{Binding IsInherited}" />
+                        <TextBox Grid.Column="1" Text="{Binding PublishNamespace, UpdateSourceTrigger=LostFocus}" PlaceholderText="publish namespace" IsVisible="{Binding IsOwn}" />
+                        <TextBlock Grid.Column="1" Text="{Binding PublishNamespace}" Classes="kind" VerticalAlignment="Center" IsVisible="{Binding IsInherited}" />
+                        <TextBlock Grid.Column="2" Text="{Binding Source}" Classes="kind" VerticalAlignment="Center" />
+                        <Button Grid.Column="3" Content="Remove" IsVisible="{Binding IsOwn}" CommandParameter="{Binding}"
+                                Command="{Binding $parent[ne:NodeEditorControl].((vm:MainViewModel)DataContext).NodeDetails.RemoveProcessorCommand}" />
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding Properties}" />
+                    <Button Content="Add property" HorizontalAlignment="Left" IsVisible="{Binding IsOwn}" CommandParameter="{Binding}"
+                            Command="{Binding $parent[ne:NodeEditorControl].((vm:MainViewModel)DataContext).NodeDetails.AddProcessorPropertyCommand}" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
     <Grid RowDefinitions="Auto,Auto,*,Auto">
         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
             <StackPanel Spacing="4">
@@ -49,60 +87,103 @@
                        TextWrapping="Wrap" Foreground="{DynamicResource AppTextSecondaryBrush}" FontSize="12" />
         </Border>
 
-        <!-- The selected node picks its editor template by type. The template roots rebind their
-             DataContext to the MainViewModel so the editors bind to its staged node values. -->
-        <ContentControl Grid.Row="2" Margin="0,22,0,0" Content="{Binding SelectedItem}">
-            <ContentControl.DataTemplates>
-                <!-- most specific types first: the first matching template wins -->
-                <DataTemplate x:DataType="models:EditRepeat">
-                    <StackPanel Spacing="12" x:DataType="vm:MainViewModel"
-                                DataContext="{Binding $parent[ne:NodeEditorControl].DataContext}">
-                        <TextBlock Text="Selected repeat properties" Classes="caption" />
-                        <TextBlock Text="Repeats its members a number of times." Classes="kind" />
-                        <TextBox PlaceholderText="Repeat name" Text="{Binding NodeName}" />
-                        <TextBox PlaceholderText="Description" Text="{Binding NodeDescription}" Classes="description" />
-                        <Button Content="Apply repeat changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
+        <TabControl Grid.Row="2" Margin="0,14,0,0"
+                    IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TabItem Header="General">
+                <!-- The selected node picks its editor template by type. The template roots rebind their
+                     DataContext to the MainViewModel so the editors bind to its staged node values. -->
+                <ContentControl Margin="0,12,0,0" Content="{Binding SelectedItem}">
+                    <ContentControl.DataTemplates>
+                        <!-- most specific types first: the first matching template wins -->
+                        <DataTemplate x:DataType="models:EditRepeat">
+                            <StackPanel Spacing="12" x:DataType="vm:MainViewModel"
+                                        DataContext="{Binding $parent[ne:NodeEditorControl].DataContext}">
+                                <TextBlock Text="Selected repeat properties" Classes="caption" />
+                                <TextBlock Text="Repeats its members a number of times." Classes="kind" />
+                                <TextBox PlaceholderText="Repeat name" Text="{Binding NodeName}" />
+                                <TextBox PlaceholderText="Description" Text="{Binding NodeDescription}" Classes="description" />
+                                <Button Content="Apply repeat changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
+                            </StackPanel>
+                        </DataTemplate>
+                        <DataTemplate x:DataType="models:EditChoice">
+                            <StackPanel Spacing="12" x:DataType="vm:MainViewModel"
+                                        DataContext="{Binding $parent[ne:NodeEditorControl].DataContext}">
+                                <TextBlock Text="Selected choice properties" Classes="caption" />
+                                <TextBlock Text="Selects one of its members at runtime." Classes="kind" />
+                                <TextBox PlaceholderText="Choice name" Text="{Binding NodeName}" />
+                                <TextBox PlaceholderText="Description" Text="{Binding NodeDescription}" Classes="description" />
+                                <Button Content="Apply choice changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
+                            </StackPanel>
+                        </DataTemplate>
+                        <DataTemplate x:DataType="models:EditGroup">
+                            <StackPanel Spacing="12" x:DataType="vm:MainViewModel"
+                                        DataContext="{Binding $parent[ne:NodeEditorControl].DataContext}">
+                                <TextBlock Text="Selected group properties" Classes="caption" />
+                                <TextBlock Text="Groups a sequence of fields and nested nodes." Classes="kind" />
+                                <TextBox PlaceholderText="Group name" Text="{Binding NodeName}" />
+                                <TextBox PlaceholderText="Description" Text="{Binding NodeDescription}" Classes="description" />
+                                <Button Content="Apply group changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
+                            </StackPanel>
+                        </DataTemplate>
+                        <DataTemplate x:DataType="models:EditField">
+                            <StackPanel Spacing="12" x:DataType="vm:MainViewModel"
+                                        DataContext="{Binding $parent[ne:NodeEditorControl].DataContext}">
+                                <TextBlock Text="Selected field properties" Classes="caption" />
+                                <TextBox PlaceholderText="Field name" Text="{Binding NodeName}" />
+                                <ComboBox ItemsSource="{Binding DataTypeOptions}" IsEditable="True" Text="{Binding NodeDataType}" />
+                                <TextBox PlaceholderText="Description" Text="{Binding NodeDescription}" Classes="description" />
+                                <TextBox PlaceholderText="Sample value" Text="{Binding NodeSampleValue}" />
+                                <Button Content="Apply field changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
+                            </StackPanel>
+                        </DataTemplate>
+                        <!-- fallback for selected document items (includes, defs, ...) that have no editor yet -->
+                        <DataTemplate x:DataType="x:Object">
+                            <TextBlock Text="This item cannot be edited yet."
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource AppTextMutedBrush}" />
+                        </DataTemplate>
+                    </ContentControl.DataTemplates>
+                </ContentControl>
+            </TabItem>
+
+            <TabItem Header="Processors" IsVisible="{Binding NodeDetails, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <ScrollViewer DataContext="{Binding NodeDetails}" x:DataType="ne:NodeDetailsViewModel">
+                    <StackPanel Spacing="10" Margin="0,12,0,0">
+                        <ItemsControl ItemsSource="{Binding Unresolved}" IsVisible="{Binding HasUnresolved}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource AppTextAccentBrush}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="PROCESSORS" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" VerticalAlignment="Center" Foreground="{DynamicResource AppTextLabelBrush}" />
+                            <Button Grid.Column="1" Content="Add processor" Command="{Binding AddProcessorCommand}" />
+                        </Grid>
+                        <ItemsControl ItemsSource="{Binding Processors}" />
                     </StackPanel>
-                </DataTemplate>
-                <DataTemplate x:DataType="models:EditChoice">
-                    <StackPanel Spacing="12" x:DataType="vm:MainViewModel"
-                                DataContext="{Binding $parent[ne:NodeEditorControl].DataContext}">
-                        <TextBlock Text="Selected choice properties" Classes="caption" />
-                        <TextBlock Text="Selects one of its members at runtime." Classes="kind" />
-                        <TextBox PlaceholderText="Choice name" Text="{Binding NodeName}" />
-                        <TextBox PlaceholderText="Description" Text="{Binding NodeDescription}" Classes="description" />
-                        <Button Content="Apply choice changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Properties" IsVisible="{Binding NodeDetails, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <ScrollViewer DataContext="{Binding NodeDetails}" x:DataType="ne:NodeDetailsViewModel">
+                    <StackPanel Spacing="10" Margin="0,12,0,0">
+                        <ItemsControl ItemsSource="{Binding Unresolved}" IsVisible="{Binding HasUnresolved}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource AppTextAccentBrush}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="EFFECTIVE PROPERTIES" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" VerticalAlignment="Center" Foreground="{DynamicResource AppTextLabelBrush}" />
+                            <Button Grid.Column="1" Content="Add property" Command="{Binding AddPropertyCommand}" />
+                        </Grid>
+                        <ItemsControl ItemsSource="{Binding Properties}" />
                     </StackPanel>
-                </DataTemplate>
-                <DataTemplate x:DataType="models:EditGroup">
-                    <StackPanel Spacing="12" x:DataType="vm:MainViewModel"
-                                DataContext="{Binding $parent[ne:NodeEditorControl].DataContext}">
-                        <TextBlock Text="Selected group properties" Classes="caption" />
-                        <TextBlock Text="Groups a sequence of fields and nested nodes." Classes="kind" />
-                        <TextBox PlaceholderText="Group name" Text="{Binding NodeName}" />
-                        <TextBox PlaceholderText="Description" Text="{Binding NodeDescription}" Classes="description" />
-                        <Button Content="Apply group changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
-                    </StackPanel>
-                </DataTemplate>
-                <DataTemplate x:DataType="models:EditField">
-                    <StackPanel Spacing="12" x:DataType="vm:MainViewModel"
-                                DataContext="{Binding $parent[ne:NodeEditorControl].DataContext}">
-                        <TextBlock Text="Selected field properties" Classes="caption" />
-                        <TextBox PlaceholderText="Field name" Text="{Binding NodeName}" />
-                        <ComboBox ItemsSource="{Binding DataTypeOptions}" IsEditable="True" Text="{Binding NodeDataType}" />
-                        <TextBox PlaceholderText="Description" Text="{Binding NodeDescription}" Classes="description" />
-                        <TextBox PlaceholderText="Sample value" Text="{Binding NodeSampleValue}" />
-                        <Button Content="Apply field changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
-                    </StackPanel>
-                </DataTemplate>
-                <!-- fallback for selected document items (includes, defs, ...) that have no editor yet -->
-                <DataTemplate x:DataType="x:Object">
-                    <TextBlock Text="This item cannot be edited yet."
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               Foreground="{DynamicResource AppTextMutedBrush}" />
-                </DataTemplate>
-            </ContentControl.DataTemplates>
-        </ContentControl>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
 
         <TextBlock Grid.Row="2"
                    Text="Choose a group or field in the schema tree to inspect and edit it."

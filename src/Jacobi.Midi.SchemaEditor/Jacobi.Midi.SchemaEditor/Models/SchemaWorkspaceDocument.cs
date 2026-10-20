@@ -133,7 +133,10 @@ internal sealed partial class SchemaWorkspaceDocument : ObservableObject
         MarkChanged();
     }
 
-    private void MarkChanged()
+    /// <summary>
+    /// Registers an edit of the draft: increments the revision and marks the document dirty.
+    /// </summary>
+    public void MarkChanged()
     {
         Revision++;
         IsDirty = true;

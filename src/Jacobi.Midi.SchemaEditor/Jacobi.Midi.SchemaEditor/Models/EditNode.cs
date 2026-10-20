@@ -65,7 +65,7 @@ internal partial class EditRepeat : EditGroup
     [ObservableProperty]
     public partial SchemaValueOrRef<int> Count { get; set; }
     [ObservableProperty]
-    public required partial List<EditProcessorRef> ValueProcessors { get; set; }
+    public required partial ObservableCollection<EditProcessorRef> ValueProcessors { get; set; }
 }
 
 internal partial class EditChoice : EditGroup
@@ -83,7 +83,7 @@ internal partial class EditChoice : EditGroup
     [ObservableProperty]
     public partial SchemaPipelineMode? Pipeline { get; set; }
     [ObservableProperty]
-    public required partial List<EditProcessorRef> ValueProcessors { get; set; }
+    public required partial ObservableCollection<EditProcessorRef> ValueProcessors { get; set; }
 }
 
 internal partial class EditDocument : EditGroup
@@ -130,7 +130,7 @@ internal partial class EditProcessorRef : ObservableObject
     [ObservableProperty]
     public partial string? PublishNamespace { get; set; }
     [ObservableProperty]
-    public partial List<EditProperty> Properties { get; set; } = [];
+    public partial ObservableCollection<EditProperty> Properties { get; set; } = [];
 }
 
 internal partial class EditProcessorDef : ObservableObject

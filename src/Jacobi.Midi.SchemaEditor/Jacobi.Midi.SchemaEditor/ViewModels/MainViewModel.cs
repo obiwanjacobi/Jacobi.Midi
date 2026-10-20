@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.Input;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.SchemaEditor.Midi;
 using Jacobi.Midi.SchemaEditor.Models;
+using Jacobi.Midi.SchemaEditor.NodeEditor;
 using Jacobi.Midi.SchemaEditor.Services;
 using YamlDotNet.Core;
 
@@ -60,6 +61,12 @@ internal sealed partial class MainViewModel : ViewModelBase
         get => SelectedItem as EditNode;
         set => SelectedItem = value;
     }
+
+    /// <summary>
+    /// The effective processors and properties of the <see cref="SelectedNode"/>; null when no node is selected.
+    /// </summary>
+    [ObservableProperty]
+    public partial NodeDetailsViewModel? NodeDetails { get; private set; }
 
     [ObservableProperty]
     public partial string NodeName { get; set; } = String.Empty;
@@ -371,6 +378,8 @@ internal sealed partial class MainViewModel : ViewModelBase
     partial void OnSelectedItemChanged(object? item)
     {
         var value = item as EditNode;
+        NodeDetails?.Dispose();
+        NodeDetails = value is not null && SelectedDocument is not null ? new NodeDetailsViewModel(SelectedDocument, value) : null;
         NodeName = value?.Name ?? String.Empty;
         NodeDataType = (value as EditField)?.DataType?.ToString() ?? String.Empty;
         NodeDescription = GetProperty(value, "description");
