@@ -1,0 +1,16 @@
+<!--
+    The Fluent control theme with the colors of the Schema Editor themes.
+    Without a palette, Fluent uses the operating system accent color for selections and highlights,
+    which can be any color (e.g. red, which is reserved for errors).
+    The custom theme variants inherit a built-in variant (Night: Dark), so the palette of that variant applies.
+    The app's own brushes are in Themes/Palette.axaml.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <FluentTheme>
+        <FluentTheme.Palettes>
+            <!-- Night: the selection/accent blue. The lighter and darker accent shades are derived from it. -->
+            <ColorPaletteResources x:Key="Dark" Accent="#3f3ad5" />
+        </FluentTheme.Palettes>
+    </FluentTheme>
+</Styles>
