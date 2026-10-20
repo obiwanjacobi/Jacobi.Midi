@@ -1,7 +1,9 @@
+using System.Reflection;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.SchemaEditor.Instantiate;
 using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.SchemaEditor.ViewModels;
+using Jacobi.Midi.Tests.Schema;
 using Xunit;
 using JsonSerializer = Jacobi.BinarySerializer.Schema.Json.JsonSerializer;
 
@@ -272,6 +274,47 @@ public class SchemaInstantiatorTests
         Assert.Null(viewModel.LastInstance);
     }
 
+    [Fact]
+    public void InstantiateCommand_FindsIncludedSchemasInTheOpenedAssemblies()
+    {
+        var viewModel = new MainViewModel();
+        var loaded = viewModel.OpenedAssemblies.Load(
+            Assembly.LoadFrom(TestHelpers.AssemblyPathOf("Jacobi.Midi.Device")), "Jacobi.Midi.Device.dll");
+        var embedded = Assert.Single(loaded.Schemas);
+        viewModel.NewDocumentCommand.Execute(null);
+        viewModel.SelectedDocument!.AddInclude(embedded.Name);
+        viewModel.SelectedItem = viewModel.SelectedDocument!.Schema.Members.Single();
+
+        viewModel.InstantiateSchemaCommand.Execute(null);
+
+        var dialog = Assert.IsType<InstantiateSchemaViewModel>(viewModel.InstantiateDialog);
+        Assert.False(dialog.HasError, dialog.Error);
+        Assert.NotNull(dialog.Root);
+    }
+
+    [Fact]
+    public void InstantiateCommand_WorksOnAnEmbeddedSchemaSelectedInTheAssemblyTree()
+    {
+        var viewModel = new MainViewModel();
+        // the Roland schemas include the 'midi' schema of the Device assembly
+        viewModel.OpenedAssemblies.Load(Assembly.LoadFrom(TestHelpers.AssemblyPathOf("Jacobi.Midi.Device")), "Jacobi.Midi.Device.dll");
+        var loaded = viewModel.OpenedAssemblies.Load(
+            Assembly.LoadFrom(TestHelpers.AssemblyPathOf("Jacobi.Midi.Roland")), "Jacobi.Midi.Roland.dll");
+        viewModel.SelectedLeftTab = MainViewModel.AssembliesLeftTab;
+        var schema = loaded.Schemas.First(candidate => candidate.Document.Schema.Members.OfType<EditGroup>().Any());
+        var root = schema.Document.Schema.Members.OfType<EditGroup>().First();
+
+        viewModel.SelectedAssemblyItem = schema;
+        Assert.False(viewModel.InstantiateSchemaCommand.CanExecute(null));
+
+        viewModel.SelectedAssemblyItem = root;
+        Assert.True(viewModel.InstantiateSchemaCommand.CanExecute(null));
+        viewModel.InstantiateSchemaCommand.Execute(null);
+
+        var dialog = Assert.IsType<InstantiateSchemaViewModel>(viewModel.InstantiateDialog);
+        Assert.False(dialog.HasError, dialog.Error);
+        Assert.Equal(root.Name, dialog.Root!.Name);
+    }
 
     private static InstanceGroup CreateRoot(string json, string root)
     {

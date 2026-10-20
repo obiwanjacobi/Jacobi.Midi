@@ -617,20 +617,28 @@ internal sealed partial class MainViewModel : ViewModelBase
     private bool CanDeleteItem() => !IsReadOnly && GetDeletableItem() is not null;
 
     /// <summary>
-    /// Opens the instantiate dialog for the selected document root. The document and the documents it includes
-    /// (taken from the open documents) are compiled first; when that fails the problem is reported and no dialog opens.
+    /// Opens the instantiate dialog for the selected group of the <see cref="ActiveDocument"/> (an open document or,
+    /// read-only, an embedded schema selected in the assembly tree). The document and the documents it includes
+    /// (taken from the open documents and the embedded schemas of the opened assemblies) are compiled first; when that fails the problem is reported and no dialog opens.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanInstantiateSchema))]
     private void InstantiateSchema()
     {
-        if (SelectedDocument is null || IsReadOnly || SelectedItem is not EditGroup root)
+        if (ActiveDocument is not { } active || SelectedItem is not EditGroup root)
         {
             return;
         }
 
         try
         {
-            var instantiator = SchemaInstantiator.Create(SelectedDocument.Schema, Documents.Select(document => document.Schema));
+            // the embedded schemas of the opened assemblies can be included too; an open document takes precedence by name
+            var workspace = Documents.Select(document => document.Schema).ToList();
+            var embedded = OpenedAssemblies.Assemblies
+                .SelectMany(assembly => assembly.Schemas)
+                .Select(schema => schema.Document.Schema)
+                .Where(schema => !workspace.Any(open => String.Equals(open.Name, schema.Name, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+            var instantiator = SchemaInstantiator.Create(active.Schema, [.. workspace, .. embedded]);
             InstantiateDialog = new InstantiateSchemaViewModel(instantiator.Create(root), CloseInstantiateDialog);
         }
         catch (Exception exception) when (IsSchemaError(exception))
@@ -710,7 +718,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     }
 
     private bool CanInstantiateSchema()
-        => SelectedDocument is not null && !IsReadOnly && SelectedItem is EditGroup and not EditDocument;
+        => ActiveDocument is not null && SelectedItem is EditGroup and not EditDocument;
 
     private void CloseInstantiateDialog(InstantiateSchemaViewModel dialog, bool confirmed)
     {

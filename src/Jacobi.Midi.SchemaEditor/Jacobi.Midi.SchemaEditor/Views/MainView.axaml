@@ -35,7 +35,7 @@
                             <MenuItem Header="Open files…" Command="{Binding OpenFilesCommand}" />
                             <MenuItem Header="Open assemblies…" Command="{Binding OpenAssembliesCommand}" ToolTip.Tip="Open .dll files to use their embedded schemas and processors" />
                             <Separator />
-                            <MenuItem Header="Instantiate…" Command="{Binding InstantiateSchemaCommand}" ToolTip.Tip="Provide values for the selected root group of the document" />
+                            <MenuItem Header="Instantiate…" Command="{Binding InstantiateSchemaCommand}" ToolTip.Tip="Provide values for the selected group of the active document" />
                             <Separator />
                             <MenuItem Header="Save" Command="{Binding SaveDocumentCommand}" IsEnabled="{Binding HasSelectedDocument}" />
                             <MenuItem Header="Save as…" Command="{Binding SaveDocumentAsCommand}" IsEnabled="{Binding HasSelectedDocument}" />
