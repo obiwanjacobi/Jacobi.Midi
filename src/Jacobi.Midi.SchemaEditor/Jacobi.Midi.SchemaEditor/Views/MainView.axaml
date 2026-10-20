@@ -11,41 +11,50 @@
              x:Class="Jacobi.Midi.SchemaEditor.Views.MainView"
              x:DataType="vm:MainViewModel">
 
-    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Background="{DynamicResource AppBackgroundBaseBrush}">
-        <midi:MidiBarControl Grid.Row="0" DataContext="{Binding MidiBar}" />
-
-        <Border Grid.Row="1" Padding="24,16" Background="{DynamicResource AppBackgroundHeaderBrush}" BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="10">
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Background="{DynamicResource AppBackgroundBaseBrush}">
+        <Border Grid.Row="0" Padding="24,16" Background="{DynamicResource AppBackgroundHeaderBrush}" BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="32">
                 <StackPanel Spacing="2" VerticalAlignment="Center">
                     <TextBlock Text="MIDI SCHEMA STUDIO" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource AppTextHeadingBrush}" />
                     <TextBlock Text="Author, inspect and reverse-engineer SysEx schemas" FontSize="12" Foreground="{DynamicResource AppTextLabelBrush}" />
                 </StackPanel>
-                <Button Grid.Column="1" Content="New schema" Command="{Binding NewDocumentCommand}" />
-                <Button Grid.Column="2" Content="Open files" Command="{Binding OpenFilesCommand}" />
-                <Button Grid.Column="3" Content="Save" Command="{Binding SaveDocumentCommand}" IsEnabled="{Binding HasSelectedDocument}" />
-                <Button Grid.Column="4" Content="Save as…" Command="{Binding SaveDocumentAsCommand}" IsEnabled="{Binding HasSelectedDocument}" />
+                <midi:MidiBarControl Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" DataContext="{Binding MidiBar}" />
             </Grid>
         </Border>
 
-        <Border Grid.Row="2" Padding="12,8" Background="{DynamicResource AppBackgroundToolbarBrush}" BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="0,0,0,1">
-            <ListBox ItemsSource="{Binding Documents}"
-                     SelectedItem="{Binding SelectedDocument, Mode=TwoWay}"
-                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                     ScrollViewer.VerticalScrollBarVisibility="Disabled">
-                <ListBox.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <StackPanel Orientation="Horizontal" Spacing="8" />
-                    </ItemsPanelTemplate>
-                </ListBox.ItemsPanel>
-                <ListBox.ItemTemplate>
-                    <DataTemplate x:DataType="models:SchemaWorkspaceDocument">
-                        <TextBlock Text="{Binding DisplayName}" Margin="12,7" />
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
+        <Border Grid.Row="1" Padding="12,8" Background="{DynamicResource AppBackgroundToolbarBrush}" BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                <Button Grid.Column="0" VerticalAlignment="Center" ToolTip.Tip="Menu">
+                    <PathIcon Width="16" Height="16" Data="M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z" />
+                    <Button.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                            <MenuItem Header="New schema" Command="{Binding NewDocumentCommand}" />
+                            <MenuItem Header="Open files…" Command="{Binding OpenFilesCommand}" />
+                            <Separator />
+                            <MenuItem Header="Save" Command="{Binding SaveDocumentCommand}" IsEnabled="{Binding HasSelectedDocument}" />
+                            <MenuItem Header="Save as…" Command="{Binding SaveDocumentAsCommand}" IsEnabled="{Binding HasSelectedDocument}" />
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+                <ListBox Grid.Column="1" ItemsSource="{Binding Documents}"
+                         SelectedItem="{Binding SelectedDocument, Mode=TwoWay}"
+                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                         ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="8" />
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="models:SchemaWorkspaceDocument">
+                            <TextBlock Text="{Binding DisplayName}" Margin="12,7" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
         </Border>
 
-        <Grid Grid.Row="3" ColumnDefinitions="280,*,320" ColumnSpacing="1" Background="{DynamicResource AppDividerBrush}">
+        <Grid Grid.Row="2" ColumnDefinitions="280,*,320" ColumnSpacing="1" Background="{DynamicResource AppDividerBrush}">
             <Border Grid.Column="0" Padding="18" Background="{DynamicResource AppBackgroundPanelBrush}">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Spacing="3" Margin="0,0,0,16">
@@ -86,7 +95,7 @@
             </Border>
         </Grid>
 
-        <Border Grid.Row="4" Padding="16,8" Background="{DynamicResource AppBackgroundHeaderBrush}">
+        <Border Grid.Row="3" Padding="16,8" Background="{DynamicResource AppBackgroundHeaderBrush}">
             <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="{DynamicResource AppTextSecondaryBrush}" />
         </Border>
     </Grid>
