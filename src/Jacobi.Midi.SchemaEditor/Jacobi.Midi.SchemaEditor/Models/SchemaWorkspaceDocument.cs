@@ -63,55 +63,64 @@ internal sealed partial class SchemaWorkspaceDocument : ObservableObject
     }
 
     public EditGroup AddGroup(EditGroup parent, string name)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        EnsureCanAddMembers(parent);
-        var group = new EditGroup(parent)
-        {
-            Name = name,
-            Members = [],
-            Processors = [],
-            Properties = [],
-        };
-        parent.Members.Add(group);
-        MarkChanged();
-        return group;
-    }
+        => AddMember(parent, (EditGroup)CreateNode(SchemaNodeKind.Group, parent, name));
 
     public EditRepeat AddRepeat(EditGroup parent, string name, int count)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        EnsureCanAddMembers(parent);
-        var repeat = new EditRepeat(parent)
-        {
-            Name = name,
-            Count = count,
-            Members = [],
-            Processors = [],
-            Properties = [],
-            ValueProcessors = [],
-        };
-        parent.Members.Add(repeat);
-        MarkChanged();
-        return repeat;
+        var repeat = (EditRepeat)CreateNode(SchemaNodeKind.Repeat, parent, name);
+        repeat.Count = count;
+        return AddMember(parent, repeat);
     }
 
     public EditChoice AddChoice(EditGroup parent, string name, int selectedIndex)
     {
+        var choice = (EditChoice)CreateNode(SchemaNodeKind.Choice, parent, name);
+        choice.SelectedIndex = selectedIndex;
+        return AddMember(parent, choice);
+    }
+
+    /// <summary>
+    /// Adds a top-level node definition of <paramref name="kind"/> with default values.
+    /// </summary>
+    public EditNode AddNodeDef(SchemaNodeKind kind, string name)
+        => AddItem(Schema.NodeDefs, CreateNode(kind, null, name));
+
+    public EditDocumentRef AddInclude(string schema)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(schema);
+        return AddItem(Schema.Includes, new EditDocumentRef { Schema = schema });
+    }
+
+    public EditDataTypeDef AddDataTypeDef(string name, string basedOn)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        EnsureCanAddMembers(parent);
-        var choice = new EditChoice(parent)
-        {
-            Name = name,
-            SelectedIndex = selectedIndex,
-            Members = [],
-            Processors = [],
-            Properties = [],
-            ValueProcessors = [],
-        };
-        parent.Members.Add(choice);
-        MarkChanged();
-        return choice;
+        ArgumentException.ThrowIfNullOrWhiteSpace(basedOn);
+        return AddItem(Schema.DataTypeDefs, new EditDataTypeDef { Name = name, BasedOn = new SchemaName(basedOn) });
+    }
+
+    public EditProcessorDef AddProcessorDef(string name, string processor)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(processor);
+        return AddItem(Schema.ProcessorDefs, new EditProcessorDef { Name = name, Processor = processor });
+    }
+
+    /// <summary>
+    /// Adds a processor to the document itself.
+    /// </summary>
+    public EditProcessorRef AddProcessor(string processor)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(processor);
+        return AddItem(Schema.Processors, new EditProcessorRef { Processor = new SchemaName(processor) });
+    }
+
+    /// <summary>
+    /// Adds a property to the document itself.
+    /// </summary>
+    public EditProperty AddProperty(string name, string? value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        return AddItem(Schema.Properties, new EditProperty { Name = name, Value = value });
     }
 
     /// <summary>
@@ -120,17 +129,62 @@ internal sealed partial class SchemaWorkspaceDocument : ObservableObject
     public void RemoveNode(EditNode node)
     {
         ArgumentNullException.ThrowIfNull(node);
-        var removed = node switch
+        RemoveItem(node);
+    }
+
+    /// <summary>
+    /// Removes a node or a document collection item (include, def, document processor or property).
+    /// </summary>
+    public void RemoveItem(object item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        var removed = item switch
         {
-            EditDocument => throw new ArgumentException("The document itself cannot be removed.", nameof(node)),
-            { Parent: { } parent } => parent.Members.Remove(node),
-            _ => Schema.NodeDefs.Remove(node)
+            EditDocument => throw new ArgumentException("The document itself cannot be removed.", nameof(item)),
+            EditNode { Parent: { } parent } node => parent.Members.Remove(node),
+            EditNode node => Schema.NodeDefs.Remove(node),
+            EditDocumentRef include => Schema.Includes.Remove(include),
+            EditDataTypeDef definition => Schema.DataTypeDefs.Remove(definition),
+            EditProcessorDef definition => Schema.ProcessorDefs.Remove(definition),
+            EditProcessorRef processor => Schema.Processors.Remove(processor),
+            EditProperty property => Schema.Properties.Remove(property),
+            _ => throw new NotSupportedException($"Cannot remove a {item.GetType().Name}.")
         };
         if (!removed)
         {
-            throw new ArgumentException($"Node '{node.Name}' is not part of this document.", nameof(node));
+            throw new ArgumentException("The item is not part of this document.", nameof(item));
         }
         MarkChanged();
+    }
+
+    /// <summary>
+    /// Creates a node of <paramref name="kind"/> with default values: a field is a sys.uint8,
+    /// a repeat repeats once and a choice selects its first member.
+    /// </summary>
+    private static EditNode CreateNode(SchemaNodeKind kind, EditGroup? parent, string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        return kind switch
+        {
+            SchemaNodeKind.Field => new EditField(parent) { Name = name, DataType = new SchemaName("sys.uint8"), Processors = [], Properties = [] },
+            SchemaNodeKind.Group => new EditGroup(parent) { Name = name, Members = [], Processors = [], Properties = [] },
+            SchemaNodeKind.Repeat => new EditRepeat(parent) { Name = name, Count = 1, Members = [], Processors = [], Properties = [], ValueProcessors = [] },
+            SchemaNodeKind.Choice => new EditChoice(parent) { Name = name, SelectedIndex = 0, Members = [], Processors = [], Properties = [], ValueProcessors = [] },
+            _ => throw new NotSupportedException($"Cannot create a node of kind {kind}.")
+        };
+    }
+
+    private T AddMember<T>(EditGroup parent, T node) where T : EditNode
+    {
+        EnsureCanAddMembers(parent);
+        return AddItem(parent.Members, node);
+    }
+
+    private T AddItem<T, TItem>(IList<TItem> collection, T item) where T : TItem
+    {
+        collection.Add(item);
+        MarkChanged();
+        return item;
     }
 
     /// <summary>

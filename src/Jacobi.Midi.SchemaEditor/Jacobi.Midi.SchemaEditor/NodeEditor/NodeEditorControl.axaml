@@ -17,6 +17,10 @@
             <Setter Property="FontSize" Value="11" />
             <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}" />
         </Style>
+        <Style Selector="TextBlock.label">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextLabelBrush}" />
+        </Style>
         <Style Selector="TextBox.description">
             <Setter Property="AcceptsReturn" Value="True" />
             <Setter Property="TextWrapping" Value="Wrap" />
@@ -36,9 +40,9 @@
                            TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextSecondaryBrush}" />
                 <TextBlock Grid.Column="2" Text="{Binding Source}" Classes="kind" VerticalAlignment="Center" />
                 <Button Grid.Column="3" Content="Remove" IsVisible="{Binding IsOwn}" CommandParameter="{Binding}"
-                        Command="{Binding $parent[ne:NodeEditorControl].((vm:MainViewModel)DataContext).NodeDetails.RemovePropertyCommand}" />
+                        Command="{Binding $parent[ne:NodeEditorControl].((vm:MainViewModel)DataContext).ItemDetails.RemovePropertyCommand}" />
                 <Button Grid.Column="3" Content="Override" IsVisible="{Binding CanOverride}" CommandParameter="{Binding}"
-                        Command="{Binding $parent[ne:NodeEditorControl].((vm:MainViewModel)DataContext).NodeDetails.OverridePropertyCommand}" />
+                        Command="{Binding $parent[ne:NodeEditorControl].((vm:MainViewModel)DataContext).ItemDetails.OverridePropertyCommand}" />
             </Grid>
         </DataTemplate>
         <!-- one effective processor with its effective properties; only own processors are editable -->
@@ -52,11 +56,11 @@
                         <TextBlock Grid.Column="1" Text="{Binding PublishNamespace}" Classes="kind" VerticalAlignment="Center" IsVisible="{Binding IsInherited}" />
                         <TextBlock Grid.Column="2" Text="{Binding Source}" Classes="kind" VerticalAlignment="Center" />
                         <Button Grid.Column="3" Content="Remove" IsVisible="{Binding IsOwn}" CommandParameter="{Binding}"
-                                Command="{Binding $parent[ne:NodeEditorControl].((vm:MainViewModel)DataContext).NodeDetails.RemoveProcessorCommand}" />
+                                Command="{Binding $parent[ne:NodeEditorControl].((vm:MainViewModel)DataContext).ItemDetails.RemoveProcessorCommand}" />
                     </Grid>
                     <ItemsControl ItemsSource="{Binding Properties}" />
                     <Button Content="Add property" HorizontalAlignment="Left" IsVisible="{Binding IsOwn}" CommandParameter="{Binding}"
-                            Command="{Binding $parent[ne:NodeEditorControl].((vm:MainViewModel)DataContext).NodeDetails.AddProcessorPropertyCommand}" />
+                            Command="{Binding $parent[ne:NodeEditorControl].((vm:MainViewModel)DataContext).ItemDetails.AddProcessorPropertyCommand}" />
                 </StackPanel>
             </Border>
         </DataTemplate>
@@ -69,30 +73,42 @@
                 <TextBlock Text="Shape your message structure" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource AppTextHeadingBrush}" />
             </StackPanel>
             <Button Grid.Column="1" VerticalAlignment="Bottom" Content="Add ▾" IsEnabled="{Binding HasSelectedDocument}"
-                    ToolTip.Tip="Add a node to the selected group">
+                    ToolTip.Tip="Add a node to the selected group, or an item to the document">
                 <Button.Flyout>
                     <MenuFlyout Placement="BottomEdgeAlignedRight">
                         <MenuItem Header="Field" Command="{Binding AddNodeCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Field}" />
                         <MenuItem Header="Group" Command="{Binding AddNodeCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Group}" />
                         <MenuItem Header="Repeat" Command="{Binding AddNodeCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Repeat}" />
                         <MenuItem Header="Choice" Command="{Binding AddNodeCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Choice}" />
+                        <Separator />
+                        <MenuItem Header="Node def">
+                            <MenuItem Header="Field" Command="{Binding AddNodeDefCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Field}" />
+                            <MenuItem Header="Group" Command="{Binding AddNodeDefCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Group}" />
+                            <MenuItem Header="Repeat" Command="{Binding AddNodeDefCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Repeat}" />
+                            <MenuItem Header="Choice" Command="{Binding AddNodeDefCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Choice}" />
+                        </MenuItem>
+                        <MenuItem Header="Data type def" Command="{Binding AddDataTypeDefCommand}" />
+                        <MenuItem Header="Processor def" Command="{Binding AddProcessorDefCommand}" />
+                        <MenuItem Header="Include" Command="{Binding AddIncludeCommand}" />
+                        <MenuItem Header="Document processor" Command="{Binding AddDocumentProcessorCommand}" />
+                        <MenuItem Header="Document property" Command="{Binding AddDocumentPropertyCommand}" />
                     </MenuFlyout>
                 </Button.Flyout>
             </Button>
-            <Button Grid.Column="2" VerticalAlignment="Bottom" Content="Delete" Command="{Binding DeleteNodeCommand}"
-                    ToolTip.Tip="Delete the selected node" />
+            <Button Grid.Column="2" VerticalAlignment="Bottom" Content="Delete" Command="{Binding DeleteItemCommand}"
+                    ToolTip.Tip="Delete the selected item" />
         </Grid>
         <Border Grid.Row="1" Padding="12" Margin="0,18,0,0" CornerRadius="6" Background="{DynamicResource AppBackgroundCardBrush}">
-            <TextBlock Text="New schemas start with a SysEx group. Use Add to insert a field, group, repeat or choice into the selected group."
+            <TextBlock Text="New schemas start with a SysEx group. Use Add to insert a field, group, repeat or choice into the selected group, or to add a definition, include, processor or property to the document."
                        TextWrapping="Wrap" Foreground="{DynamicResource AppTextSecondaryBrush}" FontSize="12" />
         </Border>
 
         <TabControl Grid.Row="2" Margin="0,14,0,0"
                     IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNotNull}}">
             <TabItem Header="General">
-                <!-- The selected node picks its editor template by type. The template roots rebind their
+                <!-- The selected node or item editor picks its template by type. The node template roots rebind their
                      DataContext to the MainViewModel so the editors bind to its staged node values. -->
-                <ContentControl Margin="0,12,0,0" Content="{Binding SelectedItem}">
+                <ContentControl Margin="0,12,0,0" Content="{Binding GeneralEditor}">
                     <ContentControl.DataTemplates>
                         <!-- most specific types first: the first matching template wins -->
                         <DataTemplate x:DataType="models:EditRepeat">
@@ -136,7 +152,111 @@
                                 <Button Content="Apply field changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
                             </StackPanel>
                         </DataTemplate>
-                        <!-- fallback for selected document items (includes, defs, ...) that have no editor yet -->
+                        <!-- item editors of the document collections (live editing) -->
+                        <DataTemplate x:DataType="ne:DocumentRefEditor">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Include" Classes="caption" />
+                                <TextBlock Text="Includes another schema so its definitions can be referenced as 'schema.name'." Classes="kind" />
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Schema" Classes="label" />
+                                    <TextBox Text="{Binding Schema}" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Path" Classes="label" />
+                                    <TextBox Text="{Binding Path}" PlaceholderText="optional" />
+                                </StackPanel>
+                            </StackPanel>
+                        </DataTemplate>
+                        <DataTemplate x:DataType="ne:DataTypeDefEditor">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Data type def" Classes="caption" />
+                                <TextBlock Text="A named data type based on another type, with optional facets and options." Classes="kind" />
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Name" Classes="label" />
+                                    <TextBox Text="{Binding Name}" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Based on" Classes="label" />
+                                    <TextBox Text="{Binding BasedOn}" PlaceholderText="e.g. sys.uint8" />
+                                </StackPanel>
+                                <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="8">
+                                    <StackPanel Grid.Column="0" Spacing="4">
+                                        <TextBlock Text="Min" Classes="label" />
+                                        <TextBox Text="{Binding Min}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="4">
+                                        <TextBlock Text="Max" Classes="label" />
+                                        <TextBox Text="{Binding Max}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Spacing="4">
+                                        <TextBlock Text="Scale" Classes="label" />
+                                        <TextBox Text="{Binding Scale}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="3" Spacing="4">
+                                        <TextBlock Text="Shift" Classes="label" />
+                                        <TextBox Text="{Binding Shift}" />
+                                    </StackPanel>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Text="OPTIONS" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" VerticalAlignment="Center" Foreground="{DynamicResource AppTextLabelBrush}" />
+                                    <Button Grid.Column="1" Content="Add option" Command="{Binding AddOptionCommand}" />
+                                </Grid>
+                                <ItemsControl ItemsSource="{Binding Options}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="ne:OptionRow">
+                                            <Grid ColumnDefinitions="100,*,Auto" ColumnSpacing="8" Margin="0,2">
+                                                <TextBox Text="{Binding Value}" PlaceholderText="value" />
+                                                <TextBox Grid.Column="1" Text="{Binding Label}" PlaceholderText="label" />
+                                                <Button Grid.Column="2" Content="Remove" CommandParameter="{Binding}"
+                                                        Command="{Binding $parent[ItemsControl].((ne:DataTypeDefEditor)DataContext).RemoveOptionCommand}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </DataTemplate>
+                        <DataTemplate x:DataType="ne:ProcessorDefEditor">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Processor def" Classes="caption" />
+                                <TextBlock Text="A processor with default properties, referenced as 'ref:name'." Classes="kind" />
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Name" Classes="label" />
+                                    <TextBox Text="{Binding Name}" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Processor" Classes="label" />
+                                    <TextBox Text="{Binding Processor}" PlaceholderText="namespace.id" />
+                                </StackPanel>
+                            </StackPanel>
+                        </DataTemplate>
+                        <DataTemplate x:DataType="ne:ProcessorRefEditor">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Document processor" Classes="caption" />
+                                <TextBlock Text="A processor applied to the document root." Classes="kind" />
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Processor" Classes="label" />
+                                    <TextBox Text="{Binding Processor}" PlaceholderText="namespace.id or ref:name" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Publish namespace" Classes="label" />
+                                    <TextBox Text="{Binding PublishNamespace}" PlaceholderText="optional" />
+                                </StackPanel>
+                            </StackPanel>
+                        </DataTemplate>
+                        <DataTemplate x:DataType="ne:PropertyEditor">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Document property" Classes="caption" />
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Name" Classes="label" />
+                                    <TextBox Text="{Binding Name}" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Value" Classes="label" />
+                                    <TextBox Text="{Binding Value}" PlaceholderText="(no value)" />
+                                </StackPanel>
+                            </StackPanel>
+                        </DataTemplate>
+                        <!-- fallback for selected items without an editor -->
                         <DataTemplate x:DataType="x:Object">
                             <TextBlock Text="This item cannot be edited yet."
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -146,8 +266,8 @@
                 </ContentControl>
             </TabItem>
 
-            <TabItem Header="Processors" IsVisible="{Binding NodeDetails, Converter={x:Static ObjectConverters.IsNotNull}}">
-                <ScrollViewer DataContext="{Binding NodeDetails}" x:DataType="ne:NodeDetailsViewModel">
+            <TabItem Header="Processors" IsVisible="{Binding ItemDetails.HasProcessors, FallbackValue=False}">
+                <ScrollViewer DataContext="{Binding ItemDetails}" x:DataType="ne:ItemDetailsViewModel">
                     <StackPanel Spacing="10" Margin="0,12,0,0">
                         <ItemsControl ItemsSource="{Binding Unresolved}" IsVisible="{Binding HasUnresolved}">
                             <ItemsControl.ItemTemplate>
@@ -165,8 +285,8 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="Properties" IsVisible="{Binding NodeDetails, Converter={x:Static ObjectConverters.IsNotNull}}">
-                <ScrollViewer DataContext="{Binding NodeDetails}" x:DataType="ne:NodeDetailsViewModel">
+            <TabItem Header="Properties" IsVisible="{Binding ItemDetails, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <ScrollViewer DataContext="{Binding ItemDetails}" x:DataType="ne:ItemDetailsViewModel">
                     <StackPanel Spacing="10" Margin="0,12,0,0">
                         <ItemsControl ItemsSource="{Binding Unresolved}" IsVisible="{Binding HasUnresolved}">
                             <ItemsControl.ItemTemplate>
@@ -186,7 +306,7 @@
         </TabControl>
 
         <TextBlock Grid.Row="2"
-                   Text="Choose a group or field in the schema tree to inspect and edit it."
+                   Text="Choose an item in the schema tree to inspect and edit it."
                    IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNull}}"
                    VerticalAlignment="Center"
                    HorizontalAlignment="Center"

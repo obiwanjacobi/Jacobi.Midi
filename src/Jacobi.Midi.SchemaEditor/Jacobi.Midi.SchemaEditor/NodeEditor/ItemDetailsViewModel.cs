@@ -9,25 +9,58 @@ namespace Jacobi.Midi.SchemaEditor.NodeEditor;
 
 /// <summary>
 /// View model of the Processors and Properties tabs of the node editor.
-/// Shows the effective processors and properties of one node (see <see cref="EffectiveNodeResolver"/>)
-/// and edits the node's own entries in place. Inherited entries are read-only (properties can be overridden).
-/// Rebuilds its rows when the structure of the node's own entries changes; dispose it to stop listening.
+/// Shows the effective processors and properties of one item (a node, data type def, processor def or
+/// document processor; see <see cref="EffectiveNodeResolver"/>) and edits the item's own entries in place.
+/// Inherited entries are read-only (properties can be overridden).
+/// Rebuilds its rows when the structure of the item's own entries changes; dispose it to stop listening.
 /// </summary>
-internal sealed partial class NodeDetailsViewModel : ObservableObject, IDisposable
+internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposable
 {
     private readonly SchemaWorkspaceDocument _document;
+    private readonly INotifyPropertyChanged _item;
+    private readonly IList<EditProperty> _properties;
+    private readonly IList<EditProcessorRef>? _processors;
+    private readonly Func<EffectiveItem> _resolve;
     private readonly List<INotifyPropertyChanged> _observedItems = [];
     private readonly List<INotifyCollectionChanged> _observedCollections = [];
 
-    public NodeDetailsViewModel(SchemaWorkspaceDocument document, EditNode node)
+    private ItemDetailsViewModel(SchemaWorkspaceDocument document, INotifyPropertyChanged item,
+        IList<EditProperty> properties, IList<EditProcessorRef>? processors, Func<EffectiveItem> resolve)
     {
         _document = document;
-        Node = node;
-        Node.PropertyChanged += OnModelPropertyChanged;
+        _item = item;
+        _properties = properties;
+        _processors = processors;
+        _resolve = resolve;
+        _item.PropertyChanged += OnModelPropertyChanged;
         Rebuild();
     }
 
-    public EditNode Node { get; }
+    /// <summary>
+    /// Creates the details of <paramref name="item"/>, or returns null when the item has no processors or properties.
+    /// </summary>
+    public static ItemDetailsViewModel? Create(SchemaWorkspaceDocument document, object? item)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        var schema = document.Schema;
+        return item switch
+        {
+            EditNode node => new(document, node, node.Properties, EffectiveNodeResolver.GetProcessors(node),
+                () => EffectiveNodeResolver.Resolve(schema, node)),
+            EditDataTypeDef definition => new(document, definition, definition.Properties, definition.Processors,
+                () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, definition.Processors)),
+            EditProcessorDef definition => new(document, definition, definition.Properties, null,
+                () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, null)),
+            EditProcessorRef processor => new(document, processor, processor.Properties, null,
+                () => EffectiveNodeResolver.ResolveProcessorRef(schema, processor)),
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// True when the item has processors (nodes and data type defs).
+    /// </summary>
+    public bool HasProcessors => _processors is not null;
 
     [ObservableProperty]
     public partial IReadOnlyList<PropertyRow> Properties { get; private set; } = [];
@@ -46,11 +79,18 @@ internal sealed partial class NodeDetailsViewModel : ObservableObject, IDisposab
 
     [RelayCommand]
     private void AddProperty()
-        => AddPropertyTo(Node.Properties);
+        => AddPropertyTo(_properties);
 
     [RelayCommand]
     private void AddProcessor()
-        => AddProcessorTo(EffectiveNodeResolver.GetProcessors(Node));
+    {
+        if (_processors is null)
+        {
+            return;
+        }
+        _processors.Add(new EditProcessorRef { Processor = new SchemaName("namespace.id") });
+        _document.MarkChanged();
+    }
 
     [RelayCommand]
     private void AddProcessorProperty(ProcessorRow? row)
@@ -94,7 +134,7 @@ internal sealed partial class NodeDetailsViewModel : ObservableObject, IDisposab
 
     public void Dispose()
     {
-        Node.PropertyChanged -= OnModelPropertyChanged;
+        _item.PropertyChanged -= OnModelPropertyChanged;
         Unobserve();
     }
 
@@ -109,21 +149,11 @@ internal sealed partial class NodeDetailsViewModel : ObservableObject, IDisposab
         _document.MarkChanged();
     }
 
-    private void AddProcessorTo(IList<EditProcessorRef>? target)
-    {
-        if (target is null)
-        {
-            return;
-        }
-        target.Add(new EditProcessorRef { Processor = new SchemaName("namespace.id") });
-        _document.MarkChanged();
-    }
-
     private void Rebuild()
     {
-        var effective = EffectiveNodeResolver.Resolve(_document.Schema, Node);
-        Properties = effective.Properties.Select(property => new PropertyRow(property, Node.Properties, OnRowEdited)).ToList();
-        Processors = effective.Processors.Select(processor => new ProcessorRow(processor, EffectiveNodeResolver.GetProcessors(Node), OnRowEdited)).ToList();
+        var effective = _resolve();
+        Properties = effective.Properties.Select(property => new PropertyRow(property, _properties, OnRowEdited)).ToList();
+        Processors = effective.Processors.Select(processor => new ProcessorRow(processor, _processors, OnRowEdited)).ToList();
         Unresolved = effective.Unresolved;
         Observe();
     }
@@ -131,20 +161,20 @@ internal sealed partial class NodeDetailsViewModel : ObservableObject, IDisposab
     private void OnRowEdited() => _document.MarkChanged();
 
     /// <summary>
-    /// Listens to the node's own entries: any change other than a property value changes the merge result.
+    /// Listens to the item's own entries: any change other than a property value changes the merge result.
     /// </summary>
     private void Observe()
     {
         Unobserve();
-        var processors = EffectiveNodeResolver.GetProcessors(Node) ?? [];
-        ObserveCollection(Node.Properties);
-        ObserveCollection(EffectiveNodeResolver.GetProcessors(Node));
+        var processors = _processors ?? [];
+        ObserveCollection(_properties);
+        ObserveCollection(_processors);
         foreach (var processor in processors)
         {
             ObserveItem(processor);
             ObserveCollection(processor.Properties);
         }
-        foreach (var property in Node.Properties.Concat(processors.SelectMany(processor => processor.Properties)))
+        foreach (var property in _properties.Concat(processors.SelectMany(processor => processor.Properties)))
         {
             ObserveItem(property);
         }

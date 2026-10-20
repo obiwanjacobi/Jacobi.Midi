@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Jacobi.Midi.Tests.SchemaEditor;
 
-public class NodeDetailsTests
+public class ItemDetailsTests
 {
     [Fact]
     public void Resolve_MergesDataTypeNodeDefAndOwnInPrecedenceOrder()
@@ -94,7 +94,7 @@ public class NodeDetailsTests
         var field = Field(Root(schema), "field", dataType: null);
         field.NodeDef = new SchemaName("def");
         var document = new SchemaWorkspaceDocument(schema, SchemaFormat.Json);
-        using var details = new NodeDetailsViewModel(document, field);
+        using var details = ItemDetailsViewModel.Create(document, field)!;
 
         var inherited = Assert.Single(details.Properties);
         Assert.False(inherited.IsOwn);
@@ -133,7 +133,7 @@ public class NodeDetailsTests
         var schema = CreateDocument();
         var field = Field(Root(schema), "field", dataType: "sys.uint8");
         var document = new SchemaWorkspaceDocument(schema, SchemaFormat.Json);
-        using var details = new NodeDetailsViewModel(document, field);
+        using var details = ItemDetailsViewModel.Create(document, field)!;
         Assert.Empty(details.Properties);
 
         document.ApplyNodeEdits(field, "field", "sys.uint8", "A description", String.Empty);

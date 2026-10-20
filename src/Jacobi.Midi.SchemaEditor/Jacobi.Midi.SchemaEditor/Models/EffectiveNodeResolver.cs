@@ -21,12 +21,12 @@ internal sealed record ResolvedProperty(string Name, string? Value, string Sourc
 internal sealed record ResolvedProcessor(EditProcessorRef Processor, string Source, bool IsOwn, IReadOnlyList<ResolvedProperty> Properties);
 
 /// <summary>
-/// The effective properties and processors of a node.
+/// The effective properties and processors of a node or another document item.
 /// </summary>
 /// <param name="Properties">The effective properties.</param>
 /// <param name="Processors">The effective processors.</param>
 /// <param name="Unresolved">Descriptions of the definitions that could not be resolved within the document.</param>
-internal sealed record EffectiveNode(
+internal sealed record EffectiveItem(
     IReadOnlyList<ResolvedProperty> Properties,
     IReadOnlyList<ResolvedProcessor> Processors,
     IReadOnlyList<string> Unresolved);
@@ -35,13 +35,13 @@ internal sealed record EffectiveNode(
 /// Computes the effective properties and processors of an <see cref="EditNode"/> the way the
 /// schema compiler (SchemaSetBuilder) merges them, but only with the definitions found in the edited document.
 /// Precedence (lowest first): the data type def chain (fields), the node def chain, the node itself.
-/// Definitions in other (included) documents are reported in <see cref="EffectiveNode.Unresolved"/>.
+/// Definitions in other (included) documents are reported in <see cref="EffectiveItem.Unresolved"/>.
 /// </summary>
 internal static class EffectiveNodeResolver
 {
     public const string OwnSource = "own";
 
-    public static EffectiveNode Resolve(EditDocument document, EditNode node)
+    public static EffectiveItem Resolve(EditDocument document, EditNode node)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(node);
@@ -74,6 +74,33 @@ internal static class EffectiveNodeResolver
         MergeProcessors(document, processors, GetProcessors(node), OwnSource, own: true, unresolved);
 
         return new(properties, processors, unresolved.Distinct().ToList());
+    }
+
+    /// <summary>
+    /// Resolves only the given (own) entries, as for a data type def or processor def.
+    /// Processor refs are still merged with their processor defs.
+    /// </summary>
+    public static EffectiveItem ResolveOwn(EditDocument document, IEnumerable<EditProperty> properties, IEnumerable<EditProcessorRef>? processors)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        var unresolved = new List<string>();
+        var resolvedProperties = new List<ResolvedProperty>();
+        var resolvedProcessors = new List<ResolvedProcessor>();
+        MergeProperties(resolvedProperties, properties, OwnSource, own: true);
+        MergeProcessors(document, resolvedProcessors, processors, OwnSource, own: true, unresolved);
+        return new(resolvedProperties, resolvedProcessors, unresolved.Distinct().ToList());
+    }
+
+    /// <summary>
+    /// Resolves the effective properties of a processor ref: its processor def properties overridden by its own.
+    /// </summary>
+    public static EffectiveItem ResolveProcessorRef(EditDocument document, EditProcessorRef processor)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(processor);
+        var unresolved = new List<string>();
+        var properties = ResolveProcessorProperties(document, processor, OwnSource, own: true, unresolved);
+        return new(properties, [], unresolved.Distinct().ToList());
     }
 
     /// <summary>

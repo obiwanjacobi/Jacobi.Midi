@@ -397,7 +397,7 @@ public class SchemaEditorTests
         public void DeleteNode_RemovesSelectionAndSelectsParent()
         {
                 var viewModel = new MainViewModel();
-                Assert.False(viewModel.DeleteNodeCommand.CanExecute(null));
+                Assert.False(viewModel.DeleteItemCommand.CanExecute(null));
                 viewModel.NewDocumentCommand.Execute(null);
                 var document = viewModel.SelectedDocument!;
                 var root = Assert.IsType<EditGroup>(Assert.Single(document.Schema.Members));
@@ -405,21 +405,21 @@ public class SchemaEditorTests
                 var field = Assert.IsType<EditField>(Assert.Single(root.Members));
                 var revision = document.Revision;
 
-                Assert.True(viewModel.DeleteNodeCommand.CanExecute(null));
-                viewModel.DeleteNodeCommand.Execute(null);
+                Assert.True(viewModel.DeleteItemCommand.CanExecute(null));
+                viewModel.DeleteItemCommand.Execute(null);
                 Assert.Empty(root.Members);
                 Assert.Same(root, viewModel.SelectedNode);
                 Assert.Equal(revision + 1, document.Revision);
 
-                viewModel.DeleteNodeCommand.Execute(null);
+                viewModel.DeleteItemCommand.Execute(null);
                 Assert.Empty(document.Schema.Members);
                 Assert.Null(viewModel.SelectedNode);
-                Assert.False(viewModel.DeleteNodeCommand.CanExecute(null));
+                Assert.False(viewModel.DeleteItemCommand.CanExecute(null));
 
                 var definition = new EditGroup(null) { Name = "def", Members = [], Processors = [], Properties = [] };
                 document.Schema.NodeDefs.Add(definition);
                 viewModel.SelectedNode = definition;
-                viewModel.DeleteNodeCommand.Execute(null);
+                viewModel.DeleteItemCommand.Execute(null);
                 Assert.Empty(document.Schema.NodeDefs);
                 Assert.Null(viewModel.SelectedNode);
         }

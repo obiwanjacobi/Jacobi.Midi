@@ -118,9 +118,9 @@ internal partial class EditDataTypeDef : ObservableObject
     [ObservableProperty]
     public partial Dictionary<long, string>? Options { get; set; }
     [ObservableProperty]
-    public partial List<EditProcessorRef> Processors { get; set; } = [];
+    public partial ObservableCollection<EditProcessorRef> Processors { get; set; } = [];
     [ObservableProperty]
-    public partial List<EditProperty> Properties { get; set; } = [];
+    public partial ObservableCollection<EditProperty> Properties { get; set; } = [];
 }
 
 internal partial class EditProcessorRef : ObservableObject
@@ -140,7 +140,7 @@ internal partial class EditProcessorDef : ObservableObject
     [ObservableProperty]
     public partial string Processor { get; set; }
     [ObservableProperty]
-    public partial List<EditProperty> Properties { get; set; } = [];
+    public partial ObservableCollection<EditProperty> Properties { get; set; } = [];
 }
 
 internal partial class EditProperty : ObservableObject

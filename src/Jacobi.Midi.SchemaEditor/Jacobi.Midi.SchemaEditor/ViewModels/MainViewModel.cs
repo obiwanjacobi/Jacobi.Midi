@@ -50,7 +50,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectedNode))]
-    [NotifyCanExecuteChangedFor(nameof(DeleteNodeCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DeleteItemCommand))]
     public partial object? SelectedItem { get; set; }
 
     /// <summary>
@@ -63,10 +63,18 @@ internal sealed partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// The effective processors and properties of the <see cref="SelectedNode"/>; null when no node is selected.
+    /// The effective processors and properties of the <see cref="SelectedItem"/>;
+    /// null when nothing is selected or the item has no processors or properties.
     /// </summary>
     [ObservableProperty]
-    public partial NodeDetailsViewModel? NodeDetails { get; private set; }
+    public partial ItemDetailsViewModel? ItemDetails { get; private set; }
+
+    /// <summary>
+    /// The General tab content: the <see cref="SelectedNode"/> (edited through the staged node values of this view model)
+    /// or an <see cref="NodeEditor.ItemEditor"/> for the other document items.
+    /// </summary>
+    [ObservableProperty]
+    public partial object? GeneralEditor { get; private set; }
 
     [ObservableProperty]
     public partial string NodeName { get; set; } = String.Empty;
@@ -218,7 +226,7 @@ internal sealed partial class MainViewModel : ViewModelBase
         try
         {
             var parent = GetTargetGroup();
-            var name = GetUniqueName(parent, $"New{kind}");
+            var name = GetUniqueName(parent.Members.Select(member => member.Name), $"New{kind}");
             EditNode node = kind switch
             {
                 SchemaNodeKind.Field => SelectedDocument.AddField(parent, name, "sys.uint8", String.Empty),
@@ -237,30 +245,81 @@ internal sealed partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Removes the selected node and selects its parent group.
+    /// Adds a top-level node definition of <paramref name="kind"/> and selects it.
     /// </summary>
-    [RelayCommand(CanExecute = nameof(CanDeleteNode))]
-    private void DeleteNode()
+    [RelayCommand]
+    private void AddNodeDef(SchemaNodeKind kind)
+        => AddDocumentItem("node def", document => document.AddNodeDef(kind,
+            GetUniqueName(document.Schema.NodeDefs.Select(definition => definition.Name), $"New{kind}Def")));
+
+    [RelayCommand]
+    private void AddInclude()
+        => AddDocumentItem("include", document => document.AddInclude(
+            GetUniqueName(document.Schema.Includes.Select(include => include.Schema), "schema")));
+
+    [RelayCommand]
+    private void AddDataTypeDef()
+        => AddDocumentItem("data type def", document => document.AddDataTypeDef(
+            GetUniqueName(document.Schema.DataTypeDefs.Select(definition => definition.Name), "NewDataType"), "sys.uint8"));
+
+    [RelayCommand]
+    private void AddProcessorDef()
+        => AddDocumentItem("processor def", document => document.AddProcessorDef(
+            GetUniqueName(document.Schema.ProcessorDefs.Select(definition => definition.Name), "NewProcessor"), "namespace.id"));
+
+    [RelayCommand]
+    private void AddDocumentProcessor()
+        => AddDocumentItem("processor", document => document.AddProcessor("namespace.id"));
+
+    [RelayCommand]
+    private void AddDocumentProperty()
+        => AddDocumentItem("property", document => document.AddProperty(
+            GetUniqueName(document.Schema.Properties.Select(property => property.Name), "property"), null));
+
+    /// <summary>
+    /// Removes the selected node or document item. A removed member selects its parent group.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanDeleteItem))]
+    private void DeleteItem()
     {
-        if (SelectedDocument is null || SelectedNode is not { } node)
+        if (SelectedDocument is null || SelectedItem is not { } item)
         {
             return;
         }
 
         try
         {
-            var parent = node.Parent is EditDocument ? null : node.Parent;
-            SelectedDocument.RemoveNode(node);
-            SelectedNode = parent;
-            StatusMessage = $"Deleted {node.Name}.";
+            var parent = item is EditNode { Parent: { } group and not EditDocument } ? group : null;
+            SelectedDocument.RemoveItem(item);
+            SelectedItem = parent;
+            StatusMessage = "Deleted the selected item.";
         }
         catch (Exception exception) when (IsSchemaError(exception))
         {
-            StatusMessage = $"Node was not deleted: {exception.Message}";
+            StatusMessage = $"Item was not deleted: {exception.Message}";
         }
     }
 
-    private bool CanDeleteNode() => SelectedNode is not null and not EditDocument;
+    private bool CanDeleteItem() => SelectedItem is not null and not EditDocument;
+
+    private void AddDocumentItem(string what, Func<SchemaWorkspaceDocument, object> add)
+    {
+        if (SelectedDocument is null)
+        {
+            StatusMessage = $"Create or open a schema before adding a {what}.";
+            return;
+        }
+
+        try
+        {
+            SelectedItem = add(SelectedDocument);
+            StatusMessage = $"Added a {what} to {SelectedDocument.Schema.Name}.";
+        }
+        catch (Exception exception) when (IsSchemaError(exception))
+        {
+            StatusMessage = $"The {what} was not added: {exception.Message}";
+        }
+    }
 
     [RelayCommand]
     private void ImportSysEx()
@@ -378,8 +437,9 @@ internal sealed partial class MainViewModel : ViewModelBase
     partial void OnSelectedItemChanged(object? item)
     {
         var value = item as EditNode;
-        NodeDetails?.Dispose();
-        NodeDetails = value is not null && SelectedDocument is not null ? new NodeDetailsViewModel(SelectedDocument, value) : null;
+        ItemDetails?.Dispose();
+        ItemDetails = SelectedDocument is null ? null : ItemDetailsViewModel.Create(SelectedDocument, item);
+        GeneralEditor = (object?)value ?? (SelectedDocument is null ? null : ItemEditor.Create(SelectedDocument, item));
         NodeName = value?.Name ?? String.Empty;
         NodeDataType = (value as EditField)?.DataType?.ToString() ?? String.Empty;
         NodeDescription = GetProperty(value, "description");
@@ -480,11 +540,12 @@ internal sealed partial class MainViewModel : ViewModelBase
             ?? throw new InvalidOperationException("Select a group before adding a node.")
     };
 
-    private static string GetUniqueName(EditGroup parent, string baseName)
+    private static string GetUniqueName(IEnumerable<string> existingNames, string baseName)
     {
+        var names = existingNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var name = baseName;
         var suffix = 2;
-        while (parent.Members.Any(member => String.Equals(member.Name, name, StringComparison.OrdinalIgnoreCase)))
+        while (names.Contains(name))
         {
             name = $"{baseName}{suffix++}";
         }
