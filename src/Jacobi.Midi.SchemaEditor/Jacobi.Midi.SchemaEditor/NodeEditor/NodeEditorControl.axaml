@@ -72,26 +72,29 @@
                 <TextBlock Text="NODE EDITOR" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
                 <TextBlock Text="Shape your message structure" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource AppTextHeadingBrush}" />
             </StackPanel>
-            <Button Grid.Column="1" VerticalAlignment="Bottom" Content="Add ▾" IsEnabled="{Binding HasSelectedDocument}"
-                    ToolTip.Tip="Add a node to the selected group, or an item to the document">
+            <Button Grid.Column="1" VerticalAlignment="Bottom" Content="Add ▾" IsEnabled="{Binding CanAdd}"
+                    ToolTip.Tip="Add a node to the selected group, or an item to the selected document collection">
                 <Button.Flyout>
                     <MenuFlyout Placement="BottomEdgeAlignedRight">
-                        <MenuItem Header="Field" Command="{Binding AddNodeCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Field}" />
-                        <MenuItem Header="Group" Command="{Binding AddNodeCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Group}" />
-                        <MenuItem Header="Repeat" Command="{Binding AddNodeCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Repeat}" />
-                        <MenuItem Header="Choice" Command="{Binding AddNodeCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Choice}" />
-                        <Separator />
-                        <MenuItem Header="Node def">
+                        <MenuItem Header="Field" Command="{Binding AddNodeCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Field}" IsVisible="{Binding CanAddMembers}" />
+                        <MenuItem Header="Group" Command="{Binding AddNodeCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Group}" IsVisible="{Binding CanAddMembers}" />
+                        <MenuItem Header="Repeat" Command="{Binding AddNodeCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Repeat}" IsVisible="{Binding CanAddMembers}" />
+                        <MenuItem Header="Choice" Command="{Binding AddNodeCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Choice}" IsVisible="{Binding CanAddMembers}" />
+                        <Separator IsVisible="{Binding ShowAddSeparator}" />
+                        <MenuItem Header="Node def" IsVisible="{Binding CanAddNodeDef}">
                             <MenuItem Header="Field" Command="{Binding AddNodeDefCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Field}" />
                             <MenuItem Header="Group" Command="{Binding AddNodeDefCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Group}" />
                             <MenuItem Header="Repeat" Command="{Binding AddNodeDefCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Repeat}" />
                             <MenuItem Header="Choice" Command="{Binding AddNodeDefCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Choice}" />
                         </MenuItem>
-                        <MenuItem Header="Data type def" Command="{Binding AddDataTypeDefCommand}" />
-                        <MenuItem Header="Processor def" Command="{Binding AddProcessorDefCommand}" />
-                        <MenuItem Header="Include" Command="{Binding AddIncludeCommand}" />
-                        <MenuItem Header="Document processor" Command="{Binding AddDocumentProcessorCommand}" />
-                        <MenuItem Header="Document property" Command="{Binding AddDocumentPropertyCommand}" />
+                        <MenuItem Header="Data type def" Command="{Binding AddDataTypeDefCommand}" IsVisible="{Binding CanAddDataTypeDef}" />
+                        <MenuItem Header="Processor def" Command="{Binding AddProcessorDefCommand}" IsVisible="{Binding CanAddProcessorDef}" />
+                        <MenuItem Header="Include" Command="{Binding AddIncludeCommand}" IsVisible="{Binding CanAddInclude}" />
+                        <MenuItem Header="Document processor" Command="{Binding AddDocumentProcessorCommand}" IsVisible="{Binding CanAddDocumentProcessor}" />
+                        <MenuItem Header="Document property" Command="{Binding AddDocumentPropertyCommand}" IsVisible="{Binding CanAddDocumentProperty}" />
+                        <Separator IsVisible="{Binding ShowItemEntriesSeparator}" />
+                        <MenuItem Header="Processor (selected item)" Command="{Binding AddItemProcessorCommand}" IsVisible="{Binding CanAddItemProcessor}" />
+                        <MenuItem Header="Property (selected item)" Command="{Binding AddItemPropertyCommand}" IsVisible="{Binding CanAddItemProperty}" />
                     </MenuFlyout>
                 </Button.Flyout>
             </Button>
@@ -103,7 +106,7 @@
                        TextWrapping="Wrap" Foreground="{DynamicResource AppTextSecondaryBrush}" FontSize="12" />
         </Border>
 
-        <TabControl Grid.Row="2" Margin="0,14,0,0"
+        <TabControl Grid.Row="2" Margin="0,14,0,0" SelectedIndex="{Binding SelectedEditorTab}"
                     IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNotNull}}">
             <TabItem Header="General">
                 <!-- The selected node or item editor picks its template by type. The node template roots rebind their
@@ -276,10 +279,7 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                        <Grid ColumnDefinitions="*,Auto">
-                            <TextBlock Text="PROCESSORS" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" VerticalAlignment="Center" Foreground="{DynamicResource AppTextLabelBrush}" />
-                            <Button Grid.Column="1" Content="Add processor" Command="{Binding AddProcessorCommand}" />
-                        </Grid>
+                        <TextBlock Text="PROCESSORS" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
                         <ItemsControl ItemsSource="{Binding Processors}" />
                     </StackPanel>
                 </ScrollViewer>
@@ -295,10 +295,7 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                        <Grid ColumnDefinitions="*,Auto">
-                            <TextBlock Text="EFFECTIVE PROPERTIES" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" VerticalAlignment="Center" Foreground="{DynamicResource AppTextLabelBrush}" />
-                            <Button Grid.Column="1" Content="Add property" Command="{Binding AddPropertyCommand}" />
-                        </Grid>
+                        <TextBlock Text="EFFECTIVE PROPERTIES" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
                         <ItemsControl ItemsSource="{Binding Properties}" />
                     </StackPanel>
                 </ScrollViewer>

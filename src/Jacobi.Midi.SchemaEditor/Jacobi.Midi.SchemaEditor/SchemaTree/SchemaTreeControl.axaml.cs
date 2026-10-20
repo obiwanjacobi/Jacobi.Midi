@@ -21,6 +21,14 @@ internal partial class SchemaTreeControl : UserControl
         AvaloniaProperty.Register<SchemaTreeControl, object?>(nameof(SelectedItem),
             defaultBindingMode: BindingMode.TwoWay);
 
+    public static readonly StyledProperty<bool> IsDocumentViewProperty =
+        AvaloniaProperty.Register<SchemaTreeControl, bool>(nameof(IsDocumentView),
+            defaultBindingMode: BindingMode.TwoWay);
+
+    public static readonly StyledProperty<DocumentCollection?> SelectedCategoryProperty =
+        AvaloniaProperty.Register<SchemaTreeControl, DocumentCollection?>(nameof(SelectedCategory),
+            defaultBindingMode: BindingMode.OneWayToSource);
+
     private readonly SchemaTreeViewModel _viewModel = new();
     // set while the selection is synchronized between the control and its view model
     private bool _synchronizing;
@@ -49,12 +57,34 @@ internal partial class SchemaTreeControl : UserControl
         set => SetValue(SelectedItemProperty, value);
     }
 
+    /// <summary>
+    /// True when the tree shows the document collections, false when it shows the document members.
+    /// </summary>
+    public bool IsDocumentView
+    {
+        get => GetValue(IsDocumentViewProperty);
+        set => SetValue(IsDocumentViewProperty, value);
+    }
+
+    /// <summary>
+    /// The document collection whose category header is selected; null when no header is selected.
+    /// </summary>
+    public DocumentCollection? SelectedCategory
+    {
+        get => GetValue(SelectedCategoryProperty);
+        private set => SetValue(SelectedCategoryProperty, value);
+    }
+
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
         if (change.Property == EditDocumentProperty)
         {
             _viewModel.Document = EditDocument;
+        }
+        else if (change.Property == IsDocumentViewProperty)
+        {
+            _viewModel.IsDocumentView = IsDocumentView;
         }
         else if (change.Property == SelectedItemProperty && !_synchronizing
             && !ReferenceEquals(_viewModel.SelectedItem, SelectedItem))
@@ -78,6 +108,15 @@ internal partial class SchemaTreeControl : UserControl
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(SchemaTreeViewModel.IsDocumentView))
+        {
+            IsDocumentView = _viewModel.IsDocumentView;
+        }
+        else if (e.PropertyName == nameof(SchemaTreeViewModel.SelectedItem))
+        {
+            SelectedCategory = (_viewModel.SelectedItem as SchemaTreeCategory)?.Collection;
+        }
+
         if (e.PropertyName == nameof(SchemaTreeViewModel.SelectedItem) && !_synchronizing)
         {
             _synchronizing = true;

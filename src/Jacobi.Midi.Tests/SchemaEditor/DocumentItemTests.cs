@@ -76,6 +76,98 @@ public class DocumentItemTests
     }
 
     [Fact]
+    public void AddOptions_MembersView_DependOnSelectedNode()
+    {
+        var viewModel = new MainViewModel();
+        Assert.False(viewModel.CanAdd);
+        viewModel.NewDocumentCommand.Execute(null);
+        var root = Assert.IsType<EditGroup>(Assert.Single(viewModel.SelectedDocument!.Schema.Members));
+
+        // nothing selected: members go into the first top-level group; no document items in the Members view
+        Assert.True(viewModel.CanAddMembers);
+        Assert.False(viewModel.CanAddDocumentItems);
+        Assert.False(viewModel.ShowAddSeparator);
+
+        viewModel.AddNodeCommand.Execute(SchemaNodeKind.Field);
+        Assert.True(viewModel.CanAddMembers);
+
+        var open = new EditChoice(root) { Name = "Body", MemberNodeDef = new("BodyType"), Members = [], Processors = [], Properties = [], ValueProcessors = [] };
+        root.Members.Add(open);
+        viewModel.SelectedItem = open;
+        Assert.False(viewModel.CanAddMembers);
+        // only its own processors and properties can be added
+        Assert.True(viewModel.CanAddItemProcessor && viewModel.CanAddItemProperty);
+        Assert.False(viewModel.ShowItemEntriesSeparator);
+    }
+
+    [Fact]
+    public void AddOptions_DocumentView_DependOnCategoryAndSelectedItem()
+    {
+        var viewModel = new MainViewModel();
+        viewModel.NewDocumentCommand.Execute(null);
+        var schema = viewModel.SelectedDocument!.Schema;
+        viewModel.IsDocumentView = true;
+
+        // nothing selected: all document items, no members
+        Assert.False(viewModel.CanAddMembers);
+        Assert.True(viewModel.CanAddNodeDef && viewModel.CanAddDataTypeDef && viewModel.CanAddProcessorDef
+            && viewModel.CanAddInclude && viewModel.CanAddDocumentProcessor && viewModel.CanAddDocumentProperty);
+
+        viewModel.SelectedCategory = DocumentCollection.Includes;
+        Assert.True(viewModel.CanAddInclude);
+        Assert.False(viewModel.CanAddNodeDef || viewModel.CanAddDataTypeDef || viewModel.CanAddDocumentProperty);
+        viewModel.SelectedCategory = null;
+
+        viewModel.AddDataTypeDefCommand.Execute(null);
+        Assert.True(viewModel.CanAddDataTypeDef);
+        Assert.False(viewModel.CanAddInclude || viewModel.CanAddMembers);
+
+        // a group node def accepts members and more node defs; a field node def only more node defs
+        viewModel.AddNodeDefCommand.Execute(SchemaNodeKind.Group);
+        Assert.True(viewModel.CanAddMembers && viewModel.CanAddNodeDef);
+        Assert.True(viewModel.ShowAddSeparator);
+        Assert.False(viewModel.CanAddDataTypeDef);
+        viewModel.AddNodeCommand.Execute(SchemaNodeKind.Field);
+        Assert.Same(schema.NodeDefs[0], Assert.IsType<EditField>(viewModel.SelectedNode).Parent);
+        Assert.True(viewModel.CanAddMembers);
+
+        viewModel.AddNodeDefCommand.Execute(SchemaNodeKind.Field);
+        Assert.False(viewModel.CanAddMembers);
+        Assert.True(viewModel.CanAddNodeDef);
+    }
+
+    [Fact]
+    public void AddItemEntries_AddToSelectedItemAndShowTheirTab()
+    {
+        var viewModel = new MainViewModel();
+        viewModel.NewDocumentCommand.Execute(null);
+        var root = Assert.IsType<EditGroup>(Assert.Single(viewModel.SelectedDocument!.Schema.Members));
+        Assert.False(viewModel.CanAddItemProperty);
+
+        viewModel.SelectedItem = root;
+        Assert.True(viewModel.CanAddItemProcessor && viewModel.CanAddItemProperty);
+        Assert.True(viewModel.ShowItemEntriesSeparator);
+
+        viewModel.AddItemProcessorCommand.Execute(null);
+        Assert.Single(root.Processors);
+        Assert.Equal(MainViewModel.ProcessorsTab, viewModel.SelectedEditorTab);
+
+        viewModel.AddItemPropertyCommand.Execute(null);
+        Assert.Equal("property", Assert.Single(root.Properties).Name);
+        Assert.Equal(MainViewModel.PropertiesTab, viewModel.SelectedEditorTab);
+
+        // a processor def has properties but no processors; an include has neither
+        viewModel.AddProcessorDefCommand.Execute(null);
+        Assert.False(viewModel.CanAddItemProcessor);
+        Assert.True(viewModel.CanAddItemProperty);
+        Assert.Equal(MainViewModel.PropertiesTab, viewModel.SelectedEditorTab);
+
+        viewModel.AddIncludeCommand.Execute(null);
+        Assert.False(viewModel.CanAddItemProperty);
+        Assert.Equal(MainViewModel.GeneralTab, viewModel.SelectedEditorTab);
+    }
+
+    [Fact]
     public void DeleteItem_RemovesDocumentItems()
     {
         var viewModel = new MainViewModel();

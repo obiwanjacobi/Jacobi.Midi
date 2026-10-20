@@ -65,7 +65,9 @@
                                Text="Select a node to edit its name, type and documentation."
                                TextWrapping="Wrap" Margin="0,14,0,0" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" />
                 <st:SchemaTreeControl EditDocument="{Binding SelectedDocument.Schema}"
-                                      SelectedItem="{Binding SelectedItem, Mode=TwoWay}" />
+                                      SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                                      IsDocumentView="{Binding IsDocumentView, Mode=TwoWay}"
+                                      SelectedCategory="{Binding SelectedCategory, Mode=OneWayToSource}" />
                 </DockPanel>
             </Border>
 

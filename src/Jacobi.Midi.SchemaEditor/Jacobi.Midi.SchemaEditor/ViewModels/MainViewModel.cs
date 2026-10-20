@@ -41,6 +41,43 @@ internal sealed partial class MainViewModel : ViewModelBase
     public IReadOnlyList<string> DataTypeOptions { get; } = ["sys.uint8", "sys.uint16", "sys.bool", "sys.bytes", "sys.string"];
     public bool HasSelectedDocument => SelectedDocument is not null;
 
+    /// <summary>
+    /// True when the schema tree shows the document collections, false when it shows the document members.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsDocumentView { get; set; }
+
+    /// <summary>
+    /// The document collection whose category header is selected in the schema tree; null when none is selected.
+    /// </summary>
+    [ObservableProperty]
+    public partial DocumentCollection? SelectedCategory { get; set; }
+
+    // The Add menu only offers the items that are valid for the current tree view and selection.
+    public bool CanAddMembers => GetTargetGroup() is not null;
+    public bool CanAddNodeDef => CanAddTo(DocumentCollection.NodeDefs);
+    public bool CanAddDataTypeDef => CanAddTo(DocumentCollection.DataTypeDefs);
+    public bool CanAddProcessorDef => CanAddTo(DocumentCollection.ProcessorDefs);
+    public bool CanAddInclude => CanAddTo(DocumentCollection.Includes);
+    public bool CanAddDocumentProcessor => CanAddTo(DocumentCollection.Processors);
+    public bool CanAddDocumentProperty => CanAddTo(DocumentCollection.Properties);
+    public bool CanAddDocumentItems => Enum.GetValues<DocumentCollection>().Any(CanAddTo);
+    public bool CanAddItemProcessor => ItemDetails?.HasProcessors == true;
+    public bool CanAddItemProperty => ItemDetails is not null;
+    public bool CanAdd => CanAddMembers || CanAddDocumentItems || CanAddItemProperty;
+    public bool ShowAddSeparator => CanAddMembers && CanAddDocumentItems;
+    public bool ShowItemEntriesSeparator => (CanAddMembers || CanAddDocumentItems) && CanAddItemProperty;
+
+    /// <summary>
+    /// The active tab of the node editor: <see cref="GeneralTab"/>, <see cref="ProcessorsTab"/> or <see cref="PropertiesTab"/>.
+    /// </summary>
+    [ObservableProperty]
+    public partial int SelectedEditorTab { get; set; }
+
+    public const int GeneralTab = 0;
+    public const int ProcessorsTab = 1;
+    public const int PropertiesTab = 2;
+
     [ObservableProperty]
     public partial SchemaWorkspaceDocument? SelectedDocument { get; set; }
 
@@ -225,7 +262,11 @@ internal sealed partial class MainViewModel : ViewModelBase
 
         try
         {
-            var parent = GetTargetGroup();
+            if (GetTargetGroup() is not { } parent)
+            {
+                StatusMessage = "Select a group (or a field in it) before adding a node.";
+                return;
+            }
             var name = GetUniqueName(parent.Members.Select(member => member.Name), $"New{kind}");
             EditNode node = kind switch
             {
@@ -275,6 +316,32 @@ internal sealed partial class MainViewModel : ViewModelBase
     private void AddDocumentProperty()
         => AddDocumentItem("property", document => document.AddProperty(
             GetUniqueName(document.Schema.Properties.Select(property => property.Name), "property"), null));
+
+    /// <summary>
+    /// Adds an own processor to the selected item and shows the Processors tab.
+    /// </summary>
+    [RelayCommand]
+    private void AddItemProcessor()
+    {
+        if (ItemDetails is { HasProcessors: true } details)
+        {
+            details.AddProcessorCommand.Execute(null);
+            SelectedEditorTab = ProcessorsTab;
+        }
+    }
+
+    /// <summary>
+    /// Adds an own property to the selected item and shows the Properties tab.
+    /// </summary>
+    [RelayCommand]
+    private void AddItemProperty()
+    {
+        if (ItemDetails is { } details)
+        {
+            details.AddPropertyCommand.Execute(null);
+            SelectedEditorTab = PropertiesTab;
+        }
+    }
 
     /// <summary>
     /// Removes the selected node or document item. A removed member selects its parent group.
@@ -408,7 +475,7 @@ internal sealed partial class MainViewModel : ViewModelBase
         try
         {
             var field = SelectedDocument.AddField(
-                GetTargetGroup(),
+                GetTargetGroup() ?? throw new InvalidOperationException("Select a group before adding a node."),
                 ReverseFieldName.Trim(),
                 ReverseFieldDataType.Trim(),
                 sample);
@@ -432,18 +499,28 @@ internal sealed partial class MainViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(HasSelectedDocument));
         SelectedItem = null;
+        NotifyAddOptionsChanged();
     }
 
-    partial void OnSelectedItemChanged(object? item)
+    partial void OnIsDocumentViewChanged(bool value) => NotifyAddOptionsChanged();
+    partial void OnSelectedCategoryChanged(DocumentCollection? value) => NotifyAddOptionsChanged();
+
+    partial void OnSelectedItemChanged(object? value)
     {
-        var value = item as EditNode;
+        var node = value as EditNode;
         ItemDetails?.Dispose();
-        ItemDetails = SelectedDocument is null ? null : ItemDetailsViewModel.Create(SelectedDocument, item);
-        GeneralEditor = (object?)value ?? (SelectedDocument is null ? null : ItemEditor.Create(SelectedDocument, item));
-        NodeName = value?.Name ?? String.Empty;
-        NodeDataType = (value as EditField)?.DataType?.ToString() ?? String.Empty;
-        NodeDescription = GetProperty(value, "description");
-        NodeSampleValue = GetProperty(value, "sample");
+        ItemDetails = SelectedDocument is null ? null : ItemDetailsViewModel.Create(SelectedDocument, value);
+        GeneralEditor = (object?)node ?? (SelectedDocument is null ? null : ItemEditor.Create(SelectedDocument, value));
+        NodeName = node?.Name ?? String.Empty;
+        NodeDataType = (node as EditField)?.DataType?.ToString() ?? String.Empty;
+        NodeDescription = GetProperty(node, "description");
+        NodeSampleValue = GetProperty(node, "sample");
+        // a tab the new selection does not have would stay selected (but hidden)
+        if ((SelectedEditorTab == ProcessorsTab && !CanAddItemProcessor) || (SelectedEditorTab == PropertiesTab && !CanAddItemProperty))
+        {
+            SelectedEditorTab = GeneralTab;
+        }
+        NotifyAddOptionsChanged();
     }
 
     partial void OnSelectedByteStartChanged(int value) => UpdateByteSelection();
@@ -532,13 +609,58 @@ internal sealed partial class MainViewModel : ViewModelBase
         }
     }
 
-    private EditGroup GetTargetGroup() => SelectedNode switch
+    /// <summary>
+    /// The group a new member node is added to: the selected group, or the parent group of the selected field.
+    /// Without a selection in the Members view it is the first top-level group.
+    /// Null when nodes cannot be added: an open choice, a top-level node def field, or a non-node selection.
+    /// </summary>
+    private EditGroup? GetTargetGroup()
     {
-        EditGroup group and not EditDocument => group,
-        EditField { Parent: { } parent } => parent,
-        _ => SelectedDocument?.Schema.Members.OfType<EditGroup>().FirstOrDefault()
-            ?? throw new InvalidOperationException("Select a group before adding a node.")
+        if (SelectedDocument is null)
+        {
+            return null;
+        }
+        var group = SelectedItem switch
+        {
+            EditDocument => null,
+            EditGroup selected => selected,
+            EditField field => field.Parent,
+            null when !IsDocumentView => SelectedDocument.Schema.Members.OfType<EditGroup>().FirstOrDefault(),
+            _ => null
+        };
+        return group is EditDocument or EditChoice { MemberNodeDef: not null } ? null : group;
+    }
+
+    /// <summary>
+    /// Document collection items can be added in the Document view: to the selected category,
+    /// to the collection of the selected item, or to any collection when nothing is selected.
+    /// </summary>
+    private bool CanAddTo(DocumentCollection collection)
+        => SelectedDocument is not null && IsDocumentView
+            && (SelectedCategory ?? GetCollection(SelectedItem) ?? collection) == collection;
+
+    private static DocumentCollection? GetCollection(object? item) => item switch
+    {
+        null => null,
+        EditNode node => DocumentCollection.NodeDefs,
+        EditDocumentRef => DocumentCollection.Includes,
+        EditDataTypeDef => DocumentCollection.DataTypeDefs,
+        EditProcessorDef => DocumentCollection.ProcessorDefs,
+        EditProcessorRef => DocumentCollection.Processors,
+        EditProperty => DocumentCollection.Properties,
+        _ => null
     };
+
+    private void NotifyAddOptionsChanged()
+    {
+        foreach (var name in (string[])[nameof(CanAddMembers), nameof(CanAddNodeDef), nameof(CanAddDataTypeDef),
+            nameof(CanAddProcessorDef), nameof(CanAddInclude), nameof(CanAddDocumentProcessor), nameof(CanAddDocumentProperty),
+            nameof(CanAddDocumentItems), nameof(CanAddItemProcessor), nameof(CanAddItemProperty), nameof(CanAdd),
+            nameof(ShowAddSeparator), nameof(ShowItemEntriesSeparator)])
+        {
+            OnPropertyChanged(name);
+        }
+    }
 
     private static string GetUniqueName(IEnumerable<string> existingNames, string baseName)
     {

@@ -7,7 +7,6 @@ Known gaps and loose ends, collected while building the editor.
 - [ ] Editing `description` or `sample` on the Properties tab does not refresh the staged values on the General tab; pressing *Apply* there writes the old values back.
 - [ ] Repeat `count` and choice `selectedIndex` cannot be edited (only name and description).
 - [ ] Value processors (repeat/choice) are not shown or editable; to be redesigned.
-- [ ] When the Processors or Properties tab is active and an item without that tab is selected (e.g. an include), the tab hides but stays selected and shows empty content.
 - [ ] *Delete* has no confirmation and there is no undo.
 - [ ] The Add menu has no keyboard shortcuts (e.g. Ctrl+S for Save in the ☰ menu).
 

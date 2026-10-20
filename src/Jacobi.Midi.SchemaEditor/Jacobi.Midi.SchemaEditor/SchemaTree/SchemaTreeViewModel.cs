@@ -48,12 +48,12 @@ internal sealed partial class SchemaTreeViewModel : ObservableObject
     {
         Categories = value is null ? [] :
         [
-            new("Includes", value.Includes),
-            new("Node Defs", value.NodeDefs),
-            new("Data Type Defs", value.DataTypeDefs),
-            new("Processor Defs", value.ProcessorDefs),
-            new("Processors", value.Processors),
-            new("Properties", value.Properties),
+            new(DocumentCollection.Includes, "Includes", value.Includes),
+            new(DocumentCollection.NodeDefs, "Node Defs", value.NodeDefs),
+            new(DocumentCollection.DataTypeDefs, "Data Type Defs", value.DataTypeDefs),
+            new(DocumentCollection.ProcessorDefs, "Processor Defs", value.ProcessorDefs),
+            new(DocumentCollection.Processors, "Processors", value.Processors),
+            new(DocumentCollection.Properties, "Properties", value.Properties),
         ];
         SelectedItem = null;
         OnPropertyChanged(nameof(Categories));
