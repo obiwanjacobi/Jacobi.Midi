@@ -4,12 +4,12 @@
              xmlns:models="using:Jacobi.Midi.SchemaEditor.Models"
              x:Class="Jacobi.Midi.SchemaEditor.Views.ReverseEngineeringWorkbenchView"
              x:DataType="vm:MainViewModel">
-    <Border Margin="0,1,0,0" Padding="18,14" Background="#101A2A">
+    <Border Margin="0,1,0,0" Padding="18,14" Background="{DynamicResource AppBackgroundPanelBrush}">
         <Grid RowDefinitions="Auto,*,Auto" ColumnDefinitions="*,340" ColumnSpacing="20" RowSpacing="12">
             <Grid Grid.ColumnSpan="2" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
                 <StackPanel Spacing="2">
-                    <TextBlock Text="REVERSE-ENGINEERING WORKBENCH" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="#94A4BA" />
-                    <TextBlock Text="Import messages, detect boundaries and compare bytes" FontSize="14" FontWeight="SemiBold" Foreground="#E7EEF8" />
+                    <TextBlock Text="REVERSE-ENGINEERING WORKBENCH" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
+                    <TextBlock Text="Import messages, detect boundaries and compare bytes" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource AppTextHeadingBrush}" />
                 </StackPanel>
                 <Button Grid.Column="1" Content="Copy first message" Command="{Binding ExportSysExCommand}" />
                 <Button Grid.Column="2" Content="Import hex" Command="{Binding ImportSysExCommand}" />
@@ -21,13 +21,13 @@
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="models:SysExMessage">
                             <StackPanel Spacing="3" Margin="4">
-                                <TextBlock Text="{Binding BoundarySummary}" FontSize="10" Foreground="#8CCFC0" />
-                                <TextBlock Text="{Binding Hex}" FontFamily="Consolas" FontSize="11" Foreground="#D0D9E6" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding BoundarySummary}" FontSize="10" Foreground="{DynamicResource AppTextAccentBrush}" />
+                                <TextBlock Text="{Binding Hex}" FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource AppTextBodyBrush}" TextTrimming="CharacterEllipsis" />
                             </StackPanel>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-                <Border Grid.Column="1" Padding="10" CornerRadius="6" Background="#0B1220">
+                <Border Grid.Column="1" Padding="10" CornerRadius="6" Background="{DynamicResource AppBackgroundBaseBrush}">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                         <ItemsControl ItemsSource="{Binding SelectedSysExMessage.ByteCells}">
                             <ItemsControl.ItemsPanel>
@@ -39,9 +39,9 @@
                                 <DataTemplate x:DataType="models:SysExByteCell">
                                     <Button Tag="{Binding Index}" Click="OnByteClicked" Background="{Binding Background}" Padding="5,3" Margin="2" MinWidth="36">
                                         <StackPanel Spacing="1">
-                                            <TextBlock Text="{Binding Index}" FontSize="9" HorizontalAlignment="Center" Foreground="#8294AC" />
-                                            <TextBlock Text="{Binding Hex}" FontFamily="Consolas" FontSize="12" HorizontalAlignment="Center" Foreground="#E7EEF8" />
-                                            <TextBlock Text="{Binding Marker}" FontSize="8" HorizontalAlignment="Center" Foreground="#8CCFC0" />
+                                            <TextBlock Text="{Binding Index}" FontSize="9" HorizontalAlignment="Center" Foreground="{DynamicResource AppTextSubtleBrush}" />
+                                            <TextBlock Text="{Binding Hex}" FontFamily="Consolas" FontSize="12" HorizontalAlignment="Center" Foreground="{DynamicResource AppTextHeadingBrush}" />
+                                            <TextBlock Text="{Binding Marker}" FontSize="8" HorizontalAlignment="Center" Foreground="{DynamicResource AppTextAccentBrush}" />
                                         </StackPanel>
                                     </Button>
                                 </DataTemplate>
@@ -52,31 +52,31 @@
             </Grid>
 
             <StackPanel Grid.Row="1" Grid.Column="1" Spacing="5">
-                <TextBlock Text="COMPARE FIRST TWO MESSAGES" FontSize="10" FontWeight="Bold" Foreground="#94A4BA" />
+                <TextBlock Text="COMPARE FIRST TWO MESSAGES" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AppTextLabelBrush}" />
                 <ScrollViewer MaxHeight="110">
                     <ItemsControl ItemsSource="{Binding ComparedBytes}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="models:SysExComparisonRow">
                                 <Border Background="{Binding Background}" Padding="6,3" Margin="0,1" CornerRadius="3">
                                     <Grid ColumnDefinitions="38,*,*" ColumnSpacing="8">
-                                        <TextBlock Text="{Binding Index}" FontSize="10" Foreground="#94A4BA" />
-                                        <TextBlock Grid.Column="1" Text="{Binding Left}" FontFamily="Consolas" FontSize="11" Foreground="#D0D9E6" />
-                                        <TextBlock Grid.Column="2" Text="{Binding Right}" FontFamily="Consolas" FontSize="11" Foreground="#D0D9E6" />
+                                        <TextBlock Text="{Binding Index}" FontSize="10" Foreground="{DynamicResource AppTextLabelBrush}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Left}" FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource AppTextBodyBrush}" />
+                                        <TextBlock Grid.Column="2" Text="{Binding Right}" FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource AppTextBodyBrush}" />
                                     </Grid>
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </ScrollViewer>
-                <TextBlock Text="Click a byte to select it, or adjust the range below." FontSize="10" Foreground="#7588A2" />
+                <TextBlock Text="Click a byte to select it, or adjust the range below." FontSize="10" Foreground="{DynamicResource AppTextMutedBrush}" />
             </StackPanel>
 
             <Grid Grid.Row="2" Grid.ColumnSpan="2" ColumnDefinitions="Auto,90,Auto,90,*,Auto,Auto,Auto" ColumnSpacing="8">
-                <TextBlock Text="Start byte" VerticalAlignment="Center" FontSize="11" Foreground="#B7C5D8" />
+                <TextBlock Text="Start byte" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource AppTextSecondaryBrush}" />
                 <TextBox Grid.Column="1" Text="{Binding SelectedByteStart}" />
-                <TextBlock Grid.Column="2" Text="Length" VerticalAlignment="Center" FontSize="11" Foreground="#B7C5D8" />
+                <TextBlock Grid.Column="2" Text="Length" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource AppTextSecondaryBrush}" />
                 <TextBox Grid.Column="3" Text="{Binding SelectedByteLength}" />
-                <TextBlock Grid.Column="4" Text="Selected range is added to the current schema as a field sample." VerticalAlignment="Center" FontSize="10" Foreground="#7588A2" />
+                <TextBlock Grid.Column="4" Text="Selected range is added to the current schema as a field sample." VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource AppTextMutedBrush}" />
                 <TextBox Grid.Column="5" Width="150" PlaceholderText="Captured field name" Text="{Binding ReverseFieldName}" />
                 <ComboBox Grid.Column="6" Width="140" ItemsSource="{Binding DataTypeOptions}" IsEditable="True" Text="{Binding ReverseFieldDataType}" />
                 <Button Grid.Column="7" Content="Isolate as field" Command="{Binding AddSelectedBytesCommand}" />

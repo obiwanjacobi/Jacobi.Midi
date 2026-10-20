@@ -11,14 +11,14 @@
              x:Class="Jacobi.Midi.SchemaEditor.Views.MainView"
              x:DataType="vm:MainViewModel">
 
-    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Background="#0B1220">
+    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Background="{DynamicResource AppBackgroundBaseBrush}">
         <midi:MidiBarControl Grid.Row="0" DataContext="{Binding MidiBar}" />
 
-        <Border Grid.Row="1" Padding="24,16" Background="#111B2C" BorderBrush="#25334A" BorderThickness="0,0,0,1">
+        <Border Grid.Row="1" Padding="24,16" Background="{DynamicResource AppBackgroundHeaderBrush}" BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="0,0,0,1">
             <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="10">
                 <StackPanel Spacing="2" VerticalAlignment="Center">
-                    <TextBlock Text="MIDI SCHEMA STUDIO" FontSize="18" FontWeight="Bold" Foreground="#E7EEF8" />
-                    <TextBlock Text="Author, inspect and reverse-engineer SysEx schemas" FontSize="12" Foreground="#94A4BA" />
+                    <TextBlock Text="MIDI SCHEMA STUDIO" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource AppTextHeadingBrush}" />
+                    <TextBlock Text="Author, inspect and reverse-engineer SysEx schemas" FontSize="12" Foreground="{DynamicResource AppTextLabelBrush}" />
                 </StackPanel>
                 <Button Grid.Column="1" Content="New schema" Command="{Binding NewDocumentCommand}" />
                 <Button Grid.Column="2" Content="Open files" Command="{Binding OpenFilesCommand}" />
@@ -27,7 +27,7 @@
             </Grid>
         </Border>
 
-        <Border Grid.Row="2" Padding="12,8" Background="#0E1828" BorderBrush="#25334A" BorderThickness="0,0,0,1">
+        <Border Grid.Row="2" Padding="12,8" Background="{DynamicResource AppBackgroundToolbarBrush}" BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="0,0,0,1">
             <ListBox ItemsSource="{Binding Documents}"
                      SelectedItem="{Binding SelectedDocument, Mode=TwoWay}"
                      ScrollViewer.HorizontalScrollBarVisibility="Auto"
@@ -45,49 +45,49 @@
             </ListBox>
         </Border>
 
-        <Grid Grid.Row="3" ColumnDefinitions="280,*,320" ColumnSpacing="1" Background="#25334A">
-            <Border Grid.Column="0" Padding="18" Background="#101A2A">
+        <Grid Grid.Row="3" ColumnDefinitions="280,*,320" ColumnSpacing="1" Background="{DynamicResource AppDividerBrush}">
+            <Border Grid.Column="0" Padding="18" Background="{DynamicResource AppBackgroundPanelBrush}">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Spacing="3" Margin="0,0,0,16">
-                        <TextBlock Text="SCHEMA TREE" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="#94A4BA" />
-                        <TextBlock Text="{Binding SelectedDocument.Schema.Name}" FontSize="18" FontWeight="SemiBold" Foreground="#E7EEF8" />
+                        <TextBlock Text="SCHEMA TREE" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
+                        <TextBlock Text="{Binding SelectedDocument.Schema.Name}" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource AppTextHeadingBrush}" />
                     </StackPanel>
                     <TextBlock DockPanel.Dock="Bottom"
                                Text="Select a node to edit its name, type and documentation."
-                               TextWrapping="Wrap" Margin="0,14,0,0" FontSize="11" Foreground="#7588A2" />
+                               TextWrapping="Wrap" Margin="0,14,0,0" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" />
                 <st:SchemaTreeControl EditDocument="{Binding SelectedDocument.Schema}"
                                       SelectedNode="{Binding SelectedNode, Mode=TwoWay}" />
                 </DockPanel>
             </Border>
 
-            <Border Grid.Column="1" Padding="24" Background="#0B1220">
+            <Border Grid.Column="1" Padding="24" Background="{DynamicResource AppBackgroundBaseBrush}">
                 <ne:NodeEditorControl />
             </Border>
 
-            <Border Grid.Column="2" Padding="18" Background="#101A2A">
+            <Border Grid.Column="2" Padding="18" Background="{DynamicResource AppBackgroundPanelBrush}">
                 <StackPanel Spacing="12">
                     <StackPanel Spacing="3">
-                        <TextBlock Text="ADD A FIELD" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="#94A4BA" />
-                        <TextBlock Text="Build the schema or capture bytes" FontSize="16" FontWeight="SemiBold" Foreground="#E7EEF8" />
+                        <TextBlock Text="ADD A FIELD" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
+                        <TextBlock Text="Build the schema or capture bytes" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource AppTextHeadingBrush}" />
                     </StackPanel>
                         <TextBox PlaceholderText="Group name" Text="{Binding NewGroupName}" />
                         <Button Content="Add nested group" Command="{Binding AddGroupCommand}" />
-                        <Border Height="1" Background="#25334A" Margin="0,4" />
+                        <Border Height="1" Background="{DynamicResource AppDividerBrush}" Margin="0,4" />
                         <TextBox PlaceholderText="Field name" Text="{Binding NewFieldName}" />
                     <ComboBox ItemsSource="{Binding DataTypeOptions}" IsEditable="True" Text="{Binding NewFieldDataType}" />
                     <TextBox PlaceholderText="Sample value (optional)" Text="{Binding NewFieldSampleValue}" />
                     <Button Content="Add field to selected group" Command="{Binding AddFieldCommand}" />
-                    <Border Height="1" Background="#25334A" Margin="0,4" />
+                    <Border Height="1" Background="{DynamicResource AppDividerBrush}" Margin="0,4" />
                     <TextBlock Text="Descriptions and sample values are stored as schema properties so they stay with the file."
-                               TextWrapping="Wrap" FontSize="11" Foreground="#94A4BA" />
+                               TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource AppTextLabelBrush}" />
                     <TextBlock Text="Supported files: .json · .xml · .yaml · .yml"
-                               TextWrapping="Wrap" FontSize="11" Foreground="#94A4BA" />
+                               TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource AppTextLabelBrush}" />
                 </StackPanel>
             </Border>
         </Grid>
 
-        <Border Grid.Row="4" Padding="16,8" Background="#111B2C">
-            <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="#B7C5D8" />
+        <Border Grid.Row="4" Padding="16,8" Background="{DynamicResource AppBackgroundHeaderBrush}">
+            <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="{DynamicResource AppTextSecondaryBrush}" />
         </Border>
     </Grid>
 </UserControl>

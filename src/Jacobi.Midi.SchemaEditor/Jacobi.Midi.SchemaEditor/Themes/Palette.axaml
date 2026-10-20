@@ -1,0 +1,36 @@
+<!--
+    The color palette of the Schema Editor, one dictionary per theme variant.
+    Views reference these brushes by key through {DynamicResource}, so a theme variant
+    switch at runtime restyles the whole UI.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:themes="using:Jacobi.Midi.SchemaEditor.Themes">
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="{x:Static themes:AppThemeVariants.Night}">
+            <!-- Backgrounds, darkest to lightest -->
+            <SolidColorBrush x:Key="AppBackgroundBaseBrush" Color="#0B1220" />
+            <SolidColorBrush x:Key="AppBackgroundToolbarBrush" Color="#0E1828" />
+            <SolidColorBrush x:Key="AppBackgroundPanelBrush" Color="#101A2A" />
+            <SolidColorBrush x:Key="AppBackgroundHeaderBrush" Color="#111B2C" />
+            <SolidColorBrush x:Key="AppBackgroundCardBrush" Color="#142238" />
+
+            <!-- Borders and dividers -->
+            <SolidColorBrush x:Key="AppDividerBrush" Color="#25334A" />
+
+            <!-- Text, brightest to dimmest -->
+            <SolidColorBrush x:Key="AppTextHeadingBrush" Color="#E7EEF8" />
+            <SolidColorBrush x:Key="AppTextCaptionBrush" Color="#DCE6F3" />
+            <SolidColorBrush x:Key="AppTextBodyBrush" Color="#D0D9E6" />
+            <SolidColorBrush x:Key="AppTextSecondaryBrush" Color="#B7C5D8" />
+            <SolidColorBrush x:Key="AppTextLabelBrush" Color="#94A4BA" />
+            <SolidColorBrush x:Key="AppTextSubtleBrush" Color="#8294AC" />
+            <SolidColorBrush x:Key="AppTextMutedBrush" Color="#7588A2" />
+            <SolidColorBrush x:Key="AppTextAccentBrush" Color="#8CCFC0" />
+
+            <!-- Status indicators -->
+            <SolidColorBrush x:Key="AppIndicatorOffBrush" Color="#3A4A62" />
+            <SolidColorBrush x:Key="AppIndicatorOnBrush" Color="#3DDC84" />
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

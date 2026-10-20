@@ -12,6 +12,6 @@
         Height="920"
         MinWidth="1120"
         MinHeight="760"
-        Background="#0B1220">
+        Background="{DynamicResource AppBackgroundBaseBrush}">
         <views:MainView />
 </Window>

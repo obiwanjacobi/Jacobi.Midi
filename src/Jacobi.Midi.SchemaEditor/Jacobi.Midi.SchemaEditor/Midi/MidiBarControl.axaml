@@ -7,17 +7,17 @@
 
     <UserControl.Styles>
         <Style Selector="Ellipse.indicator">
-            <Setter Property="Fill" Value="#3A4A62" />
+            <Setter Property="Fill" Value="{DynamicResource AppIndicatorOffBrush}" />
         </Style>
         <Style Selector="Ellipse.indicator.connected">
-            <Setter Property="Fill" Value="#3DDC84" />
+            <Setter Property="Fill" Value="{DynamicResource AppIndicatorOnBrush}" />
         </Style>
     </UserControl.Styles>
 
-    <Border Padding="24,8" Background="#0E1828" BorderBrush="#25334A" BorderThickness="0,0,0,1">
+    <Border Padding="24,8" Background="{DynamicResource AppBackgroundToolbarBrush}" BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="0,0,0,1">
         <Grid ColumnDefinitions="Auto,320,Auto,Auto,Auto,Auto,*" ColumnSpacing="10">
             <TextBlock Grid.Column="0" Text="MIDI" VerticalAlignment="Center"
-                       FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="#94A4BA" />
+                       FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
 
             <ComboBox Grid.Column="1" HorizontalAlignment="Stretch"
                       ItemsSource="{Binding Endpoints}"
@@ -31,7 +31,7 @@
                 </ComboBox.ItemTemplate>
             </ComboBox>
 
-            <TextBlock Grid.Column="2" Text="Group" VerticalAlignment="Center" Foreground="#94A4BA" />
+            <TextBlock Grid.Column="2" Text="Group" VerticalAlignment="Center" Foreground="{DynamicResource AppTextLabelBrush}" />
             <ComboBox Grid.Column="3" MinWidth="72"
                       ItemsSource="{Binding GroupNumbers}"
                       SelectedIndex="{Binding SelectedGroupIndex, Mode=TwoWay}"
@@ -45,7 +45,7 @@
                      Classes="indicator" Classes.connected="{Binding IsConnected}" />
 
             <TextBlock Grid.Column="6" Text="{Binding StatusText}" VerticalAlignment="Center"
-                       TextTrimming="CharacterEllipsis" FontSize="11" Foreground="#B7C5D8" />
+                       TextTrimming="CharacterEllipsis" FontSize="11" Foreground="{DynamicResource AppTextSecondaryBrush}" />
         </Grid>
     </Border>
 </UserControl>

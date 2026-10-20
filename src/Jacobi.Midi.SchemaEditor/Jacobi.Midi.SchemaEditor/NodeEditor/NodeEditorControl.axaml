@@ -10,11 +10,11 @@
         <Style Selector="TextBlock.caption">
             <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="#DCE6F3" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextCaptionBrush}" />
         </Style>
         <Style Selector="TextBlock.kind">
             <Setter Property="FontSize" Value="11" />
-            <Setter Property="Foreground" Value="#7588A2" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}" />
         </Style>
         <Style Selector="TextBox.description">
             <Setter Property="AcceptsReturn" Value="True" />
@@ -25,12 +25,12 @@
 
     <Grid RowDefinitions="Auto,Auto,*,Auto">
         <StackPanel Spacing="4">
-            <TextBlock Text="NODE EDITOR" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="#94A4BA" />
-            <TextBlock Text="Shape your message structure" FontSize="22" FontWeight="SemiBold" Foreground="#E7EEF8" />
+            <TextBlock Text="NODE EDITOR" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
+            <TextBlock Text="Shape your message structure" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource AppTextHeadingBrush}" />
         </StackPanel>
-        <Border Grid.Row="1" Padding="12" Margin="0,18,0,0" CornerRadius="6" Background="#142238">
+        <Border Grid.Row="1" Padding="12" Margin="0,18,0,0" CornerRadius="6" Background="{DynamicResource AppBackgroundCardBrush}">
             <TextBlock Text="New schemas start with a SysEx group. Add fields directly to define the message structure."
-                       TextWrapping="Wrap" Foreground="#B7C5D8" FontSize="12" />
+                       TextWrapping="Wrap" Foreground="{DynamicResource AppTextSecondaryBrush}" FontSize="12" />
         </Border>
 
         <!-- The selected node picks its editor template by type. The template roots rebind their
@@ -87,7 +87,7 @@
                    IsVisible="{Binding SelectedNode, Converter={x:Static ObjectConverters.IsNull}}"
                    VerticalAlignment="Center"
                    HorizontalAlignment="Center"
-                   Foreground="#7588A2" />
-        <TextBlock Grid.Row="3" Text="{Binding SelectedDocument.FileName}" FontSize="11" Foreground="#7588A2" />
+                   Foreground="{DynamicResource AppTextMutedBrush}" />
+        <TextBlock Grid.Row="3" Text="{Binding SelectedDocument.FileName}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" />
     </Grid>
 </UserControl>

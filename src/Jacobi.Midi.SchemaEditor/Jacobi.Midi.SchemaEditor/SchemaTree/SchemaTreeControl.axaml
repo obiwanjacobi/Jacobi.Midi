@@ -12,14 +12,14 @@
             <!-- Matches Group, Repeat and Choice. Add a more specific template above this one to style a kind differently. -->
             <TreeDataTemplate x:DataType="models:EditGroup" ItemsSource="{Binding Members}">
                 <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,5">
-                    <TextBlock Text="{Binding Name}" Foreground="#D0D9E6" />
-                    <TextBlock Text="{Binding Kind}" Foreground="#7588A2" />
+                    <TextBlock Text="{Binding Name}" Foreground="{DynamicResource AppTextBodyBrush}" />
+                    <TextBlock Text="{Binding Kind}" Foreground="{DynamicResource AppTextMutedBrush}" />
                 </StackPanel>
             </TreeDataTemplate>
             <DataTemplate x:DataType="models:EditField">
                 <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,5">
-                    <TextBlock Text="{Binding Name}" Foreground="#D0D9E6" />
-                    <TextBlock Text="{Binding DataType}" Foreground="#7588A2" />
+                    <TextBlock Text="{Binding Name}" Foreground="{DynamicResource AppTextBodyBrush}" />
+                    <TextBlock Text="{Binding DataType}" Foreground="{DynamicResource AppTextMutedBrush}" />
                 </StackPanel>
             </DataTemplate>
         </TreeView.DataTemplates>
