@@ -31,7 +31,7 @@ internal static class TestHelpers
         var processors = new ProcessorManager();
         processors.Register(new Jacobi.BinarySerializer.Processors.ProcessorFactory());
         processors.Register(new Jacobi.Midi.Roland.Processors.ProcessorFactory());
-        processors.Register(new Jacobi.Midi.Processors.ProcessorFactory());
+        processors.Register(new Jacobi.Midi.Device.Processors.ProcessorFactory());
         return processors;
     }
 

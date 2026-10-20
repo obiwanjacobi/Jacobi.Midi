@@ -1,7 +1,7 @@
 ﻿using System.Buffers;
 using Jacobi.BinarySerializer.Processor;
 
-namespace Jacobi.Midi.Processors;
+namespace Jacobi.Midi.Device.Processors;
 
 public sealed class SysExProcessor : ILayoutProcessor,
     ILayoutReader<ReadOnlyMemory<byte>>, ILayoutWriter<ReadOnlySpan<byte>>

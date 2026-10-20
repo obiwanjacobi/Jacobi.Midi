@@ -8,16 +8,16 @@ public sealed class ProcessorFactory : IProcessorFactory
     private readonly static Dictionary<string, IProcessor> ProcessorMap = new()
     {
         // Layout Processors
-        {  "roland.checksum", new ChecksumProcessor() },
+        {  "checksum", new ChecksumProcessor() },
     };
 
     public IEnumerable<string> Processors
-        => ProcessorMap.Keys.Select(p => p[7..]);
+        => ProcessorMap.Keys;
 
     public string Namespace => "roland";
 
     public IProcessor? CreateProcessor(string id)
-        => ProcessorMap.GetValueOrDefault($"{Namespace}.{id}");
+        => ProcessorMap.GetValueOrDefault(id);
 
     public IEnumerable<DataTypeDescriptor> DataTypes => [];
 }

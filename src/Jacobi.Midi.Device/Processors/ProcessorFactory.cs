@@ -1,23 +1,23 @@
 ﻿using Jacobi.BinarySerializer.Descriptors;
 using Jacobi.BinarySerializer.Processor;
 
-namespace Jacobi.Midi.Processors;
+namespace Jacobi.Midi.Device.Processors;
 
 public sealed class ProcessorFactory : IProcessorFactory
 {
     private readonly static Dictionary<string, IProcessor> ProcessorMap = new()
     {
         // Layout Processors
-        {  "midi.sysex", new SysExProcessor() },
+        {  "sysex", new SysExProcessor() },
     };
 
     public string Namespace => "midi";
 
     public IEnumerable<string> Processors
-    => ProcessorMap.Keys.Select(p => p[5..]);
+    => ProcessorMap.Keys;
 
     public IProcessor? CreateProcessor(string id)
-        => ProcessorMap.GetValueOrDefault($"{Namespace}.{id}");
+        => ProcessorMap.GetValueOrDefault(id);
 
     public IEnumerable<DataTypeDescriptor> DataTypes => [];
 }

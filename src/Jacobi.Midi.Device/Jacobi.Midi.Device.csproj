@@ -10,4 +10,8 @@
   <ItemGroup>
     <EmbeddedResource Include="Midi.xml" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Jacobi.BinarySerializer\src\Jacobi.BinarySerializer\Jacobi.BinarySerializer.csproj" />
+    <ProjectReference Include="..\Jacobi.Midi.Core\Jacobi.Midi.Core.csproj" />
+  </ItemGroup>
 </Project>
