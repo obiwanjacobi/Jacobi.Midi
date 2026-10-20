@@ -24,14 +24,18 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
     private readonly List<INotifyPropertyChanged> _observedItems = [];
     private readonly List<INotifyCollectionChanged> _observedCollections = [];
 
+    private readonly EditProcessorDef? _definition;
+
     private ItemDetailsViewModel(SchemaWorkspaceDocument document, INotifyPropertyChanged item,
-        IList<EditProperty> properties, IList<EditProcessorRef>? processors, Func<EffectiveItem> resolve)
+        IList<EditProperty> properties, IList<EditProcessorRef>? processors, Func<EffectiveItem> resolve,
+        EditProcessorDef? definition = null)
     {
         _document = document;
         _item = item;
         _properties = properties;
         _processors = processors;
         _resolve = resolve;
+        _definition = definition;
         _item.PropertyChanged += OnModelPropertyChanged;
         Rebuild();
     }
@@ -50,7 +54,7 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
             EditDataTypeDef definition => new(document, definition, definition.Properties, definition.Processors,
                 () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, definition.Processors)),
             EditProcessorDef definition => new(document, definition, definition.Properties, null,
-                () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, null)),
+                () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, null), definition),
             EditProcessorRef processor => new(document, processor, processor.Properties, null,
                 () => EffectiveNodeResolver.ResolveProcessorRef(schema, processor)),
             _ => null
@@ -61,6 +65,18 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
     /// True when the item has processors (nodes and data type defs).
     /// </summary>
     public bool HasProcessors => _processors is not null;
+
+    /// <summary>
+    /// False for a processor def: it references exactly one processor and its properties are part of that processor
+    /// (<see cref="Definition"/>); both are edited in the General tab.
+    /// </summary>
+    public bool HasPropertiesTab => _definition is null;
+
+    /// <summary>
+    /// The one processor of a processor def with its properties; null for other items.
+    /// </summary>
+    [ObservableProperty]
+    public partial ProcessorDefRow? Definition { get; private set; }
 
     [ObservableProperty]
     public partial IReadOnlyList<PropertyRow> Properties { get; private set; } = [];
@@ -154,6 +170,7 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
         var effective = _resolve();
         Properties = effective.Properties.Select(property => new PropertyRow(property, _properties, OnRowEdited)).ToList();
         Processors = effective.Processors.Select(processor => new ProcessorRow(processor, _processors, OnRowEdited)).ToList();
+        Definition = _definition is null ? null : new ProcessorDefRow(_definition, Properties, _properties, OnRowEdited);
         Unresolved = effective.Unresolved;
         Observe();
     }
@@ -275,6 +292,34 @@ internal sealed class PropertyRow : ObservableObject
             Own.Value = value;
             OnPropertyChanged();
             _edited();
+        }
+    }
+}
+
+/// <summary>
+/// The processor of a processor def in the node editor with the def's properties, which are part of the processor.
+/// </summary>
+internal sealed class ProcessorDefRow(EditProcessorDef definition, IReadOnlyList<PropertyRow> properties,
+    IList<EditProperty> owner, Action edited) : ObservableObject
+{
+    public IReadOnlyList<PropertyRow> Properties { get; } = properties;
+    public IList<EditProperty> Owner { get; } = owner;
+
+    /// <summary>
+    /// The processor key ('namespace.id'). Empty input is ignored.
+    /// </summary>
+    public string Processor
+    {
+        get => definition.Processor;
+        set
+        {
+            if (String.IsNullOrWhiteSpace(value) || definition.Processor == value.Trim())
+            {
+                return;
+            }
+            definition.Processor = value.Trim();
+            OnPropertyChanged();
+            edited();
         }
     }
 }

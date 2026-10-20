@@ -28,9 +28,9 @@
         </Style>
     </UserControl.Styles>
 
-    <UserControl.DataTemplates>
-        <!-- one effective property; own properties are editable, inherited ones can be overridden -->
-        <DataTemplate x:DataType="ne:PropertyRow">
+    <UserControl.Resources>
+        <!-- one effective property (a keyed resource: the General tab editor templates would otherwise shadow it with their fallback); own properties are editable, inherited ones can be overridden -->
+        <DataTemplate x:Key="PropertyRowTemplate" x:DataType="ne:PropertyRow">
             <Grid ColumnDefinitions="160,*,Auto,Auto" ColumnSpacing="8" Margin="0,2">
                 <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" IsVisible="{Binding IsOwn}" />
                 <TextBlock Text="{Binding Name}" IsVisible="{Binding IsInherited}" VerticalAlignment="Center"
@@ -45,6 +45,9 @@
                         Command="{Binding $parent[ne:NodeEditorControl].((vm:MainViewModel)DataContext).ItemDetails.OverridePropertyCommand}" />
             </Grid>
         </DataTemplate>
+    </UserControl.Resources>
+
+    <UserControl.DataTemplates>
         <!-- one effective processor with its effective properties; only own processors are editable -->
         <DataTemplate x:DataType="ne:ProcessorRow">
             <Border Padding="10" Margin="0,0,0,8" CornerRadius="6" Background="{DynamicResource AppBackgroundCardBrush}">
@@ -58,7 +61,7 @@
                         <Button Grid.Column="3" Content="Remove" IsVisible="{Binding IsOwn}" CommandParameter="{Binding}"
                                 Command="{Binding $parent[ne:NodeEditorControl].((vm:MainViewModel)DataContext).ItemDetails.RemoveProcessorCommand}" />
                     </Grid>
-                    <ItemsControl ItemsSource="{Binding Properties}" />
+                    <ItemsControl ItemsSource="{Binding Properties}" ItemTemplate="{StaticResource PropertyRowTemplate}" />
                     <Button Content="Add property" HorizontalAlignment="Left" IsVisible="{Binding IsOwn}" CommandParameter="{Binding}"
                             Command="{Binding $parent[ne:NodeEditorControl].((vm:MainViewModel)DataContext).ItemDetails.AddProcessorPropertyCommand}" />
                 </StackPanel>
@@ -101,10 +104,6 @@
             <Button Grid.Column="2" VerticalAlignment="Bottom" Content="Delete" Command="{Binding DeleteItemCommand}"
                     ToolTip.Tip="Delete the selected item" />
         </Grid>
-        <Border Grid.Row="1" Padding="12" Margin="0,18,0,0" CornerRadius="6" Background="{DynamicResource AppBackgroundCardBrush}">
-            <TextBlock Text="New schemas start with a SysEx group. Use Add to insert a field, group, repeat or choice into the selected group, or to add a definition, include, processor or property to the document."
-                       TextWrapping="Wrap" Foreground="{DynamicResource AppTextSecondaryBrush}" FontSize="12" />
-        </Border>
 
         <TabControl Grid.Row="2" Margin="0,14,0,0" SelectedIndex="{Binding SelectedEditorTab}"
                     IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNotNull}}">
@@ -283,10 +282,22 @@
                                     <TextBlock Text="Name" Classes="label" />
                                     <TextBox Text="{Binding Name}" />
                                 </StackPanel>
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="Processor" Classes="label" />
-                                    <TextBox Text="{Binding Processor}" PlaceholderText="namespace.id" />
-                                </StackPanel>
+                                <TextBlock Text="The processor it references, with its properties." Classes="label" />
+                                <ContentControl x:DataType="vm:MainViewModel"
+                                                Content="{Binding $parent[ne:NodeEditorControl].((vm:MainViewModel)DataContext).ItemDetails.Definition}">
+                                    <ContentControl.ContentTemplate>
+                                        <DataTemplate x:DataType="ne:ProcessorDefRow">
+            <Border Padding="10" Margin="0,0,0,8" CornerRadius="6" Background="{DynamicResource AppBackgroundCardBrush}">
+                <StackPanel Spacing="6">
+                    <TextBox Text="{Binding Processor, UpdateSourceTrigger=LostFocus}" PlaceholderText="namespace.id" />
+                    <ItemsControl ItemsSource="{Binding Properties}" ItemTemplate="{StaticResource PropertyRowTemplate}" />
+                    <Button Content="Add property" HorizontalAlignment="Left"
+                            Command="{Binding $parent[ne:NodeEditorControl].((vm:MainViewModel)DataContext).ItemDetails.AddPropertyCommand}" />
+                </StackPanel>
+            </Border>
+                                        </DataTemplate>
+                                    </ContentControl.ContentTemplate>
+                                </ContentControl>
                             </StackPanel>
                         </DataTemplate>
                         <DataTemplate x:DataType="ne:ProcessorRefEditor">
@@ -343,7 +354,7 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="Properties" IsVisible="{Binding ItemDetails, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TabItem Header="Properties" IsVisible="{Binding ItemDetails.HasPropertiesTab, FallbackValue=False}">
                 <ScrollViewer DataContext="{Binding ItemDetails}" x:DataType="ne:ItemDetailsViewModel">
                     <StackPanel Spacing="10" Margin="0,12,0,0">
                         <ItemsControl ItemsSource="{Binding Unresolved}" IsVisible="{Binding HasUnresolved}">
@@ -354,7 +365,7 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                         <TextBlock Text="EFFECTIVE PROPERTIES" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
-                        <ItemsControl ItemsSource="{Binding Properties}" />
+                        <ItemsControl ItemsSource="{Binding Properties}" ItemTemplate="{StaticResource PropertyRowTemplate}" />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

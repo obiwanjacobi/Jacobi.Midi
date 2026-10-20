@@ -212,8 +212,8 @@ internal sealed class OptionRow(DataTypeDefEditor owner, long number, string lab
 }
 
 /// <summary>
-/// Edits a processor def: the name it is referenced by and the processor it configures.
-/// Its default properties are edited in the Properties tab.
+/// Edits a processor def: the name it is referenced by.
+/// Its processor and properties are edited in the Processors tab.
 /// </summary>
 internal sealed class ProcessorDefEditor(SchemaWorkspaceDocument document, EditProcessorDef definition) : ItemEditor(document)
 {
@@ -221,12 +221,6 @@ internal sealed class ProcessorDefEditor(SchemaWorkspaceDocument document, EditP
     {
         get => definition.Name;
         set => Edit(definition.Name, Required(value, "The name"), v => definition.Name = v);
-    }
-
-    public string Processor
-    {
-        get => definition.Processor;
-        set => Edit(definition.Processor, Required(value, "The processor"), v => definition.Processor = v);
     }
 }
 

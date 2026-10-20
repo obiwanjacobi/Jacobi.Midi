@@ -364,7 +364,7 @@ internal sealed partial class MainViewModel : ViewModelBase
         if (ItemDetails is { } details)
         {
             details.AddPropertyCommand.Execute(null);
-            SelectedEditorTab = PropertiesTab;
+            SelectedEditorTab = details.HasPropertiesTab ? PropertiesTab : GeneralTab;
         }
     }
 

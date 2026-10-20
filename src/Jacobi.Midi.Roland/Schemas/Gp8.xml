@@ -33,8 +33,9 @@
     <processor name="bitBoolProc" processor="sys.bitpacker" bitLength="1" />
     <processor name="valBoolProc" processor="sys.map">
       <properties>
-        <property name="logical" value="sys.bool" />
-        <property name="map" value="0=0,1=1" />
+        <property name="to" value="sys.bool" />
+        <property name="0" value="False" />
+        <property name="1" value="True" />
       </properties>
     </processor>
   </processorDefs>
