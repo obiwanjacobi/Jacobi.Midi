@@ -54,7 +54,7 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Row="2" ColumnDefinitions="280,*,320" ColumnSpacing="1" Background="{DynamicResource AppDividerBrush}">
+        <Grid Grid.Row="2" ColumnDefinitions="280,*" ColumnSpacing="1" Background="{DynamicResource AppDividerBrush}">
             <Border Grid.Column="0" Padding="18" Background="{DynamicResource AppBackgroundPanelBrush}">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Spacing="3" Margin="0,0,0,16">
@@ -71,27 +71,6 @@
 
             <Border Grid.Column="1" Padding="24" Background="{DynamicResource AppBackgroundBaseBrush}">
                 <ne:NodeEditorControl />
-            </Border>
-
-            <Border Grid.Column="2" Padding="18" Background="{DynamicResource AppBackgroundPanelBrush}">
-                <StackPanel Spacing="12">
-                    <StackPanel Spacing="3">
-                        <TextBlock Text="ADD A FIELD" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
-                        <TextBlock Text="Build the schema or capture bytes" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource AppTextHeadingBrush}" />
-                    </StackPanel>
-                        <TextBox PlaceholderText="Group name" Text="{Binding NewGroupName}" />
-                        <Button Content="Add nested group" Command="{Binding AddGroupCommand}" />
-                        <Border Height="1" Background="{DynamicResource AppDividerBrush}" Margin="0,4" />
-                        <TextBox PlaceholderText="Field name" Text="{Binding NewFieldName}" />
-                    <ComboBox ItemsSource="{Binding DataTypeOptions}" IsEditable="True" Text="{Binding NewFieldDataType}" />
-                    <TextBox PlaceholderText="Sample value (optional)" Text="{Binding NewFieldSampleValue}" />
-                    <Button Content="Add field to selected group" Command="{Binding AddFieldCommand}" />
-                    <Border Height="1" Background="{DynamicResource AppDividerBrush}" Margin="0,4" />
-                    <TextBlock Text="Descriptions and sample values are stored as schema properties so they stay with the file."
-                               TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource AppTextLabelBrush}" />
-                    <TextBlock Text="Supported files: .json · .xml · .yaml · .yml"
-                               TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource AppTextLabelBrush}" />
-                </StackPanel>
             </Border>
         </Grid>
 

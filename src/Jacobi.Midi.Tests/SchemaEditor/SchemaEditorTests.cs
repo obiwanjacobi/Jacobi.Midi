@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.SchemaEditor.Services;
 using Jacobi.Midi.SchemaEditor.ViewModels;
@@ -344,17 +345,15 @@ public class SchemaEditorTests
                 var root = Assert.IsType<EditGroup>(Assert.Single(schema.Members));
                 Assert.True(document.IsDirty);
 
-                viewModel.NewGroupName = "Header";
-                viewModel.AddGroupCommand.Execute(null);
+                viewModel.AddNodeCommand.Execute(SchemaNodeKind.Group);
                 var header = Assert.IsType<EditGroup>(Assert.Single(root.Members));
                 Assert.Same(header, viewModel.SelectedNode);
-                Assert.Equal("Header", viewModel.NodeName);
-                viewModel.NewFieldName = "Parameter";
-                viewModel.NewFieldSampleValue = "2A";
-                viewModel.AddFieldCommand.Execute(null);
+                Assert.Equal("NewGroup", viewModel.NodeName);
+                viewModel.AddNodeCommand.Execute(SchemaNodeKind.Field);
                 var field = Assert.IsType<EditField>(Assert.Single(header.Members));
                 Assert.Same(field, viewModel.SelectedNode);
-                Assert.Equal("2A", viewModel.NodeSampleValue);
+                Assert.Equal("NewField", viewModel.NodeName);
+                Assert.Equal("sys.uint8", viewModel.NodeDataType);
 
                 viewModel.NodeName = "Renamed";
                 viewModel.NodeDescription = "A parameter";
@@ -363,12 +362,66 @@ public class SchemaEditorTests
                 Assert.Equal("A parameter", Assert.Single(field.Properties, property => property.Name == "description").Value);
                 Assert.Same(field, viewModel.SelectedNode);
 
-                viewModel.NewFieldName = "Sibling";
-                viewModel.AddFieldCommand.Execute(null);
+                viewModel.AddNodeCommand.Execute(SchemaNodeKind.Field);
                 Assert.Equal(2, header.Members.Count);
                 Assert.Same(header.Members[1], viewModel.SelectedNode);
+                Assert.Equal("NewField", header.Members[1].Name);
                 Assert.Same(schema, document.Schema);
                 Assert.Equal(4, document.Revision);
+        }
+
+        [Fact]
+        public void AddNode_CreatesEachKindWithUniqueNames()
+        {
+                var viewModel = new MainViewModel();
+                viewModel.NewDocumentCommand.Execute(null);
+                var root = Assert.IsType<EditGroup>(Assert.Single(viewModel.SelectedDocument!.Schema.Members));
+
+                viewModel.AddNodeCommand.Execute(SchemaNodeKind.Repeat);
+                var repeat = Assert.IsType<EditRepeat>(Assert.Single(root.Members));
+                Assert.True(repeat.Count is int count && count == 1);
+                viewModel.SelectedNode = root;
+                viewModel.AddNodeCommand.Execute(SchemaNodeKind.Choice);
+                Assert.IsType<EditChoice>(root.Members[1]);
+                viewModel.SelectedNode = root;
+                viewModel.AddNodeCommand.Execute(SchemaNodeKind.Repeat);
+                Assert.Equal(["NewRepeat", "NewChoice", "NewRepeat2"], root.Members.Select(member => member.Name));
+
+                // the new kinds survive a save round trip
+                var saved = SchemaFileService.Serialize(viewModel.SelectedDocument.Schema, SchemaFormat.Json);
+                var restored = Assert.IsType<EditGroup>(Assert.Single(SchemaFileService.Parse(saved, SchemaFormat.Json).Members));
+                Assert.Equal([typeof(EditRepeat), typeof(EditChoice), typeof(EditRepeat)], restored.Members.Select(member => member.GetType()));
+        }
+
+        [Fact]
+        public void DeleteNode_RemovesSelectionAndSelectsParent()
+        {
+                var viewModel = new MainViewModel();
+                Assert.False(viewModel.DeleteNodeCommand.CanExecute(null));
+                viewModel.NewDocumentCommand.Execute(null);
+                var document = viewModel.SelectedDocument!;
+                var root = Assert.IsType<EditGroup>(Assert.Single(document.Schema.Members));
+                viewModel.AddNodeCommand.Execute(SchemaNodeKind.Field);
+                var field = Assert.IsType<EditField>(Assert.Single(root.Members));
+                var revision = document.Revision;
+
+                Assert.True(viewModel.DeleteNodeCommand.CanExecute(null));
+                viewModel.DeleteNodeCommand.Execute(null);
+                Assert.Empty(root.Members);
+                Assert.Same(root, viewModel.SelectedNode);
+                Assert.Equal(revision + 1, document.Revision);
+
+                viewModel.DeleteNodeCommand.Execute(null);
+                Assert.Empty(document.Schema.Members);
+                Assert.Null(viewModel.SelectedNode);
+                Assert.False(viewModel.DeleteNodeCommand.CanExecute(null));
+
+                var definition = new EditGroup(null) { Name = "def", Members = [], Processors = [], Properties = [] };
+                document.Schema.NodeDefs.Add(definition);
+                viewModel.SelectedNode = definition;
+                viewModel.DeleteNodeCommand.Execute(null);
+                Assert.Empty(document.Schema.NodeDefs);
+                Assert.Null(viewModel.SelectedNode);
         }
 
         [Fact]
@@ -377,8 +430,7 @@ public class SchemaEditorTests
                 var viewModel = new MainViewModel();
                 viewModel.NewDocumentCommand.Execute(null);
                 var first = Assert.Single(viewModel.Documents);
-                viewModel.NewFieldName = "FirstField";
-                viewModel.AddFieldCommand.Execute(null);
+                viewModel.AddNodeCommand.Execute(SchemaNodeKind.Field);
                 Assert.NotNull(viewModel.SelectedNode);
                 viewModel.NewDocumentCommand.Execute(null);
                 var second = viewModel.SelectedDocument;
@@ -410,10 +462,6 @@ public class SchemaEditorTests
                 Assert.False(document.IsDirty);
                 Assert.Equal(revision, document.Revision);
                 Assert.Contains("not applied", viewModel.StatusMessage);
-                viewModel.NewFieldName = " ";
-                viewModel.AddFieldCommand.Execute(null);
-                Assert.Single(root.Members);
-                Assert.False(document.IsDirty);
         }
 
         [Fact]
@@ -435,13 +483,13 @@ public class SchemaEditorTests
                 var viewModel = new MainViewModel { SelectedDocument = document };
 
                 viewModel.SelectedNode = open;
-                viewModel.AddFieldCommand.Execute(null);
-                viewModel.AddGroupCommand.Execute(null);
+                viewModel.AddNodeCommand.Execute(SchemaNodeKind.Field);
+                viewModel.AddNodeCommand.Execute(SchemaNodeKind.Group);
                 Assert.Empty(open.Members);
                 Assert.False(document.IsDirty);
 
                 viewModel.SelectedNode = root;
-                viewModel.AddFieldCommand.Execute(null);
+                viewModel.AddNodeCommand.Execute(SchemaNodeKind.Field);
                 Assert.IsType<EditField>(root.Members[1]);
                 Assert.True(document.IsDirty);
         }

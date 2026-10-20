@@ -78,6 +78,61 @@ internal sealed partial class SchemaWorkspaceDocument : ObservableObject
         return group;
     }
 
+    public EditRepeat AddRepeat(EditGroup parent, string name, int count)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        EnsureCanAddMembers(parent);
+        var repeat = new EditRepeat(parent)
+        {
+            Name = name,
+            Count = count,
+            Members = [],
+            Processors = [],
+            Properties = [],
+            ValueProcessors = [],
+        };
+        parent.Members.Add(repeat);
+        MarkChanged();
+        return repeat;
+    }
+
+    public EditChoice AddChoice(EditGroup parent, string name, int selectedIndex)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        EnsureCanAddMembers(parent);
+        var choice = new EditChoice(parent)
+        {
+            Name = name,
+            SelectedIndex = selectedIndex,
+            Members = [],
+            Processors = [],
+            Properties = [],
+            ValueProcessors = [],
+        };
+        parent.Members.Add(choice);
+        MarkChanged();
+        return choice;
+    }
+
+    /// <summary>
+    /// Removes <paramref name="node"/> from its parent group, or from the node defs when it is a top-level definition.
+    /// </summary>
+    public void RemoveNode(EditNode node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        var removed = node switch
+        {
+            EditDocument => throw new ArgumentException("The document itself cannot be removed.", nameof(node)),
+            { Parent: { } parent } => parent.Members.Remove(node),
+            _ => Schema.NodeDefs.Remove(node)
+        };
+        if (!removed)
+        {
+            throw new ArgumentException($"Node '{node.Name}' is not part of this document.", nameof(node));
+        }
+        MarkChanged();
+    }
+
     private void MarkChanged()
     {
         Revision++;

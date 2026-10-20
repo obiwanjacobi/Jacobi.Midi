@@ -6,6 +6,7 @@ using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.SchemaEditor.Midi;
 using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.SchemaEditor.Services;
@@ -48,6 +49,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectedNode))]
+    [NotifyCanExecuteChangedFor(nameof(DeleteNodeCommand))]
     public partial object? SelectedItem { get; set; }
 
     /// <summary>
@@ -78,19 +80,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     public partial string ReverseFieldName { get; set; } = "CapturedBytes";
 
     [ObservableProperty]
-    public partial string NewFieldName { get; set; } = "NewField";
-
-    [ObservableProperty]
-    public partial string NewGroupName { get; set; } = "NewGroup";
-
-    [ObservableProperty]
     public partial string ReverseFieldDataType { get; set; } = "sys.bytes";
-
-    [ObservableProperty]
-    public partial string NewFieldDataType { get; set; } = "sys.uint8";
-
-    [ObservableProperty]
-    public partial string NewFieldSampleValue { get; set; } = String.Empty;
 
     [ObservableProperty]
     public partial int SelectedByteStart { get; set; }
@@ -205,53 +195,65 @@ internal sealed partial class MainViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Adds a new node of <paramref name="kind"/> with a default name to the target group (see <see cref="GetTargetGroup"/>)
+    /// and selects it for editing.
+    /// </summary>
     [RelayCommand]
-    private void AddField()
+    private void AddNode(SchemaNodeKind kind)
     {
         if (SelectedDocument is null)
         {
-            StatusMessage = "Create or open a schema before adding a field.";
+            StatusMessage = "Create or open a schema before adding a node.";
             return;
         }
 
         try
         {
-            var field = SelectedDocument.AddField(
-                GetTargetGroup(),
-                NewFieldName.Trim(),
-                NewFieldDataType.Trim(),
-                NewFieldSampleValue.Trim());
-            SelectedNode = field;
-            StatusMessage = $"Added {NewFieldName} to {SelectedDocument.Schema.Name}.";
+            var parent = GetTargetGroup();
+            var name = GetUniqueName(parent, $"New{kind}");
+            EditNode node = kind switch
+            {
+                SchemaNodeKind.Field => SelectedDocument.AddField(parent, name, "sys.uint8", String.Empty),
+                SchemaNodeKind.Group => SelectedDocument.AddGroup(parent, name),
+                SchemaNodeKind.Repeat => SelectedDocument.AddRepeat(parent, name, count: 1),
+                SchemaNodeKind.Choice => SelectedDocument.AddChoice(parent, name, selectedIndex: 0),
+                _ => throw new NotSupportedException($"Cannot add a node of kind {kind}.")
+            };
+            SelectedNode = node;
+            StatusMessage = $"Added {name} to {parent.Name}.";
         }
         catch (Exception exception) when (IsSchemaError(exception))
         {
-            StatusMessage = $"Field was not added: {exception.Message}";
+            StatusMessage = $"Node was not added: {exception.Message}";
         }
     }
 
-    [RelayCommand]
-    private void AddGroup()
+    /// <summary>
+    /// Removes the selected node and selects its parent group.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanDeleteNode))]
+    private void DeleteNode()
     {
-        if (SelectedDocument is null)
+        if (SelectedDocument is null || SelectedNode is not { } node)
         {
-            StatusMessage = "Create or open a schema before adding a group.";
             return;
         }
 
         try
         {
-            var group = SelectedDocument.AddGroup(
-                GetTargetGroup(),
-                NewGroupName.Trim());
-            SelectedNode = group;
-            StatusMessage = $"Added group {NewGroupName} to {SelectedDocument.Schema.Name}.";
+            var parent = node.Parent is EditDocument ? null : node.Parent;
+            SelectedDocument.RemoveNode(node);
+            SelectedNode = parent;
+            StatusMessage = $"Deleted {node.Name}.";
         }
         catch (Exception exception) when (IsSchemaError(exception))
         {
-            StatusMessage = $"Group was not added: {exception.Message}";
+            StatusMessage = $"Node was not deleted: {exception.Message}";
         }
     }
+
+    private bool CanDeleteNode() => SelectedNode is not null and not EditDocument;
 
     [RelayCommand]
     private void ImportSysEx()
@@ -468,6 +470,17 @@ internal sealed partial class MainViewModel : ViewModelBase
         _ => SelectedDocument?.Schema.Members.OfType<EditGroup>().FirstOrDefault()
             ?? throw new InvalidOperationException("Select a group before adding a node.")
     };
+
+    private static string GetUniqueName(EditGroup parent, string baseName)
+    {
+        var name = baseName;
+        var suffix = 2;
+        while (parent.Members.Any(member => String.Equals(member.Name, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            name = $"{baseName}{suffix++}";
+        }
+        return name;
+    }
 
     private static string GetProperty(EditNode? node, string name)
         => node?.Properties.FirstOrDefault(property => String.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))?.Value

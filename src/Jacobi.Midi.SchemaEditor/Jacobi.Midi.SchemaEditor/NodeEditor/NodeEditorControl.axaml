@@ -3,6 +3,7 @@
              xmlns:vm="using:Jacobi.Midi.SchemaEditor.ViewModels"
              xmlns:models="using:Jacobi.Midi.SchemaEditor.Models"
              xmlns:ne="using:Jacobi.Midi.SchemaEditor.NodeEditor"
+             xmlns:schema="using:Jacobi.BinarySerializer.Schema"
              x:Class="Jacobi.Midi.SchemaEditor.NodeEditor.NodeEditorControl"
              x:DataType="vm:MainViewModel">
 
@@ -24,12 +25,27 @@
     </UserControl.Styles>
 
     <Grid RowDefinitions="Auto,Auto,*,Auto">
-        <StackPanel Spacing="4">
-            <TextBlock Text="NODE EDITOR" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
-            <TextBlock Text="Shape your message structure" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource AppTextHeadingBrush}" />
-        </StackPanel>
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+            <StackPanel Spacing="4">
+                <TextBlock Text="NODE EDITOR" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
+                <TextBlock Text="Shape your message structure" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource AppTextHeadingBrush}" />
+            </StackPanel>
+            <Button Grid.Column="1" VerticalAlignment="Bottom" Content="Add ▾" IsEnabled="{Binding HasSelectedDocument}"
+                    ToolTip.Tip="Add a node to the selected group">
+                <Button.Flyout>
+                    <MenuFlyout Placement="BottomEdgeAlignedRight">
+                        <MenuItem Header="Field" Command="{Binding AddNodeCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Field}" />
+                        <MenuItem Header="Group" Command="{Binding AddNodeCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Group}" />
+                        <MenuItem Header="Repeat" Command="{Binding AddNodeCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Repeat}" />
+                        <MenuItem Header="Choice" Command="{Binding AddNodeCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Choice}" />
+                    </MenuFlyout>
+                </Button.Flyout>
+            </Button>
+            <Button Grid.Column="2" VerticalAlignment="Bottom" Content="Delete" Command="{Binding DeleteNodeCommand}"
+                    ToolTip.Tip="Delete the selected node" />
+        </Grid>
         <Border Grid.Row="1" Padding="12" Margin="0,18,0,0" CornerRadius="6" Background="{DynamicResource AppBackgroundCardBrush}">
-            <TextBlock Text="New schemas start with a SysEx group. Add fields directly to define the message structure."
+            <TextBlock Text="New schemas start with a SysEx group. Use Add to insert a field, group, repeat or choice into the selected group."
                        TextWrapping="Wrap" Foreground="{DynamicResource AppTextSecondaryBrush}" FontSize="12" />
         </Border>
 
