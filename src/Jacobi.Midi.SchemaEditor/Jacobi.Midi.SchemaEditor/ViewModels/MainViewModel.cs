@@ -11,6 +11,7 @@ using Jacobi.Midi.SchemaEditor.Instantiate;
 using Jacobi.Midi.SchemaEditor.Midi;
 using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.SchemaEditor.NodeEditor;
+using Jacobi.Midi.SchemaEditor.SchemaTree;
 using Jacobi.Midi.SchemaEditor.Services;
 using YamlDotNet.Core;
 
@@ -46,6 +47,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// True when the schema tree shows the document collections, false when it shows the document members.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SelectedItemPath))]
     public partial bool IsDocumentView { get; set; }
 
     /// <summary>
@@ -101,9 +103,49 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectedNode))]
+    [NotifyPropertyChangedFor(nameof(SelectedItemPath))]
     [NotifyCanExecuteChangedFor(nameof(DeleteItemCommand))]
     [NotifyCanExecuteChangedFor(nameof(InstantiateSchemaCommand))]
     public partial object? SelectedItem { get; set; }
+
+    /// <summary>
+    /// The path of the <see cref="SelectedItem"/> in the schema tree, starting with the document name:
+    /// <c>Name/Header/Id</c> for a member, <c>Name/NodeDefs/Header</c> or <c>Name/Includes/Schema</c> for a document item.
+    /// </summary>
+    public string SelectedItemPath => GetItemPath(SelectedItem);
+
+    private string GetItemPath(object? item)
+    {
+        var root = SelectedDocument?.Schema.Name ?? String.Empty;
+        if (item is null or EditDocument)
+        {
+            return root;
+        }
+
+        if (item is EditNode node)
+        {
+            var names = new List<string>();
+            for (EditNode? current = node; current is not null and not EditDocument; current = current.Parent)
+            {
+                names.Insert(0, current.Name);
+            }
+
+            // node defs are listed under their collection in the document view
+            var path = String.Join('/', names);
+            return SchemaTreeViewModel.IsDocumentItem(node) ? $"{root}/{nameof(EditDocument.NodeDefs)}/{path}" : $"{root}/{path}";
+        }
+
+        var (category, name) = item switch
+        {
+            EditDocumentRef include => (nameof(EditDocument.Includes), include.Schema),
+            EditDataTypeDef dataTypeDef => (nameof(EditDocument.DataTypeDefs), dataTypeDef.Name),
+            EditProcessorDef processorDef => (nameof(EditDocument.ProcessorDefs), processorDef.Name),
+            EditProcessorRef processor => (nameof(EditDocument.Processors), processor.Processor.ToString()),
+            EditProperty property => (nameof(EditDocument.Properties), property.Name),
+            _ => (String.Empty, String.Empty)
+        };
+        return category.Length == 0 ? root : $"{root}/{category}/{name}";
+    }
 
     /// <summary>
     /// The <see cref="SelectedItem"/> when it is a schema node, otherwise null.
@@ -264,6 +306,7 @@ internal sealed partial class MainViewModel : ViewModelBase
                 NodeSampleValue.Trim(),
                 NodeFacets);
             NodeFacets = NodeFacets.Read(node);
+            OnPropertyChanged(nameof(SelectedItemPath));
             StatusMessage = $"Updated {NodeName}.";
         }
         catch (Exception exception) when (IsSchemaError(exception))
@@ -565,7 +608,16 @@ internal sealed partial class MainViewModel : ViewModelBase
         NotifyAddOptionsChanged();
     }
 
-    partial void OnIsDocumentViewChanged(bool value) => NotifyAddOptionsChanged();
+    partial void OnIsDocumentViewChanged(bool value)
+    {
+        // a selected item that is not shown in the other view would otherwise stay selected (and keep its path)
+        if (SelectedItem is { } item && SchemaTreeViewModel.IsDocumentItem(item) != value)
+        {
+            SelectedItem = null;
+        }
+
+        NotifyAddOptionsChanged();
+    }
     partial void OnSelectedCategoryChanged(DocumentCollection? value) => NotifyAddOptionsChanged();
 
     partial void OnSelectedItemChanged(object? value)

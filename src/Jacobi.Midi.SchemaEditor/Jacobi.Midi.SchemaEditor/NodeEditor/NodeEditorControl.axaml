@@ -73,7 +73,8 @@
         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
             <StackPanel Spacing="4">
                 <TextBlock Text="NODE EDITOR" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
-                <TextBlock Text="Shape your message structure" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource AppTextHeadingBrush}" />
+                <TextBlock Text="{Binding SelectedItemPath}" FontSize="22" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource AppTextHeadingBrush}" />
             </StackPanel>
             <Button Grid.Column="1" VerticalAlignment="Bottom" Content="Add ▾" IsEnabled="{Binding CanAdd}"
                     ToolTip.Tip="Add a node to the selected group, or an item to the selected document collection">
