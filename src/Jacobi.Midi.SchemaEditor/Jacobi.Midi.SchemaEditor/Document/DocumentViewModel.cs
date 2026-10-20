@@ -2,22 +2,22 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Jacobi.Midi.SchemaEditor.ViewModels;
 
-namespace Jacobi.Midi.SchemaEditor.Rename;
+namespace Jacobi.Midi.SchemaEditor.Document;
 
 /// <summary>
 /// The view model of the rename document dialog: asks the user to confirm renaming a document.
 /// When other open documents include the old name the user can choose to rename those includes as well;
 /// when none do, the dialog warns that includes (in documents that are not open) may become invalid.
 /// </summary>
-internal sealed partial class RenameDocumentViewModel : ViewModelBase
+internal sealed partial class DocumentViewModel : ViewModelBase
 {
-    private readonly Action<RenameDocumentViewModel, bool> _close;
+    private readonly Action<DocumentViewModel, bool> _close;
 
     /// <param name="oldName">The current name of the document.</param>
     /// <param name="newName">The name the document is renamed to.</param>
     /// <param name="dependents">The names of the other open documents that include <paramref name="oldName"/>.</param>
     /// <param name="close">Called with this view model and whether the user confirmed (true) or cancelled (false).</param>
-    public RenameDocumentViewModel(string oldName, string newName, IReadOnlyList<string> dependents, Action<RenameDocumentViewModel, bool> close)
+    public DocumentViewModel(string oldName, string newName, IReadOnlyList<string> dependents, Action<DocumentViewModel, bool> close)
     {
         OldName = oldName;
         NewName = newName;

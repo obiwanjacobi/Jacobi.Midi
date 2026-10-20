@@ -1,12 +1,12 @@
 <!--
     The rename document dialog: shown as an overlay (so it works in the Desktop and the Browser host)
-    to confirm renaming a document and, optionally, the includes of it in other open documents. See RenameDocumentViewModel.
+    to confirm renaming a document and, optionally, the includes of it in other open documents. See DocumentViewModel.
 -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:rn="using:Jacobi.Midi.SchemaEditor.Rename"
-             x:Class="Jacobi.Midi.SchemaEditor.Rename.RenameDocumentView"
-             x:DataType="rn:RenameDocumentViewModel">
+             xmlns:rn="using:Jacobi.Midi.SchemaEditor.Document"
+             x:Class="Jacobi.Midi.SchemaEditor.Document.DocumentView"
+             x:DataType="rn:DocumentViewModel">
 
     <Grid Background="#99000000">
         <Border MaxWidth="560" Margin="32" Padding="20" CornerRadius="8"

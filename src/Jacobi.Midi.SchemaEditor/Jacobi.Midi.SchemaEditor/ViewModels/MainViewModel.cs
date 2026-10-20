@@ -9,11 +9,11 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.SchemaEditor.Assemblies;
+using Jacobi.Midi.SchemaEditor.Document;
 using Jacobi.Midi.SchemaEditor.Instantiate;
 using Jacobi.Midi.SchemaEditor.Midi;
 using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.SchemaEditor.NodeEditor;
-using Jacobi.Midi.SchemaEditor.Rename;
 using Jacobi.Midi.SchemaEditor.SchemaTree;
 using Jacobi.Midi.SchemaEditor.Services;
 using YamlDotNet.Core;
@@ -160,7 +160,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// The rename dialog while it is shown; null otherwise.
     /// </summary>
     [ObservableProperty]
-    public partial RenameDocumentViewModel? RenameDialog { get; private set; }
+    public partial DocumentViewModel? RenameDialog { get; private set; }
 
     /// <summary>
     /// The item selected in the schema tree or in the node defs tab: an <see cref="EditNode"/>
@@ -670,14 +670,14 @@ internal sealed partial class MainViewModel : ViewModelBase
         }
 
         var dependents = GetIncludingDocuments(document, oldName).Select(dependent => dependent.Schema.Name).ToList();
-        RenameDialog = new RenameDocumentViewModel(oldName, newName, dependents, CloseRenameDialog);
+        RenameDialog = new DocumentViewModel(oldName, newName, dependents, CloseRenameDialog);
     }
 
     private IEnumerable<SchemaWorkspaceDocument> GetIncludingDocuments(SchemaWorkspaceDocument document, string name)
         => Documents.Where(other => !ReferenceEquals(other, document)
             && other.Schema.Includes.Any(include => String.Equals(include.Schema, name, StringComparison.OrdinalIgnoreCase)));
 
-    private void CloseRenameDialog(RenameDocumentViewModel dialog, bool confirmed)
+    private void CloseRenameDialog(DocumentViewModel dialog, bool confirmed)
     {
         RenameDialog = null;
         var document = SelectedDocument;
