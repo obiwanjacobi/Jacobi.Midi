@@ -258,7 +258,7 @@ public class SchemaInstantiatorTests
     {
         var viewModel = new MainViewModel();
         viewModel.NewDocumentCommand.Execute(null);
-        viewModel.AddIncludeCommand.Execute(null);
+        viewModel.SelectedDocument!.AddInclude("schema");
         viewModel.SelectedItem = viewModel.SelectedDocument!.Schema.Members.Single();
 
         viewModel.InstantiateSchemaCommand.Execute(null);

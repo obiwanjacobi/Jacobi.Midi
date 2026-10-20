@@ -413,7 +413,7 @@ public class SchemaEditorTests
 
                 viewModel.DeleteItemCommand.Execute(null);
                 Assert.Empty(document.Schema.Members);
-                Assert.Null(viewModel.SelectedNode);
+                Assert.Same(document.Schema, viewModel.SelectedNode);
                 Assert.False(viewModel.DeleteItemCommand.CanExecute(null));
 
                 var definition = new EditGroup(null) { Name = "def", Members = [], Processors = [], Properties = [] };
@@ -421,7 +421,7 @@ public class SchemaEditorTests
                 viewModel.SelectedNode = definition;
                 viewModel.DeleteItemCommand.Execute(null);
                 Assert.Empty(document.Schema.NodeDefs);
-                Assert.Null(viewModel.SelectedNode);
+                Assert.Same(document.Schema, viewModel.SelectedNode);
         }
 
         [Fact]

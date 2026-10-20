@@ -6,8 +6,7 @@ namespace Jacobi.Midi.SchemaEditor.SchemaTree;
 
 /// <summary>
 /// View model behind <see cref="SchemaTreeControl"/>.
-/// Exposes the items of the active view (the document members, or the document collections
-/// grouped by <see cref="SchemaTreeCategory"/>) and the selected item.
+/// Exposes the <see cref="Root"/> (the document with its members below it) and the selected item.
 /// The tree binds directly to the (observable) <see cref="EditNode"/> model.
 /// </summary>
 internal sealed partial class SchemaTreeViewModel : ObservableObject
@@ -16,91 +15,64 @@ internal sealed partial class SchemaTreeViewModel : ObservableObject
     public partial EditDocument? Document { get; set; }
 
     /// <summary>
-    /// True to show the document collections, false to show the document members.
+    /// The root of the tree: the document with its members below it. Null when there is no document.
     /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsMembersView), nameof(Items))]
-    public partial bool IsDocumentView { get; set; }
-
-    public bool IsMembersView
-    {
-        get => !IsDocumentView;
-        set => IsDocumentView = !value;
-    }
+    public SchemaTreeRoot? Root { get; private set; }
 
     /// <summary>
-    /// The category headers of the document view. Empty when there is no document.
+    /// The root items of the tree: the <see cref="Root"/>.
     /// </summary>
-    public IReadOnlyList<SchemaTreeCategory> Categories { get; private set; } = [];
+    public IEnumerable? Items => Root is { } root ? new[] { root } : null;
 
     /// <summary>
-    /// The root items of the active view.
-    /// </summary>
-    public IEnumerable? Items => IsDocumentView ? Categories : Document?.Members;
-
-    /// <summary>
-    /// The selected tree item: an <see cref="EditNode"/>, another document item or a <see cref="SchemaTreeCategory"/>.
+    /// The selected tree item: the <see cref="SchemaTreeRoot"/>, an <see cref="EditNode"/> or null.
     /// </summary>
     [ObservableProperty]
     public partial object? SelectedItem { get; set; }
 
     partial void OnDocumentChanged(EditDocument? value)
     {
-        Categories = value is null ? [] :
-        [
-            new(DocumentCollection.Includes, "Includes", value.Includes),
-            new(DocumentCollection.NodeDefs, "Node Defs", value.NodeDefs),
-            new(DocumentCollection.DataTypeDefs, "Data Type Defs", value.DataTypeDefs),
-            new(DocumentCollection.ProcessorDefs, "Processor Defs", value.ProcessorDefs),
-            new(DocumentCollection.Processors, "Processors", value.Processors),
-            new(DocumentCollection.Properties, "Properties", value.Properties),
-        ];
+        Root = value is null ? null : new SchemaTreeRoot(value, value.Members);
         SelectedItem = null;
-        OnPropertyChanged(nameof(Categories));
+        OnPropertyChanged(nameof(Root));
         OnPropertyChanged(nameof(Items));
     }
 
     /// <summary>
-    /// Returns true when <paramref name="item"/> is shown in the document view, false when it is a member.
+    /// Returns the tree item that represents <paramref name="item"/>: the <see cref="Root"/> for the document, otherwise the item itself.
     /// </summary>
-    public static bool IsDocumentItem(object item)
-        => item is not EditNode node || GetRoot(node) is not EditDocument;
+    public object? ToTreeItem(object? item) => item is EditDocument document && ReferenceEquals(document, Document) ? Root : item;
 
     /// <summary>
-    /// Returns the tree items from the root of the view containing <paramref name="item"/> down to (excluding) the item itself.
-    /// Returns null when the item is not part of <see cref="Document"/>.
+    /// Returns the item the host sees for <paramref name="treeItem"/>: the document for the root, otherwise the item itself.
+    /// </summary>
+    public static object? ToItem(object? treeItem) => treeItem is SchemaTreeRoot root ? root.Document : treeItem;
+
+    /// <summary>
+    /// Returns the tree items from the <see cref="Root"/> down to (excluding) the item itself; empty for the document.
+    /// Returns null when the item is not shown in the tree, e.g. a node def or a node of another document.
     /// </summary>
     public IReadOnlyList<object>? GetPath(object item)
     {
-        var path = new List<object>();
-        var root = item;
-        if (item is EditNode node)
-        {
-            for (var parent = node.Parent; parent is not null and not EditDocument; parent = parent.Parent)
-            {
-                path.Insert(0, parent);
-            }
-            root = path.Count > 0 ? path[0] : node;
-            if (GetRoot(node) is EditDocument document)
-            {
-                return ReferenceEquals(document, Document) ? path : null;
-            }
-        }
-        var category = Categories.FirstOrDefault(c => c.Items.Contains(root));
-        if (category is null)
+        if (Root is not { } root)
         {
             return null;
         }
-        path.Insert(0, category);
-        return path;
-    }
-
-    private static EditNode GetRoot(EditNode node)
-    {
-        while (node.Parent is not null)
+        if (item is EditDocument document)
         {
-            node = node.Parent;
+            return ReferenceEquals(document, Document) ? [] : null;
         }
-        return node;
+        if (item is not EditNode node)
+        {
+            return null;
+        }
+
+        var path = new List<object>();
+        for (var parent = node.Parent; parent is not null and not EditDocument; parent = parent.Parent)
+        {
+            path.Insert(0, parent);
+        }
+        var top = path.Count > 0 ? (EditNode)path[0] : node;
+        return ReferenceEquals(top.Parent, Document) ? [root, .. path] : null;
     }
 }

@@ -7,6 +7,7 @@
              xmlns:st="clr-namespace:Jacobi.Midi.SchemaEditor.SchemaTree"
              xmlns:ne="clr-namespace:Jacobi.Midi.SchemaEditor.NodeEditor"
              xmlns:inst="clr-namespace:Jacobi.Midi.SchemaEditor.Instantiate"
+             xmlns:rn="clr-namespace:Jacobi.Midi.SchemaEditor.Rename"
              xmlns:midi="clr-namespace:Jacobi.Midi.SchemaEditor.Midi"
              mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="900"
              x:Class="Jacobi.Midi.SchemaEditor.Views.MainView"
@@ -67,9 +68,7 @@
                                Text="Select a node to edit its name, type and documentation."
                                TextWrapping="Wrap" Margin="0,14,0,0" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" />
                 <st:SchemaTreeControl EditDocument="{Binding SelectedDocument.Schema}"
-                                      SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
-                                      IsDocumentView="{Binding IsDocumentView, Mode=TwoWay}"
-                                      SelectedCategory="{Binding SelectedCategory, Mode=OneWayToSource}" />
+                                      SelectedItem="{Binding SelectedItem, Mode=TwoWay}" />
                 </DockPanel>
             </Border>
 
@@ -85,6 +84,11 @@
         <!-- modal overlay of the instantiate dialog -->
         <Panel Grid.RowSpan="4" IsVisible="{Binding InstantiateDialog, Converter={x:Static ObjectConverters.IsNotNull}}">
             <inst:InstantiateSchemaView DataContext="{Binding InstantiateDialog}" />
+        </Panel>
+
+        <!-- modal overlay of the rename document dialog -->
+        <Panel Grid.RowSpan="4" IsVisible="{Binding RenameDialog, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <rn:RenameDocumentView DataContext="{Binding RenameDialog}" />
         </Panel>
     </Grid>
 </UserControl>

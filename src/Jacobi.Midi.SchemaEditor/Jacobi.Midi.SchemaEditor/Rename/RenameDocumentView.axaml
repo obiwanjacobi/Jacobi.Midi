@@ -1,0 +1,48 @@
+<!--
+    The rename document dialog: shown as an overlay (so it works in the Desktop and the Browser host)
+    to confirm renaming a document and, optionally, the includes of it in other open documents. See RenameDocumentViewModel.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:rn="using:Jacobi.Midi.SchemaEditor.Rename"
+             x:Class="Jacobi.Midi.SchemaEditor.Rename.RenameDocumentView"
+             x:DataType="rn:RenameDocumentViewModel">
+
+    <Grid Background="#99000000">
+        <Border MaxWidth="560" Margin="32" Padding="20" CornerRadius="8"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                Background="{DynamicResource AppBackgroundPanelBrush}"
+                BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="1">
+            <StackPanel Spacing="12">
+                <TextBlock Text="RENAME DOCUMENT" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
+                <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap"
+                           Foreground="{DynamicResource AppTextHeadingBrush}" />
+
+                <!-- other open documents include the old name -->
+                <StackPanel Spacing="8" IsVisible="{Binding HasDependents}">
+                    <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource AppTextBodyBrush}"
+                               Text="These open documents include the old name. Their includes become invalid unless they are renamed as well:" />
+                    <ItemsControl ItemsSource="{Binding Dependents}" Margin="12,0,0,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <TextBlock Text="{Binding}" FontWeight="SemiBold" Foreground="{DynamicResource AppTextCaptionBrush}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <CheckBox Content="Rename the includes in these documents as well" IsChecked="{Binding UpdateIncludes}" />
+                </StackPanel>
+
+                <!-- nothing open includes the old name -->
+                <TextBlock IsVisible="{Binding HasNoDependents}" TextWrapping="Wrap" Foreground="{DynamicResource AppTextBodyBrush}"
+                           Text="No open document includes the old name. Documents that are not open may include it, and those includes become invalid. Continue?" />
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,6,0,0">
+                    <Button Content="No" Command="{Binding CancelCommand}" IsVisible="{Binding HasNoDependents}" />
+                    <Button Content="Yes" Classes="accent" Command="{Binding ConfirmCommand}" IsVisible="{Binding HasNoDependents}" />
+                    <Button Content="Cancel" Command="{Binding CancelCommand}" IsVisible="{Binding HasDependents}" />
+                    <Button Content="Rename" Classes="accent" Command="{Binding ConfirmCommand}" IsVisible="{Binding HasDependents}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

@@ -25,11 +25,13 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
     private readonly List<INotifyCollectionChanged> _observedCollections = [];
 
     private readonly EditProcessorDef? _definition;
+    private readonly bool _isDocument;
 
     private ItemDetailsViewModel(SchemaWorkspaceDocument document, INotifyPropertyChanged item,
         IList<EditProperty> properties, IList<EditProcessorRef>? processors, Func<EffectiveItem> resolve,
-        EditProcessorDef? definition = null)
+        EditProcessorDef? definition = null, bool isDocument = false)
     {
+        _isDocument = isDocument;
         _document = document;
         _item = item;
         _properties = properties;
@@ -50,7 +52,7 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
         return item switch
         {
             EditNode node => new(document, node, node.Properties, EffectiveNodeResolver.GetProcessors(node),
-                () => EffectiveNodeResolver.Resolve(schema, node)),
+                () => EffectiveNodeResolver.Resolve(schema, node), isDocument: node is EditDocument),
             EditDataTypeDef definition => new(document, definition, definition.Properties, definition.Processors,
                 () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, definition.Processors)),
             EditProcessorDef definition => new(document, definition, definition.Properties, null,
@@ -71,6 +73,16 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
     /// (<see cref="Definition"/>); both are edited in the General tab.
     /// </summary>
     public bool HasPropertiesTab => _definition is null;
+
+    /// <summary>
+    /// True when the Processors tab is shown. The processors of the document are edited in its General tab.
+    /// </summary>
+    public bool ShowProcessorsTab => HasProcessors && !_isDocument;
+
+    /// <summary>
+    /// True when the Properties tab is shown. The properties of the document are edited in its General tab.
+    /// </summary>
+    public bool ShowPropertiesTab => HasPropertiesTab && !_isDocument;
 
     /// <summary>
     /// The one processor of a processor def with its properties; null for other items.
@@ -168,9 +180,9 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
     private void Rebuild()
     {
         var effective = _resolve();
-        Properties = effective.Properties.Select(property => new PropertyRow(property, _properties, OnRowEdited)).ToList();
-        Processors = effective.Processors.Select(processor => new ProcessorRow(processor, _processors, OnRowEdited)).ToList();
-        Definition = _definition is null ? null : new ProcessorDefRow(_definition, Properties, _properties, OnRowEdited);
+        Properties = effective.Properties.Select(property => new PropertyRow(property, _properties, OnRowEdited, this)).ToList();
+        Processors = effective.Processors.Select(processor => new ProcessorRow(processor, _processors, OnRowEdited, this)).ToList();
+        Definition = _definition is null ? null : new ProcessorDefRow(_definition, Properties, _properties, OnRowEdited, this);
         Unresolved = effective.Unresolved;
         Observe();
     }
@@ -251,12 +263,16 @@ internal sealed class PropertyRow : ObservableObject
     /// <param name="resolved">The effective property.</param>
     /// <param name="owner">The collection own properties live in (and overrides are added to); null when none can be added.</param>
     /// <param name="edited">Called after an own property was edited.</param>
-    public PropertyRow(ResolvedProperty resolved, IList<EditProperty>? owner, Action edited)
+    /// <param name="details">The details this row belongs to; its commands remove and override properties.</param>
+    public PropertyRow(ResolvedProperty resolved, IList<EditProperty>? owner, Action edited, ItemDetailsViewModel details)
     {
         _resolved = resolved;
         _edited = edited;
         Owner = owner;
+        Details = details;
     }
+
+    public ItemDetailsViewModel Details { get; }
 
     public EditProperty? Own => _resolved.Own;
     public IList<EditProperty>? Owner { get; }
@@ -300,8 +316,10 @@ internal sealed class PropertyRow : ObservableObject
 /// The processor of a processor def in the node editor with the def's properties, which are part of the processor.
 /// </summary>
 internal sealed class ProcessorDefRow(EditProcessorDef definition, IReadOnlyList<PropertyRow> properties,
-    IList<EditProperty> owner, Action edited) : ObservableObject
+    IList<EditProperty> owner, Action edited, ItemDetailsViewModel details) : ObservableObject
 {
+    public ItemDetailsViewModel Details { get; } = details;
+
     public IReadOnlyList<PropertyRow> Properties { get; } = properties;
     public IList<EditProperty> Owner { get; } = owner;
 
@@ -336,13 +354,17 @@ internal sealed class ProcessorRow : ObservableObject
     /// <param name="resolved">The effective processor.</param>
     /// <param name="owner">The collection own processors live in.</param>
     /// <param name="edited">Called after an own processor (or one of its properties) was edited.</param>
-    public ProcessorRow(ResolvedProcessor resolved, IList<EditProcessorRef>? owner, Action edited)
+    /// <param name="details">The details this row belongs to; its commands remove processors and add their properties.</param>
+    public ProcessorRow(ResolvedProcessor resolved, IList<EditProcessorRef>? owner, Action edited, ItemDetailsViewModel details)
     {
         _resolved = resolved;
         _edited = edited;
         Owner = owner;
-        Properties = resolved.Properties.Select(property => new PropertyRow(property, IsOwn ? Ref.Properties : null, edited)).ToList();
+        Details = details;
+        Properties = resolved.Properties.Select(property => new PropertyRow(property, IsOwn ? Ref.Properties : null, edited, details)).ToList();
     }
+
+    public ItemDetailsViewModel Details { get; }
 
     public EditProcessorRef Ref => _resolved.Processor;
     public IList<EditProcessorRef>? Owner { get; }

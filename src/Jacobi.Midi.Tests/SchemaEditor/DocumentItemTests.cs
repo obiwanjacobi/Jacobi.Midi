@@ -10,7 +10,7 @@ namespace Jacobi.Midi.Tests.SchemaEditor;
 public class DocumentItemTests
 {
     [Fact]
-    public void AddCommands_AddEachDocumentItemSelectItAndSurviveSave()
+    public void DocumentTabs_AddEachDocumentItemSelectItAndSurviveSave()
     {
         var viewModel = new MainViewModel();
         viewModel.NewDocumentCommand.Execute(null);
@@ -19,31 +19,41 @@ public class DocumentItemTests
         foreach (var kind in new[] { SchemaNodeKind.Field, SchemaNodeKind.Group, SchemaNodeKind.Repeat, SchemaNodeKind.Choice })
         {
             viewModel.AddNodeDefCommand.Execute(kind);
-            Assert.Same(schema.NodeDefs[^1], viewModel.SelectedNode);
+            // the node def is edited in the Node Defs tab: the document root stays selected
+            Assert.Same(schema, viewModel.SelectedItem);
+            Assert.Same(schema.NodeDefs[^1], viewModel.SelectedNodeDef);
+            Assert.Equal(MainViewModel.NodeDefsTab, viewModel.SelectedEditorTab);
             Assert.Null(schema.NodeDefs[^1].Parent);
         }
         viewModel.AddNodeDefCommand.Execute(SchemaNodeKind.Field);
         Assert.Equal(["NewFieldDef", "NewGroupDef", "NewRepeatDef", "NewChoiceDef", "NewFieldDef2"], schema.NodeDefs.Select(node => node.Name));
 
-        viewModel.AddIncludeCommand.Execute(null);
-        Assert.Same(Assert.Single(schema.Includes), viewModel.SelectedItem);
-        Assert.IsType<DocumentRefEditor>(viewModel.GeneralEditor);
-        Assert.Null(viewModel.ItemDetails);
+        // the collection tabs belong to the document root
+        Assert.True(viewModel.IsDocumentSelected);
+        var tabs = viewModel.DocumentTabs!;
 
-        viewModel.AddDataTypeDefCommand.Execute(null);
-        Assert.Same(Assert.Single(schema.DataTypeDefs), viewModel.SelectedItem);
-        Assert.True(viewModel.ItemDetails!.HasProcessors);
+        tabs.Includes.AddCommand.Execute(null);
+        Assert.Same(Assert.Single(schema.Includes), tabs.Includes.SelectedEntry);
+        Assert.IsType<DocumentRefEditor>(tabs.Includes.Editor);
+        Assert.Null(tabs.Includes.Editor.Details);
 
-        viewModel.AddProcessorDefCommand.Execute(null);
-        Assert.Same(Assert.Single(schema.ProcessorDefs), viewModel.SelectedItem);
-        Assert.False(viewModel.ItemDetails!.HasProcessors);
+        tabs.DataTypeDefs.AddCommand.Execute(null);
+        Assert.Same(Assert.Single(schema.DataTypeDefs), tabs.DataTypeDefs.SelectedEntry);
+        Assert.True(tabs.DataTypeDefs.Editor!.Details!.HasProcessors);
 
-        viewModel.AddDocumentProcessorCommand.Execute(null);
-        Assert.Same(Assert.Single(schema.Processors), viewModel.SelectedItem);
+        tabs.ProcessorDefs.AddCommand.Execute(null);
+        Assert.Same(Assert.Single(schema.ProcessorDefs), tabs.ProcessorDefs.SelectedEntry);
+        Assert.False(tabs.ProcessorDefs.Editor!.Details!.HasProcessors);
+        Assert.NotNull(tabs.ProcessorDefs.Editor.Details.Definition);
 
-        viewModel.AddDocumentPropertyCommand.Execute(null);
-        Assert.Same(Assert.Single(schema.Properties), viewModel.SelectedItem);
-        Assert.IsType<PropertyEditor>(viewModel.GeneralEditor);
+        // the processors and properties of the document are edited in its General tab
+        Assert.True(viewModel.ItemDetails!.HasProcessors && viewModel.ItemDetails.HasPropertiesTab);
+        Assert.False(viewModel.ItemDetails.ShowProcessorsTab || viewModel.ItemDetails.ShowPropertiesTab);
+        viewModel.AddItemProcessorCommand.Execute(null);
+        viewModel.AddItemPropertyCommand.Execute(null);
+        Assert.Single(schema.Processors);
+        Assert.Single(schema.Properties);
+        Assert.Equal(MainViewModel.GeneralTab, viewModel.SelectedEditorTab);
 
         var saved = SchemaFileService.Serialize(schema, SchemaFormat.Json);
         var restored = SchemaFileService.Parse(saved, SchemaFormat.Json);
@@ -54,6 +64,33 @@ public class DocumentItemTests
         Assert.Single(restored.ProcessorDefs);
         Assert.Single(restored.Processors);
         Assert.Single(restored.Properties);
+
+        // leaving the root disposes the tabs
+        viewModel.SelectedItem = schema.NodeDefs[0];
+        Assert.Null(viewModel.DocumentTabs);
+        Assert.False(viewModel.IsDocumentSelected);
+    }
+
+    [Fact]
+    public void DocumentTab_RemoveDeletesTheSelectedItem()
+    {
+        var viewModel = new MainViewModel();
+        viewModel.NewDocumentCommand.Execute(null);
+        var schema = viewModel.SelectedDocument!.Schema;
+        viewModel.SelectedItem = schema;
+        var includes = viewModel.DocumentTabs!.Includes;
+
+        Assert.False(includes.RemoveCommand.CanExecute(null));
+        includes.AddCommand.Execute(null);
+        includes.AddCommand.Execute(null);
+        Assert.Equal(2, schema.Includes.Count);
+
+        Assert.True(includes.RemoveCommand.CanExecute(null));
+        includes.RemoveCommand.Execute(null);
+        Assert.Single(schema.Includes);
+        Assert.Null(includes.SelectedEntry);
+        Assert.Null(includes.Editor);
+        Assert.False(includes.RemoveCommand.CanExecute(null));
     }
 
     [Theory]
@@ -76,20 +113,22 @@ public class DocumentItemTests
     }
 
     [Fact]
-    public void AddOptions_MembersView_DependOnSelectedNode()
+    public void AddOptions_DependOnSelectedNode()
     {
         var viewModel = new MainViewModel();
         Assert.False(viewModel.CanAdd);
         viewModel.NewDocumentCommand.Execute(null);
-        var root = Assert.IsType<EditGroup>(Assert.Single(viewModel.SelectedDocument!.Schema.Members));
+        var schema = viewModel.SelectedDocument!.Schema;
+        var root = Assert.IsType<EditGroup>(Assert.Single(schema.Members));
 
-        // nothing selected: members go into the first top-level group; no document items in the Members view
+        // nothing selected, or the document root: members go into the first top-level group
         Assert.True(viewModel.CanAddMembers);
-        Assert.False(viewModel.CanAddDocumentItems);
-        Assert.False(viewModel.ShowAddSeparator);
+        viewModel.SelectedItem = schema;
+        Assert.True(viewModel.CanAddMembers);
+        Assert.True(viewModel.CanAddItemProcessor && viewModel.CanAddItemProperty);
 
         viewModel.AddNodeCommand.Execute(SchemaNodeKind.Field);
-        Assert.True(viewModel.CanAddMembers);
+        Assert.Same(root, Assert.IsType<EditField>(viewModel.SelectedNode).Parent);
 
         var open = new EditChoice(root) { Name = "Body", MemberNodeDef = new("BodyType"), Members = [], Processors = [], Properties = [], ValueProcessors = [] };
         root.Members.Add(open);
@@ -98,42 +137,15 @@ public class DocumentItemTests
         // only its own processors and properties can be added
         Assert.True(viewModel.CanAddItemProcessor && viewModel.CanAddItemProperty);
         Assert.False(viewModel.ShowItemEntriesSeparator);
-    }
 
-    [Fact]
-    public void AddOptions_DocumentView_DependOnCategoryAndSelectedItem()
-    {
-        var viewModel = new MainViewModel();
-        viewModel.NewDocumentCommand.Execute(null);
-        var schema = viewModel.SelectedDocument!.Schema;
-        viewModel.IsDocumentView = true;
-
-        // nothing selected: all document items, no members
-        Assert.False(viewModel.CanAddMembers);
-        Assert.True(viewModel.CanAddNodeDef && viewModel.CanAddDataTypeDef && viewModel.CanAddProcessorDef
-            && viewModel.CanAddInclude && viewModel.CanAddDocumentProcessor && viewModel.CanAddDocumentProperty);
-
-        viewModel.SelectedCategory = DocumentCollection.Includes;
-        Assert.True(viewModel.CanAddInclude);
-        Assert.False(viewModel.CanAddNodeDef || viewModel.CanAddDataTypeDef || viewModel.CanAddDocumentProperty);
-        viewModel.SelectedCategory = null;
-
-        viewModel.AddDataTypeDefCommand.Execute(null);
-        Assert.True(viewModel.CanAddDataTypeDef);
-        Assert.False(viewModel.CanAddInclude || viewModel.CanAddMembers);
-
-        // a group node def accepts members and more node defs; a field node def only more node defs
+        // a group node def accepts members; a field node def does not
         viewModel.AddNodeDefCommand.Execute(SchemaNodeKind.Group);
-        Assert.True(viewModel.CanAddMembers && viewModel.CanAddNodeDef);
-        Assert.True(viewModel.ShowAddSeparator);
-        Assert.False(viewModel.CanAddDataTypeDef);
-        viewModel.AddNodeCommand.Execute(SchemaNodeKind.Field);
-        Assert.Same(schema.NodeDefs[0], Assert.IsType<EditField>(viewModel.SelectedNode).Parent);
         Assert.True(viewModel.CanAddMembers);
-
+        viewModel.AddNodeCommand.Execute(SchemaNodeKind.Field);
+        Assert.Same(schema, viewModel.SelectedItem);
+        Assert.Same(schema.NodeDefs[0], Assert.IsType<EditField>(viewModel.SelectedNodeDef).Parent);
         viewModel.AddNodeDefCommand.Execute(SchemaNodeKind.Field);
         Assert.False(viewModel.CanAddMembers);
-        Assert.True(viewModel.CanAddNodeDef);
     }
 
     [Fact]
@@ -156,40 +168,85 @@ public class DocumentItemTests
         Assert.Equal("property", Assert.Single(root.Properties).Name);
         Assert.Equal(MainViewModel.PropertiesTab, viewModel.SelectedEditorTab);
 
-        // a processor def has properties but no processors; an include has neither
-        viewModel.AddProcessorDefCommand.Execute(null);
-        Assert.False(viewModel.CanAddItemProcessor);
-        Assert.True(viewModel.CanAddItemProperty);
-        Assert.Equal(MainViewModel.PropertiesTab, viewModel.SelectedEditorTab);
+        // the document has no Processors and Properties tabs: its entries are in the General tab
+        viewModel.SelectedItem = viewModel.SelectedDocument!.Schema;
+        viewModel.AddItemPropertyCommand.Execute(null);
+        Assert.Equal(MainViewModel.GeneralTab, viewModel.SelectedEditorTab);
 
-        viewModel.AddIncludeCommand.Execute(null);
-        Assert.False(viewModel.CanAddItemProperty);
+        // a document tab does not exist for a node
+        viewModel.SelectedItem = viewModel.SelectedDocument.Schema;
+        viewModel.SelectedEditorTab = MainViewModel.DataTypeDefsTab;
+        viewModel.SelectedItem = root;
         Assert.Equal(MainViewModel.GeneralTab, viewModel.SelectedEditorTab);
     }
 
     [Fact]
-    public void DeleteItem_RemovesDocumentItems()
+    public void DeleteItem_RemovesNodesAndSelectsTheirParent()
     {
         var viewModel = new MainViewModel();
         viewModel.NewDocumentCommand.Execute(null);
         var schema = viewModel.SelectedDocument!.Schema;
-        viewModel.AddIncludeCommand.Execute(null);
-        viewModel.AddDataTypeDefCommand.Execute(null);
         viewModel.AddNodeDefCommand.Execute(SchemaNodeKind.Group);
 
         Assert.True(viewModel.DeleteItemCommand.CanExecute(null));
         viewModel.DeleteItemCommand.Execute(null);
         Assert.Empty(schema.NodeDefs);
-        Assert.Null(viewModel.SelectedItem);
+        Assert.Same(schema, viewModel.SelectedItem);
+        Assert.Null(viewModel.SelectedNodeDef);
 
-        viewModel.SelectedItem = schema.DataTypeDefs[0];
-        viewModel.DeleteItemCommand.Execute(null);
-        Assert.Empty(schema.DataTypeDefs);
-
-        viewModel.SelectedItem = schema.Includes[0];
-        viewModel.DeleteItemCommand.Execute(null);
-        Assert.Empty(schema.Includes);
+        // the document itself cannot be deleted
         Assert.False(viewModel.DeleteItemCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void NodeDef_IsEditedNextToTheNodeDefsTab()
+    {
+        var viewModel = new MainViewModel();
+        viewModel.NewDocumentCommand.Execute(null);
+        var schema = viewModel.SelectedDocument!.Schema;
+        viewModel.AddNodeDefCommand.Execute(SchemaNodeKind.Group);
+        var definition = Assert.IsType<EditGroup>(viewModel.SelectedNodeDef);
+
+        // the staged values and the details are those of the node def; the document keeps its own
+        Assert.Equal("NewGroupDef", viewModel.NodeName);
+        Assert.Equal(schema.Name, viewModel.DocumentName);
+        Assert.True(viewModel.SelectedNodeDefDetails!.ShowProcessorsTab);
+        Assert.Equal($"{schema.Name}/NodeDefs/NewGroupDef", viewModel.SelectedItemPath);
+
+        viewModel.NodeName = "Renamed";
+        viewModel.ApplyNodeEditsCommand.Execute(null);
+        Assert.Equal("Renamed", definition.Name);
+        Assert.Equal(schema.Name, viewModel.SelectedDocument!.Schema.Name);
+        Assert.Same(schema, viewModel.SelectedItem);
+
+        viewModel.AddNodeCommand.Execute(SchemaNodeKind.Field);
+        Assert.Same(definition, Assert.IsType<EditField>(viewModel.SelectedNodeDef).Parent);
+        Assert.Same(schema, viewModel.SelectedItem);
+
+        // deleting the nested node selects its parent node def; selecting another item forgets the node def
+        viewModel.DeleteItemCommand.Execute(null);
+        Assert.Same(definition, viewModel.SelectedNodeDef);
+        viewModel.SelectedItem = schema.Members[0];
+        Assert.Null(viewModel.SelectedNodeDef);
+        Assert.Null(viewModel.SelectedNodeDefDetails);
+    }
+
+    [Fact]
+    public void SelectedItemPath_StartsWithTheDocumentName()
+    {
+        var viewModel = new MainViewModel();
+        viewModel.NewDocumentCommand.Execute(null);
+        var schema = viewModel.SelectedDocument!.Schema;
+        var root = Assert.IsType<EditGroup>(Assert.Single(schema.Members));
+
+        Assert.Equal(schema.Name, viewModel.SelectedItemPath);
+        viewModel.SelectedItem = schema;
+        Assert.Equal(schema.Name, viewModel.SelectedItemPath);
+        viewModel.SelectedItem = root;
+        Assert.Equal($"{schema.Name}/{root.Name}", viewModel.SelectedItemPath);
+
+        viewModel.AddNodeDefCommand.Execute(SchemaNodeKind.Group);
+        Assert.Equal($"{schema.Name}/NodeDefs/NewGroupDef", viewModel.SelectedItemPath);
     }
 
     [Fact]

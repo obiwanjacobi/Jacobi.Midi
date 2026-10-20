@@ -2,15 +2,17 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data;
+using Avalonia.Threading;
 using Jacobi.Midi.SchemaEditor.Models;
 
 namespace Jacobi.Midi.SchemaEditor.SchemaTree;
 
 /// <summary>
-/// Self-contained control that shows an <see cref="Models.EditDocument"/> as a tree.
-/// It has two views: the document members, and the document collections (includes, node defs, ...).
+/// Self-contained control that shows an <see cref="Models.EditDocument"/> as a tree:
+/// the document as the root with its members below it.
 /// Assign <see cref="EditDocument"/> to show a schema; <see cref="SelectedItem"/> reflects
-/// (and can set) the selected item. Setting it switches to the view that contains the item.
+/// (and can set) the selected item; the selected root is reported as the document itself.
+/// An item that is not shown in the tree (a node def) is kept by the host but not selected in the tree.
 /// </summary>
 internal partial class SchemaTreeControl : UserControl
 {
@@ -20,14 +22,6 @@ internal partial class SchemaTreeControl : UserControl
     public static readonly StyledProperty<object?> SelectedItemProperty =
         AvaloniaProperty.Register<SchemaTreeControl, object?>(nameof(SelectedItem),
             defaultBindingMode: BindingMode.TwoWay);
-
-    public static readonly StyledProperty<bool> IsDocumentViewProperty =
-        AvaloniaProperty.Register<SchemaTreeControl, bool>(nameof(IsDocumentView),
-            defaultBindingMode: BindingMode.TwoWay);
-
-    public static readonly StyledProperty<DocumentCollection?> SelectedCategoryProperty =
-        AvaloniaProperty.Register<SchemaTreeControl, DocumentCollection?>(nameof(SelectedCategory),
-            defaultBindingMode: BindingMode.OneWayToSource);
 
     private readonly SchemaTreeViewModel _viewModel = new();
     // set while the selection is synchronized between the control and its view model
@@ -49,30 +43,12 @@ internal partial class SchemaTreeControl : UserControl
     }
 
     /// <summary>
-    /// The selected <see cref="EditNode"/> or other document item. Category headers are reported as null.
+    /// The selected <see cref="EditNode"/>, or the <see cref="Models.EditDocument"/> when the root is selected.
     /// </summary>
     public object? SelectedItem
     {
         get => GetValue(SelectedItemProperty);
         set => SetValue(SelectedItemProperty, value);
-    }
-
-    /// <summary>
-    /// True when the tree shows the document collections, false when it shows the document members.
-    /// </summary>
-    public bool IsDocumentView
-    {
-        get => GetValue(IsDocumentViewProperty);
-        set => SetValue(IsDocumentViewProperty, value);
-    }
-
-    /// <summary>
-    /// The document collection whose category header is selected; null when no header is selected.
-    /// </summary>
-    public DocumentCollection? SelectedCategory
-    {
-        get => GetValue(SelectedCategoryProperty);
-        private set => SetValue(SelectedCategoryProperty, value);
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -81,23 +57,23 @@ internal partial class SchemaTreeControl : UserControl
         if (change.Property == EditDocumentProperty)
         {
             _viewModel.Document = EditDocument;
-        }
-        else if (change.Property == IsDocumentViewProperty)
-        {
-            _viewModel.IsDocumentView = IsDocumentView;
+            // the root is replaced: show its children
+            Dispatcher.UIThread.Post(() => ExpandTo([]), DispatcherPriority.Loaded);
         }
         else if (change.Property == SelectedItemProperty && !_synchronizing
-            && !ReferenceEquals(_viewModel.SelectedItem, SelectedItem))
+            && !ReferenceEquals(SchemaTreeViewModel.ToItem(_viewModel.SelectedItem), SelectedItem))
         {
             _synchronizing = true;
             try
             {
-                if (SelectedItem is { } item)
+                // an item that is not in the tree (a node def) is not selected in the tree
+                object? treeItem = null;
+                if (SelectedItem is { } item && _viewModel.GetPath(item) is { } path)
                 {
-                    _viewModel.IsDocumentView = SchemaTreeViewModel.IsDocumentItem(item);
-                    ExpandTo(_viewModel.GetPath(item));
+                    ExpandTo(path);
+                    treeItem = _viewModel.ToTreeItem(item);
                 }
-                _viewModel.SelectedItem = SelectedItem;
+                _viewModel.SelectedItem = treeItem;
             }
             finally
             {
@@ -108,21 +84,12 @@ internal partial class SchemaTreeControl : UserControl
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(SchemaTreeViewModel.IsDocumentView))
-        {
-            IsDocumentView = _viewModel.IsDocumentView;
-        }
-        else if (e.PropertyName == nameof(SchemaTreeViewModel.SelectedItem))
-        {
-            SelectedCategory = (_viewModel.SelectedItem as SchemaTreeCategory)?.Collection;
-        }
-
         if (e.PropertyName == nameof(SchemaTreeViewModel.SelectedItem) && !_synchronizing)
         {
             _synchronizing = true;
             try
             {
-                SelectedItem = _viewModel.SelectedItem is SchemaTreeCategory ? null : _viewModel.SelectedItem;
+                SelectedItem = SchemaTreeViewModel.ToItem(_viewModel.SelectedItem);
             }
             finally
             {
@@ -132,7 +99,7 @@ internal partial class SchemaTreeControl : UserControl
     }
 
     /// <summary>
-    /// Expands the tree items along <paramref name="path"/> (from the root down) so the item below it becomes visible.
+    /// Expands the root and the tree items along <paramref name="path"/> (from the root down) so the item below it becomes visible.
     /// </summary>
     private void ExpandTo(IReadOnlyList<object>? path)
     {
@@ -140,9 +107,14 @@ internal partial class SchemaTreeControl : UserControl
         {
             return;
         }
-        // the root items may just have been replaced by a view switch
+        // the root item may just have been replaced
         Tree.UpdateLayout();
         ItemsControl level = Tree;
+        // the root is always expanded
+        if (level.ContainerFromIndex(0) is TreeViewItem rootItem)
+        {
+            rootItem.IsExpanded = true;
+        }
         foreach (var ancestor in path)
         {
             if (level.ContainerFromItem(ancestor) is not TreeViewItem item)

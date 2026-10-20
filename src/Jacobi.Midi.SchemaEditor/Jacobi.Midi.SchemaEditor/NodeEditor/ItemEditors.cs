@@ -8,24 +8,36 @@ using Jacobi.Midi.SchemaEditor.Models;
 namespace Jacobi.Midi.SchemaEditor.NodeEditor;
 
 /// <summary>
-/// Base of the General tab editors for the document items that are not nodes (includes, defs, document processors and properties).
+/// Base of the editors for the document items that are not nodes (includes, data type defs, processor defs, processors and properties).
 /// Editors change the model directly (live) and mark the document changed.
 /// Setters throw on invalid input so the bound text box shows a validation error and the model keeps its value.
 /// </summary>
-internal abstract class ItemEditor(SchemaWorkspaceDocument document) : ObservableObject
+internal abstract class ItemEditor(SchemaWorkspaceDocument document) : ObservableObject, IDisposable
 {
+    /// <summary>
+    /// The processors and properties of the edited item; null when the item has none. Disposed with the editor.
+    /// </summary>
+    public ItemDetailsViewModel? Details { get; private set; }
+
+    public void Dispose() => Details?.Dispose();
+
     /// <summary>
     /// Creates the editor for <paramref name="item"/>, or returns null when the item has no item editor (nodes have their own).
     /// </summary>
-    public static ItemEditor? Create(SchemaWorkspaceDocument document, object? item) => item switch
+    public static ItemEditor? Create(SchemaWorkspaceDocument document, object? item)
     {
-        EditDocumentRef include => new DocumentRefEditor(document, include),
-        EditDataTypeDef definition => new DataTypeDefEditor(document, definition),
-        EditProcessorDef definition => new ProcessorDefEditor(document, definition),
-        EditProcessorRef processor => new ProcessorRefEditor(document, processor),
-        EditProperty property => new PropertyEditor(document, property),
-        _ => null
-    };
+        ItemEditor? editor = item switch
+        {
+            EditDocumentRef include => new DocumentRefEditor(document, include),
+            EditDataTypeDef definition => new DataTypeDefEditor(document, definition),
+            EditProcessorDef definition => new ProcessorDefEditor(document, definition),
+            EditProcessorRef processor => new ProcessorRefEditor(document, processor),
+            EditProperty property => new PropertyEditor(document, property),
+            _ => null
+        };
+        editor?.Details = ItemDetailsViewModel.Create(document, item);
+        return editor;
+    }
 
     /// <summary>
     /// Assigns <paramref name="value"/> through <paramref name="assign"/> when it differs from <paramref name="current"/>
