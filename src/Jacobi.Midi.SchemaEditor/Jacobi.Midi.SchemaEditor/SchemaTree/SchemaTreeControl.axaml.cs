@@ -7,27 +7,30 @@ using Jacobi.Midi.SchemaEditor.Models;
 namespace Jacobi.Midi.SchemaEditor.SchemaTree;
 
 /// <summary>
-/// Self-contained control that shows the node tree of an <see cref="Models.EditDocument"/>.
-/// Assign <see cref="EditDocument"/> to show a schema; <see cref="SelectedNode"/> reflects
-/// (and can set) the selected node.
+/// Self-contained control that shows an <see cref="Models.EditDocument"/> as a tree.
+/// It has two views: the document members, and the document collections (includes, node defs, ...).
+/// Assign <see cref="EditDocument"/> to show a schema; <see cref="SelectedItem"/> reflects
+/// (and can set) the selected item. Setting it switches to the view that contains the item.
 /// </summary>
 internal partial class SchemaTreeControl : UserControl
 {
     public static readonly StyledProperty<EditDocument?> EditDocumentProperty =
         AvaloniaProperty.Register<SchemaTreeControl, EditDocument?>(nameof(EditDocument));
 
-    public static readonly StyledProperty<EditNode?> SelectedNodeProperty =
-        AvaloniaProperty.Register<SchemaTreeControl, EditNode?>(nameof(SelectedNode),
+    public static readonly StyledProperty<object?> SelectedItemProperty =
+        AvaloniaProperty.Register<SchemaTreeControl, object?>(nameof(SelectedItem),
             defaultBindingMode: BindingMode.TwoWay);
 
     private readonly SchemaTreeViewModel _viewModel = new();
+    // set while the selection is synchronized between the control and its view model
+    private bool _synchronizing;
 
     public SchemaTreeControl()
     {
         InitializeComponent();
-        // Only the tree gets the internal view model; the control itself keeps the inherited
-        // DataContext so bindings on it (EditDocument, SelectedNode) resolve against the host.
-        Tree.DataContext = _viewModel;
+        // Only the content gets the internal view model; the control itself keeps the inherited
+        // DataContext so bindings on it (EditDocument, SelectedItem) resolve against the host.
+        Root.DataContext = _viewModel;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
     }
 
@@ -37,10 +40,13 @@ internal partial class SchemaTreeControl : UserControl
         set => SetValue(EditDocumentProperty, value);
     }
 
-    public EditNode? SelectedNode
+    /// <summary>
+    /// The selected <see cref="EditNode"/> or other document item. Category headers are reported as null.
+    /// </summary>
+    public object? SelectedItem
     {
-        get => GetValue(SelectedNodeProperty);
-        set => SetValue(SelectedNodeProperty, value);
+        get => GetValue(SelectedItemProperty);
+        set => SetValue(SelectedItemProperty, value);
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -50,34 +56,55 @@ internal partial class SchemaTreeControl : UserControl
         {
             _viewModel.Document = EditDocument;
         }
-        else if (change.Property == SelectedNodeProperty && !ReferenceEquals(_viewModel.SelectedNode, SelectedNode))
+        else if (change.Property == SelectedItemProperty && !_synchronizing
+            && !ReferenceEquals(_viewModel.SelectedItem, SelectedItem))
         {
-            ExpandTo(SelectedNode);
-            _viewModel.SelectedNode = SelectedNode;
+            _synchronizing = true;
+            try
+            {
+                if (SelectedItem is { } item)
+                {
+                    _viewModel.IsDocumentView = SchemaTreeViewModel.IsDocumentItem(item);
+                    ExpandTo(_viewModel.GetPath(item));
+                }
+                _viewModel.SelectedItem = SelectedItem;
+            }
+            finally
+            {
+                _synchronizing = false;
+            }
         }
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(SchemaTreeViewModel.SelectedNode))
+        if (e.PropertyName == nameof(SchemaTreeViewModel.SelectedItem) && !_synchronizing)
         {
-            SelectedNode = _viewModel.SelectedNode;
+            _synchronizing = true;
+            try
+            {
+                SelectedItem = _viewModel.SelectedItem is SchemaTreeCategory ? null : _viewModel.SelectedItem;
+            }
+            finally
+            {
+                _synchronizing = false;
+            }
         }
     }
 
     /// <summary>
-    /// Expands the tree items of all ancestors of <paramref name="node"/> so it becomes visible.
+    /// Expands the tree items along <paramref name="path"/> (from the root down) so the item below it becomes visible.
     /// </summary>
-    private void ExpandTo(EditNode? node)
+    private void ExpandTo(IReadOnlyList<object>? path)
     {
-        var ancestors = new Stack<EditGroup>();
-        for (var parent = node?.Parent; parent is not null and not Models.EditDocument; parent = parent.Parent)
+        if (path is null)
         {
-            ancestors.Push(parent);
+            return;
         }
-
+        // the root items may just have been replaced by a view switch
+        Tree.UpdateLayout();
         ItemsControl level = Tree;
-        foreach (var ancestor in ancestors)
+        foreach (var ancestor in path)
         {
             if (level.ContainerFromItem(ancestor) is not TreeViewItem item)
             {

@@ -93,7 +93,10 @@ internal static class EditNodeMapper
         };
         CopyProperties(document.Properties, edit.Properties);
         ReadGroup(document, edit);
-        edit.NodeDefs.AddRange(document.NodeDefs.Select(n => ToEditNode(n, null)));
+        foreach (var definition in document.NodeDefs)
+        {
+            edit.NodeDefs.Add(ToEditNode(definition, null));
+        }
         foreach (var definition in document.DataTypeDefs)
         {
             var target = new EditDataTypeDef
@@ -116,7 +119,10 @@ internal static class EditNodeMapper
             CopyProperties(definition.Properties, target.Properties);
             edit.ProcessorDefs.Add(target);
         }
-        edit.Includes.AddRange(document.Includes.Select(include => new EditDocumentRef { Schema = include.Schema, Path = include.Path }));
+        foreach (var include in document.Includes)
+        {
+            edit.Includes.Add(new EditDocumentRef { Schema = include.Schema, Path = include.Path });
+        }
         return edit;
     }
 
@@ -207,13 +213,18 @@ internal static class EditNodeMapper
         }
     }
 
-    private static void CopyProperties(IEnumerable<SchemaProperty> source, List<EditProperty> target)
-        => target.AddRange(source.Select(property => new EditProperty { Name = property.Name, Value = property.Value }));
+    private static void CopyProperties(IEnumerable<SchemaProperty> source, ICollection<EditProperty> target)
+    {
+        foreach (var property in source)
+        {
+            target.Add(new EditProperty { Name = property.Name, Value = property.Value });
+        }
+    }
 
     private static List<SchemaProperty> WriteProperties(IEnumerable<EditProperty> source)
         => source.Select(property => new SchemaProperty { Name = property.Name, Value = property.Value }).ToList();
 
-    private static void CopyProcessors(IEnumerable<SchemaProcessorRef> source, List<EditProcessorRef> target)
+    private static void CopyProcessors(IEnumerable<SchemaProcessorRef> source, ICollection<EditProcessorRef> target)
     {
         foreach (var processor in source)
         {

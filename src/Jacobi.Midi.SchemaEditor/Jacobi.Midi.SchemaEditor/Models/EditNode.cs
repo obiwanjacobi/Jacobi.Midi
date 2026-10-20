@@ -13,7 +13,7 @@ internal abstract partial class EditNode : ObservableObject
     [ObservableProperty]
     public partial SchemaName? NodeDef { get; set; }
     [ObservableProperty]
-    public required partial List<EditProperty> Properties { get; set; }
+    public required partial ObservableCollection<EditProperty> Properties { get; set; }
 
     public EditGroup? Parent { get; set; }
 }
@@ -35,7 +35,7 @@ internal partial class EditField : EditNode
     [ObservableProperty]
     public partial int? ByteOffset { get; set; }
     [ObservableProperty]
-    public required partial List<EditProcessorRef> Processors { get; set; }
+    public required partial ObservableCollection<EditProcessorRef> Processors { get; set; }
 }
 
 internal partial class EditGroup : EditNode
@@ -51,7 +51,7 @@ internal partial class EditGroup : EditNode
     [ObservableProperty]
     public required partial ObservableCollection<EditNode> Members { get; set; }
     [ObservableProperty]
-    public required partial List<EditProcessorRef> Processors { get; set; }
+    public required partial ObservableCollection<EditProcessorRef> Processors { get; set; }
 }
 
 internal partial class EditRepeat : EditGroup
@@ -92,13 +92,13 @@ internal partial class EditDocument : EditGroup
         => Kind = SchemaNodeKind.Schema;
 
     [ObservableProperty]
-    public required partial List<EditNode> NodeDefs { get; set; }
+    public required partial ObservableCollection<EditNode> NodeDefs { get; set; }
     [ObservableProperty]
-    public required partial List<EditDataTypeDef> DataTypeDefs { get; set; }
+    public required partial ObservableCollection<EditDataTypeDef> DataTypeDefs { get; set; }
     [ObservableProperty]
-    public required partial List<EditProcessorDef> ProcessorDefs { get; set; }
+    public required partial ObservableCollection<EditProcessorDef> ProcessorDefs { get; set; }
     [ObservableProperty]
-    public required partial List<EditDocumentRef> Includes { get; set; }
+    public required partial ObservableCollection<EditDocumentRef> Includes { get; set; }
 }
 
 internal partial class EditDataTypeDef : ObservableObject

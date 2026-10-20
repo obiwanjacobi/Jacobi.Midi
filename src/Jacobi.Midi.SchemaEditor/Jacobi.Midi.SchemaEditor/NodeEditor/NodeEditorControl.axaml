@@ -35,7 +35,7 @@
 
         <!-- The selected node picks its editor template by type. The template roots rebind their
              DataContext to the MainViewModel so the editors bind to its staged node values. -->
-        <ContentControl Grid.Row="2" Margin="0,22,0,0" Content="{Binding SelectedNode}">
+        <ContentControl Grid.Row="2" Margin="0,22,0,0" Content="{Binding SelectedItem}">
             <ContentControl.DataTemplates>
                 <!-- most specific types first: the first matching template wins -->
                 <DataTemplate x:DataType="models:EditRepeat">
@@ -79,12 +79,18 @@
                         <Button Content="Apply field changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
                     </StackPanel>
                 </DataTemplate>
+                <!-- fallback for selected document items (includes, defs, ...) that have no editor yet -->
+                <DataTemplate x:DataType="x:Object">
+                    <TextBlock Text="This item cannot be edited yet."
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Foreground="{DynamicResource AppTextMutedBrush}" />
+                </DataTemplate>
             </ContentControl.DataTemplates>
         </ContentControl>
 
         <TextBlock Grid.Row="2"
                    Text="Choose a group or field in the schema tree to inspect and edit it."
-                   IsVisible="{Binding SelectedNode, Converter={x:Static ObjectConverters.IsNull}}"
+                   IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNull}}"
                    VerticalAlignment="Center"
                    HorizontalAlignment="Center"
                    Foreground="{DynamicResource AppTextMutedBrush}" />

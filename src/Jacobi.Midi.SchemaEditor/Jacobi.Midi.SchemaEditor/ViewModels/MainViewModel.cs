@@ -42,8 +42,22 @@ internal sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial SchemaWorkspaceDocument? SelectedDocument { get; set; }
 
+    /// <summary>
+    /// The item selected in the schema tree: an <see cref="EditNode"/> or another document item
+    /// (include, data type def, processor def, ...).
+    /// </summary>
     [ObservableProperty]
-    public partial EditNode? SelectedNode { get; set; }
+    [NotifyPropertyChangedFor(nameof(SelectedNode))]
+    public partial object? SelectedItem { get; set; }
+
+    /// <summary>
+    /// The <see cref="SelectedItem"/> when it is a schema node, otherwise null.
+    /// </summary>
+    public EditNode? SelectedNode
+    {
+        get => SelectedItem as EditNode;
+        set => SelectedItem = value;
+    }
 
     [ObservableProperty]
     public partial string NodeName { get; set; } = String.Empty;
@@ -349,11 +363,12 @@ internal sealed partial class MainViewModel : ViewModelBase
     partial void OnSelectedDocumentChanged(SchemaWorkspaceDocument? value)
     {
         OnPropertyChanged(nameof(HasSelectedDocument));
-        SelectedNode = null;
+        SelectedItem = null;
     }
 
-    partial void OnSelectedNodeChanged(EditNode? value)
+    partial void OnSelectedItemChanged(object? item)
     {
+        var value = item as EditNode;
         NodeName = value?.Name ?? String.Empty;
         NodeDataType = (value as EditField)?.DataType?.ToString() ?? String.Empty;
         NodeDescription = GetProperty(value, "description");
