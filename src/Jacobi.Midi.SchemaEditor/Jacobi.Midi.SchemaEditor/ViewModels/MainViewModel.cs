@@ -7,6 +7,7 @@ using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Jacobi.BinarySerializer.Descriptors;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.SchemaEditor.Assemblies;
 using Jacobi.Midi.SchemaEditor.Document;
@@ -71,7 +72,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// The read-only document of the embedded schema selected in the assembly tree; null when none is selected.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly))]
+    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(DataTypeOptions))]
     public partial SchemaWorkspaceDocument? InspectedDocument { get; private set; }
 
     /// <summary>
@@ -103,7 +104,30 @@ internal sealed partial class MainViewModel : ViewModelBase
 
     public ObservableCollection<SysExMessage> SysExMessages { get; } = [];
     public ObservableCollection<SysExComparisonRow> ComparedBytes { get; } = [];
-    public IReadOnlyList<string> DataTypeOptions { get; } = ["sys.uint8", "sys.uint16", "sys.bool", "sys.bytes", "sys.string"];
+    private static readonly string[] RegisteredDataTypes = DataTypeRegistry.CreateDefault().Types
+        .Select(descriptor => descriptor.Name.FullName)
+        .Order(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
+    /// <summary>
+    /// The data types to choose from for a field: the types registered in the <see cref="DataTypeRegistry"/>
+    /// followed by the data type defs of the <see cref="ActiveDocument"/>. The data type editors also accept a custom value.
+    /// </summary>
+    public IReadOnlyList<string> DataTypeOptions
+    {
+        get
+        {
+            var document = ActiveDocument?.Schema;
+            if (document is null)
+            {
+                return RegisteredDataTypes;
+            }
+            return [.. RegisteredDataTypes, .. document.DataTypeDefs
+                .Select(def => $"{document.Name}{SchemaName.Separator}{def.Name}")
+                .Where(name => !RegisteredDataTypes.Contains(name, StringComparer.OrdinalIgnoreCase))];
+        }
+    }
+
     public bool HasSelectedDocument => SelectedDocument is not null;
 
     // The Add menu only offers the items that are valid for the current selection.
@@ -140,7 +164,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     public const int ProcessorDefsTab = 6;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly))]
+    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(DataTypeOptions))]
     [NotifyCanExecuteChangedFor(nameof(InstantiateSchemaCommand))]
     public partial SchemaWorkspaceDocument? SelectedDocument { get; set; }
 
@@ -270,6 +294,40 @@ internal sealed partial class MainViewModel : ViewModelBase
     public partial NodeFacets NodeFacets { get; set; } = new();
 
     public IReadOnlyList<string> PipelineOptions => NodeFacets.PipelineOptions;
+
+    /// <summary>
+    /// A warning when the staged Value does not fit the staged data type (see <see cref="DataTypeValueValidator"/>); otherwise null.
+    /// Informational only: it never blocks applying the edits.
+    /// </summary>
+    public string? ValueWarning => DataTypeValueValidator.Validate(ActiveDocument?.Schema, NodeDataType, NodeFacets.Value);
+
+    /// <summary>
+    /// A note when the staged data type is custom (not registered and not defined in the document); otherwise null.
+    /// </summary>
+    public string? DataTypeNote => DataTypeValueValidator.IsCustom(ActiveDocument?.Schema, NodeDataType)
+        ? "Custom data type: its values are not validated."
+        : null;
+
+    partial void OnNodeDataTypeChanged(string value)
+    {
+        OnPropertyChanged(nameof(ValueWarning));
+        OnPropertyChanged(nameof(DataTypeNote));
+    }
+
+    partial void OnNodeFacetsChanged(NodeFacets oldValue, NodeFacets newValue)
+    {
+        oldValue.PropertyChanged -= OnNodeFacetsPropertyChanged;
+        newValue.PropertyChanged += OnNodeFacetsPropertyChanged;
+        OnPropertyChanged(nameof(ValueWarning));
+    }
+
+    private void OnNodeFacetsPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(Models.NodeFacets.Value))
+        {
+            OnPropertyChanged(nameof(ValueWarning));
+        }
+    }
 
     [ObservableProperty]
     public partial string HexInput { get; set; } = String.Empty;
@@ -910,6 +968,8 @@ internal sealed partial class MainViewModel : ViewModelBase
     private void LoadStagedNode()
     {
         var node = EditedNode;
+        // the data type defs of the document may have changed since the last selection
+        OnPropertyChanged(nameof(DataTypeOptions));
         NodeName = node?.Name ?? String.Empty;
         NodeDataType = (node as EditField)?.DataType?.ToString() ?? String.Empty;
         NodeDescription = GetProperty(node, "description");

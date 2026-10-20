@@ -1,4 +1,5 @@
 using System.Globalization;
+using CommunityToolkit.Mvvm.ComponentModel;
 using Jacobi.BinarySerializer.Schema;
 
 namespace Jacobi.Midi.SchemaEditor.Models;
@@ -9,13 +10,14 @@ namespace Jacobi.Midi.SchemaEditor.Models;
 /// Reads them from a node for editing and validates and writes them back as one unit.
 /// Value-or-reference properties are written as a constant, 'ref:path' or 'pub:namespace.name'; empty means not set.
 /// </summary>
-internal sealed class NodeFacets
+internal sealed partial class NodeFacets : ObservableObject
 {
     /// <summary>The pipeline choices of an open choice; empty inherits the mode of a node definition.</summary>
     public static IReadOnlyList<string> PipelineOptions { get; } = [String.Empty, nameof(SchemaPipelineMode.Integrate), nameof(SchemaPipelineMode.Isolate)];
 
     public string NodeDef { get; set; } = String.Empty;
-    public string Value { get; set; } = String.Empty;
+    [ObservableProperty]
+    public partial string Value { get; set; } = String.Empty;
     public string ByteLength { get; set; } = String.Empty;
     public string ByteOffset { get; set; } = String.Empty;
     public string ByteSize { get; set; } = String.Empty;

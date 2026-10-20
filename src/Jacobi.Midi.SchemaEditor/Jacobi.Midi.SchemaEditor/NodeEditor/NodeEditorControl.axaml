@@ -249,6 +249,8 @@
                         <TextBlock Text="Selected field properties" Classes="caption" />
                         <TextBox PlaceholderText="Field name" Text="{Binding NodeName}" />
                         <ComboBox ItemsSource="{Binding DataTypeOptions}" IsEditable="True" Text="{Binding NodeDataType}" />
+                        <TextBlock Text="{Binding DataTypeNote}" Classes="caption" TextWrapping="Wrap"
+                                   IsVisible="{Binding DataTypeNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Node def" Classes="label" />
                             <TextBox Text="{Binding NodeFacets.NodeDef}" PlaceholderText="optional, e.g. name or schema.name" />
@@ -256,6 +258,8 @@
                         <StackPanel Spacing="4">
                             <TextBlock Text="Value" Classes="label" />
                             <TextBox Text="{Binding NodeFacets.Value}" PlaceholderText="optional constant, ref:path or pub:ns.name" />
+                            <TextBlock Text="{Binding ValueWarning}" Foreground="Orange" FontSize="11" TextWrapping="Wrap"
+                                       IsVisible="{Binding ValueWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Byte length" Classes="label" />
