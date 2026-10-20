@@ -1,4 +1,5 @@
-﻿using System.ComponentModel;
+﻿using System.Collections.Specialized;
+using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data;
@@ -8,16 +9,16 @@ using Jacobi.Midi.SchemaEditor.Models;
 namespace Jacobi.Midi.SchemaEditor.SchemaTree;
 
 /// <summary>
-/// Self-contained control that shows an <see cref="Models.EditDocument"/> as a tree:
-/// the document as the root with its members below it.
-/// Assign <see cref="EditDocument"/> to show a schema; <see cref="SelectedItem"/> reflects
-/// (and can set) the selected item; the selected root is reported as the document itself.
+/// Self-contained control that shows <see cref="Models.EditDocument"/>s as a tree:
+/// each document as a root with its members below it.
+/// Assign <see cref="Documents"/> to show schemas (an observable collection is followed); <see cref="SelectedItem"/> reflects
+/// (and can set) the selected item; a selected root is reported as the document itself.
 /// An item that is not shown in the tree (a node def) is kept by the host but not selected in the tree.
 /// </summary>
 internal partial class SchemaTreeControl : UserControl
 {
-    public static readonly StyledProperty<EditDocument?> EditDocumentProperty =
-        AvaloniaProperty.Register<SchemaTreeControl, EditDocument?>(nameof(EditDocument));
+    public static readonly StyledProperty<IReadOnlyList<EditDocument>?> DocumentsProperty =
+        AvaloniaProperty.Register<SchemaTreeControl, IReadOnlyList<EditDocument>?>(nameof(Documents));
 
     public static readonly StyledProperty<object?> SelectedItemProperty =
         AvaloniaProperty.Register<SchemaTreeControl, object?>(nameof(SelectedItem),
@@ -36,10 +37,13 @@ internal partial class SchemaTreeControl : UserControl
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
     }
 
-    public EditDocument? EditDocument
+    /// <summary>
+    /// The documents shown as the roots of the tree.
+    /// </summary>
+    public IReadOnlyList<EditDocument>? Documents
     {
-        get => GetValue(EditDocumentProperty);
-        set => SetValue(EditDocumentProperty, value);
+        get => GetValue(DocumentsProperty);
+        set => SetValue(DocumentsProperty, value);
     }
 
     /// <summary>
@@ -54,11 +58,17 @@ internal partial class SchemaTreeControl : UserControl
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == EditDocumentProperty)
+        if (change.Property == DocumentsProperty)
         {
-            _viewModel.Document = EditDocument;
-            // the root is replaced: show its children
-            Dispatcher.UIThread.Post(() => ExpandTo([]), DispatcherPriority.Loaded);
+            if (change.OldValue is INotifyCollectionChanged oldDocuments)
+            {
+                oldDocuments.CollectionChanged -= OnDocumentsCollectionChanged;
+            }
+            if (change.NewValue is INotifyCollectionChanged newDocuments)
+            {
+                newDocuments.CollectionChanged += OnDocumentsCollectionChanged;
+            }
+            SynchronizeDocuments();
         }
         else if (change.Property == SelectedItemProperty && !_synchronizing
             && !ReferenceEquals(SchemaTreeViewModel.ToItem(_viewModel.SelectedItem), SelectedItem))
@@ -82,6 +92,24 @@ internal partial class SchemaTreeControl : UserControl
         }
     }
 
+    private void OnDocumentsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => SynchronizeDocuments();
+
+    private void SynchronizeDocuments()
+    {
+        var added = _viewModel.SetDocuments(Documents ?? []);
+        if (added.Count > 0)
+        {
+            // a new root shows its children
+            Dispatcher.UIThread.Post(() =>
+            {
+                foreach (var root in added)
+                {
+                    ExpandTo([root]);
+                }
+            }, DispatcherPriority.Loaded);
+        }
+    }
+
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(SchemaTreeViewModel.SelectedItem) && !_synchronizing)
@@ -99,7 +127,7 @@ internal partial class SchemaTreeControl : UserControl
     }
 
     /// <summary>
-    /// Expands the root and the tree items along <paramref name="path"/> (from the root down) so the item below it becomes visible.
+    /// Expands the tree items along <paramref name="path"/> (from a root down) so the item below it becomes visible.
     /// </summary>
     private void ExpandTo(IReadOnlyList<object>? path)
     {
@@ -107,14 +135,9 @@ internal partial class SchemaTreeControl : UserControl
         {
             return;
         }
-        // the root item may just have been replaced
+        // a root item may just have been added
         Tree.UpdateLayout();
         ItemsControl level = Tree;
-        // the root is always expanded
-        if (level.ContainerFromIndex(0) is TreeViewItem rootItem)
-        {
-            rootItem.IsExpanded = true;
-        }
         foreach (var ancestor in path)
         {
             if (level.ContainerFromItem(ancestor) is not TreeViewItem item)

@@ -4,7 +4,7 @@ using Jacobi.Midi.SchemaEditor.Models;
 namespace Jacobi.Midi.SchemaEditor.SchemaTree;
 
 /// <summary>
-/// The single root item of the schema tree: it shows the name of the <see cref="Models.EditDocument"/>
+/// A root item of the schema tree (one per shown document): it shows the name of the <see cref="Models.EditDocument"/>
 /// and holds the items of the active view (the document members, or the document collection categories) as its children.
 /// It only exists in the tree; the host sees the selected root as the <see cref="Models.EditDocument"/> itself.
 /// </summary>

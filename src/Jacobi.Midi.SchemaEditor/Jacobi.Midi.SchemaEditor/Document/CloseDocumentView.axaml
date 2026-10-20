@@ -1,0 +1,30 @@
+<!--
+    The close document dialog: shown as an overlay (so it works in the Desktop and the Browser host)
+    to confirm closing a document with unsaved changes. See CloseDocumentViewModel.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:rn="using:Jacobi.Midi.SchemaEditor.Document"
+             x:Class="Jacobi.Midi.SchemaEditor.Document.CloseDocumentView"
+             x:DataType="rn:CloseDocumentViewModel">
+
+    <Grid Background="#99000000">
+        <Border MaxWidth="560" Margin="32" Padding="20" CornerRadius="8"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                Background="{DynamicResource AppBackgroundPanelBrush}"
+                BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="1">
+            <StackPanel Spacing="12">
+                <TextBlock Text="CLOSE DOCUMENT" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
+                <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap"
+                           Foreground="{DynamicResource AppTextHeadingBrush}" />
+                <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource AppTextBodyBrush}"
+                           Text="The document has unsaved changes. Closing it discards them. Continue?" />
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,6,0,0">
+                    <Button Content="Cancel" Command="{Binding CancelCommand}" />
+                    <Button Content="Close" Classes="accent" Command="{Binding ConfirmCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

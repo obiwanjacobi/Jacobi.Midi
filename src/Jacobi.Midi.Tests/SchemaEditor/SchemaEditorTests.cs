@@ -425,21 +425,21 @@ public class SchemaEditorTests
         }
 
         [Fact]
-        public void SwitchingDocuments_ClearsSelection()
+        public void SwitchingDocuments_SelectsTheDocumentRoot()
         {
                 var viewModel = new MainViewModel();
                 viewModel.NewDocumentCommand.Execute(null);
                 var first = Assert.Single(viewModel.Documents);
                 viewModel.AddNodeCommand.Execute(SchemaNodeKind.Field);
-                Assert.NotNull(viewModel.SelectedNode);
+                Assert.IsType<EditField>(viewModel.SelectedNode);
                 viewModel.NewDocumentCommand.Execute(null);
                 var second = viewModel.SelectedDocument;
                 Assert.Equal("NewSchema2", second!.Schema.Name);
-                Assert.Null(viewModel.SelectedNode);
+                Assert.Same(second.Schema, viewModel.SelectedItem);
                 Assert.Equal(String.Empty, viewModel.NodeName);
 
                 viewModel.SelectedDocument = first;
-                Assert.Null(viewModel.SelectedNode);
+                Assert.Same(first.Schema, viewModel.SelectedItem);
         }
 
         [Fact]

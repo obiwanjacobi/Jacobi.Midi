@@ -154,7 +154,8 @@ public class DocumentItemTests
         var viewModel = new MainViewModel();
         viewModel.NewDocumentCommand.Execute(null);
         var root = Assert.IsType<EditGroup>(Assert.Single(viewModel.SelectedDocument!.Schema.Members));
-        Assert.False(viewModel.CanAddItemProperty);
+        // a new document selects its root
+        Assert.Same(viewModel.SelectedDocument.Schema, viewModel.SelectedItem);
 
         viewModel.SelectedItem = root;
         Assert.True(viewModel.CanAddItemProcessor && viewModel.CanAddItemProperty);

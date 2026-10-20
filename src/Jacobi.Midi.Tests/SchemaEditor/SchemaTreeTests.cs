@@ -1,6 +1,7 @@
 using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.SchemaEditor.SchemaTree;
 using Jacobi.Midi.SchemaEditor.Services;
+using Jacobi.Midi.SchemaEditor.ViewModels;
 using Xunit;
 
 namespace Jacobi.Midi.Tests.SchemaEditor;
@@ -8,63 +9,90 @@ namespace Jacobi.Midi.Tests.SchemaEditor;
 public class SchemaTreeTests
 {
     [Fact]
-    public void ChangingDocument_ClearsSelection()
+    public void RemovingTheDocument_ClearsItsSelection()
     {
         var first = SchemaFileService.CreateDocument("First");
-        var tree = new SchemaTreeViewModel { Document = first };
+        var second = SchemaFileService.CreateDocument("Second");
+        var tree = new SchemaTreeViewModel();
+        tree.SetDocuments([first, second]);
+
         tree.SelectedItem = first.Members[0];
+        tree.SetDocuments([first]);
+        Assert.Same(first.Members[0], tree.SelectedItem);
 
-        tree.Document = SchemaFileService.CreateDocument("Second");
+        tree.SetDocuments([second]);
         Assert.Null(tree.SelectedItem);
 
-        tree.SelectedItem = tree.Document.Members[0];
-        tree.Document = null;
+        tree.SelectedItem = tree.Roots[0];
+        tree.SetDocuments([]);
         Assert.Null(tree.SelectedItem);
-        Assert.Null(tree.Items);
+        Assert.Empty(tree.Items.Cast<object>());
     }
 
     [Fact]
-    public void Items_IsTheRootWithTheMembersBelowIt()
+    public void Items_AreTheRootsWithTheMembersBelowThem()
     {
         var document = SchemaFileService.CreateDocument("Doc");
-        var tree = new SchemaTreeViewModel { Document = document };
+        var tree = new SchemaTreeViewModel();
+        tree.SetDocuments([document]);
 
-        var root = Assert.IsType<SchemaTreeRoot>(Assert.Single(tree.Items!.Cast<object>()));
+        var root = Assert.IsType<SchemaTreeRoot>(Assert.Single(tree.Items.Cast<object>()));
         Assert.Same(document, root.Document);
         Assert.Same(document.Members, root.Children);
     }
 
     [Fact]
-    public void ToTreeItem_MapsTheDocumentToTheRoot()
+    public void SetDocuments_KeepsTheRootsOfDocumentsThatStay()
+    {
+        var first = SchemaFileService.CreateDocument("First");
+        var second = SchemaFileService.CreateDocument("Second");
+        var third = SchemaFileService.CreateDocument("Third");
+        var tree = new SchemaTreeViewModel();
+        tree.SetDocuments([first, third]);
+        var firstRoot = tree.Roots[0];
+
+        var added = tree.SetDocuments([first, second, third]);
+
+        Assert.Equal([first, second, third], tree.Roots.Select(root => root.Document));
+        Assert.Same(firstRoot, tree.Roots[0]);
+        Assert.Same(tree.Roots[1], Assert.Single(added));
+    }
+
+    [Fact]
+    public void ToTreeItem_MapsADocumentToItsRoot()
     {
         var document = SchemaFileService.CreateDocument("Doc");
-        var tree = new SchemaTreeViewModel { Document = document };
+        var tree = new SchemaTreeViewModel();
+        tree.SetDocuments([document]);
 
-        Assert.Same(tree.Root, tree.ToTreeItem(document));
-        Assert.Same(document, SchemaTreeViewModel.ToItem(tree.Root));
+        Assert.Same(tree.Roots[0], tree.ToTreeItem(document));
+        Assert.Same(document, SchemaTreeViewModel.ToItem(tree.Roots[0]));
         Assert.Same(document.Members[0], tree.ToTreeItem(document.Members[0]));
         Assert.Null(SchemaTreeViewModel.ToItem(null));
     }
 
     [Fact]
-    public void GetPath_LocatesMembersBelowTheRoot()
+    public void GetPath_LocatesMembersBelowTheirRoot()
     {
+        var first = SchemaFileService.CreateDocument("First");
         var document = SchemaFileService.CreateDocument("Doc");
-        var tree = new SchemaTreeViewModel { Document = document };
+        var tree = new SchemaTreeViewModel();
+        tree.SetDocuments([first, document]);
         var group = (EditGroup)document.Members[0];
         var nested = new EditField(group) { Name = "nested", Processors = [], Properties = [] };
         group.Members.Add(nested);
 
         Assert.Empty(tree.GetPath(document)!);
-        Assert.Equal<object>([tree.Root!], tree.GetPath(group)!);
-        Assert.Equal<object>([tree.Root!, group], tree.GetPath(nested)!);
+        Assert.Equal<object>([tree.Roots[1]], tree.GetPath(group)!);
+        Assert.Equal<object>([tree.Roots[1], group], tree.GetPath(nested)!);
     }
 
     [Fact]
     public void GetPath_IsNullForItemsThatAreNotInTheTree()
     {
         var document = SchemaFileService.CreateDocument("Doc");
-        var tree = new SchemaTreeViewModel { Document = document };
+        var tree = new SchemaTreeViewModel();
+        tree.SetDocuments([document]);
         var definition = new EditGroup(null) { Name = "def", Members = [], Processors = [], Properties = [] };
         var nested = new EditField(definition) { Name = "nested", Processors = [], Properties = [] };
         definition.Members.Add(nested);
@@ -74,5 +102,94 @@ public class SchemaTreeTests
         Assert.Null(tree.GetPath(nested));
         Assert.Null(tree.GetPath(SchemaFileService.CreateDocument("Other")));
         Assert.Null(tree.GetPath(new EditDocumentRef { Schema = "midi" }));
+    }
+
+    [Fact]
+    public void TreeDocuments_KeepPinnedDocumentsWhenANewDocumentIsSelected()
+    {
+        var viewModel = new MainViewModel();
+        viewModel.NewDocumentCommand.Execute(null);
+        var first = viewModel.SelectedDocument!;
+        Assert.Equal([first.Schema], viewModel.TreeDocuments);
+
+        // an unpinned document is replaced by a document that is not in the tree
+        viewModel.NewDocumentCommand.Execute(null);
+        var second = viewModel.SelectedDocument!;
+        Assert.Equal([second.Schema], viewModel.TreeDocuments);
+
+        // a pinned document stays
+        second.IsPinned = true;
+        viewModel.NewDocumentCommand.Execute(null);
+        var third = viewModel.SelectedDocument!;
+        Assert.Equal([second.Schema, third.Schema], viewModel.TreeDocuments);
+
+        // selecting a document in the tree does not change the tree
+        viewModel.SelectedDocument = second;
+        Assert.Equal([second.Schema, third.Schema], viewModel.TreeDocuments);
+
+        // changing the pin state does not change the tree
+        second.IsPinned = false;
+        Assert.Equal([second.Schema, third.Schema], viewModel.TreeDocuments);
+        second.IsPinned = true;
+        Assert.Equal([second.Schema, third.Schema], viewModel.TreeDocuments);
+
+        // the unpinned documents are replaced, the pinned stay
+        viewModel.SelectedDocument = first;
+        Assert.Equal([first.Schema, second.Schema], viewModel.TreeDocuments);
+    }
+
+    [Fact]
+    public void SelectingADocument_SelectsItsRoot()
+    {
+        var viewModel = new MainViewModel();
+        viewModel.NewDocumentCommand.Execute(null);
+        var first = viewModel.SelectedDocument!;
+        viewModel.NewDocumentCommand.Execute(null);
+
+        viewModel.SelectedDocument = first;
+
+        Assert.Same(first.Schema, viewModel.SelectedItem);
+        Assert.True(viewModel.IsDocumentSelected);
+    }
+
+    [Fact]
+    public void SwitchingTabs_SelectsTheFirstInTheTree()
+    {
+        var viewModel = new MainViewModel();
+        viewModel.NewDocumentCommand.Execute(null);
+        var first = viewModel.SelectedDocument!;
+        first.IsPinned = true;
+        viewModel.NewDocumentCommand.Execute(null);
+        viewModel.SelectedItem = viewModel.SelectedDocument!.Schema.Members[0];
+
+        // no assemblies: nothing of the schema tab remains in the node editor
+        viewModel.SelectedLeftTab = MainViewModel.AssembliesLeftTab;
+        Assert.Null(viewModel.SelectedAssemblyItem);
+        Assert.Null(viewModel.SelectedItem);
+        Assert.Null(viewModel.ActiveDocument);
+        Assert.Equal(String.Empty, viewModel.SelectedItemPath);
+        Assert.False(viewModel.CanPin);
+        Assert.False(viewModel.CanAdd);
+
+        viewModel.SelectedLeftTab = MainViewModel.SchemaLeftTab;
+        Assert.Same(first.Schema, viewModel.SelectedItem);
+        Assert.Same(first, viewModel.SelectedDocument);
+    }
+
+    [Fact]
+    public void SelectingAnItemOfAPinnedDocument_SelectsThatDocument()
+    {
+        var viewModel = new MainViewModel();
+        viewModel.NewDocumentCommand.Execute(null);
+        var pinned = viewModel.SelectedDocument!;
+        pinned.IsPinned = true;
+        viewModel.NewDocumentCommand.Execute(null);
+
+        var node = pinned.Schema.Members[0];
+        viewModel.SelectedItem = node;
+
+        Assert.Same(pinned, viewModel.SelectedDocument);
+        Assert.Same(node, viewModel.SelectedItem);
+        Assert.Same(pinned, viewModel.ActiveDocument);
     }
 }

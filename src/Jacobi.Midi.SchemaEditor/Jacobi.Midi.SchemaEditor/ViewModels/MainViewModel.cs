@@ -48,6 +48,20 @@ internal sealed partial class MainViewModel : ViewModelBase
     public ObservableCollection<SchemaWorkspaceDocument> Documents { get; } = [];
 
     /// <summary>
+    /// The documents shown in the schema tree, in the order of <see cref="Documents"/>. A document stays in the tree
+    /// until a document that is not in the tree is selected: that replaces all unpinned documents in the tree.
+    /// Changing the pin state does not change the tree.
+    /// </summary>
+    public ObservableCollection<EditDocument> TreeDocuments { get; } = [];
+
+    // the open documents shown in the schema tree
+    private readonly HashSet<SchemaWorkspaceDocument> _treeDocuments = [];
+    // set while a selection in the schema tree switches the selected document: the selection is kept
+    private bool _keepSelectedItem;
+    // set while a newly selected document switches to the schema tab: its root is selected instead of the first in the tree
+    private bool _selectingDocument;
+
+    /// <summary>
     /// The opened assemblies with their embedded schemas (not editable, not part of <see cref="Documents"/>) and processors.
     /// </summary>
     public AssemblyWorkspace OpenedAssemblies { get; } = new();
@@ -56,6 +70,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// The active tab of the left panel: <see cref="SchemaLeftTab"/> (the schema tree) or <see cref="AssembliesLeftTab"/>.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(CanPin), nameof(DataTypeOptions), nameof(SelectedItemPath))]
     public partial int SelectedLeftTab { get; set; }
 
     public const int SchemaLeftTab = 0;
@@ -72,7 +87,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// The read-only document of the embedded schema selected in the assembly tree; null when none is selected.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(DataTypeOptions))]
+    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(CanPin), nameof(DataTypeOptions))]
     public partial SchemaWorkspaceDocument? InspectedDocument { get; private set; }
 
     /// <summary>
@@ -92,15 +107,20 @@ internal sealed partial class MainViewModel : ViewModelBase
     public bool ShowNodeEditor => InspectedAssembly is null && InspectedNamespace is null;
 
     /// <summary>
-    /// The document the node editor shows: the read-only <see cref="InspectedDocument"/> of an embedded schema
-    /// or else the <see cref="SelectedDocument"/>.
+    /// The document the node editor shows: on the assemblies tab the read-only <see cref="InspectedDocument"/> of an embedded schema
+    /// (null when none is selected), otherwise the <see cref="SelectedDocument"/>.
     /// </summary>
-    public SchemaWorkspaceDocument? ActiveDocument => InspectedDocument ?? SelectedDocument;
+    public SchemaWorkspaceDocument? ActiveDocument => SelectedLeftTab == AssembliesLeftTab ? InspectedDocument : SelectedDocument;
 
     /// <summary>
     /// True when the node editor shows an embedded schema: it cannot be changed.
     /// </summary>
     public bool IsReadOnly => ActiveDocument?.IsReadOnly == true;
+
+    /// <summary>
+    /// True when the <see cref="SelectedDocument"/> can be pinned to the schema tree: only on the schema tab.
+    /// </summary>
+    public bool CanPin => SelectedLeftTab == SchemaLeftTab && SelectedDocument is not null;
 
     public ObservableCollection<SysExMessage> SysExMessages { get; } = [];
     public ObservableCollection<SysExComparisonRow> ComparedBytes { get; } = [];
@@ -164,8 +184,9 @@ internal sealed partial class MainViewModel : ViewModelBase
     public const int ProcessorDefsTab = 6;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(DataTypeOptions))]
+    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(CanPin), nameof(DataTypeOptions))]
     [NotifyCanExecuteChangedFor(nameof(InstantiateSchemaCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CloseDocumentCommand))]
     public partial SchemaWorkspaceDocument? SelectedDocument { get; set; }
 
     /// <summary>
@@ -185,6 +206,12 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     public partial DocumentViewModel? RenameDialog { get; private set; }
+
+    /// <summary>
+    /// The close document dialog while it is shown (to confirm discarding unsaved changes); null otherwise.
+    /// </summary>
+    [ObservableProperty]
+    public partial CloseDocumentViewModel? CloseDialog { get; private set; }
 
     /// <summary>
     /// The item selected in the schema tree or in the node defs tab: an <see cref="EditNode"/>
@@ -484,6 +511,59 @@ internal sealed partial class MainViewModel : ViewModelBase
     private async Task SaveDocumentAs()
     {
         await SaveSelectedDocument(saveAs: true);
+    }
+
+    /// <summary>
+    /// Closes the selected document. A document with unsaved changes is only closed after the user confirmed it in the close dialog.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(HasSelectedDocument))]
+    private void CloseDocument()
+    {
+        if (SelectedDocument is not { } document)
+        {
+            return;
+        }
+
+        if (document.IsDirty)
+        {
+            CloseDialog = new CloseDocumentViewModel(document, CloseCloseDialog);
+            return;
+        }
+        RemoveDocument(document);
+    }
+
+    private void CloseCloseDialog(CloseDocumentViewModel dialog, bool confirmed)
+    {
+        CloseDialog = null;
+        if (confirmed)
+        {
+            RemoveDocument(dialog.Document);
+        }
+    }
+
+    /// <summary>
+    /// Removes the document from the open documents and selects its neighbour (the next one, or else the previous one).
+    /// </summary>
+    private void RemoveDocument(SchemaWorkspaceDocument document)
+    {
+        var index = Documents.IndexOf(document);
+        if (index < 0)
+        {
+            return;
+        }
+
+        var wasSelected = ReferenceEquals(SelectedDocument, document);
+        _treeDocuments.Remove(document);
+        document.PropertyChanged -= OnDocumentPropertyChanged;
+        _storageFiles.Remove(document);
+        Documents.RemoveAt(index);
+        RefreshIncludeStatus();
+        if (wasSelected)
+        {
+            SelectedDocument = Documents.Count == 0 ? null : Documents[Math.Min(index, Documents.Count - 1)];
+        }
+        UpdateTreeDocuments();
+        StatusMessage = $"Closed {document.Schema.Name}.";
     }
 
     [RelayCommand]
@@ -898,17 +978,92 @@ internal sealed partial class MainViewModel : ViewModelBase
     partial void OnSelectedDocumentChanged(SchemaWorkspaceDocument? value)
     {
         OnPropertyChanged(nameof(HasSelectedDocument));
-        // picking a schema document leaves the assemblies tab
-        SelectedLeftTab = SchemaLeftTab;
-        SelectedItem = null;
+        // a document that is not in the tree yet replaces the unpinned documents in it
+        if (value is not null && !_treeDocuments.Contains(value))
+        {
+            _treeDocuments.RemoveWhere(document => !document.IsPinned);
+            _treeDocuments.Add(value);
+        }
+        UpdateTreeDocuments();
+        // picking a schema document leaves the assemblies tab (selecting its root below, not the first in the tree)
+        _selectingDocument = true;
+        try
+        {
+            SelectedLeftTab = SchemaLeftTab;
+        }
+        finally
+        {
+            _selectingDocument = false;
+        }
+        // a document picked in the strip selects its root in the schema tree
+        if (!_keepSelectedItem)
+        {
+            SelectedItem = value?.Schema;
+        }
         NotifyAddOptionsChanged();
     }
 
+    /// <summary>
+    /// Shows the documents of <see cref="_treeDocuments"/> in the schema tree in the order of <see cref="Documents"/>.
+    /// The documents that stay are not removed, so their tree keeps its state.
+    /// </summary>
+    private void UpdateTreeDocuments()
+    {
+        var shown = Documents
+            .Where(_treeDocuments.Contains)
+            .Select(document => document.Schema)
+            .ToList();
+
+        for (var index = TreeDocuments.Count - 1; index >= 0; index--)
+        {
+            if (!shown.Contains(TreeDocuments[index]))
+            {
+                TreeDocuments.RemoveAt(index);
+            }
+        }
+        // both follow the order of the documents: insert the missing ones in place
+        for (var index = 0; index < shown.Count; index++)
+        {
+            if (index >= TreeDocuments.Count || !ReferenceEquals(TreeDocuments[index], shown[index]))
+            {
+                TreeDocuments.Insert(index, shown[index]);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The open document <paramref name="item"/> (an <see cref="EditDocument"/> or a node in it) belongs to; null when there is none.
+    /// </summary>
+    private SchemaWorkspaceDocument? FindDocument(object? item)
+    {
+        var node = item as EditNode;
+        while (node is not null and not EditDocument)
+        {
+            node = node.Parent;
+        }
+        return node is EditDocument schema ? Documents.FirstOrDefault(document => ReferenceEquals(document.Schema, schema)) : null;
+    }
+
+    /// <summary>
+    /// Each tab starts with the first item of its tree selected; with an empty tree nothing is selected,
+    /// so the node editor shows nothing of the other tab.
+    /// </summary>
     partial void OnSelectedLeftTabChanged(int value)
     {
-        // each tab starts without a selection: the node editor shows what the tab's tree has selected
-        SelectedAssemblyItem = null;
-        SelectedItem = null;
+        if (value == AssembliesLeftTab)
+        {
+            SelectedItem = null;
+            SelectedAssemblyItem = OpenedAssemblies.Assemblies.FirstOrDefault();
+        }
+        else
+        {
+            SelectedAssemblyItem = null;
+            if (!_selectingDocument)
+            {
+                SelectedItem = TreeDocuments.FirstOrDefault();
+            }
+        }
+        NotifyAddOptionsChanged();
     }
 
     /// <summary>
@@ -945,6 +1100,20 @@ internal sealed partial class MainViewModel : ViewModelBase
 
     partial void OnSelectedItemChanged(object? value)
     {
+        // an item of another (pinned) document in the schema tree selects that document
+        if (SelectedLeftTab == SchemaLeftTab && FindDocument(value) is { } owner && !ReferenceEquals(owner, SelectedDocument))
+        {
+            _keepSelectedItem = true;
+            try
+            {
+                SelectedDocument = owner;
+            }
+            finally
+            {
+                _keepSelectedItem = false;
+            }
+        }
+
         var node = value as EditNode;
         SelectedNodeDef = null;
         ItemDetails?.Dispose();
@@ -994,13 +1163,22 @@ internal sealed partial class MainViewModel : ViewModelBase
         var document = new SchemaWorkspaceDocument(schema, format, fileName);
         Documents.Add(document);
         // MarkChanged raises DisplayName; includes or names may have changed
-        document.PropertyChanged += (_, _) => RefreshIncludeStatus();
+        document.PropertyChanged += OnDocumentPropertyChanged;
         RefreshIncludeStatus();
         if (storageFile is not null)
         {
             _storageFiles[document] = storageFile;
         }
         SelectedDocument = document;
+    }
+
+    private void OnDocumentPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        // the pin state only matters when another document is selected
+        if (e.PropertyName != nameof(SchemaWorkspaceDocument.IsPinned))
+        {
+            RefreshIncludeStatus();
+        }
     }
 
     /// <summary>

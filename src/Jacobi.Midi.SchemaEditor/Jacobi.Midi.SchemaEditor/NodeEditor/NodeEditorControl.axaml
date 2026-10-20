@@ -389,13 +389,21 @@
     </UserControl.DataTemplates>
 
     <Grid RowDefinitions="Auto,Auto,*,Auto" Classes.readonly="{Binding IsReadOnly}">
-        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+        <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
             <StackPanel Spacing="4">
                 <TextBlock Text="NODE EDITOR" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
                 <TextBlock Text="{Binding SelectedItemPath}" FontSize="22" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
                            Foreground="{DynamicResource AppTextHeadingBrush}" />
             </StackPanel>
-            <Button Grid.Column="1" VerticalAlignment="Bottom" Content="Add ▾" IsEnabled="{Binding CanAdd}"
+            <!-- a pinned document stays in the schema tree when another document is selected -->
+            <ToggleButton Grid.Column="1" VerticalAlignment="Bottom" IsChecked="{Binding SelectedDocument.IsPinned}" IsVisible="{Binding CanPin}"
+                          ToolTip.Tip="Keep the selected document in the schema tree when another document is selected">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Width="14" Height="14" Data="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" />
+                    <TextBlock Text="Pin" VerticalAlignment="Center" />
+                </StackPanel>
+            </ToggleButton>
+            <Button Grid.Column="2" VerticalAlignment="Bottom" Content="Add ▾" IsEnabled="{Binding CanAdd}"
                     ToolTip.Tip="Add a node to the selected group, or a processor or property to the selected item">
                 <Button.Flyout>
                     <MenuFlyout Placement="BottomEdgeAlignedRight">
@@ -409,7 +417,7 @@
                     </MenuFlyout>
                 </Button.Flyout>
             </Button>
-            <Button Grid.Column="2" VerticalAlignment="Bottom" Content="Delete" Command="{Binding DeleteItemCommand}"
+            <Button Grid.Column="3" VerticalAlignment="Bottom" Content="Delete" Command="{Binding DeleteItemCommand}"
                     ToolTip.Tip="Delete the selected item" />
         </Grid>
 

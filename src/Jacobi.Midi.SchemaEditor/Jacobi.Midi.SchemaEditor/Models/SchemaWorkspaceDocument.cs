@@ -29,7 +29,13 @@ internal sealed partial class SchemaWorkspaceDocument : ObservableObject
     [ObservableProperty]
     public partial bool IsDirty { get; set; }
 
-    public string DisplayName => $"{Schema.Name}{(IsDirty ? " *" : String.Empty)}";
+    /// <summary>
+    /// True to keep the document in the schema tree when another document is selected (session only).
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsPinned { get; set; }
+
+    public string DisplayName =>$"{Schema.Name}{(IsDirty ? " *" : String.Empty)}";
 
     public void ApplyNodeEdits(EditNode node, string name, string dataType, string description, string sampleValue, NodeFacets? facets = null)
     {
