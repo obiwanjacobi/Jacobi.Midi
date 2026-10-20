@@ -195,7 +195,9 @@ internal sealed class SchemaInstantiator
         switch (node)
         {
             case SchemaField field:
-                return new InstanceField(field, path, field.Value is string constant ? constant : null);
+                var dataType = field.DataType?.ToString() ?? String.Empty;
+                return new InstanceField(field, path, field.Value is string constant ? constant : null,
+                    value => DataTypeValueValidator.Validate(_edits, ns, dataType, value));
             case SchemaRepeat repeat:
                 return BuildRepeat(repeat, ns, path);
             case SchemaChoice choice:

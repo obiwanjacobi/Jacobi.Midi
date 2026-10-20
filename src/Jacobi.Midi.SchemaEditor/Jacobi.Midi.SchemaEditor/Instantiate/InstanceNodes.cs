@@ -71,9 +71,13 @@ internal abstract partial class InstanceNode : ObservableObject
 /// </summary>
 internal sealed partial class InstanceField : InstanceNode
 {
-    public InstanceField(SchemaField schema, SchemaPath path, string? constant)
+    private readonly Func<string, string?>? _validate;
+
+    /// <param name="validate">Returns a warning for a value that does not fit the data type of the field, else null.</param>
+    public InstanceField(SchemaField schema, SchemaPath path, string? constant, Func<string, string?>? validate = null)
         : base(schema, path)
     {
+        _validate = validate;
         Value = constant ?? String.Empty;
         IsConstant = constant is not null;
     }
@@ -95,6 +99,14 @@ internal sealed partial class InstanceField : InstanceNode
 
     [ObservableProperty]
     public partial string Value { get; set; }
+
+    /// <summary>
+    /// A warning when the <see cref="Value"/> does not fit the data type of the field; otherwise null.
+    /// Informational only: it does not prevent confirming the dialog.
+    /// </summary>
+    public string? ValueWarning => IsConstant ? null : _validate?.Invoke(Value);
+
+    partial void OnValueChanged(string value) => OnPropertyChanged(nameof(ValueWarning));
 }
 
 /// <summary>

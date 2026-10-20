@@ -9,7 +9,7 @@ Known gaps and loose ends, collected while building the editor.
 - [ ] `SchemaWorkspaceDocument.ApplyNodeEdits` takes the type-specific properties as an optional trailing `NodeFacets` parameter; fold name, data type, description and sample into the staged model so there is one apply path.
 - [ ] Value processors (repeat/choice) are not shown or editable; to be redesigned.
 - [ ] The data type options and the field Value validation (`DataTypeValueValidator`) only know the registered types and the data type defs of the edited document; data type defs of included schemas are not listed and their types count as custom (not validated). Resolve the includes' documents to fix this.
-- [ ] The built-in data type descriptors have no `Min`/`Max`, so the Value range warning only applies to data type defs that define them.
+- [x] The built-in data type descriptors have no `Min`/`Max`, so the Value range warning only applies to data type defs that define them. Fixed: the validation falls back to the range of the descriptor's `ClrType`.
 - [ ] The Value validation compares the typed value to the `Options` keys (physical values) and to `Min`/`Max` (logical values) without applying `Scale` and `Shift`; decide whether options should be matched on the physical value after scaling.
 - [ ] *Delete* has no confirmation and there is no undo.
 - [ ] The Add menu has no keyboard shortcuts (e.g. Ctrl+S for Save in the ☰ menu).
@@ -35,6 +35,6 @@ Known gaps and loose ends, collected while building the editor.
 
 ## Instantiate dialog
 
-- [ ] Field values are free text: they are not parsed or validated against the data type (data type def `options` are not offered as a list).
+- [ ] Field values are free text. They get a (non-blocking) warning from `DataTypeValueValidator`, but data type def `options` are not offered as a list.
 - [ ] The confirmed instance (`MainViewModel.LastInstance`) is not used yet; it should implement `IValueSource`/`IOpenChoiceSource` so it can be written by the serializer.
 - [ ] Processors are not checked: only includes (open documents) and schema compilation are verified before the dialog opens.

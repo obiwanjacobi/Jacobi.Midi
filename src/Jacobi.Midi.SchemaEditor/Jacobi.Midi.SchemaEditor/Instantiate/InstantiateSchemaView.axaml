@@ -32,7 +32,11 @@
                     <TextBlock Text="{Binding Name}" Classes="caption" TextTrimming="CharacterEllipsis" />
                     <TextBlock Text="{Binding DataType}" Classes="path" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
-                <TextBox Grid.Column="1" Text="{Binding Value}" IsReadOnly="{Binding IsConstant}" PlaceholderText="{Binding Sample}" />
+                <StackPanel Grid.Column="1" Spacing="2">
+                    <TextBox Text="{Binding Value}" IsReadOnly="{Binding IsConstant}" PlaceholderText="{Binding Sample}" />
+                    <TextBlock Text="{Binding ValueWarning}" Foreground="Orange" FontSize="11" TextWrapping="Wrap"
+                               IsVisible="{Binding ValueWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                </StackPanel>
             </Grid>
         </DataTemplate>
 
