@@ -11,6 +11,8 @@
 - Write doc-comments on new lines. Not ///<summary>...</summary> on the same line. Except for very short descriptions.
 - Add a doc-comment for every type newly created to describe its purpose and responsibilty.
 - If a request is ambiguous, can be interpretted multiple ways -or- when the request mentions specifics that are not the complete picture: summarize and list the problems and ask for clarity from the user before continuing.
+- If a tool does not work as expected, tell the user. Describe the problem and propose an alternative.
+- Use the jargon of the project, how things are called in the code and documentation. When referencing code, use the exact terms used there, in the code itself or its comments.
 
 ## Project Overview
 

@@ -46,6 +46,8 @@
                     <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,5">
                         <TextBlock Text="{Binding Schema}" Foreground="{DynamicResource AppTextBodyBrush}" />
                         <TextBlock Text="{Binding Path}" Foreground="{DynamicResource AppTextMutedBrush}" />
+                        <TextBlock Text="!" FontWeight="Bold" Foreground="Orange" IsVisible="{Binding IsNotLoaded}"
+                                   ToolTip.Tip="The included document is not loaded." />
                     </StackPanel>
                 </DataTemplate>
                 <DataTemplate x:DataType="models:EditDataTypeDef">

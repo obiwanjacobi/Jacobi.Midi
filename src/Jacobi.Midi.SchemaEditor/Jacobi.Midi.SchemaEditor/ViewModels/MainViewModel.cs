@@ -125,6 +125,14 @@ internal sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial string NodeSampleValue { get; set; } = String.Empty;
 
+    /// <summary>
+    /// The staged type-specific properties of the <see cref="SelectedNode"/> (nodeDef, count, selectedIndex, ...).
+    /// </summary>
+    [ObservableProperty]
+    public partial NodeFacets NodeFacets { get; set; } = new();
+
+    public IReadOnlyList<string> PipelineOptions => NodeFacets.PipelineOptions;
+
     [ObservableProperty]
     public partial string HexInput { get; set; } = String.Empty;
 
@@ -238,7 +246,9 @@ internal sealed partial class MainViewModel : ViewModelBase
                 NodeName.Trim(),
                 NodeDataType.Trim(),
                 NodeDescription.Trim(),
-                NodeSampleValue.Trim());
+                NodeSampleValue.Trim(),
+                NodeFacets);
+            NodeFacets = NodeFacets.Read(node);
             StatusMessage = $"Updated {NodeName}.";
         }
         catch (Exception exception) when (IsSchemaError(exception))
@@ -515,6 +525,7 @@ internal sealed partial class MainViewModel : ViewModelBase
         NodeDataType = (node as EditField)?.DataType?.ToString() ?? String.Empty;
         NodeDescription = GetProperty(node, "description");
         NodeSampleValue = GetProperty(node, "sample");
+        NodeFacets = NodeFacets.Read(node);
         // a tab the new selection does not have would stay selected (but hidden)
         if ((SelectedEditorTab == ProcessorsTab && !CanAddItemProcessor) || (SelectedEditorTab == PropertiesTab && !CanAddItemProperty))
         {
@@ -531,11 +542,29 @@ internal sealed partial class MainViewModel : ViewModelBase
     {
         var document = new SchemaWorkspaceDocument(schema, format, fileName);
         Documents.Add(document);
+        // MarkChanged raises DisplayName; includes or names may have changed
+        document.PropertyChanged += (_, _) => RefreshIncludeStatus();
+        RefreshIncludeStatus();
         if (storageFile is not null)
         {
             _storageFiles[document] = storageFile;
         }
         SelectedDocument = document;
+    }
+
+    /// <summary>
+    /// Flags the includes of all open documents whose included schema is not loaded as another open document.
+    /// </summary>
+    private void RefreshIncludeStatus()
+    {
+        foreach (var document in Documents)
+        {
+            foreach (var include in document.Schema.Includes)
+            {
+                include.IsLoaded = Documents.Any(other => !ReferenceEquals(other, document)
+                    && String.Equals(other.Schema.Name, include.Schema, StringComparison.OrdinalIgnoreCase));
+            }
+        }
     }
 
     private async Task SaveSelectedDocument(bool saveAs)

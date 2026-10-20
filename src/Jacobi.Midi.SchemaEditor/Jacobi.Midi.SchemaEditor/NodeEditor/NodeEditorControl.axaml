@@ -111,7 +111,8 @@
             <TabItem Header="General">
                 <!-- The selected node or item editor picks its template by type. The node template roots rebind their
                      DataContext to the MainViewModel so the editors bind to its staged node values. -->
-                <ContentControl Margin="0,12,0,0" Content="{Binding GeneralEditor}">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                <ContentControl Margin="0,12,12,0" Content="{Binding GeneralEditor}">
                     <ContentControl.DataTemplates>
                         <!-- most specific types first: the first matching template wins -->
                         <DataTemplate x:DataType="models:EditRepeat">
@@ -120,6 +121,18 @@
                                 <TextBlock Text="Selected repeat properties" Classes="caption" />
                                 <TextBlock Text="Repeats its members a number of times." Classes="kind" />
                                 <TextBox PlaceholderText="Repeat name" Text="{Binding NodeName}" />
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Node def" Classes="label" />
+                                    <TextBox Text="{Binding NodeFacets.NodeDef}" PlaceholderText="optional, e.g. name or schema.name" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Count" Classes="label" />
+                                    <TextBox Text="{Binding NodeFacets.Count}" PlaceholderText="number, ref:path or pub:ns.name" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Byte size" Classes="label" />
+                                    <TextBox Text="{Binding NodeFacets.ByteSize}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
+                                </StackPanel>
                                 <TextBox PlaceholderText="Description" Text="{Binding NodeDescription}" Classes="description" />
                                 <Button Content="Apply repeat changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
                             </StackPanel>
@@ -130,6 +143,26 @@
                                 <TextBlock Text="Selected choice properties" Classes="caption" />
                                 <TextBlock Text="Selects one of its members at runtime." Classes="kind" />
                                 <TextBox PlaceholderText="Choice name" Text="{Binding NodeName}" />
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Node def" Classes="label" />
+                                    <TextBox Text="{Binding NodeFacets.NodeDef}" PlaceholderText="optional, e.g. name or schema.name" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Selected index" Classes="label" />
+                                    <TextBox Text="{Binding NodeFacets.SelectedIndex}" PlaceholderText="number, ref:path or pub:ns.name" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Member node def" Classes="label" />
+                                    <TextBox Text="{Binding NodeFacets.MemberNodeDef}" PlaceholderText="optional: makes the choice open" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Pipeline" Classes="label" />
+                                    <ComboBox ItemsSource="{Binding PipelineOptions}" SelectedItem="{Binding NodeFacets.Pipeline}" HorizontalAlignment="Stretch" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Byte size" Classes="label" />
+                                    <TextBox Text="{Binding NodeFacets.ByteSize}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
+                                </StackPanel>
                                 <TextBox PlaceholderText="Description" Text="{Binding NodeDescription}" Classes="description" />
                                 <Button Content="Apply choice changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
                             </StackPanel>
@@ -140,6 +173,14 @@
                                 <TextBlock Text="Selected group properties" Classes="caption" />
                                 <TextBlock Text="Groups a sequence of fields and nested nodes." Classes="kind" />
                                 <TextBox PlaceholderText="Group name" Text="{Binding NodeName}" />
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Node def" Classes="label" />
+                                    <TextBox Text="{Binding NodeFacets.NodeDef}" PlaceholderText="optional, e.g. name or schema.name" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Byte size" Classes="label" />
+                                    <TextBox Text="{Binding NodeFacets.ByteSize}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
+                                </StackPanel>
                                 <TextBox PlaceholderText="Description" Text="{Binding NodeDescription}" Classes="description" />
                                 <Button Content="Apply group changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
                             </StackPanel>
@@ -150,6 +191,22 @@
                                 <TextBlock Text="Selected field properties" Classes="caption" />
                                 <TextBox PlaceholderText="Field name" Text="{Binding NodeName}" />
                                 <ComboBox ItemsSource="{Binding DataTypeOptions}" IsEditable="True" Text="{Binding NodeDataType}" />
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Node def" Classes="label" />
+                                    <TextBox Text="{Binding NodeFacets.NodeDef}" PlaceholderText="optional, e.g. name or schema.name" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Value" Classes="label" />
+                                    <TextBox Text="{Binding NodeFacets.Value}" PlaceholderText="optional constant, ref:path or pub:ns.name" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Byte length" Classes="label" />
+                                    <TextBox Text="{Binding NodeFacets.ByteLength}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Byte offset" Classes="label" />
+                                    <TextBox Text="{Binding NodeFacets.ByteOffset}" PlaceholderText="optional signed number" />
+                                </StackPanel>
                                 <TextBox PlaceholderText="Description" Text="{Binding NodeDescription}" Classes="description" />
                                 <TextBox PlaceholderText="Sample value" Text="{Binding NodeSampleValue}" />
                                 <Button Content="Apply field changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
@@ -267,6 +324,7 @@
                         </DataTemplate>
                     </ContentControl.DataTemplates>
                 </ContentControl>
+                </ScrollViewer>
             </TabItem>
 
             <TabItem Header="Processors" IsVisible="{Binding ItemDetails.HasProcessors, FallbackValue=False}">

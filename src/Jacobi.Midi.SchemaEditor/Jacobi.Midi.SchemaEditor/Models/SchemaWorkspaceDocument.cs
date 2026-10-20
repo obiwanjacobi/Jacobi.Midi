@@ -26,17 +26,23 @@ internal sealed partial class SchemaWorkspaceDocument : ObservableObject
 
     public string DisplayName => $"{Schema.Name}{(IsDirty ? " *" : String.Empty)}";
 
-    public void ApplyNodeEdits(EditNode node, string name, string dataType, string description, string sampleValue)
+    public void ApplyNodeEdits(EditNode node, string name, string dataType, string description, string sampleValue, NodeFacets? facets = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         SchemaName? fieldType = String.IsNullOrWhiteSpace(dataType) ? (SchemaName?)null : new SchemaName(dataType);
         if (node is EditField field)
         {
-            if (fieldType is null && field.NodeDef is null)
+            var hasNodeDef = facets is null ? field.NodeDef is not null : !String.IsNullOrWhiteSpace(facets.NodeDef);
+            if (fieldType is null && !hasNodeDef)
             {
                 throw new ArgumentException("A field data type or node definition is required.", nameof(dataType));
             }
+            facets?.Apply(node);
             field.DataType = fieldType;
+        }
+        else
+        {
+            facets?.Apply(node);
         }
         node.Name = name;
         SetProperty(node, "description", description);

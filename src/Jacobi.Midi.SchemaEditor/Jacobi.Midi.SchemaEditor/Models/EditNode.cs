@@ -157,4 +157,14 @@ internal partial class EditDocumentRef : ObservableObject
     public partial string Schema { get; set; }
     [ObservableProperty]
     public partial string? Path { get; set; }
+
+    /// <summary>
+    /// False when the included document is not loaded in the workspace.
+    /// Maintained by the workspace; not part of the schema.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsNotLoaded))]
+    public partial bool IsLoaded { get; set; } = true;
+
+    public bool IsNotLoaded => !IsLoaded;
 }
