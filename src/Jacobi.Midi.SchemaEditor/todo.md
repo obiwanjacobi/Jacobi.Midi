@@ -29,3 +29,9 @@ Known gaps and loose ends, collected while building the editor.
 ## Build & test
 
 - [ ] `dotnet test` fails on the .NET 11 SDK: the test project uses Microsoft.Testing.Platform and needs the opt-in in a `global.json`. Run `Jacobi.Midi.Tests.exe` directly until then.
+
+## Instantiate dialog
+
+- [ ] Field values are free text: they are not parsed or validated against the data type (data type def `options` are not offered as a list).
+- [ ] The confirmed instance (`MainViewModel.LastInstance`) is not used yet; it should implement `IValueSource`/`IOpenChoiceSource` so it can be written by the serializer.
+- [ ] Processors are not checked: only includes (open documents) and schema compilation are verified before the dialog opens.

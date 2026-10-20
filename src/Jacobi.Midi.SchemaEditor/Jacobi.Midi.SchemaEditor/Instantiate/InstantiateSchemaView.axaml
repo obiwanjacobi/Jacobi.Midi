@@ -1,0 +1,134 @@
+<!--
+    The instantiate dialog: shown as an overlay (so it works in the Desktop and the Browser host)
+    to provide the values of a schema root. See InstantiateSchemaViewModel.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:inst="using:Jacobi.Midi.SchemaEditor.Instantiate"
+             x:Class="Jacobi.Midi.SchemaEditor.Instantiate.InstantiateSchemaView"
+             x:DataType="inst:InstantiateSchemaViewModel">
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.caption">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextCaptionBrush}" />
+        </Style>
+        <Style Selector="TextBlock.path">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}" />
+        </Style>
+        <Style Selector="TextBlock.note">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextLabelBrush}" />
+        </Style>
+    </UserControl.Styles>
+
+    <UserControl.DataTemplates>
+        <!-- a field: the value as text -->
+        <DataTemplate x:DataType="inst:InstanceField">
+            <Grid ColumnDefinitions="220,*" ColumnSpacing="12" Margin="0,3" ToolTip.Tip="{Binding Description}">
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Name}" Classes="caption" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding DataType}" Classes="path" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <TextBox Grid.Column="1" Text="{Binding Value}" IsReadOnly="{Binding IsConstant}" PlaceholderText="{Binding Sample}" />
+            </Grid>
+        </DataTemplate>
+
+        <!-- an item of a repeat: shows the path with its instance index and can be removed from an open repeat -->
+        <DataTemplate x:DataType="inst:InstanceRepeatItem">
+            <Border Margin="0,4" Padding="10" CornerRadius="6" Background="{DynamicResource AppBackgroundCardBrush}"
+                    BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="1">
+                <StackPanel Spacing="6">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding DisplayPath}" Classes="caption" />
+                            <TextBlock Text="{Binding InstanceText, StringFormat='instance {0}'}" Classes="path" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="Remove" Command="{Binding RemoveCommand}" IsVisible="{Binding Repeat.IsOpen}" />
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding Members}" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <!-- the body of an open choice: the selected root -->
+        <DataTemplate x:DataType="inst:InstanceBody">
+            <Border Margin="0,4" Padding="10" CornerRadius="6" Background="{DynamicResource AppBackgroundCardBrush}"
+                    BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="1">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="{Binding DisplayPath}" Classes="path" />
+                    <ItemsControl ItemsSource="{Binding Members}" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <!-- a plain group -->
+        <DataTemplate x:DataType="inst:InstanceGroup">
+            <Border Margin="0,4" Padding="10" CornerRadius="6" Background="{DynamicResource AppBackgroundCardBrush}"
+                    BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="1">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="{Binding DisplayPath}" Classes="caption" />
+                    <ItemsControl ItemsSource="{Binding Members}" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <!-- a repeat: its items and, when open, a button to add a copy of the group -->
+        <DataTemplate x:DataType="inst:InstanceRepeat">
+            <StackPanel Margin="0,4" Spacing="4">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Name}" Classes="caption" />
+                        <TextBlock Text="repeat" Classes="path" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding CountText}" Classes="path" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Add" Command="{Binding AddItemCommand}" IsVisible="{Binding IsOpen}" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding Items}" Margin="12,0,0,0" />
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- a choice: select the alternative; for an open choice the groups that conform to the member node def -->
+        <DataTemplate x:DataType="inst:InstanceChoice">
+            <StackPanel Margin="0,4" Spacing="4">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <TextBlock Text="{Binding Name}" Classes="caption" VerticalAlignment="Center" />
+                    <TextBlock Text="choice" Classes="path" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding MemberNodeDef, StringFormat='open: {0}'}" Classes="path" VerticalAlignment="Center" IsVisible="{Binding IsOpen}" />
+                </StackPanel>
+                <ComboBox ItemsSource="{Binding Options}" SelectedItem="{Binding SelectedOption}"
+                          IsEnabled="{Binding CanSelect}" IsVisible="{Binding HasOptions}"
+                          PlaceholderText="Select an alternative" HorizontalAlignment="Stretch" />
+                <TextBlock Text="{Binding NoOptionsText}" Classes="note" IsVisible="{Binding HasNoOptions}" />
+                <ContentControl Content="{Binding Selected}" Margin="12,0,0,0" />
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <Grid Background="#99000000">
+        <Border MaxWidth="900" MaxHeight="760" Margin="32" Padding="20" CornerRadius="8"
+                HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                Background="{DynamicResource AppBackgroundPanelBrush}"
+                BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="1">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Spacing="3" Margin="0,0,0,14">
+                    <TextBlock Text="INSTANTIATE" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
+                    <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource AppTextHeadingBrush}" />
+                    <TextBlock Text="Provide a value for each field. Select the body of an open choice and add copies of an open repeat."
+                               Classes="note" TextWrapping="Wrap" IsVisible="{Binding HasRoot}" />
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,14,0,0">
+                    <Button Content="Cancel" Command="{Binding CancelCommand}" IsVisible="{Binding HasRoot}" />
+                    <Button Content="OK" Classes="accent" Command="{Binding ConfirmCommand}" />
+                </StackPanel>
+                <TextBlock Text="{Binding Error}" IsVisible="{Binding HasError}" TextWrapping="Wrap" DockPanel.Dock="Top"
+                           Foreground="{DynamicResource AppTextBodyBrush}" />
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding HasRoot}">
+                    <ContentControl Content="{Binding Root}" Margin="0,0,12,0" />
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

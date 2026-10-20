@@ -6,6 +6,7 @@
              xmlns:models="using:Jacobi.Midi.SchemaEditor.Models"
              xmlns:st="clr-namespace:Jacobi.Midi.SchemaEditor.SchemaTree"
              xmlns:ne="clr-namespace:Jacobi.Midi.SchemaEditor.NodeEditor"
+             xmlns:inst="clr-namespace:Jacobi.Midi.SchemaEditor.Instantiate"
              xmlns:midi="clr-namespace:Jacobi.Midi.SchemaEditor.Midi"
              mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="900"
              x:Class="Jacobi.Midi.SchemaEditor.Views.MainView"
@@ -30,6 +31,8 @@
                         <MenuFlyout Placement="BottomEdgeAlignedLeft">
                             <MenuItem Header="New schema" Command="{Binding NewDocumentCommand}" />
                             <MenuItem Header="Open files…" Command="{Binding OpenFilesCommand}" />
+                            <Separator />
+                            <MenuItem Header="Instantiate…" Command="{Binding InstantiateSchemaCommand}" ToolTip.Tip="Provide values for the selected root group of the document" />
                             <Separator />
                             <MenuItem Header="Save" Command="{Binding SaveDocumentCommand}" IsEnabled="{Binding HasSelectedDocument}" />
                             <MenuItem Header="Save as…" Command="{Binding SaveDocumentAsCommand}" IsEnabled="{Binding HasSelectedDocument}" />
@@ -79,5 +82,10 @@
         <Border Grid.Row="3" Padding="16,8" Background="{DynamicResource AppBackgroundHeaderBrush}">
             <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="{DynamicResource AppTextSecondaryBrush}" />
         </Border>
+
+        <!-- modal overlay of the instantiate dialog -->
+        <Panel Grid.RowSpan="4" IsVisible="{Binding InstantiateDialog, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <inst:InstantiateSchemaView DataContext="{Binding InstantiateDialog}" />
+        </Panel>
     </Grid>
 </UserControl>

@@ -7,6 +7,7 @@ using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.SchemaEditor.Instantiate;
 using Jacobi.Midi.SchemaEditor.Midi;
 using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.SchemaEditor.NodeEditor;
@@ -79,7 +80,20 @@ internal sealed partial class MainViewModel : ViewModelBase
     public const int PropertiesTab = 2;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(InstantiateSchemaCommand))]
     public partial SchemaWorkspaceDocument? SelectedDocument { get; set; }
+
+    /// <summary>
+    /// The open instantiate dialog (shown as an overlay); null when there is none.
+    /// </summary>
+    [ObservableProperty]
+    public partial InstantiateSchemaViewModel? InstantiateDialog { get; private set; }
+
+    /// <summary>
+    /// The instance that the user confirmed in the last instantiate dialog; null when there is none yet.
+    /// </summary>
+    [ObservableProperty]
+    public partial InstanceNode? LastInstance { get; private set; }
 
     /// <summary>
     /// The item selected in the schema tree: an <see cref="EditNode"/> or another document item
@@ -88,6 +102,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectedNode))]
     [NotifyCanExecuteChangedFor(nameof(DeleteItemCommand))]
+    [NotifyCanExecuteChangedFor(nameof(InstantiateSchemaCommand))]
     public partial object? SelectedItem { get; set; }
 
     /// <summary>
@@ -378,6 +393,44 @@ internal sealed partial class MainViewModel : ViewModelBase
     }
 
     private bool CanDeleteItem() => SelectedItem is not null and not EditDocument;
+
+    /// <summary>
+    /// Opens the instantiate dialog for the selected document root. The document and the documents it includes
+    /// (taken from the open documents) are compiled first; when that fails the problem is reported and no dialog opens.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanInstantiateSchema))]
+    private void InstantiateSchema()
+    {
+        if (SelectedDocument is null || SelectedItem is not EditGroup root)
+        {
+            return;
+        }
+
+        try
+        {
+            var instantiator = SchemaInstantiator.Create(SelectedDocument.Schema, Documents.Select(document => document.Schema));
+            InstantiateDialog = new InstantiateSchemaViewModel(instantiator.Create(root), CloseInstantiateDialog);
+        }
+        catch (Exception exception) when (IsSchemaError(exception))
+        {
+            // the error is shown in the dialog: the status bar is easily overlooked
+            StatusMessage = $"Cannot instantiate {root.Name}: {exception.Message}";
+            InstantiateDialog = new InstantiateSchemaViewModel(root.Name, exception.Message, CloseInstantiateDialog);
+        }
+    }
+
+    private bool CanInstantiateSchema()
+        => SelectedDocument is not null && SelectedItem is EditGroup and not EditDocument;
+
+    private void CloseInstantiateDialog(InstantiateSchemaViewModel dialog, bool confirmed)
+    {
+        InstantiateDialog = null;
+        if (confirmed && dialog.Root is { } instance)
+        {
+            LastInstance = instance;
+            StatusMessage = $"Instantiated {instance.Name} with {instance.Fields().Count()} field value(s).";
+        }
+    }
 
     private void AddDocumentItem(string what, Func<SchemaWorkspaceDocument, object> add)
     {
