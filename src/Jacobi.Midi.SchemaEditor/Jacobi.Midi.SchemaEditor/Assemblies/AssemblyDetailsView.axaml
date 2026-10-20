@@ -1,0 +1,68 @@
+<!--
+    The details of the assembly selected in the assembly tree (or the assembly of the selected processor factory):
+    shown in place of the node editor. Read-only. The data context is the LoadedAssembly.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:asm="using:Jacobi.Midi.SchemaEditor.Assemblies"
+             x:Class="Jacobi.Midi.SchemaEditor.Assemblies.AssemblyDetailsView"
+             x:DataType="asm:LoadedAssembly">
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.label">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="LetterSpacing" Value="1.4" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextLabelBrush}" />
+        </Style>
+        <Style Selector="TextBlock.muted">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}" />
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Spacing="10" MaxWidth="720" HorizontalAlignment="Left">
+            <StackPanel Spacing="4">
+                <TextBlock Text="ASSEMBLY" Classes="label" />
+                <TextBlock Text="{Binding Name}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource AppTextHeadingBrush}" />
+                <TextBlock Text="{Binding Version}" Classes="muted" />
+                <TextBlock Text="{Binding Location}" Classes="muted" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding Summary}" Classes="muted" />
+            </StackPanel>
+
+            <StackPanel Spacing="2" IsVisible="{Binding HasSchemas}">
+                <TextBlock Text="SCHEMAS" Classes="label" />
+                <ItemsControl ItemsSource="{Binding SchemaNames}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <TextBlock Text="{Binding}" Foreground="{DynamicResource AppTextBodyBrush}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <StackPanel Spacing="2" IsVisible="{Binding HasProcessorNamespaces}">
+                <TextBlock Text="PROCESSOR NAMESPACES" Classes="label" />
+                <ItemsControl ItemsSource="{Binding ProcessorNamespaceNames}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <TextBlock Text="{Binding}" Foreground="{DynamicResource AppTextBodyBrush}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <StackPanel Spacing="2" IsVisible="{Binding HasProblems}">
+                <TextBlock Text="PROBLEMS" Classes="label" />
+                <ItemsControl ItemsSource="{Binding Problems}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <TextBlock Text="{Binding}" TextWrapping="Wrap" Foreground="{DynamicResource AppTextAccentBrush}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

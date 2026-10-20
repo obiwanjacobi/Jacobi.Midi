@@ -1,0 +1,44 @@
+<!--
+    The details of the processor namespace selected in the assembly tree: the processors of its factory.
+    Shown in place of the node editor. Read-only. The data context is the ProcessorNamespaceItem.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:asm="using:Jacobi.Midi.SchemaEditor.Assemblies"
+             x:Class="Jacobi.Midi.SchemaEditor.Assemblies.ProcessorNamespaceDetailsView"
+             x:DataType="asm:ProcessorNamespaceItem">
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.label">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="LetterSpacing" Value="1.4" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextLabelBrush}" />
+        </Style>
+        <Style Selector="TextBlock.muted">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}" />
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Spacing="10" MaxWidth="720" HorizontalAlignment="Left">
+            <StackPanel Spacing="4">
+                <TextBlock Text="PROCESSOR NAMESPACE" Classes="label" />
+                <TextBlock Text="{Binding Namespace}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource AppTextHeadingBrush}" />
+                <TextBlock Text="{Binding Summary}" Classes="muted" />
+            </StackPanel>
+
+            <StackPanel Spacing="2" IsVisible="{Binding HasProcessors}">
+                <TextBlock Text="PROCESSORS" Classes="label" />
+                <ItemsControl ItemsSource="{Binding ProcessorKeys}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <TextBlock Text="{Binding}" Foreground="{DynamicResource AppTextBodyBrush}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

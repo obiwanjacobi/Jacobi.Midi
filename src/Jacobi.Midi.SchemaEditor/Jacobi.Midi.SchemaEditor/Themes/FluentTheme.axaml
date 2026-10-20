@@ -13,4 +13,9 @@
             <ColorPaletteResources x:Key="Dark" Accent="#3f3ad5" />
         </FluentTheme.Palettes>
     </FluentTheme>
+
+    <!-- the headers of all tabs -->
+    <Style Selector="TabItem">
+        <Setter Property="FontSize" Value="11" />
+    </Style>
 </Styles>

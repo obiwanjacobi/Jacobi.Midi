@@ -15,6 +15,11 @@ internal sealed partial class SchemaWorkspaceDocument : ObservableObject
 
     public SchemaFormat Format { get; }
 
+    /// <summary>
+    /// True for the schema of an opened assembly: it is shown but cannot be changed.
+    /// </summary>
+    public bool IsReadOnly { get; init; }
+
     public EditDocument Schema { get; }
     public long Revision { get; private set; }
 
@@ -198,6 +203,10 @@ internal sealed partial class SchemaWorkspaceDocument : ObservableObject
     /// </summary>
     public void MarkChanged()
     {
+        if (IsReadOnly)
+        {
+            throw new InvalidOperationException($"'{Schema.Name}' is read-only.");
+        }
         Revision++;
         IsDirty = true;
         OnPropertyChanged(nameof(DisplayName));

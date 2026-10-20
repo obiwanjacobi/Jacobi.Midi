@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Reflection;
 using System.Text.Json;
 using System.Xml;
 using Avalonia.Input.Platform;
@@ -7,6 +8,7 @@ using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.SchemaEditor.Assemblies;
 using Jacobi.Midi.SchemaEditor.Instantiate;
 using Jacobi.Midi.SchemaEditor.Midi;
 using Jacobi.Midi.SchemaEditor.Models;
@@ -28,6 +30,11 @@ internal sealed partial class MainViewModel : ViewModelBase
         new("YAML schema") { Patterns = ["*.yaml", "*.yml"] }
     ];
 
+    private static readonly FilePickerFileType[] AssemblyFileTypes =
+    [
+        new("Assemblies") { Patterns = ["*.dll"] }
+    ];
+
     private readonly Dictionary<SchemaWorkspaceDocument, IStorageFile> _storageFiles = [];
     private IStorageProvider? _storageProvider;
     private IClipboard? _clipboard;
@@ -38,6 +45,61 @@ internal sealed partial class MainViewModel : ViewModelBase
     public MidiBarViewModel MidiBar { get; init; } = new(null);
 
     public ObservableCollection<SchemaWorkspaceDocument> Documents { get; } = [];
+
+    /// <summary>
+    /// The opened assemblies with their embedded schemas (not editable, not part of <see cref="Documents"/>) and processors.
+    /// </summary>
+    public AssemblyWorkspace OpenedAssemblies { get; } = new();
+
+    /// <summary>
+    /// The active tab of the left panel: <see cref="SchemaLeftTab"/> (the schema tree) or <see cref="AssembliesLeftTab"/>.
+    /// </summary>
+    [ObservableProperty]
+    public partial int SelectedLeftTab { get; set; }
+
+    public const int SchemaLeftTab = 0;
+    public const int AssembliesLeftTab = 1;
+
+    /// <summary>
+    /// The item selected in the assembly tree: a <see cref="LoadedAssembly"/>, a <see cref="LoadedSchema"/>,
+    /// a node of an embedded schema or a <see cref="ProcessorNamespaceItem"/>; null when none is selected.
+    /// </summary>
+    [ObservableProperty]
+    public partial object? SelectedAssemblyItem { get; set; }
+
+    /// <summary>
+    /// The read-only document of the embedded schema selected in the assembly tree; null when none is selected.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly))]
+    public partial SchemaWorkspaceDocument? InspectedDocument { get; private set; }
+
+    /// <summary>
+    /// The assembly whose details are shown instead of the node editor; null unless an assembly is selected.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowNodeEditor))]
+    public partial LoadedAssembly? InspectedAssembly { get; private set; }
+
+    /// <summary>
+    /// The processor namespace whose details (its processors) are shown instead of the node editor; null unless one is selected.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowNodeEditor))]
+    public partial ProcessorNamespaceItem? InspectedNamespace { get; private set; }
+
+    public bool ShowNodeEditor => InspectedAssembly is null && InspectedNamespace is null;
+
+    /// <summary>
+    /// The document the node editor shows: the read-only <see cref="InspectedDocument"/> of an embedded schema
+    /// or else the <see cref="SelectedDocument"/>.
+    /// </summary>
+    public SchemaWorkspaceDocument? ActiveDocument => InspectedDocument ?? SelectedDocument;
+
+    /// <summary>
+    /// True when the node editor shows an embedded schema: it cannot be changed.
+    /// </summary>
+    public bool IsReadOnly => ActiveDocument?.IsReadOnly == true;
 
     public ObservableCollection<SysExMessage> SysExMessages { get; } = [];
     public ObservableCollection<SysExComparisonRow> ComparedBytes { get; } = [];
@@ -78,6 +140,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     public const int ProcessorDefsTab = 6;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly))]
     [NotifyCanExecuteChangedFor(nameof(InstantiateSchemaCommand))]
     public partial SchemaWorkspaceDocument? SelectedDocument { get; set; }
 
@@ -119,7 +182,7 @@ internal sealed partial class MainViewModel : ViewModelBase
 
     private string GetItemPath(object? item)
     {
-        var root = SelectedDocument?.Schema.Name ?? String.Empty;
+        var root = ActiveDocument?.Schema.Name ?? String.Empty;
         if (item is not EditNode node || node is EditDocument)
         {
             return root;
@@ -135,7 +198,7 @@ internal sealed partial class MainViewModel : ViewModelBase
 
         // node defs are listed under their collection
         var path = String.Join('/', names);
-        return SelectedDocument?.Schema.NodeDefs.Contains(top) == true ? $"{root}/{nameof(EditDocument.NodeDefs)}/{path}" : $"{root}/{path}";
+        return ActiveDocument?.Schema.NodeDefs.Contains(top) == true ? $"{root}/{nameof(EditDocument.NodeDefs)}/{path}" : $"{root}/{path}";
     }
 
     /// <summary>
@@ -292,6 +355,67 @@ internal sealed partial class MainViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Opens assemblies (.dll): their embedded schemas go to the schema set and the same assembly is passed to the processor manager.
+    /// </summary>
+    [RelayCommand]
+    private async Task OpenAssemblies()
+    {
+        if (_storageProvider is null || !_storageProvider.CanOpen)
+        {
+            StatusMessage = "This platform does not provide file-open access.";
+            return;
+        }
+
+        try
+        {
+            var files = await _storageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Open assemblies with embedded schemas or processors",
+                AllowMultiple = true,
+                FileTypeFilter = AssemblyFileTypes
+            });
+
+            foreach (var file in files)
+            {
+                try
+                {
+                    var assembly = await LoadAssembly(file);
+                    var known = OpenedAssemblies.Assemblies.Count;
+                    var loaded = OpenedAssemblies.Load(assembly, file.Name);
+                    StatusMessage = OpenedAssemblies.Assemblies.Count == known
+                        ? $"{loaded.Name} was already opened."
+                        : $"Opened {file.Name}: {loaded.Summary}.";
+                }
+                catch (Exception exception) when (IsAssemblyError(exception))
+                {
+                    StatusMessage = $"Could not open {file.Name}: {exception.Message}";
+                }
+            }
+        }
+        catch (Exception exception) when (IsStorageError(exception))
+        {
+            StatusMessage = $"Could not open assemblies: {exception.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Loads the assembly from its path (so its dependencies resolve next to it) or, when the file has no local path
+    /// (the Browser host), from its bytes.
+    /// </summary>
+    private static async Task<Assembly> LoadAssembly(IStorageFile file)
+    {
+        if (file.TryGetLocalPath() is { } path)
+        {
+            return Assembly.LoadFrom(path);
+        }
+
+        await using var stream = await file.OpenReadAsync();
+        using var buffer = new MemoryStream();
+        await stream.CopyToAsync(buffer);
+        return Assembly.Load(buffer.ToArray());
+    }
+
     [RelayCommand]
     private async Task SaveDocument()
     {
@@ -307,15 +431,20 @@ internal sealed partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private void ApplyNodeEdits()
     {
-        if (SelectedDocument is null || EditedNode is not { } node)
+        if (ActiveDocument is null || EditedNode is not { } node)
         {
             StatusMessage = "Select a schema node before editing its properties.";
+            return;
+        }
+        if (IsReadOnly)
+        {
+            StatusMessage = "The schema of an assembly is read-only.";
             return;
         }
 
         try
         {
-            SelectedDocument.ApplyNodeEdits(
+            ActiveDocument.ApplyNodeEdits(
                 node,
                 NodeName.Trim(),
                 NodeDataType.Trim(),
@@ -339,7 +468,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private void AddNode(SchemaNodeKind kind)
     {
-        if (SelectedDocument is null)
+        if (ActiveDocument is null || IsReadOnly)
         {
             StatusMessage = "Create or open a schema before adding a node.";
             return;
@@ -355,10 +484,10 @@ internal sealed partial class MainViewModel : ViewModelBase
             var name = GetUniqueName(parent.Members.Select(member => member.Name), $"New{kind}");
             EditNode node = kind switch
             {
-                SchemaNodeKind.Field => SelectedDocument.AddField(parent, name, "sys.uint8", String.Empty),
-                SchemaNodeKind.Group => SelectedDocument.AddGroup(parent, name),
-                SchemaNodeKind.Repeat => SelectedDocument.AddRepeat(parent, name, count: 1),
-                SchemaNodeKind.Choice => SelectedDocument.AddChoice(parent, name, selectedIndex: 0),
+                SchemaNodeKind.Field => ActiveDocument.AddField(parent, name, "sys.uint8", String.Empty),
+                SchemaNodeKind.Group => ActiveDocument.AddGroup(parent, name),
+                SchemaNodeKind.Repeat => ActiveDocument.AddRepeat(parent, name, count: 1),
+                SchemaNodeKind.Choice => ActiveDocument.AddChoice(parent, name, selectedIndex: 0),
                 _ => throw new NotSupportedException($"Cannot add a node of kind {kind}.")
             };
             // a node added to a selected node def stays in the Node Defs tab
@@ -384,7 +513,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private void AddNodeDef(SchemaNodeKind kind)
     {
-        if (SelectedDocument is null)
+        if (ActiveDocument is null || IsReadOnly)
         {
             StatusMessage = "Create or open a schema before adding a node def.";
             return;
@@ -392,13 +521,13 @@ internal sealed partial class MainViewModel : ViewModelBase
 
         try
         {
-            var definition = SelectedDocument.AddNodeDef(kind,
-                GetUniqueName(SelectedDocument.Schema.NodeDefs.Select(existing => existing.Name), $"New{kind}Def"));
+            var definition = ActiveDocument.AddNodeDef(kind,
+                GetUniqueName(ActiveDocument.Schema.NodeDefs.Select(existing => existing.Name), $"New{kind}Def"));
             // the node def is edited next to the Node Defs tab: the document root stays selected
-            SelectedItem = SelectedDocument.Schema;
+            SelectedItem = ActiveDocument.Schema;
             SelectedNodeDef = definition;
             SelectedEditorTab = NodeDefsTab;
-            StatusMessage = $"Added a node def to {SelectedDocument.Schema.Name}.";
+            StatusMessage = $"Added a node def to {ActiveDocument.Schema.Name}.";
         }
         catch (Exception exception) when (IsSchemaError(exception))
         {
@@ -454,7 +583,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanDeleteItem))]
     private void DeleteItem()
     {
-        if (SelectedDocument is null || GetDeletableItem() is not { } item)
+        if (ActiveDocument is null || IsReadOnly || GetDeletableItem() is not { } item)
         {
             return;
         }
@@ -463,14 +592,14 @@ internal sealed partial class MainViewModel : ViewModelBase
         {
             var inNodeDefsTab = SelectedItem is EditDocument;
             var parent = item is EditNode { Parent: { } group and not EditDocument } ? group : null;
-            SelectedDocument.RemoveItem(item);
+            ActiveDocument.RemoveItem(item);
             if (inNodeDefsTab)
             {
                 SelectedNodeDef = parent;
             }
             else
             {
-                SelectedItem = parent ?? SelectedDocument.Schema;
+                SelectedItem = parent ?? ActiveDocument.Schema;
             }
             StatusMessage = "Deleted the selected item.";
         }
@@ -485,7 +614,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// </summary>
     private object? GetDeletableItem() => SelectedItem is EditDocument ? SelectedNodeDef : SelectedItem;
 
-    private bool CanDeleteItem() => GetDeletableItem() is not null;
+    private bool CanDeleteItem() => !IsReadOnly && GetDeletableItem() is not null;
 
     /// <summary>
     /// Opens the instantiate dialog for the selected document root. The document and the documents it includes
@@ -494,7 +623,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanInstantiateSchema))]
     private void InstantiateSchema()
     {
-        if (SelectedDocument is null || SelectedItem is not EditGroup root)
+        if (SelectedDocument is null || IsReadOnly || SelectedItem is not EditGroup root)
         {
             return;
         }
@@ -520,7 +649,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private void RenameDocument()
     {
-        if (SelectedDocument is not { } document || SelectedItem is not EditDocument)
+        if (IsReadOnly || SelectedDocument is not { } document || SelectedItem is not EditDocument)
         {
             StatusMessage = "Select the document root before renaming it.";
             return;
@@ -581,7 +710,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     }
 
     private bool CanInstantiateSchema()
-        => SelectedDocument is not null && SelectedItem is EditGroup and not EditDocument;
+        => SelectedDocument is not null && !IsReadOnly && SelectedItem is EditGroup and not EditDocument;
 
     private void CloseInstantiateDialog(InstantiateSchemaViewModel dialog, bool confirmed)
     {
@@ -703,14 +832,47 @@ internal sealed partial class MainViewModel : ViewModelBase
     partial void OnSelectedDocumentChanged(SchemaWorkspaceDocument? value)
     {
         OnPropertyChanged(nameof(HasSelectedDocument));
+        // picking a schema document leaves the assemblies tab
+        SelectedLeftTab = SchemaLeftTab;
         SelectedItem = null;
         NotifyAddOptionsChanged();
+    }
+
+    partial void OnSelectedLeftTabChanged(int value)
+    {
+        // each tab starts without a selection: the node editor shows what the tab's tree has selected
+        SelectedAssemblyItem = null;
+        SelectedItem = null;
+    }
+
+    /// <summary>
+    /// Shows the item selected in the assembly tree: an embedded schema or one of its nodes in the (read-only) node editor,
+    /// an assembly or a processor namespace as its details.
+    /// </summary>
+    partial void OnSelectedAssemblyItemChanged(object? value)
+    {
+        var schema = value switch
+        {
+            LoadedSchema loadedSchema => loadedSchema,
+            EditNode node => OpenedAssemblies.FindSchema(node),
+            _ => null
+        };
+        InspectedAssembly = value as LoadedAssembly;
+        InspectedNamespace = value as ProcessorNamespaceItem;
+        // the document first: the selection below is shown for it
+        InspectedDocument = schema?.Document;
+        SelectedItem = value switch
+        {
+            LoadedSchema loadedSchema => loadedSchema.Document.Schema,
+            EditNode node when schema is not null => node,
+            _ => null
+        };
     }
 
     partial void OnSelectedNodeDefChanged(EditNode? value)
     {
         SelectedNodeDefDetails?.Dispose();
-        SelectedNodeDefDetails = SelectedDocument is null || value is null ? null : ItemDetailsViewModel.Create(SelectedDocument, value);
+        SelectedNodeDefDetails = ActiveDocument is null || value is null ? null : ItemDetailsViewModel.Create(ActiveDocument, value);
         LoadStagedNode();
         NotifyAddOptionsChanged();
     }
@@ -720,10 +882,10 @@ internal sealed partial class MainViewModel : ViewModelBase
         var node = value as EditNode;
         SelectedNodeDef = null;
         ItemDetails?.Dispose();
-        ItemDetails = SelectedDocument is null ? null : ItemDetailsViewModel.Create(SelectedDocument, value);
+        ItemDetails = ActiveDocument is null ? null : ItemDetailsViewModel.Create(ActiveDocument, value);
         GeneralEditor = node;
         DocumentTabs?.Dispose();
-        DocumentTabs = SelectedDocument is not null && value is EditDocument ? CreateDocumentTabs(SelectedDocument) : null;
+        DocumentTabs = ActiveDocument is not null && value is EditDocument ? CreateDocumentTabs(ActiveDocument) : null;
         DocumentName = (value as EditDocument)?.Name ?? String.Empty;
         LoadStagedNode();
         // a tab the new selection does not have would stay selected (but hidden)
@@ -866,7 +1028,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// </summary>
     private EditGroup? GetTargetGroup()
     {
-        if (SelectedDocument is null)
+        if (ActiveDocument is null || IsReadOnly)
         {
             return null;
         }
@@ -875,7 +1037,7 @@ internal sealed partial class MainViewModel : ViewModelBase
         {
             EditGroup selected and not EditDocument => selected,
             EditField field => field.Parent,
-            null or EditDocument => SelectedDocument.Schema.Members.OfType<EditGroup>().FirstOrDefault(),
+            null or EditDocument => ActiveDocument.Schema.Members.OfType<EditGroup>().FirstOrDefault(),
             _ => null
         };
         return group is EditDocument or EditChoice { MemberNodeDef: not null } ? null : group;
@@ -962,6 +1124,10 @@ internal sealed partial class MainViewModel : ViewModelBase
             or JsonException
             or XmlException
             or YamlException;
+
+    private static bool IsAssemblyError(Exception exception)
+        => IsStorageError(exception)
+            || exception is BadImageFormatException or ArgumentException or TypeLoadException;
 
     private static bool IsStorageError(Exception exception)
         => exception is IOException

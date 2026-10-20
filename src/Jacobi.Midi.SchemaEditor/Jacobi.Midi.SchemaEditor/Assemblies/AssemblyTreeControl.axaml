@@ -1,0 +1,56 @@
+<!--
+    The assembly tree: the opened assemblies with their embedded schemas (and the nodes of those) and processor factories.
+    The selection is the SelectedAssemblyItem of the MainViewModel; the node editor shows it read-only.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Jacobi.Midi.SchemaEditor.ViewModels"
+             xmlns:asm="using:Jacobi.Midi.SchemaEditor.Assemblies"
+             xmlns:models="using:Jacobi.Midi.SchemaEditor.Models"
+             x:Class="Jacobi.Midi.SchemaEditor.Assemblies.AssemblyTreeControl"
+             x:DataType="vm:MainViewModel">
+
+    <Panel>
+        <TreeView ItemsSource="{Binding OpenedAssemblies.Assemblies}"
+                  SelectedItem="{Binding SelectedAssemblyItem, Mode=TwoWay}">
+            <TreeView.DataTemplates>
+                <TreeDataTemplate x:DataType="asm:LoadedAssembly" ItemsSource="{Binding Children}">
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,5">
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{DynamicResource AppTextBodyBrush}" />
+                        <TextBlock Text="{Binding Version}" Foreground="{DynamicResource AppTextMutedBrush}" />
+                        <TextBlock Text="!" FontWeight="Bold" Foreground="Orange" IsVisible="{Binding HasProblems}"
+                                   ToolTip.Tip="Some resources or processors could not be loaded." />
+                    </StackPanel>
+                </TreeDataTemplate>
+                <TreeDataTemplate x:DataType="asm:LoadedSchema" ItemsSource="{Binding Document.Schema.Members}">
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,5">
+                        <TextBlock Text="{Binding Name}" Foreground="{DynamicResource AppTextBodyBrush}" />
+                        <TextBlock Text="schema" Foreground="{DynamicResource AppTextMutedBrush}" />
+                    </StackPanel>
+                </TreeDataTemplate>
+                <DataTemplate x:DataType="asm:ProcessorNamespaceItem">
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,5">
+                        <TextBlock Text="{Binding Namespace}" Foreground="{DynamicResource AppTextBodyBrush}" />
+                        <TextBlock Text="processors" Foreground="{DynamicResource AppTextMutedBrush}" />
+                    </StackPanel>
+                </DataTemplate>
+                <!-- the nodes of an embedded schema; matches Group, Repeat and Choice -->
+                <TreeDataTemplate x:DataType="models:EditGroup" ItemsSource="{Binding Members}">
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,5">
+                        <TextBlock Text="{Binding Name}" Foreground="{DynamicResource AppTextBodyBrush}" />
+                        <TextBlock Text="{Binding Kind}" Foreground="{DynamicResource AppTextMutedBrush}" />
+                    </StackPanel>
+                </TreeDataTemplate>
+                <DataTemplate x:DataType="models:EditField">
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,5">
+                        <TextBlock Text="{Binding Name}" Foreground="{DynamicResource AppTextBodyBrush}" />
+                        <TextBlock Text="{Binding DataType}" Foreground="{DynamicResource AppTextMutedBrush}" />
+                    </StackPanel>
+                </DataTemplate>
+            </TreeView.DataTemplates>
+        </TreeView>
+        <TextBlock Text="No assemblies opened. Use the menu: Open assemblies…" TextWrapping="Wrap"
+                   IsVisible="{Binding OpenedAssemblies.HasNoAssemblies}"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource AppTextMutedBrush}" />
+    </Panel>
+</UserControl>

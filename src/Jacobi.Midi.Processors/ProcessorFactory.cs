@@ -5,7 +5,7 @@ namespace Jacobi.Midi.Processors;
 
 public sealed class ProcessorFactory : IProcessorFactory
 {
-    private readonly static Dictionary<string, IProcessor> Processors = new()
+    private readonly static Dictionary<string, IProcessor> ProcessorMap = new()
     {
         // Layout Processors
         {  "midi.sysex", new SysExProcessor() },
@@ -13,8 +13,11 @@ public sealed class ProcessorFactory : IProcessorFactory
 
     public string Namespace => "midi";
 
+    public IEnumerable<string> Processors
+    => ProcessorMap.Keys.Select(p => p[5..]);
+
     public IProcessor? CreateProcessor(string id)
-        => Processors.GetValueOrDefault($"{Namespace}.{id}");
+        => ProcessorMap.GetValueOrDefault($"{Namespace}.{id}");
 
     public IEnumerable<DataTypeDescriptor> DataTypes => [];
 }

@@ -8,6 +8,7 @@
              xmlns:ne="clr-namespace:Jacobi.Midi.SchemaEditor.NodeEditor"
              xmlns:inst="clr-namespace:Jacobi.Midi.SchemaEditor.Instantiate"
              xmlns:rn="clr-namespace:Jacobi.Midi.SchemaEditor.Rename"
+             xmlns:asm="clr-namespace:Jacobi.Midi.SchemaEditor.Assemblies"
              xmlns:midi="clr-namespace:Jacobi.Midi.SchemaEditor.Midi"
              mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="900"
              x:Class="Jacobi.Midi.SchemaEditor.Views.MainView"
@@ -32,6 +33,7 @@
                         <MenuFlyout Placement="BottomEdgeAlignedLeft">
                             <MenuItem Header="New schema" Command="{Binding NewDocumentCommand}" />
                             <MenuItem Header="Open files…" Command="{Binding OpenFilesCommand}" />
+                            <MenuItem Header="Open assemblies…" Command="{Binding OpenAssembliesCommand}" ToolTip.Tip="Open .dll files to use their embedded schemas and processors" />
                             <Separator />
                             <MenuItem Header="Instantiate…" Command="{Binding InstantiateSchemaCommand}" ToolTip.Tip="Provide values for the selected root group of the document" />
                             <Separator />
@@ -60,20 +62,37 @@
 
         <Grid Grid.Row="2" ColumnDefinitions="280,*" ColumnSpacing="1" Background="{DynamicResource AppDividerBrush}">
             <Border Grid.Column="0" Padding="18" Background="{DynamicResource AppBackgroundPanelBrush}">
-                <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" Spacing="3" Margin="0,0,0,16">
-                        <TextBlock Text="SCHEMA TREE" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
-                    </StackPanel>
-                    <TextBlock DockPanel.Dock="Bottom"
-                               Text="Select a node to edit its name, type and documentation."
-                               TextWrapping="Wrap" Margin="0,14,0,0" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" />
-                <st:SchemaTreeControl EditDocument="{Binding SelectedDocument.Schema}"
-                                      SelectedItem="{Binding SelectedItem, Mode=TwoWay}" />
-                </DockPanel>
+                <TabControl SelectedIndex="{Binding SelectedLeftTab}" Padding="0">
+                    <TabItem Header="Schema">
+                        <DockPanel Margin="0,12,0,0">
+                            <TextBlock DockPanel.Dock="Bottom"
+                                       Text="Select a node to edit its name, type and documentation."
+                                       TextWrapping="Wrap" Margin="0,14,0,0" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" />
+                            <st:SchemaTreeControl EditDocument="{Binding SelectedDocument.Schema}"
+                                                  SelectedItem="{Binding SelectedItem, Mode=TwoWay}" />
+                        </DockPanel>
+                    </TabItem>
+                    <TabItem Header="Assemblies">
+                        <DockPanel Margin="0,12,0,0">
+                            <TextBlock DockPanel.Dock="Bottom"
+                                       Text="The embedded schemas of opened assemblies are shown read-only."
+                                       TextWrapping="Wrap" Margin="0,14,0,0" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" />
+                            <asm:AssemblyTreeControl />
+                        </DockPanel>
+                    </TabItem>
+                </TabControl>
             </Border>
 
             <Border Grid.Column="1" Padding="24" Background="{DynamicResource AppBackgroundBaseBrush}">
-                <ne:NodeEditorControl />
+                <Panel>
+                    <ne:NodeEditorControl IsVisible="{Binding ShowNodeEditor}" />
+                    <Panel IsVisible="{Binding InspectedAssembly, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <asm:AssemblyDetailsView DataContext="{Binding InspectedAssembly}" />
+                    </Panel>
+                    <Panel IsVisible="{Binding InspectedNamespace, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <asm:ProcessorNamespaceDetailsView DataContext="{Binding InspectedNamespace}" />
+                    </Panel>
+                </Panel>
             </Border>
         </Grid>
 

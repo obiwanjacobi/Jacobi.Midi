@@ -8,6 +8,24 @@
              x:DataType="vm:MainViewModel">
 
     <UserControl.Styles>
+        <!-- an embedded schema of an assembly is shown read-only: text can be selected but not edited, drop-downs cannot be changed
+             and buttons are not shown (an empty template; a style cannot hide a button whose visibility is bound) -->
+        <Style Selector="Grid.readonly TextBox">
+            <Setter Property="IsReadOnly" Value="True" />
+        </Style>
+        <Style Selector="Grid.readonly ComboBox, Grid.readonly CheckBox">
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="Focusable" Value="False" />
+        </Style>
+        <Style Selector="Grid.readonly Button">
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Panel />
+                </ControlTemplate>
+            </Setter>
+        </Style>
         <Style Selector="TextBlock.caption">
             <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -366,7 +384,7 @@
                 </DataTemplate>
     </UserControl.DataTemplates>
 
-    <Grid RowDefinitions="Auto,Auto,*,Auto">
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Classes.readonly="{Binding IsReadOnly}">
         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
             <StackPanel Spacing="4">
                 <TextBlock Text="NODE EDITOR" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
@@ -434,7 +452,7 @@
                             </Button>
                             <Button Content="Delete" Command="{Binding DeleteItemCommand}" ToolTip.Tip="Delete the selected node def" />
                         </StackPanel>
-                        <TreeView x:Name="NodeDefsTree" ItemsSource="{Binding SelectedDocument.Schema.NodeDefs}"
+                        <TreeView x:Name="NodeDefsTree" ItemsSource="{Binding ActiveDocument.Schema.NodeDefs}"
                                   SelectedItem="{Binding SelectedNodeDef, Mode=TwoWay}">
                             <TreeView.DataTemplates>
                                 <TreeDataTemplate x:DataType="models:EditGroup" ItemsSource="{Binding Members}">
@@ -490,6 +508,6 @@
                    VerticalAlignment="Center"
                    HorizontalAlignment="Center"
                    Foreground="{DynamicResource AppTextMutedBrush}" />
-        <TextBlock Grid.Row="3" Text="{Binding SelectedDocument.FileName}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" />
+        <TextBlock Grid.Row="3" Text="{Binding ActiveDocument.FileName}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" />
     </Grid>
 </UserControl>
