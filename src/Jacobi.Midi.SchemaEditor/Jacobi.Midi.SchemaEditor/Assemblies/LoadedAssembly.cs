@@ -71,6 +71,12 @@ internal sealed class LoadedAssembly
     public bool HasProblems => Problems.Count > 0;
 
     /// <summary>
+    /// True when the assembly provides nothing: no embedded schemas, no processors and no problems to show.
+    /// Such an assembly is not added to the <see cref="AssemblyWorkspace.Assemblies"/>.
+    /// </summary>
+    public bool IsEmpty => !HasSchemas && !HasProcessorNamespaces && !HasProblems;
+
+    /// <summary>
     /// A one-line description of what the assembly provides.
     /// </summary>
     public string Summary

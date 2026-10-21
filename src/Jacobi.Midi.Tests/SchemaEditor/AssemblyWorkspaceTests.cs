@@ -130,6 +130,17 @@ public class AssemblyWorkspaceTests
     }
 
     [Fact]
+    public void Load_DoesNotAddAnAssemblyWithoutSchemasOrProcessors()
+    {
+        var workspace = new AssemblyWorkspace();
+
+        var loaded = workspace.Load(Assembly.LoadFrom(TestHelpers.AssemblyPathOf("Jacobi.Midi.Core")), "Jacobi.Midi.Core.dll");
+
+        Assert.True(loaded.IsEmpty);
+        Assert.Empty(workspace.Assemblies);
+    }
+
+    [Fact]
     public void Load_ReportsProcessorsThatAreAlreadyRegistered()
     {
         var workspace = new AssemblyWorkspace();

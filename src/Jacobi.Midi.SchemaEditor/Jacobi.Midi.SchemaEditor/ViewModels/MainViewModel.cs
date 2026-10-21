@@ -513,9 +513,11 @@ internal sealed partial class MainViewModel : ViewModelBase
                     var assembly = await LoadAssembly(file);
                     var known = OpenedAssemblies.Assemblies.Count;
                     var loaded = OpenedAssemblies.Load(assembly, file.Name);
-                    StatusMessage = OpenedAssemblies.Assemblies.Count == known
-                        ? $"{loaded.Name} was already opened."
-                        : $"Opened {file.Name}: {loaded.Summary}.";
+                    StatusMessage = loaded.IsEmpty
+                        ? $"{file.Name} contains no schemas or processors; it was not added."
+                        : OpenedAssemblies.Assemblies.Count == known
+                            ? $"{loaded.Name} was already opened."
+                            : $"Opened {file.Name}: {loaded.Summary}.";
                 }
                 catch (Exception exception) when (IsAssemblyError(exception))
                 {

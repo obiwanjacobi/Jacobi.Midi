@@ -62,6 +62,7 @@ internal sealed class AssemblyWorkspace : ObservableObject
     /// to the <see cref="Processors"/>. A resource or processor that cannot be loaded is reported in
     /// <see cref="LoadedAssembly.Problems"/> and does not prevent the rest from loading.
     /// Returns the already opened entry when the assembly was opened before.
+    /// An assembly that provides nothing (<see cref="LoadedAssembly.IsEmpty"/>) is returned but not added to the <see cref="Assemblies"/>.
     /// </summary>
     /// <param name="assembly">The assembly to take the schemas and processors from.</param>
     /// <param name="location">The file name or path to show; empty to use the assembly name.</param>
@@ -82,7 +83,10 @@ internal sealed class AssemblyWorkspace : ObservableObject
         var name = assembly.GetName();
         var loaded = new LoadedAssembly(assembly.FullName ?? name.Name ?? location, name.Name ?? location,
             name.Version?.ToString() ?? String.Empty, location, schemas, processorNamespaces, problems);
-        Assemblies.Add(loaded);
+        if (!loaded.IsEmpty)
+        {
+            Assemblies.Add(loaded);
+        }
         return loaded;
     }
 
