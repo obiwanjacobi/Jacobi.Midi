@@ -22,12 +22,8 @@ public class SchemaEditorTests
         var group = Assert.IsType<EditGroup>(Assert.Single(schema.Members));
         Assert.Equal("SysEx", group.Name);
 
-        document.ApplyNodeEdits(
-            group,
-            "SysEx",
-            "sys.uint8",
-            "The complete system-exclusive message.",
-            String.Empty);
+        document.ApplyNodeEdits(group, "SysEx", "sys.uint8");
+        group.Properties.Add(new EditProperty { Name = "description", Value = "The complete system-exclusive message." });
         var addedGroup = document.AddGroup(group, "Header");
         document.AddField(
             addedGroup,
@@ -131,7 +127,7 @@ public class SchemaEditorTests
                 var document = new SchemaWorkspaceDocument(schema, SchemaFormat.Xml);
                 var message = Assert.IsType<EditGroup>(schema.Members[0]);
                 var scope = Assert.IsType<EditGroup>(message.Members[0]);
-                document.ApplyNodeEdits(scope, "ChecksumScope", String.Empty, String.Empty, String.Empty);
+                document.ApplyNodeEdits(scope, "ChecksumScope", String.Empty);
 
                 var saved = SchemaFileService.Serialize(schema, SchemaFormat.Xml);
                 Assert.Equal(source.Replace("ChecksumBlock", "ChecksumScope", StringComparison.Ordinal), saved);
@@ -262,7 +258,7 @@ public class SchemaEditorTests
                 var schema = SchemaFileService.Parse(source, SchemaFormat.Xml);
                 Assert.Equal(source, SchemaFileService.Serialize(schema, SchemaFormat.Xml));
                 var document = new SchemaWorkspaceDocument(schema, SchemaFormat.Xml);
-                document.ApplyNodeEdits(schema.Members[0], "Renamed", String.Empty, String.Empty, String.Empty);
+                document.ApplyNodeEdits(schema.Members[0], "Renamed", String.Empty);
                 Assert.Equal(source.Replace("name=\"Root\"", "name=\"Renamed\"", StringComparison.Ordinal),
                         SchemaFileService.Serialize(schema, SchemaFormat.Xml));
         }
@@ -280,7 +276,8 @@ public class SchemaEditorTests
                 var schema = SchemaFileService.Parse(source, SchemaFormat.Xml);
                 var document = new SchemaWorkspaceDocument(schema, SchemaFormat.Xml);
                 var root = Assert.IsType<EditGroup>(schema.Members[0]);
-                document.ApplyNodeEdits(root.Members[0], "Renamed", "sys.uint8", "New", String.Empty);
+                document.ApplyNodeEdits(root.Members[0], "Renamed", "sys.uint8");
+                Assert.Single(root.Members[0].Properties, property => property.Name == "description").Value = "New";
                 document.AddField(root, "Added", "sys.uint8", "2A");
 
                 var saved = SchemaFileService.Serialize(schema, SchemaFormat.Xml);
@@ -355,8 +352,9 @@ public class SchemaEditorTests
                 Assert.Equal("NewField", viewModel.NodeName);
                 Assert.Equal("sys.uint8", viewModel.NodeDataType);
 
+                // the properties are edited on the Properties tab: applying the General tab keeps them
+                field.Properties.Add(new EditProperty { Name = "description", Value = "A parameter" });
                 viewModel.NodeName = "Renamed";
-                viewModel.NodeDescription = "A parameter";
                 viewModel.ApplyNodeEditsCommand.Execute(null);
                 Assert.Equal("Renamed", field.Name);
                 Assert.Equal("A parameter", Assert.Single(field.Properties, property => property.Name == "description").Value);

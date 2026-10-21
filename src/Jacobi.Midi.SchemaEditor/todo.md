@@ -4,7 +4,7 @@ Known gaps and loose ends, collected while building the editor.
 
 ## Node editor
 
-- [ ] Editing `description` or `sample` on the Properties tab does not refresh the staged values on the General tab; pressing *Apply* there writes the old values back.
+- [x] Editing `description` or `sample` on the Properties tab does not refresh the staged values on the General tab; pressing *Apply* there writes the old values back. Fixed: the description and sample value fields are removed from the General tab; both are edited as properties only.
 - [ ] The node def, count, selected index, member node def, byte size/length/offset and value fields are plain text boxes; offer the document's node defs (and the reachable `ref:` paths) as suggestions.
 - [ ] `SchemaWorkspaceDocument.ApplyNodeEdits` takes the type-specific properties as an optional trailing `NodeFacets` parameter; fold name, data type, description and sample into the staged model so there is one apply path.
 - [ ] Value processors (repeat/choice) are not shown or editable; to be redesigned.

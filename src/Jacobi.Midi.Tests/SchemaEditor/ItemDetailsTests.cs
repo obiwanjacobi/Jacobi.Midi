@@ -136,8 +136,10 @@ public class ItemDetailsTests
         using var details = ItemDetailsViewModel.Create(document, field)!;
         Assert.Empty(details.Properties);
 
-        document.ApplyNodeEdits(field, "field", "sys.uint8", "A description", String.Empty);
+        field.Properties.Add(Property("description", "A description"));
+        Assert.Equal("description", Assert.Single(details.Properties).Name);
 
+        document.ApplyNodeEdits(field, "renamed", "sys.uint8");
         Assert.Equal("description", Assert.Single(details.Properties).Name);
     }
 

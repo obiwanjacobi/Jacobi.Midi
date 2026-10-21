@@ -367,12 +367,6 @@ internal sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial string NodeDataType { get; set; } = "sys.uint8";
 
-    [ObservableProperty]
-    public partial string NodeDescription { get; set; } = String.Empty;
-
-    [ObservableProperty]
-    public partial string NodeSampleValue { get; set; } = String.Empty;
-
     /// <summary>
     /// The staged type-specific properties of the <see cref="SelectedNode"/> (nodeDef, count, selectedIndex, ...).
     /// </summary>
@@ -645,8 +639,6 @@ internal sealed partial class MainViewModel : ViewModelBase
                 node,
                 NodeName.Trim(),
                 NodeDataType.Trim(),
-                NodeDescription.Trim(),
-                NodeSampleValue.Trim(),
                 NodeFacets);
             NodeFacets = NodeFacets.Read(node);
             OnPropertyChanged(nameof(SelectedItemPath));
@@ -1254,8 +1246,6 @@ internal sealed partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(MemberNodeDefOptions));
         NodeName = node?.Name ?? String.Empty;
         NodeDataType = (node as EditField)?.DataType?.ToString() ?? String.Empty;
-        NodeDescription = GetProperty(node, "description");
-        NodeSampleValue = GetProperty(node, "sample");
         NodeFacets = NodeFacets.Read(node);
     }
 
@@ -1428,10 +1418,6 @@ internal sealed partial class MainViewModel : ViewModelBase
         }
         return name;
     }
-
-    private static string GetProperty(EditNode? node, string name)
-        => node?.Properties.FirstOrDefault(property => String.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))?.Value
-            ?? String.Empty;
 
     private static FilePickerFileType GetSchemaFileType(SchemaFormat format) => format switch
     {

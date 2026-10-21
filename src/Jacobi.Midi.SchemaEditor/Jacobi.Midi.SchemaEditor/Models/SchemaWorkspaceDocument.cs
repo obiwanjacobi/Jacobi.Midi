@@ -37,7 +37,11 @@ internal sealed partial class SchemaWorkspaceDocument : ObservableObject
 
     public string DisplayName =>$"{Schema.Name}{(IsDirty ? " *" : String.Empty)}";
 
-    public void ApplyNodeEdits(EditNode node, string name, string dataType, string description, string sampleValue, NodeFacets? facets = null)
+    /// <summary>
+    /// Applies the staged values of the General tab to <paramref name="node"/>. Its properties (e.g. 'description' and 'sample')
+    /// are edited on the Properties tab and are not changed.
+    /// </summary>
+    public void ApplyNodeEdits(EditNode node, string name, string dataType, NodeFacets? facets = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         SchemaName? fieldType = String.IsNullOrWhiteSpace(dataType) ? (SchemaName?)null : new SchemaName(dataType);
@@ -56,8 +60,6 @@ internal sealed partial class SchemaWorkspaceDocument : ObservableObject
             facets?.Apply(node);
         }
         node.Name = name;
-        SetProperty(node, "description", description);
-        SetProperty(node, "sample", sampleValue);
         MarkChanged();
     }
 

@@ -53,11 +53,6 @@
             <Setter Property="Foreground" Value="Orange" />
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
-        <Style Selector="TextBox.description">
-            <Setter Property="AcceptsReturn" Value="True" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="MinHeight" Value="66" />
-        </Style>
     </UserControl.Styles>
 
     <UserControl.Resources>
@@ -255,7 +250,6 @@
                             <TextBlock Text="Byte size" Classes="label" />
                             <TextBox Text="{Binding NodeFacets.ByteSize}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
                         </StackPanel>
-                        <TextBox PlaceholderText="Description" Text="{Binding NodeDescription}" Classes="description" />
                         <Button Content="Apply repeat changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
                     </StackPanel>
                 </DataTemplate>
@@ -289,7 +283,6 @@
                             <TextBlock Text="Byte size" Classes="label" />
                             <TextBox Text="{Binding NodeFacets.ByteSize}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
                         </StackPanel>
-                        <TextBox PlaceholderText="Description" Text="{Binding NodeDescription}" Classes="description" />
                         <Button Content="Apply choice changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
                     </StackPanel>
                 </DataTemplate>
@@ -307,7 +300,6 @@
                             <TextBlock Text="Byte size" Classes="label" />
                             <TextBox Text="{Binding NodeFacets.ByteSize}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
                         </StackPanel>
-                        <TextBox PlaceholderText="Description" Text="{Binding NodeDescription}" Classes="description" />
                         <Button Content="Apply group changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
                     </StackPanel>
                 </DataTemplate>
@@ -337,8 +329,6 @@
                             <TextBlock Text="Byte offset" Classes="label" />
                             <TextBox Text="{Binding NodeFacets.ByteOffset}" PlaceholderText="optional signed number" />
                         </StackPanel>
-                        <TextBox PlaceholderText="Description" Text="{Binding NodeDescription}" Classes="description" />
-                        <TextBox PlaceholderText="Sample value" Text="{Binding NodeSampleValue}" />
                         <Button Content="Apply field changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
                     </StackPanel>
                 </DataTemplate>

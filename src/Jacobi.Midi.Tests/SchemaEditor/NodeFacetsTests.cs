@@ -17,11 +17,11 @@ public class NodeFacetsTests
         Assert.Equal("1", facets.Count);
 
         facets.Count = "ref:test.SysEx.Length";
-        document.ApplyNodeEdits(repeat, "Items", String.Empty, String.Empty, String.Empty, facets);
+        document.ApplyNodeEdits(repeat, "Items", String.Empty, facets);
         Assert.True(repeat.Count is SchemaNodeRef);
 
         facets.Count = "3";
-        document.ApplyNodeEdits(repeat, "Items", String.Empty, String.Empty, String.Empty, facets);
+        document.ApplyNodeEdits(repeat, "Items", String.Empty, facets);
         Assert.Equal("3", NodeFacets.Read(repeat).Count);
     }
 
@@ -34,7 +34,7 @@ public class NodeFacetsTests
         var facets = NodeFacets.Read(choice);
         facets.NodeDef = "Body";
         facets.SelectedIndex = "abc";
-        Assert.Throws<ArgumentException>(() => document.ApplyNodeEdits(choice, "Pick", String.Empty, String.Empty, String.Empty, facets));
+        Assert.Throws<ArgumentException>(() => document.ApplyNodeEdits(choice, "Pick", String.Empty, facets));
         Assert.Null(choice.NodeDef);
         Assert.Equal("2", NodeFacets.Read(choice).SelectedIndex);
     }
