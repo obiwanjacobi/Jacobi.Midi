@@ -26,7 +26,7 @@ internal static class DataTypeValueValidator
     /// <paramref name="documents"/> (based on a registered type). Unqualified names are looked up in <paramref name="ownerName"/>.
     /// </summary>
     public static bool IsCustom(IReadOnlyList<EditDocument> documents, string ownerName, string dataType)
-        => !String.IsNullOrWhiteSpace(dataType) && Resolve(documents, ownerName, dataType) is null;
+        => !String.IsNullOrWhiteSpace(dataType) && Resolve(documents, ownerName, dataType, Registry) is null;
 
     /// <summary>
     /// Returns a warning when <paramref name="value"/> is not valid for <paramref name="dataType"/>; otherwise null.
@@ -40,13 +40,15 @@ internal static class DataTypeValueValidator
     /// The data type defs of all <paramref name="documents"/> are known (so also those of included schemas);
     /// unqualified names are looked up in <paramref name="ownerName"/>.
     /// </summary>
-    public static string? Validate(IReadOnlyList<EditDocument> documents, string ownerName, string dataType, string value)
+    /// <param name="registry">The registered data types; null for the built-in data types.</param>
+    public static string? Validate(IReadOnlyList<EditDocument> documents, string ownerName, string dataType, string value,
+        DataTypeRegistry? registry = null)
     {
         value = value?.Trim() ?? String.Empty;
         if (value.Length == 0 ||
             value.StartsWith(SchemaNodeRef.Prefix, StringComparison.Ordinal) ||
             value.StartsWith(SchemaPubRef.Prefix, StringComparison.Ordinal) ||
-            Resolve(documents, ownerName, dataType) is not { } type)
+            Resolve(documents, ownerName, dataType, registry ?? Registry) is not { } type)
         {
             return null;
         }
@@ -88,7 +90,7 @@ internal static class DataTypeValueValidator
     /// The base of a def without namespace is looked up in the document of that def.
     /// Returns null when the chain does not end in a registered type.
     /// </summary>
-    private static ResolvedType? Resolve(IReadOnlyList<EditDocument> documents, string ownerName, string dataType)
+    private static ResolvedType? Resolve(IReadOnlyList<EditDocument> documents, string ownerName, string dataType, DataTypeRegistry registry)
     {
         if (String.IsNullOrWhiteSpace(dataType))
         {
@@ -101,7 +103,7 @@ internal static class DataTypeValueValidator
         var name = new SchemaName(dataType.Trim());
         while (true)
         {
-            if (Registry.TryGet(name, out var descriptor))
+            if (registry.TryGet(name, out var descriptor))
             {
                 var (clrMin, clrMax) = GetClrRange(descriptor.ClrType);
                 return new(descriptor, min ?? descriptor.Min ?? clrMin, max ?? descriptor.Max ?? clrMax, options ?? descriptor.Options);

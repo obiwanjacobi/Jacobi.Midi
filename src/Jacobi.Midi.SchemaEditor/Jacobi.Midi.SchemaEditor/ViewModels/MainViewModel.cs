@@ -71,8 +71,16 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// </summary>
     public AssemblyWorkspace OpenedAssemblies { get; } = new();
 
+    /// <summary>
+    /// The properties the processors of the <see cref="OpenedAssemblies"/> publish; the node editor checks processor properties against them.
+    /// </summary>
+    private ProcessorCatalog ProcessorCatalog { get; }
+
     public MainViewModel()
     {
+        ProcessorCatalog = new ProcessorCatalog(OpenedAssemblies.Processors);
+        // an opened assembly may embed the schema an include refers to
+        OpenedAssemblies.Assemblies.CollectionChanged += (_, _) => RefreshIncludeStatus();
         // pre-loaded: the 'sys' processors of the serializer, and the base 'midi' schema and 'midi' processors
         // that the vendor and device schemas build on
         foreach (var assembly in (Assembly[])[typeof(Jacobi.BinarySerializer.Processors.ProcessorFactory).Assembly,
@@ -86,7 +94,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// The active tab of the left panel: <see cref="SchemaLeftTab"/> (the schema tree) or <see cref="AssembliesLeftTab"/>.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(CanPin), nameof(DataTypeOptions), nameof(SelectedItemPath))]
+    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(CanPin), nameof(DataTypeOptions), nameof(ProcessorOptions), nameof(SelectedItemPath))]
     public partial int SelectedLeftTab { get; set; }
 
     public const int SchemaLeftTab = 0;
@@ -103,7 +111,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// The read-only document of the embedded schema selected in the assembly tree; null when none is selected.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(CanPin), nameof(DataTypeOptions))]
+    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(CanPin), nameof(DataTypeOptions), nameof(ProcessorOptions))]
     public partial SchemaWorkspaceDocument? InspectedDocument { get; private set; }
 
     /// <summary>
@@ -140,29 +148,94 @@ internal sealed partial class MainViewModel : ViewModelBase
 
     public ObservableCollection<SysExMessage> SysExMessages { get; } = [];
     public ObservableCollection<SysExComparisonRow> ComparedBytes { get; } = [];
-    private static readonly string[] RegisteredDataTypes = DataTypeRegistry.CreateDefault().Types
-        .Select(descriptor => descriptor.Name.FullName)
-        .Order(StringComparer.OrdinalIgnoreCase)
-        .ToArray();
-
     /// <summary>
     /// The data types to choose from for a field: the types registered in the <see cref="DataTypeRegistry"/>
     /// followed by the data type defs of the <see cref="ActiveDocument"/>. The data type editors also accept a custom value.
     /// </summary>
-    public IReadOnlyList<string> DataTypeOptions
+    public IReadOnlyList<string> DataTypeOptions => Models.DataTypeOptions.Get(ActiveDocument?.Schema);
+
+    /// <summary>
+    /// The processors to choose from for a processor of a node, data type def or document, in two sections:
+    /// the processors of the processor namespaces of the opened assemblies (e.g. 'sys.*')
+    /// and references to the processor defs of the <see cref="ActiveDocument"/>. The processor editors also accept a custom value.
+    /// </summary>
+    public IReadOnlyList<ProcessorOption> ProcessorOptions
     {
         get
         {
-            var document = ActiveDocument?.Schema;
-            if (document is null)
+            var options = new List<ProcessorOption> { new("Global processors", IsHeader: true) };
+            options.AddRange(GetProcessorKeys().Select(key => new ProcessorOption(key)));
+            var processorDefs = ActiveDocument?.Schema.ProcessorDefs ?? [];
+            if (processorDefs.Count > 0)
             {
-                return RegisteredDataTypes;
+                options.Add(new("Processor defs", IsHeader: true));
+                options.AddRange(processorDefs
+                    .Select(def => def.Name)
+                    .Order(StringComparer.OrdinalIgnoreCase)
+                    .Select(name => new ProcessorOption($"{SchemaNodeRef.Prefix}{name}")));
             }
-            return [.. RegisteredDataTypes, .. document.DataTypeDefs
-                .Select(def => $"{document.Name}{SchemaName.Separator}{def.Name}")
-                .Where(name => !RegisteredDataTypes.Contains(name, StringComparer.OrdinalIgnoreCase))];
+            return options;
         }
     }
+
+    /// <summary>
+    /// The processors a processor def can reference: the global processors of <see cref="ProcessorOptions"/>.
+    /// </summary>
+    public IReadOnlyList<string> ProcessorKeyOptions => GetProcessorKeys();
+
+    private string[] GetProcessorKeys()
+        => OpenedAssemblies.Assemblies
+            .SelectMany(assembly => assembly.ProcessorNamespaces)
+            .SelectMany(item => item.ProcessorKeys)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    /// <summary>
+    /// The node defs to choose from for the nodeDef of the edited node: the node defs of the same kind
+    /// in the <see cref="ActiveDocument"/> ('name') and in its included schemas ('schema.name').
+    /// </summary>
+    public IReadOnlyList<string> NodeDefOptions
+        => EditedNode is { } node ? GetNodeDefNames(node.Kind, exclude: node) : [];
+
+    /// <summary>
+    /// The node defs to choose from for the member nodeDef of a choice: the group node defs, see <see cref="NodeDefOptions"/>.
+    /// </summary>
+    public IReadOnlyList<string> MemberNodeDefOptions => GetNodeDefNames(SchemaNodeKind.Group, exclude: EditedNode);
+
+    private List<string> GetNodeDefNames(SchemaNodeKind kind, EditNode? exclude)
+    {
+        if (ActiveDocument?.Schema is not { } document)
+        {
+            return [];
+        }
+        // a node def cannot be its own node def
+        var names = document.NodeDefs
+            .Where(def => def.Kind == kind && !ReferenceEquals(def, exclude))
+            .Select(def => def.Name)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        foreach (var include in document.Includes)
+        {
+            if (FindIncludedSchema(document, include.Schema) is { } included)
+            {
+                names.AddRange(included.NodeDefs
+                    .Where(def => def.Kind == kind)
+                    .Select(def => $"{included.Name}{SchemaName.Separator}{def.Name}")
+                    .Order(StringComparer.OrdinalIgnoreCase));
+            }
+        }
+        return names;
+    }
+
+    /// <summary>
+    /// The schema named <paramref name="name"/> as another open document or an embedded schema of an opened assembly;
+    /// null when it is not loaded.
+    /// </summary>
+    private EditDocument? FindIncludedSchema(EditDocument document, string name)
+        => Documents.Select(other => other.Schema)
+            .Concat(OpenedAssemblies.Assemblies.SelectMany(assembly => assembly.Schemas).Select(schema => schema.Document.Schema))
+            .FirstOrDefault(schema => !ReferenceEquals(schema, document) && String.Equals(schema.Name, name, StringComparison.OrdinalIgnoreCase));
 
     public bool HasSelectedDocument => SelectedDocument is not null;
 
@@ -200,7 +273,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     public const int ProcessorDefsTab = 6;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(CanPin), nameof(DataTypeOptions))]
+    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(CanPin), nameof(DataTypeOptions), nameof(ProcessorOptions))]
     [NotifyCanExecuteChangedFor(nameof(InstantiateSchemaCommand))]
     [NotifyCanExecuteChangedFor(nameof(CloseDocumentCommand))]
     public partial SchemaWorkspaceDocument? SelectedDocument { get; set; }
@@ -694,9 +767,9 @@ internal sealed partial class MainViewModel : ViewModelBase
             new CollectionTabViewModel(document, schema.Includes, "include",
                 () => document.AddInclude(GetUniqueName(schema.Includes.Select(include => include.Schema), "schema")), Report),
             new CollectionTabViewModel(document, schema.DataTypeDefs, "data type def",
-                () => document.AddDataTypeDef(GetUniqueName(schema.DataTypeDefs.Select(definition => definition.Name), "NewDataType"), "sys.uint8"), Report),
+                () => document.AddDataTypeDef(GetUniqueName(schema.DataTypeDefs.Select(definition => definition.Name), "NewDataType"), "sys.uint8"), Report, ProcessorCatalog),
             new CollectionTabViewModel(document, schema.ProcessorDefs, "processor def",
-                () => document.AddProcessorDef(GetUniqueName(schema.ProcessorDefs.Select(definition => definition.Name), "NewProcessor"), "namespace.id"), Report));
+                () => document.AddProcessorDef(GetUniqueName(schema.ProcessorDefs.Select(definition => definition.Name), "NewProcessor"), "namespace.id"), Report, ProcessorCatalog));
     }
 
     /// <summary>
@@ -1152,7 +1225,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     partial void OnSelectedNodeDefChanged(EditNode? value)
     {
         SelectedNodeDefDetails?.Dispose();
-        SelectedNodeDefDetails = ActiveDocument is null || value is null ? null : ItemDetailsViewModel.Create(ActiveDocument, value);
+        SelectedNodeDefDetails = ActiveDocument is null || value is null ? null : ItemDetailsViewModel.Create(ActiveDocument, value, ProcessorCatalog);
         LoadStagedNode();
         NotifyAddOptionsChanged();
     }
@@ -1176,7 +1249,7 @@ internal sealed partial class MainViewModel : ViewModelBase
         var node = value as EditNode;
         SelectedNodeDef = null;
         ItemDetails?.Dispose();
-        ItemDetails = ActiveDocument is null ? null : ItemDetailsViewModel.Create(ActiveDocument, value);
+        ItemDetails = ActiveDocument is null ? null : ItemDetailsViewModel.Create(ActiveDocument, value, ProcessorCatalog);
         GeneralEditor = node;
         DocumentTabs?.Dispose();
         DocumentTabs = ActiveDocument is not null && value is EditDocument ? CreateDocumentTabs(ActiveDocument) : null;
@@ -1196,8 +1269,12 @@ internal sealed partial class MainViewModel : ViewModelBase
     private void LoadStagedNode()
     {
         var node = EditedNode;
-        // the data type defs of the document may have changed since the last selection
+        // the data type defs, processor defs and opened assemblies may have changed since the last selection
         OnPropertyChanged(nameof(DataTypeOptions));
+        OnPropertyChanged(nameof(ProcessorOptions));
+        OnPropertyChanged(nameof(ProcessorKeyOptions));
+        OnPropertyChanged(nameof(NodeDefOptions));
+        OnPropertyChanged(nameof(MemberNodeDefOptions));
         NodeName = node?.Name ?? String.Empty;
         NodeDataType = (node as EditField)?.DataType?.ToString() ?? String.Empty;
         NodeDescription = GetProperty(node, "description");
@@ -1241,16 +1318,22 @@ internal sealed partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Flags the includes of all open documents whose included schema is not loaded as another open document.
+    /// Flags the includes of all open documents whose included schema is neither loaded as another open document
+    /// nor embedded in one of the <see cref="OpenedAssemblies"/>.
     /// </summary>
     private void RefreshIncludeStatus()
     {
+        var embedded = OpenedAssemblies.Assemblies
+            .SelectMany(assembly => assembly.Schemas)
+            .Select(schema => schema.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var document in Documents)
         {
             foreach (var include in document.Schema.Includes)
             {
-                include.IsLoaded = Documents.Any(other => !ReferenceEquals(other, document)
-                    && String.Equals(other.Schema.Name, include.Schema, StringComparison.OrdinalIgnoreCase));
+                include.IsLoaded = embedded.Contains(include.Schema)
+                    || Documents.Any(other => !ReferenceEquals(other, document)
+                        && String.Equals(other.Schema.Name, include.Schema, StringComparison.OrdinalIgnoreCase));
             }
         }
     }

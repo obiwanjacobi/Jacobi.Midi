@@ -1,6 +1,7 @@
 using System.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Jacobi.Midi.SchemaEditor.Assemblies;
 using Jacobi.Midi.SchemaEditor.Models;
 
 namespace Jacobi.Midi.SchemaEditor.NodeEditor;
@@ -15,19 +16,23 @@ internal sealed partial class CollectionTabViewModel : ObservableObject, IDispos
     private readonly SchemaWorkspaceDocument _document;
     private readonly Func<object> _add;
     private readonly Action<string> _report;
+    private readonly ProcessorCatalog? _catalog;
 
     /// <param name="document">The document the collection belongs to.</param>
     /// <param name="items">The (observable) collection of the document.</param>
     /// <param name="what">What an item is called in messages, e.g. "include".</param>
     /// <param name="add">Adds a new item to the document and returns it.</param>
     /// <param name="report">Called with a status message after an add or remove, or when it failed.</param>
-    public CollectionTabViewModel(SchemaWorkspaceDocument document, IList items, string what, Func<object> add, Action<string> report)
+    /// <param name="catalog">The processors to check the processor properties of the items against; null to not check them.</param>
+    public CollectionTabViewModel(SchemaWorkspaceDocument document, IList items, string what, Func<object> add, Action<string> report,
+        ProcessorCatalog? catalog = null)
     {
         _document = document;
         Items = items;
         What = what;
         _add = add;
         _report = report;
+        _catalog = catalog;
     }
 
     public IList Items { get; }
@@ -53,7 +58,7 @@ internal sealed partial class CollectionTabViewModel : ObservableObject, IDispos
     partial void OnSelectedEntryChanged(object? value)
     {
         Editor?.Dispose();
-        Editor = ItemEditor.Create(_document, value);
+        Editor = ItemEditor.Create(_document, value, _catalog);
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 using System.Reflection;
 using Jacobi.Midi.SchemaEditor.Assemblies;
+using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.SchemaEditor.ViewModels;
 using Jacobi.Midi.Tests.Schema;
 using Xunit;
@@ -18,6 +19,54 @@ public class AssemblyWorkspaceTests
         Assert.Contains(viewModel.OpenedAssemblies.Assemblies, assembly => assembly.Schemas.Any(schema => schema.Name == "Midi"));
         Assert.All(viewModel.OpenedAssemblies.Assemblies, assembly => Assert.False(assembly.HasProblems, String.Join("; ", assembly.Problems)));
     }
+
+    [Fact]
+    public void Includes_OfSchemasEmbeddedInOpenedAssembliesAreLoaded()
+    {
+        var viewModel = new MainViewModel();
+        viewModel.NewDocumentCommand.Execute(null);
+        var document = viewModel.SelectedDocument!;
+
+        var midi = document.AddInclude("Midi");
+        var roland = document.AddInclude("Roland");
+        var unknown = document.AddInclude("Unknown");
+
+        Assert.True(midi.IsLoaded);
+        Assert.False(roland.IsLoaded);
+        Assert.False(unknown.IsLoaded);
+
+        viewModel.OpenedAssemblies.Load(Assembly.LoadFrom(TestHelpers.AssemblyPathOf("Jacobi.Midi.Roland")), "Jacobi.Midi.Roland.dll");
+
+        Assert.True(roland.IsLoaded);
+        Assert.False(unknown.IsLoaded);
+    }
+
+    [Fact]
+    public void NodeDefOptions_AreTheNodeDefsOfTheSameKindLocalAndIncluded()
+    {
+        var viewModel = new MainViewModel();
+        viewModel.NewDocumentCommand.Execute(null);
+        var library = viewModel.SelectedDocument!.Schema;
+        library.NodeDefs.Add(NewField("libraryField"));
+        library.NodeDefs.Add(NewGroup("libraryGroup"));
+        viewModel.NewDocumentCommand.Execute(null);
+        var document = viewModel.SelectedDocument!;
+        var schema = document.Schema;
+        document.AddInclude(library.Name);
+        schema.NodeDefs.Add(NewField("localField"));
+        schema.NodeDefs.Add(NewGroup("localGroup"));
+        var root = (EditGroup)schema.Members[0];
+        var field = new EditField(root) { Name = "field", Processors = [], Properties = [] };
+        root.Members.Add(field);
+
+        viewModel.SelectedItem = field;
+
+        Assert.Equal(["localField", $"{library.Name}.libraryField"], viewModel.NodeDefOptions);
+        Assert.Equal(["localGroup", $"{library.Name}.libraryGroup"], viewModel.MemberNodeDefOptions);
+    }
+
+    private static EditField NewField(string name) => new(null) { Name = name, Processors = [], Properties = [] };
+    private static EditGroup NewGroup(string name) => new(null) { Name = name, Members = [], Processors = [], Properties = [] };
 
     [Fact]
     public void Load_AddsEmbeddedSchemasToTheSchemaSet()

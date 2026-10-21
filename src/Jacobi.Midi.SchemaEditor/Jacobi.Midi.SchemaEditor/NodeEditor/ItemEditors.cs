@@ -3,6 +3,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.SchemaEditor.Assemblies;
 using Jacobi.Midi.SchemaEditor.Models;
 
 namespace Jacobi.Midi.SchemaEditor.NodeEditor;
@@ -24,7 +25,8 @@ internal abstract class ItemEditor(SchemaWorkspaceDocument document) : Observabl
     /// <summary>
     /// Creates the editor for <paramref name="item"/>, or returns null when the item has no item editor (nodes have their own).
     /// </summary>
-    public static ItemEditor? Create(SchemaWorkspaceDocument document, object? item)
+    /// <param name="catalog">The processors to check the processor properties against; null to not check them.</param>
+    public static ItemEditor? Create(SchemaWorkspaceDocument document, object? item, ProcessorCatalog? catalog = null)
     {
         ItemEditor? editor = item switch
         {
@@ -35,7 +37,7 @@ internal abstract class ItemEditor(SchemaWorkspaceDocument document) : Observabl
             EditProperty property => new PropertyEditor(document, property),
             _ => null
         };
-        editor?.Details = ItemDetailsViewModel.Create(document, item);
+        editor?.Details = ItemDetailsViewModel.Create(document, item, catalog);
         return editor;
     }
 
@@ -115,6 +117,12 @@ internal sealed partial class DataTypeDefEditor : ItemEditor
         get => _definition.BasedOn.ToString();
         set => Edit(_definition.BasedOn, new SchemaName(Required(value, "The base type")), v => _definition.BasedOn = v);
     }
+
+    /// <summary>
+    /// The data types to base the def on: the registered types and the other data type defs of the document.
+    /// Taken from the document each time the editor is created (when a def is selected or added).
+    /// </summary>
+    public IReadOnlyList<string> BasedOnOptions => DataTypeOptions.Get(_document.Schema, _definition);
 
     public string? Min
     {

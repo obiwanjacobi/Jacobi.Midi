@@ -39,6 +39,20 @@
             <Setter Property="FontSize" Value="11" />
             <Setter Property="Foreground" Value="{DynamicResource AppTextLabelBrush}" />
         </Style>
+        <!-- the drop-down lists of data types and processors can be long: they scroll -->
+        <Style Selector="ComboBox.options">
+            <Setter Property="MaxDropDownHeight" Value="240" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+        </Style>
+        <!-- the section headers of the processor drop-down list cannot be selected -->
+        <Style Selector="ComboBox.processors ComboBoxItem" x:DataType="ne:ProcessorOption">
+            <Setter Property="IsEnabled" Value="{Binding IsSelectable}" />
+        </Style>
+        <Style Selector="TextBlock.warning">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="Orange" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
         <Style Selector="TextBox.description">
             <Setter Property="AcceptsReturn" Value="True" />
             <Setter Property="TextWrapping" Value="Wrap" />
@@ -49,9 +63,21 @@
     <UserControl.Resources>
         <!-- one effective property (a keyed resource: the General tab editor templates would otherwise shadow it with their fallback); own properties are editable, inherited ones can be overridden -->
         <DataTemplate x:Key="PropertyRowTemplate" x:DataType="ne:PropertyRow">
-            <Grid ColumnDefinitions="160,*,Auto,Auto" ColumnSpacing="8" Margin="0,2">
-                <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" IsVisible="{Binding IsOwn}" />
-                <TextBlock Text="{Binding Name}" IsVisible="{Binding IsInherited}" VerticalAlignment="Center"
+            <StackPanel Spacing="2" Margin="0,2">
+            <Grid ColumnDefinitions="200,*,Auto,Auto" ColumnSpacing="8">
+                <!-- the name can be chosen from the properties the processor publishes -->
+                <ComboBox Classes="options" IsEditable="True" IsVisible="{Binding IsOwn}" ToolTip.Tip="{Binding Description}"
+                          Text="{Binding Name, UpdateSourceTrigger=LostFocus}" ItemsSource="{Binding NameOptions}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="ne:PropertyOption">
+                            <StackPanel Orientation="Horizontal" Spacing="8" ToolTip.Tip="{Binding Description}">
+                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Summary}" Classes="kind" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBlock Text="{Binding Name}" IsVisible="{Binding IsInherited}" VerticalAlignment="Center" ToolTip.Tip="{Binding Description}"
                            TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextSecondaryBrush}" />
                 <TextBox Grid.Column="1" Text="{Binding Value}" PlaceholderText="(no value)" IsVisible="{Binding IsOwn}" />
                 <TextBlock Grid.Column="1" Text="{Binding Value}" IsVisible="{Binding IsInherited}" VerticalAlignment="Center"
@@ -62,6 +88,9 @@
                 <Button Grid.Column="3" Content="Override" IsVisible="{Binding CanOverride}" CommandParameter="{Binding}"
                         Command="{Binding Details.OverridePropertyCommand}" />
             </Grid>
+            <TextBlock Text="{Binding Warning}" Classes="warning"
+                       IsVisible="{Binding Warning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </StackPanel>
         </DataTemplate>
 
         <!-- the processors and properties of an item (the document, a data type def): add buttons and the effective entries -->
@@ -148,7 +177,19 @@
             <Border Padding="10" Margin="0,0,0,8" CornerRadius="6" Background="{DynamicResource AppBackgroundCardBrush}">
                 <StackPanel Spacing="6">
                     <Grid ColumnDefinitions="*,140,Auto,Auto" ColumnSpacing="8">
-                        <TextBox Text="{Binding Processor, UpdateSourceTrigger=LostFocus}" PlaceholderText="namespace.id or ref:name" IsVisible="{Binding IsOwn}" />
+                        <ComboBox Classes="options processors" IsEditable="True" IsVisible="{Binding IsOwn}"
+                                  Text="{Binding Processor, UpdateSourceTrigger=LostFocus}" PlaceholderText="namespace.id or ref:name"
+                                  ItemsSource="{Binding $parent[ne:NodeEditorControl].((vm:MainViewModel)DataContext).ProcessorOptions}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="ne:ProcessorOption">
+                                    <Panel>
+                                        <TextBlock Text="{Binding Text}" IsVisible="{Binding IsSelectable}" />
+                                        <TextBlock Text="{Binding Text}" IsVisible="{Binding IsHeader}" FontSize="11" FontWeight="Bold"
+                                                   Foreground="{DynamicResource AppTextLabelBrush}" />
+                                    </Panel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
                         <TextBlock Text="{Binding Processor}" Classes="caption" VerticalAlignment="Center" IsVisible="{Binding IsInherited}" />
                         <TextBox Grid.Column="1" Text="{Binding PublishNamespace, UpdateSourceTrigger=LostFocus}" PlaceholderText="publish namespace" IsVisible="{Binding IsOwn}" />
                         <TextBlock Grid.Column="1" Text="{Binding PublishNamespace}" Classes="kind" VerticalAlignment="Center" IsVisible="{Binding IsInherited}" />
@@ -156,6 +197,8 @@
                         <Button Grid.Column="3" Content="Remove" IsVisible="{Binding IsOwn}" CommandParameter="{Binding}"
                                 Command="{Binding Details.RemoveProcessorCommand}" />
                     </Grid>
+                    <TextBlock Text="{Binding Warning}" Classes="warning"
+                               IsVisible="{Binding Warning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     <ItemsControl ItemsSource="{Binding Properties}" ItemTemplate="{StaticResource PropertyRowTemplate}" />
                     <Button Content="Add property" HorizontalAlignment="Left" IsVisible="{Binding IsOwn}" CommandParameter="{Binding}"
                             Command="{Binding Details.AddProcessorPropertyCommand}" />
@@ -181,7 +224,7 @@
                         <TextBox PlaceholderText="Repeat name" Text="{Binding NodeName}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Node def" Classes="label" />
-                            <TextBox Text="{Binding NodeFacets.NodeDef}" PlaceholderText="optional, e.g. name or schema.name" />
+                            <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Count" Classes="label" />
@@ -203,7 +246,7 @@
                         <TextBox PlaceholderText="Choice name" Text="{Binding NodeName}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Node def" Classes="label" />
-                            <TextBox Text="{Binding NodeFacets.NodeDef}" PlaceholderText="optional, e.g. name or schema.name" />
+                            <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Selected index" Classes="label" />
@@ -211,7 +254,7 @@
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Member node def" Classes="label" />
-                            <TextBox Text="{Binding NodeFacets.MemberNodeDef}" PlaceholderText="optional: makes the choice open" />
+                            <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.MemberNodeDef}" ItemsSource="{Binding MemberNodeDefOptions}" PlaceholderText="optional: makes the choice open" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Pipeline" Classes="label" />
@@ -233,7 +276,7 @@
                         <TextBox PlaceholderText="Group name" Text="{Binding NodeName}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Node def" Classes="label" />
-                            <TextBox Text="{Binding NodeFacets.NodeDef}" PlaceholderText="optional, e.g. name or schema.name" />
+                            <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Byte size" Classes="label" />
@@ -248,12 +291,12 @@
                                 DataContext="{Binding $parent[ne:NodeEditorControl].DataContext}">
                         <TextBlock Text="Selected field properties" Classes="caption" />
                         <TextBox PlaceholderText="Field name" Text="{Binding NodeName}" />
-                        <ComboBox ItemsSource="{Binding DataTypeOptions}" IsEditable="True" Text="{Binding NodeDataType}" />
+                        <ComboBox Classes="options" ItemsSource="{Binding DataTypeOptions}" IsEditable="True" Text="{Binding NodeDataType}" />
                         <TextBlock Text="{Binding DataTypeNote}" Classes="caption" TextWrapping="Wrap"
                                    IsVisible="{Binding DataTypeNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Node def" Classes="label" />
-                            <TextBox Text="{Binding NodeFacets.NodeDef}" PlaceholderText="optional, e.g. name or schema.name" />
+                            <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Value" Classes="label" />
@@ -322,7 +365,8 @@
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Based on" Classes="label" />
-                            <TextBox Text="{Binding BasedOn}" PlaceholderText="e.g. sys.uint8" />
+                            <ComboBox Classes="options" IsEditable="True" Text="{Binding BasedOn}" PlaceholderText="e.g. sys.uint8"
+                                      ItemsSource="{Binding BasedOnOptions}" />
                         </StackPanel>
                         <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="8">
                             <StackPanel Grid.Column="0" Spacing="4">
@@ -375,7 +419,8 @@
                                 <DataTemplate x:DataType="ne:ProcessorDefRow">
     <Border Padding="10" Margin="0,0,0,8" CornerRadius="6" Background="{DynamicResource AppBackgroundCardBrush}">
         <StackPanel Spacing="6">
-            <TextBox Text="{Binding Processor, UpdateSourceTrigger=LostFocus}" PlaceholderText="namespace.id" />
+            <ComboBox Classes="options" IsEditable="True" Text="{Binding Processor, UpdateSourceTrigger=LostFocus}" PlaceholderText="namespace.id"
+                      ItemsSource="{Binding $parent[ne:NodeEditorControl].((vm:MainViewModel)DataContext).ProcessorKeyOptions}" />
             <ItemsControl ItemsSource="{Binding Properties}" ItemTemplate="{StaticResource PropertyRowTemplate}" />
             <Button Content="Add property" HorizontalAlignment="Left"
                     Command="{Binding Details.AddPropertyCommand}" />

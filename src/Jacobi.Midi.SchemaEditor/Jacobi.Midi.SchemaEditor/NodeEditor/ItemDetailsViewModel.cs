@@ -2,7 +2,9 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.SchemaEditor.Assemblies;
 using Jacobi.Midi.SchemaEditor.Models;
 
 namespace Jacobi.Midi.SchemaEditor.NodeEditor;
@@ -12,6 +14,8 @@ namespace Jacobi.Midi.SchemaEditor.NodeEditor;
 /// Shows the effective processors and properties of one item (a node, data type def, processor def or
 /// document processor; see <see cref="EffectiveNodeResolver"/>) and edits the item's own entries in place.
 /// Inherited entries are read-only (properties can be overridden).
+/// With a <see cref="ProcessorCatalog"/>, processor properties are checked against the properties the processor publishes
+/// (see <see cref="ProcessorPropertyValidator"/>); on the item itself only properties prefixed with a known processor key are checked.
 /// Rebuilds its rows when the structure of the item's own entries changes; dispose it to stop listening.
 /// </summary>
 internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposable
@@ -26,12 +30,14 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
 
     private readonly EditProcessorDef? _definition;
     private readonly bool _isDocument;
+    private readonly ProcessorCatalog? _catalog;
 
     private ItemDetailsViewModel(SchemaWorkspaceDocument document, INotifyPropertyChanged item,
         IList<EditProperty> properties, IList<EditProcessorRef>? processors, Func<EffectiveItem> resolve,
-        EditProcessorDef? definition = null, bool isDocument = false)
+        ProcessorCatalog? catalog, EditProcessorDef? definition = null, bool isDocument = false)
     {
         _isDocument = isDocument;
+        _catalog = catalog;
         _document = document;
         _item = item;
         _properties = properties;
@@ -45,20 +51,21 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
     /// <summary>
     /// Creates the details of <paramref name="item"/>, or returns null when the item has no processors or properties.
     /// </summary>
-    public static ItemDetailsViewModel? Create(SchemaWorkspaceDocument document, object? item)
+    /// <param name="catalog">The processors to check the processor properties against; null to not check them.</param>
+    public static ItemDetailsViewModel? Create(SchemaWorkspaceDocument document, object? item, ProcessorCatalog? catalog = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         var schema = document.Schema;
         return item switch
         {
             EditNode node => new(document, node, node.Properties, EffectiveNodeResolver.GetProcessors(node),
-                () => EffectiveNodeResolver.Resolve(schema, node), isDocument: node is EditDocument),
+                () => EffectiveNodeResolver.Resolve(schema, node), catalog, isDocument: node is EditDocument),
             EditDataTypeDef definition => new(document, definition, definition.Properties, definition.Processors,
-                () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, definition.Processors)),
+                () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, definition.Processors), catalog),
             EditProcessorDef definition => new(document, definition, definition.Properties, null,
-                () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, null), definition),
+                () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, null), catalog, definition),
             EditProcessorRef processor => new(document, processor, processor.Properties, null,
-                () => EffectiveNodeResolver.ResolveProcessorRef(schema, processor)),
+                () => EffectiveNodeResolver.ResolveProcessorRef(schema, processor), catalog),
             _ => null
         };
     }
@@ -180,14 +187,102 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
     private void Rebuild()
     {
         var effective = _resolve();
-        Properties = effective.Properties.Select(property => new PropertyRow(property, _properties, OnRowEdited, this)).ToList();
-        Processors = effective.Processors.Select(processor => new ProcessorRow(processor, _processors, OnRowEdited, this)).ToList();
+        var itemCheck = CreateItemCheck(effective);
+        Properties = effective.Properties.Select(property => new PropertyRow(property, _properties, OnRowEdited, this, itemCheck)).ToList();
+        Processors = effective.Processors.Select(CreateProcessorRow).ToList();
         Definition = _definition is null ? null : new ProcessorDefRow(_definition, Properties, _properties, OnRowEdited, this);
         Unresolved = effective.Unresolved;
         Observe();
     }
 
     private void OnRowEdited() => _document.MarkChanged();
+
+    private ProcessorRow CreateProcessorRow(ResolvedProcessor processor)
+    {
+        var key = GetProcessorKey(processor.Processor);
+        var descriptors = GetDescribedProperties(key);
+        var check = CreateProcessorCheck(key);
+        var warning = descriptors is null ? null
+            : ProcessorPropertyValidator.ValidateRequired(key!, descriptors, processor.Properties.Select(property => property.Name));
+        return new ProcessorRow(processor, _processors, OnRowEdited, this, check, warning);
+    }
+
+    /// <summary>
+    /// The check of the item's own properties: those of the processor of a processor def or processor ref; on other items
+    /// only the properties prefixed with the key of a known processor ('namespace.id.name'), the others may hold any data.
+    /// The name options are then the prefixed properties of the effective processors.
+    /// </summary>
+    private PropertyCheck? CreateItemCheck(EffectiveItem effective)
+    {
+        if (_catalog is not { } catalog)
+        {
+            return null;
+        }
+        if (_definition is not null)
+        {
+            return CreateProcessorCheck(_definition.Processor);
+        }
+        if (_item is EditProcessorRef processor)
+        {
+            return CreateProcessorCheck(GetProcessorKey(processor));
+        }
+
+        var schema = _document.Schema;
+        var options = effective.Processors
+            .Select(resolved => GetProcessorKey(resolved.Processor))
+            .OfType<string>()
+            .SelectMany(key => (catalog.GetProperties(key) ?? [])
+                .Select(descriptor => new PropertyOption($"{key}{ProcessorKey.Separator}{descriptor.Name}", descriptor)))
+            .DistinctBy(option => option.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return new PropertyCheck(options,
+            name => ProcessorPropertyValidator.TrySplitPrefixed(name, out var key, out _) && GetDescribedProperties(key) is { } descriptors
+                ? ProcessorPropertyValidator.Find(key, descriptors, name)
+                : null,
+            (name, value) => ProcessorPropertyValidator.TrySplitPrefixed(name, out var key, out _) && GetDescribedProperties(key) is { } descriptors
+                ? ProcessorPropertyValidator.Validate(key, descriptors, name, value, schema, catalog.DataTypes)
+                : null);
+    }
+
+    /// <summary>
+    /// The properties the processor <paramref name="key"/> publishes; null when the processor is not known or publishes none
+    /// (its properties are not described, so they are not checked).
+    /// </summary>
+    private IReadOnlyList<Jacobi.BinarySerializer.Processor.PropertyDescriptor>? GetDescribedProperties(string? key)
+        => _catalog?.GetProperties(key) is { Count: > 0 } descriptors ? descriptors : null;
+
+    /// <summary>
+    /// The check of the properties of the processor <paramref name="key"/>; null when the processor is not known or publishes no properties.
+    /// </summary>
+    private PropertyCheck? CreateProcessorCheck(string? key)
+    {
+        if (_catalog is not { } catalog || GetDescribedProperties(key) is not { } descriptors)
+        {
+            return null;
+        }
+        var schema = _document.Schema;
+        return new PropertyCheck(descriptors.Select(descriptor => new PropertyOption(descriptor.Name, descriptor)).ToList(),
+            name => ProcessorPropertyValidator.Find(key!, descriptors, name),
+            (name, value) => ProcessorPropertyValidator.Validate(key!, descriptors, name, value, schema, catalog.DataTypes));
+    }
+
+    /// <summary>
+    /// The processor key of a processor ref: its own key, or the key of the local processor def it references.
+    /// Null for a reference to a processor def that is not in the document.
+    /// </summary>
+    private string? GetProcessorKey(EditProcessorRef processor)
+    {
+        var name = processor.Processor;
+        if (!name.IsReference)
+        {
+            return name.FullName;
+        }
+        var schema = _document.Schema;
+        var isLocal = String.IsNullOrEmpty(name.Namespace) || String.Equals(name.Namespace, schema.Name, StringComparison.OrdinalIgnoreCase);
+        return isLocal
+            ? schema.ProcessorDefs.FirstOrDefault(def => String.Equals(def.Name, name.Name, StringComparison.OrdinalIgnoreCase))?.Processor
+            : null;
+    }
 
     /// <summary>
     /// Listens to the item's own entries: any change other than a property value changes the merge result.
@@ -259,18 +354,40 @@ internal sealed class PropertyRow : ObservableObject
 {
     private readonly ResolvedProperty _resolved;
     private readonly Action _edited;
+    private readonly PropertyCheck? _check;
 
     /// <param name="resolved">The effective property.</param>
     /// <param name="owner">The collection own properties live in (and overrides are added to); null when none can be added.</param>
     /// <param name="edited">Called after an own property was edited.</param>
     /// <param name="details">The details this row belongs to; its commands remove and override properties.</param>
-    public PropertyRow(ResolvedProperty resolved, IList<EditProperty>? owner, Action edited, ItemDetailsViewModel details)
+    /// <param name="check">How the property is checked against the published processor properties; null when it is not checked.</param>
+    public PropertyRow(ResolvedProperty resolved, IList<EditProperty>? owner, Action edited, ItemDetailsViewModel details,
+        PropertyCheck? check = null)
     {
         _resolved = resolved;
         _edited = edited;
+        _check = check;
         Owner = owner;
         Details = details;
     }
+
+    /// <summary>
+    /// The published property names to choose from for the name.
+    /// </summary>
+    public IReadOnlyList<PropertyOption> NameOptions => _check?.NameOptions ?? [];
+
+    /// <summary>
+    /// The data type and description of the published property with this name; null when it is not published.
+    /// </summary>
+    public string? Description => _check?.Describe(Name) is { } descriptor
+        ? new PropertyOption(descriptor.Name, descriptor).Summary
+            + (String.IsNullOrEmpty(descriptor.Description) ? String.Empty : $": {descriptor.Description}")
+        : null;
+
+    /// <summary>
+    /// The warning when the property does not match the published processor properties; otherwise null.
+    /// </summary>
+    public string? Warning => _check?.Validate(Name, Value);
 
     public ItemDetailsViewModel Details { get; }
 
@@ -292,6 +409,8 @@ internal sealed class PropertyRow : ObservableObject
             }
             Own.Name = value.Trim();
             OnPropertyChanged();
+            OnPropertyChanged(nameof(Description));
+            OnPropertyChanged(nameof(Warning));
             _edited();
         }
     }
@@ -307,6 +426,7 @@ internal sealed class PropertyRow : ObservableObject
             }
             Own.Value = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(Warning));
             _edited();
         }
     }
@@ -355,14 +475,23 @@ internal sealed class ProcessorRow : ObservableObject
     /// <param name="owner">The collection own processors live in.</param>
     /// <param name="edited">Called after an own processor (or one of its properties) was edited.</param>
     /// <param name="details">The details this row belongs to; its commands remove processors and add their properties.</param>
-    public ProcessorRow(ResolvedProcessor resolved, IList<EditProcessorRef>? owner, Action edited, ItemDetailsViewModel details)
+    /// <param name="check">How the properties are checked against the properties the processor publishes; null when the processor is not known.</param>
+    /// <param name="warning">The warning about the processor's properties as a whole (missing required properties); null when none.</param>
+    public ProcessorRow(ResolvedProcessor resolved, IList<EditProcessorRef>? owner, Action edited, ItemDetailsViewModel details,
+        PropertyCheck? check = null, string? warning = null)
     {
         _resolved = resolved;
         _edited = edited;
         Owner = owner;
         Details = details;
-        Properties = resolved.Properties.Select(property => new PropertyRow(property, IsOwn ? Ref.Properties : null, edited, details)).ToList();
+        Warning = warning;
+        Properties = resolved.Properties.Select(property => new PropertyRow(property, IsOwn ? Ref.Properties : null, edited, details, check)).ToList();
     }
+
+    /// <summary>
+    /// The warning about the processor's properties as a whole (missing required properties); null when none.
+    /// </summary>
+    public string? Warning { get; }
 
     public ItemDetailsViewModel Details { get; }
 
