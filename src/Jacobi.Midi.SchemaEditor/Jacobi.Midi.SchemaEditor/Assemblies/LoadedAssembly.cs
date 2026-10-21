@@ -10,7 +10,7 @@ namespace Jacobi.Midi.SchemaEditor.Assemblies;
 internal sealed class LoadedAssembly
 {
     public LoadedAssembly(string fullName, string name, string version, string location,
-        IReadOnlyList<LoadedSchema> schemas, IReadOnlyList<(string Namespace, IReadOnlyList<string> Processors)> processorNamespaces,
+        IReadOnlyList<LoadedSchema> schemas, IReadOnlyList<(string Namespace, IReadOnlyList<ProcessorInfo> Processors)> processorNamespaces,
         IReadOnlyList<string> problems)
     {
         FullName = fullName;
@@ -102,12 +102,21 @@ internal sealed class LoadedSchema(string name, string resource, SchemaWorkspace
 /// </summary>
 /// <param name="assembly">The assembly that provides the processors.</param>
 /// <param name="namespace">The processor namespace, e.g. 'roland'.</param>
-/// <param name="processors">The ids of the processors of the namespace's factory, e.g. 'checksum'.</param>
-internal sealed class ProcessorNamespaceItem(LoadedAssembly assembly, string @namespace, IReadOnlyList<string> processors)
+/// <param name="processorInfos">What the processors of the namespace's factory publish, ordered by id.</param>
+internal sealed class ProcessorNamespaceItem(LoadedAssembly assembly, string @namespace, IReadOnlyList<ProcessorInfo> processorInfos)
 {
     public LoadedAssembly Assembly { get; } = assembly;
     public string Namespace { get; } = @namespace;
-    public IReadOnlyList<string> Processors { get; } = processors;
+
+    /// <summary>
+    /// The processors of the namespace with their stage and published properties.
+    /// </summary>
+    public IReadOnlyList<ProcessorInfo> ProcessorInfos { get; } = processorInfos;
+
+    /// <summary>
+    /// The ids of the processors of the namespace's factory, e.g. 'checksum'.
+    /// </summary>
+    public IReadOnlyList<string> Processors { get; } = processorInfos.Select(info => info.Key[(@namespace.Length + 1)..]).ToList();
 
     /// <summary>
     /// The processors with their namespace as used in schemas, e.g. 'roland.checksum'.

@@ -21,6 +21,26 @@ public class AssemblyWorkspaceTests
     }
 
     [Fact]
+    public void ProcessorNamespace_DescribesTheProcessorsWithTheirProperties()
+    {
+        var viewModel = new MainViewModel();
+        var sys = viewModel.OpenedAssemblies.Assemblies.SelectMany(assembly => assembly.ProcessorNamespaces).Single(item => item.Namespace == "sys");
+
+        Assert.Equal(sys.Processors.Count, sys.ProcessorInfos.Count);
+        Assert.Contains("align", sys.Processors);
+        var align = sys.ProcessorInfos.Single(info => info.Key == "sys.align");
+        Assert.Null(align.Problem);
+        Assert.Equal("Layout", align.StageText);
+        var bytes = align.Properties.Single(property => property.Name == "bytes");
+        Assert.Equal("sys.int32", bytes.DataType);
+        Assert.Equal("required", bytes.Flags);
+        Assert.NotEmpty(bytes.Description);
+        // the options of a data type published by the processor factory
+        Assert.Contains("Root", align.Properties.Single(property => property.Name == "relative").Values);
+        Assert.True(sys.ProcessorInfos.Single(info => info.Key == "sys.null").HasNoProperties);
+    }
+
+    [Fact]
     public void Includes_OfSchemasEmbeddedInOpenedAssembliesAreLoaded()
     {
         var viewModel = new MainViewModel();

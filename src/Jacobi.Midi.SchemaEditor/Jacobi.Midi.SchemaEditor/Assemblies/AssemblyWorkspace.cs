@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using System.Reflection;
 using System.Text.Json;
 using System.Xml;
+using Jacobi.BinarySerializer.Descriptors;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.SchemaEditor.Models;
@@ -125,14 +126,18 @@ internal sealed class AssemblyWorkspace : ObservableObject
     }
 
     // the processors are kept by namespace: the namespaces the assembly added to the processor manager, with their processors
-    private List<(string Namespace, IReadOnlyList<string> Processors)> LoadProcessors(Assembly assembly, List<string> problems)
+    private List<(string Namespace, IReadOnlyList<ProcessorInfo> Processors)> LoadProcessors(Assembly assembly, List<string> problems)
     {
         var known = Processors.Namespaces.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        List<(string, IReadOnlyList<string>)> Added() => Processors.Namespaces
-            .Where(@namespace => !known.Contains(@namespace))
-            .Order()
-            .Select(@namespace => (@namespace, GetProcessorIds(@namespace, problems)))
-            .ToList();
+        List<(string, IReadOnlyList<ProcessorInfo>)> Added()
+        {
+            var dataTypes = CreateDataTypeRegistry();
+            return Processors.Namespaces
+                .Where(@namespace => !known.Contains(@namespace))
+                .Order()
+                .Select(@namespace => (@namespace, GetProcessors(@namespace, dataTypes, problems)))
+                .ToList();
+        }
 
         try
         {
@@ -154,17 +159,33 @@ internal sealed class AssemblyWorkspace : ObservableObject
         }
     }
 
-    private IReadOnlyList<string> GetProcessorIds(string @namespace, List<string> problems)
+    private IReadOnlyList<ProcessorInfo> GetProcessors(string @namespace, IDataTypeRegistry dataTypes, List<string> problems)
     {
         try
         {
-            return Processors.TryGetFactory(@namespace, out var factory) ? factory.Processors.Order().ToList() : [];
+            return Processors.TryGetFactory(@namespace, out var factory)
+                ? factory.Processors.Order().Select(id => ProcessorInfo.Create(factory, id, dataTypes)).ToList()
+                : [];
         }
         catch (Exception exception) when (exception is NotImplementedException or NotSupportedException or InvalidOperationException)
         {
             problems.Add($"Processors of '{@namespace}': {exception.Message}");
             return [];
         }
+    }
+
+    // the built-in data types and those of all loaded processor factories: the data types of the processor properties
+    private DataTypeRegistry CreateDataTypeRegistry()
+    {
+        var registry = DataTypeRegistry.CreateDefault();
+        foreach (var descriptor in Processors.DataTypes)
+        {
+            if (!registry.TryGet(descriptor.Name, out _))
+            {
+                registry.Register(descriptor);
+            }
+        }
+        return registry;
     }
 
     private static bool IsSchemaError(Exception exception)
