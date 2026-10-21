@@ -222,9 +222,8 @@
                     <StackPanel Spacing="12" x:DataType="vm:MainViewModel"
                                 DataContext="{Binding $parent[ne:NodeEditorControl].DataContext}">
                         <TextBlock Text="Selected document properties" Classes="caption" />
-                        <TextBlock Text="Renaming asks for confirmation: other documents may include this one by name." Classes="kind" />
-                        <TextBox PlaceholderText="Document name" Text="{Binding DocumentName}" />
-                        <Button Content="Rename…" HorizontalAlignment="Left" Command="{Binding RenameDocumentCommand}" />
+                        <TextBlock Text="A changed name is confirmed when you leave the box: other documents may include this one by name." Classes="kind" />
+                        <TextBox PlaceholderText="Document name" Text="{Binding DocumentName, UpdateSourceTrigger=LostFocus}" />
                         <ContentControl Content="{Binding ItemDetails}" ContentTemplate="{StaticResource DetailsSectionsTemplate}" />
                     </StackPanel>
                 </DataTemplate>
@@ -233,14 +232,14 @@
                                 DataContext="{Binding $parent[ne:NodeEditorControl].DataContext}">
                         <TextBlock Text="Selected repeat properties" Classes="caption" />
                         <TextBlock Text="Repeats its members a number of times." Classes="kind" />
-                        <TextBox PlaceholderText="Repeat name" Text="{Binding NodeName}" />
+                        <TextBox PlaceholderText="Repeat name" Text="{Binding NodeFacets.Name, UpdateSourceTrigger=LostFocus}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Node def" Classes="label" />
-                            <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
+                            <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef, UpdateSourceTrigger=LostFocus}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Count" Classes="label" />
-                            <TextBox Text="{Binding NodeFacets.Count}" PlaceholderText="number, ref:path or pub:ns.name" />
+                            <TextBox Text="{Binding NodeFacets.Count, UpdateSourceTrigger=LostFocus}" PlaceholderText="number, ref:path or pub:ns.name" />
                             <TextBlock Text="{Binding ValueProcessorDetails.ConversionNote}" Classes="kind" TextWrapping="Wrap"
                                        IsVisible="{Binding ValueProcessorDetails.ConversionNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}" />
                         </StackPanel>
@@ -248,9 +247,8 @@
                                         IsVisible="{Binding ValueProcessorDetails, Converter={x:Static ObjectConverters.IsNotNull}}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Byte size" Classes="label" />
-                            <TextBox Text="{Binding NodeFacets.ByteSize}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
+                            <TextBox Text="{Binding NodeFacets.ByteSize, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
                         </StackPanel>
-                        <Button Content="Apply repeat changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
                     </StackPanel>
                 </DataTemplate>
                 <DataTemplate x:DataType="models:EditChoice">
@@ -258,14 +256,14 @@
                                 DataContext="{Binding $parent[ne:NodeEditorControl].DataContext}">
                         <TextBlock Text="Selected choice properties" Classes="caption" />
                         <TextBlock Text="Selects one of its members at runtime." Classes="kind" />
-                        <TextBox PlaceholderText="Choice name" Text="{Binding NodeName}" />
+                        <TextBox PlaceholderText="Choice name" Text="{Binding NodeFacets.Name, UpdateSourceTrigger=LostFocus}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Node def" Classes="label" />
-                            <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
+                            <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef, UpdateSourceTrigger=LostFocus}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Selected index" Classes="label" />
-                            <TextBox Text="{Binding NodeFacets.SelectedIndex}" PlaceholderText="number, ref:path or pub:ns.name" />
+                            <TextBox Text="{Binding NodeFacets.SelectedIndex, UpdateSourceTrigger=LostFocus}" PlaceholderText="number, ref:path or pub:ns.name" />
                             <TextBlock Text="{Binding ValueProcessorDetails.ConversionNote}" Classes="kind" TextWrapping="Wrap"
                                        IsVisible="{Binding ValueProcessorDetails.ConversionNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}" />
                         </StackPanel>
@@ -273,7 +271,7 @@
                                         IsVisible="{Binding ValueProcessorDetails, Converter={x:Static ObjectConverters.IsNotNull}}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Member node def" Classes="label" />
-                            <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.MemberNodeDef}" ItemsSource="{Binding MemberNodeDefOptions}" PlaceholderText="optional: makes the choice open" />
+                            <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.MemberNodeDef, UpdateSourceTrigger=LostFocus}" ItemsSource="{Binding MemberNodeDefOptions}" PlaceholderText="optional: makes the choice open" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Pipeline" Classes="label" />
@@ -281,9 +279,8 @@
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Byte size" Classes="label" />
-                            <TextBox Text="{Binding NodeFacets.ByteSize}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
+                            <TextBox Text="{Binding NodeFacets.ByteSize, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
                         </StackPanel>
-                        <Button Content="Apply choice changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
                     </StackPanel>
                 </DataTemplate>
                 <DataTemplate x:DataType="models:EditGroup">
@@ -291,45 +288,43 @@
                                 DataContext="{Binding $parent[ne:NodeEditorControl].DataContext}">
                         <TextBlock Text="Selected group properties" Classes="caption" />
                         <TextBlock Text="Groups a sequence of fields and nested nodes." Classes="kind" />
-                        <TextBox PlaceholderText="Group name" Text="{Binding NodeName}" />
+                        <TextBox PlaceholderText="Group name" Text="{Binding NodeFacets.Name, UpdateSourceTrigger=LostFocus}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Node def" Classes="label" />
-                            <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
+                            <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef, UpdateSourceTrigger=LostFocus}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Byte size" Classes="label" />
-                            <TextBox Text="{Binding NodeFacets.ByteSize}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
+                            <TextBox Text="{Binding NodeFacets.ByteSize, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
                         </StackPanel>
-                        <Button Content="Apply group changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
                     </StackPanel>
                 </DataTemplate>
                 <DataTemplate x:DataType="models:EditField">
                     <StackPanel Spacing="12" x:DataType="vm:MainViewModel"
                                 DataContext="{Binding $parent[ne:NodeEditorControl].DataContext}">
                         <TextBlock Text="Selected field properties" Classes="caption" />
-                        <TextBox PlaceholderText="Field name" Text="{Binding NodeName}" />
-                        <ComboBox Classes="options" ItemsSource="{Binding DataTypeOptions}" IsEditable="True" Text="{Binding NodeDataType}" />
-                        <TextBlock Text="{Binding DataTypeNote}" Classes="caption" TextWrapping="Wrap"
-                                   IsVisible="{Binding DataTypeNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                        <TextBox PlaceholderText="Field name" Text="{Binding NodeFacets.Name, UpdateSourceTrigger=LostFocus}" />
+                        <ComboBox Classes="options" ItemsSource="{Binding DataTypeOptions}" IsEditable="True" Text="{Binding NodeFacets.DataType, UpdateSourceTrigger=LostFocus}" />
+                        <TextBlock Text="{Binding NodeFacets.DataTypeNote}" Classes="caption" TextWrapping="Wrap"
+                                   IsVisible="{Binding NodeFacets.DataTypeNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Node def" Classes="label" />
-                            <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
+                            <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef, UpdateSourceTrigger=LostFocus}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Value" Classes="label" />
-                            <TextBox Text="{Binding NodeFacets.Value}" PlaceholderText="optional constant, ref:path or pub:ns.name" />
-                            <TextBlock Text="{Binding ValueWarning}" Foreground="Orange" FontSize="11" TextWrapping="Wrap"
-                                       IsVisible="{Binding ValueWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            <TextBox Text="{Binding NodeFacets.Value, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional constant, ref:path or pub:ns.name" />
+                            <TextBlock Text="{Binding NodeFacets.ValueWarning}" Foreground="Orange" FontSize="11" TextWrapping="Wrap"
+                                       IsVisible="{Binding NodeFacets.ValueWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Byte length" Classes="label" />
-                            <TextBox Text="{Binding NodeFacets.ByteLength}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
+                            <TextBox Text="{Binding NodeFacets.ByteLength, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Byte offset" Classes="label" />
-                            <TextBox Text="{Binding NodeFacets.ByteOffset}" PlaceholderText="optional signed number" />
+                            <TextBox Text="{Binding NodeFacets.ByteOffset, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional signed number" />
                         </StackPanel>
-                        <Button Content="Apply field changes" HorizontalAlignment="Left" Command="{Binding ApplyNodeEditsCommand}" />
                     </StackPanel>
                 </DataTemplate>
 

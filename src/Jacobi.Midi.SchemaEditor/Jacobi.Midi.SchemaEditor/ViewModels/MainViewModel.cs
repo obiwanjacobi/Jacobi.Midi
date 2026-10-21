@@ -266,6 +266,12 @@ internal sealed partial class MainViewModel : ViewModelBase
     public partial CloseDocumentViewModel? CloseDialog { get; private set; }
 
     /// <summary>
+    /// The confirmation dialog while it is shown (e.g. to confirm a delete); null otherwise.
+    /// </summary>
+    [ObservableProperty]
+    public partial ConfirmViewModel? ConfirmDialog { get; private set; }
+
+    /// <summary>
     /// The item selected in the schema tree or in the node defs tab: an <see cref="EditNode"/>
     /// (the <see cref="EditDocument"/> for the root) or null.
     /// </summary>
@@ -355,57 +361,43 @@ internal sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial object? GeneralEditor { get; private set; }
 
-    [ObservableProperty]
-    public partial string NodeName { get; set; } = String.Empty;
-
     /// <summary>
-    /// The staged name of the selected document root; applied by <see cref="RenameDocumentCommand"/> after confirmation.
+    /// The name of the selected document root. A changed name (committed when its editor loses focus) is applied by
+    /// <see cref="RenameDocument"/> after the user confirmed it in the rename dialog.
     /// </summary>
     [ObservableProperty]
     public partial string DocumentName { get; set; } = String.Empty;
 
-    [ObservableProperty]
-    public partial string NodeDataType { get; set; } = "sys.uint8";
+    partial void OnDocumentNameChanged(string value)
+    {
+        // set by the selection (or restored after a cancelled rename) when it equals the document name
+        if (SelectedItem is EditDocument && SelectedDocument is { } document
+            && !String.Equals(value.Trim(), document.Schema.Name, StringComparison.Ordinal))
+        {
+            RenameDocument();
+        }
+    }
 
     /// <summary>
-    /// The staged type-specific properties of the <see cref="SelectedNode"/> (nodeDef, count, selectedIndex, ...).
+    /// The live editor of the General tab values of the <see cref="EditedNode"/> (name, data type, nodeDef, count, selectedIndex, ...):
+    /// changes are written to the node at once.
     /// </summary>
     [ObservableProperty]
     public partial NodeFacets NodeFacets { get; set; } = new();
 
     public IReadOnlyList<string> PipelineOptions => NodeFacets.PipelineOptions;
 
-    /// <summary>
-    /// A warning when the staged Value does not fit the staged data type (see <see cref="DataTypeValueValidator"/>); otherwise null.
-    /// Informational only: it never blocks applying the edits.
-    /// </summary>
-    public string? ValueWarning => DataTypeValueValidator.Validate(ActiveDocument?.Schema, NodeDataType, NodeFacets.Value);
-
-    /// <summary>
-    /// A note when the staged data type is custom (not registered and not defined in the document); otherwise null.
-    /// </summary>
-    public string? DataTypeNote => DataTypeValueValidator.IsCustom(ActiveDocument?.Schema, NodeDataType)
-        ? "Custom data type: its values are not validated."
-        : null;
-
-    partial void OnNodeDataTypeChanged(string value)
-    {
-        OnPropertyChanged(nameof(ValueWarning));
-        OnPropertyChanged(nameof(DataTypeNote));
-    }
-
     partial void OnNodeFacetsChanged(NodeFacets oldValue, NodeFacets newValue)
     {
         oldValue.PropertyChanged -= OnNodeFacetsPropertyChanged;
         newValue.PropertyChanged += OnNodeFacetsPropertyChanged;
-        OnPropertyChanged(nameof(ValueWarning));
     }
 
     private void OnNodeFacetsPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(Models.NodeFacets.Value))
+        if (e.PropertyName == nameof(Models.NodeFacets.Name))
         {
-            OnPropertyChanged(nameof(ValueWarning));
+            OnPropertyChanged(nameof(SelectedItemPath));
         }
     }
 
@@ -619,37 +611,6 @@ internal sealed partial class MainViewModel : ViewModelBase
         StatusMessage = $"Closed {document.Schema.Name}.";
     }
 
-    [RelayCommand]
-    private void ApplyNodeEdits()
-    {
-        if (ActiveDocument is null || EditedNode is not { } node)
-        {
-            StatusMessage = "Select a schema node before editing its properties.";
-            return;
-        }
-        if (IsReadOnly)
-        {
-            StatusMessage = "The schema of an assembly is read-only.";
-            return;
-        }
-
-        try
-        {
-            ActiveDocument.ApplyNodeEdits(
-                node,
-                NodeName.Trim(),
-                NodeDataType.Trim(),
-                NodeFacets);
-            NodeFacets = NodeFacets.Read(node);
-            OnPropertyChanged(nameof(SelectedItemPath));
-            StatusMessage = $"Updated {NodeName}.";
-        }
-        catch (Exception exception) when (IsSchemaError(exception))
-        {
-            StatusMessage = $"Schema edit was not applied: {exception.Message}";
-        }
-    }
-
     /// <summary>
     /// Adds a new node of <paramref name="kind"/> with a default name to the target group (see <see cref="GetTargetGroup"/>)
     /// and selects it for editing.
@@ -767,12 +728,44 @@ internal sealed partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Removes the selected node or node def. A removed node selects its parent group, a removed top-level node the document root.
+    /// Asks to confirm the removal of the selected item or node def (there is no undo); see <see cref="CloseDeleteDialog"/>.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanDeleteItem))]
     private void DeleteItem()
     {
         if (ActiveDocument is null || IsReadOnly || GetDeletableItem() is not { } item)
+        {
+            return;
+        }
+
+        var schema = ActiveDocument.Schema;
+        var (what, name) = item switch
+        {
+            EditNode node when schema.NodeDefs.Contains(node) => ("node def", node.Name),
+            EditNode node => (node.Kind.ToString().ToLowerInvariant(), node.Name),
+            EditDocumentRef include => ("include", include.Schema),
+            EditDataTypeDef definition => ("data type def", definition.Name),
+            EditProcessorDef definition => ("processor def", definition.Name),
+            EditProcessorRef processor => ("processor", processor.Processor.ToString()),
+            EditProperty property => ("property", property.Name),
+            _ => ("item", item.ToString() ?? String.Empty)
+        };
+        var members = item is EditGroup { Members.Count: > 0 } group
+            ? $" It has {group.Members.Count} member(s) that are deleted as well."
+            : String.Empty;
+        ConfirmDialog = new ConfirmViewModel("DELETE", $"Delete {what} '{name}'",
+            $"The {what} will be removed from {schema.Name}.{members} This cannot be undone. Continue?",
+            "Delete", (dialog, confirmed) => CloseDeleteDialog(item, confirmed));
+    }
+
+    /// <summary>
+    /// Removes <paramref name="item"/> when the user confirmed it and it is still the selected item.
+    /// A removed node selects its parent group, a removed top-level node the document root.
+    /// </summary>
+    private void CloseDeleteDialog(object item, bool confirmed)
+    {
+        ConfirmDialog = null;
+        if (!confirmed || ActiveDocument is null || IsReadOnly || !ReferenceEquals(GetDeletableItem(), item))
         {
             return;
         }
@@ -863,7 +856,6 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// The dialog offers to rename the includes of the old name in the other open documents as well,
     /// or warns that includes may become invalid when no open document includes it.
     /// </summary>
-    [RelayCommand]
     private void RenameDocument()
     {
         if (IsReadOnly || SelectedDocument is not { } document || SelectedItem is not EditDocument)
@@ -1194,7 +1186,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     {
         SelectedNodeDefDetails?.Dispose();
         SelectedNodeDefDetails = ActiveDocument is null || value is null ? null : ItemDetailsViewModel.Create(ActiveDocument, value, ProcessorCatalog);
-        LoadStagedNode();
+        LoadNodeEditors();
         NotifyAddOptionsChanged();
     }
 
@@ -1222,7 +1214,7 @@ internal sealed partial class MainViewModel : ViewModelBase
         DocumentTabs?.Dispose();
         DocumentTabs = ActiveDocument is not null && value is EditDocument ? CreateDocumentTabs(ActiveDocument) : null;
         DocumentName = (value as EditDocument)?.Name ?? String.Empty;
-        LoadStagedNode();
+        LoadNodeEditors();
         // a tab the new selection does not have would stay selected (but hidden)
         if (!IsEditorTabAvailable(SelectedEditorTab))
         {
@@ -1232,9 +1224,9 @@ internal sealed partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Stages the values of the <see cref="EditedNode"/> for the node editors.
+    /// Creates the live editors of the <see cref="EditedNode"/> (General tab values and value processors) and refreshes the option lists.
     /// </summary>
-    private void LoadStagedNode()
+    private void LoadNodeEditors()
     {
         var node = EditedNode;
         ValueProcessorDetails?.Dispose();
@@ -1244,9 +1236,7 @@ internal sealed partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(ProcessorKeyOptions));
         OnPropertyChanged(nameof(NodeDefOptions));
         OnPropertyChanged(nameof(MemberNodeDefOptions));
-        NodeName = node?.Name ?? String.Empty;
-        NodeDataType = (node as EditField)?.DataType?.ToString() ?? String.Empty;
-        NodeFacets = NodeFacets.Read(node);
+        NodeFacets = new NodeFacets(ActiveDocument, node);
     }
 
     private bool IsEditorTabAvailable(int tab) => tab switch

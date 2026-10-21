@@ -5,102 +5,212 @@ using Jacobi.BinarySerializer.Schema;
 namespace Jacobi.Midi.SchemaEditor.Models;
 
 /// <summary>
-/// The staged, text form of the type-specific properties of an <see cref="EditNode"/>
-/// (nodeDef, value, byteLength, byteOffset, byteSize, count, selectedIndex, memberNodeDef and pipeline).
-/// Reads them from a node for editing and validates and writes them back as one unit.
+/// Edits the General tab values of one <see cref="EditNode"/> live, in text form: the name, the data type of a field and
+/// the type-specific properties (nodeDef, value, byteLength, byteOffset, byteSize, count, selectedIndex, memberNodeDef and pipeline).
+/// Each setter validates the text and writes it to the node at once, then marks the document changed.
+/// Invalid text throws an <see cref="ArgumentException"/>: the bound editor shows the error and the node keeps its value.
 /// Value-or-reference properties are written as a constant, 'ref:path' or 'pub:namespace.name'; empty means not set.
+/// Nothing is written for a read-only document.
 /// </summary>
 internal sealed partial class NodeFacets : ObservableObject
 {
+    private readonly SchemaWorkspaceDocument? _document;
+    private readonly EditNode? _node;
+
     /// <summary>The pipeline choices of an open choice; empty inherits the mode of a node definition.</summary>
     public static IReadOnlyList<string> PipelineOptions { get; } = [String.Empty, nameof(SchemaPipelineMode.Integrate), nameof(SchemaPipelineMode.Isolate)];
 
-    public string NodeDef { get; set; } = String.Empty;
-    [ObservableProperty]
-    public partial string Value { get; set; } = String.Empty;
-    public string ByteLength { get; set; } = String.Empty;
-    public string ByteOffset { get; set; } = String.Empty;
-    public string ByteSize { get; set; } = String.Empty;
-    public string Count { get; set; } = String.Empty;
-    public string SelectedIndex { get; set; } = String.Empty;
-    public string MemberNodeDef { get; set; } = String.Empty;
-    public string Pipeline { get; set; } = String.Empty;
-
     /// <summary>
-    /// Reads the staged values from <paramref name="node"/> (empty values for a null node).
+    /// Edits <paramref name="node"/> of <paramref name="document"/>; without a node the values are empty and edits are ignored.
     /// </summary>
-    public static NodeFacets Read(EditNode? node)
+    public NodeFacets(SchemaWorkspaceDocument? document = null, EditNode? node = null)
     {
-        var facets = new NodeFacets { NodeDef = node?.NodeDef?.ToString() ?? String.Empty };
-        switch (node)
+        _document = document;
+        _node = node;
+    }
+
+    public string Name
+    {
+        get => _node?.Name ?? String.Empty;
+        set => Edit(nameof(Name), value, Name, node =>
         {
-            case EditField field:
-                facets.Value = Format(field.Value);
-                facets.ByteLength = Format(field.ByteLength);
-                facets.ByteOffset = field.ByteOffset?.ToString(CultureInfo.InvariantCulture) ?? String.Empty;
-                break;
-            case EditGroup group:
-                facets.ByteSize = Format(group.ByteSize);
-                if (group is EditRepeat repeat)
-                {
-                    facets.Count = Format(repeat.Count);
-                }
-                else if (group is EditChoice choice)
-                {
-                    facets.SelectedIndex = Format(choice.SelectedIndex);
-                    facets.MemberNodeDef = choice.MemberNodeDef?.ToString() ?? String.Empty;
-                    facets.Pipeline = choice.Pipeline?.ToString() ?? String.Empty;
-                }
-                break;
-        }
-        return facets;
+            ArgumentException.ThrowIfNullOrWhiteSpace(value, "The name");
+            node.Name = value.Trim();
+        });
     }
 
     /// <summary>
-    /// Writes the staged values to <paramref name="node"/>. Nothing is changed when a value is invalid.
+    /// The data type of a field; a field needs a data type or a node def.
     /// </summary>
-    /// <exception cref="ArgumentException">A value could not be parsed.</exception>
-    public void Apply(EditNode node)
+    public string DataType
     {
-        ArgumentNullException.ThrowIfNull(node);
-        var nodeDef = ParseName(NodeDef);
-        switch (node)
+        get => (_node as EditField)?.DataType?.ToString() ?? String.Empty;
+        set => Edit(nameof(DataType), value, DataType, node =>
         {
-            case EditField field:
-                var value = ParseValueOrRef(Value, "The value", (text, _) => text);
-                var byteLength = ParseValueOrRef(ByteLength, "The byte length", ParseInt);
-                var byteOffset = String.IsNullOrWhiteSpace(ByteOffset) ? (int?)null : ParseInt(ByteOffset, "The byte offset");
-                field.Value = value;
-                field.ByteLength = byteLength;
-                field.ByteOffset = byteOffset;
-                break;
-            case EditRepeat repeat:
-                var count = ParseValueOrRef(Count, "The count", ParseInt);
-                var repeatSize = ParseValueOrRef(ByteSize, "The byte size", ParseInt);
-                repeat.Count = count;
-                repeat.ByteSize = repeatSize;
-                break;
-            case EditChoice choice:
-                var selectedIndex = ParseValueOrRef(SelectedIndex, "The selected index", ParseInt);
-                var memberNodeDef = ParseName(MemberNodeDef);
-                var pipeline = String.IsNullOrWhiteSpace(Pipeline) ? (SchemaPipelineMode?)null
-                    : Enum.TryParse<SchemaPipelineMode>(Pipeline, ignoreCase: true, out var mode) ? mode
-                    : throw new ArgumentException($"'{Pipeline}' is not a pipeline mode.");
-                var choiceSize = ParseValueOrRef(ByteSize, "The byte size", ParseInt);
-                if (memberNodeDef is not null && choice.Members.Count > 0)
-                {
-                    throw new ArgumentException("Open choices select their body at runtime and cannot contain explicit members.");
-                }
-                choice.SelectedIndex = selectedIndex;
-                choice.MemberNodeDef = memberNodeDef;
-                choice.Pipeline = pipeline;
-                choice.ByteSize = choiceSize;
-                break;
-            case EditGroup group:
-                group.ByteSize = ParseValueOrRef(ByteSize, "The byte size", ParseInt);
-                break;
+            if (node is not EditField fieldNode)
+            {
+                return;
+            }
+            var dataType = ParseName(value);
+            if (dataType is null && fieldNode.NodeDef is null)
+            {
+                throw new ArgumentException("A field data type or node definition is required.");
+            }
+            fieldNode.DataType = dataType;
+        }, nameof(ValueWarning), nameof(DataTypeNote));
+    }
+
+    public string NodeDef
+    {
+        get => _node?.NodeDef?.ToString() ?? String.Empty;
+        set => Edit(nameof(NodeDef), value, NodeDef, node =>
+        {
+            var nodeDef = ParseName(value);
+            if (nodeDef is null && node is EditField { DataType: null })
+            {
+                throw new ArgumentException("A field data type or node definition is required.");
+            }
+            node.NodeDef = nodeDef;
+        });
+    }
+
+    public string Value
+    {
+        get => (_node as EditField)?.Value is { } value ? Format(value) : String.Empty;
+        set => Edit(nameof(Value), value, Value, node =>
+        {
+            if (node is EditField fieldNode)
+            {
+                fieldNode.Value = ParseValueOrRef(value, "The value", (text, _) => text);
+            }
+        }, nameof(ValueWarning));
+    }
+
+    public string ByteLength
+    {
+        get => (_node as EditField)?.ByteLength is { } value ? Format(value) : String.Empty;
+        set => Edit(nameof(ByteLength), value, ByteLength, node =>
+        {
+            if (node is EditField fieldNode)
+            {
+                fieldNode.ByteLength = ParseValueOrRef(value, "The byte length", ParseInt);
+            }
+        });
+    }
+
+    public string ByteOffset
+    {
+        get => (_node as EditField)?.ByteOffset?.ToString(CultureInfo.InvariantCulture) ?? String.Empty;
+        set => Edit(nameof(ByteOffset), value, ByteOffset, node =>
+        {
+            if (node is EditField fieldNode)
+            {
+                fieldNode.ByteOffset = String.IsNullOrWhiteSpace(value) ? null : ParseInt(value.Trim(), "The byte offset");
+            }
+        });
+    }
+
+    public string ByteSize
+    {
+        get => (_node as EditGroup)?.ByteSize is { } value ? Format(value) : String.Empty;
+        set => Edit(nameof(ByteSize), value, ByteSize, node =>
+        {
+            if (node is EditGroup group)
+            {
+                group.ByteSize = ParseValueOrRef(value, "The byte size", ParseInt);
+            }
+        });
+    }
+
+    public string Count
+    {
+        get => (_node as EditRepeat)?.Count is { } value ? Format(value) : String.Empty;
+        set => Edit(nameof(Count), value, Count, node =>
+        {
+            if (node is EditRepeat repeat)
+            {
+                repeat.Count = ParseValueOrRef(value, "The count", ParseInt);
+            }
+        });
+    }
+
+    public string SelectedIndex
+    {
+        get => (_node as EditChoice)?.SelectedIndex is { } value ? Format(value) : String.Empty;
+        set => Edit(nameof(SelectedIndex), value, SelectedIndex, node =>
+        {
+            if (node is EditChoice choice)
+            {
+                choice.SelectedIndex = ParseValueOrRef(value, "The selected index", ParseInt);
+            }
+        });
+    }
+
+    public string MemberNodeDef
+    {
+        get => (_node as EditChoice)?.MemberNodeDef?.ToString() ?? String.Empty;
+        set => Edit(nameof(MemberNodeDef), value, MemberNodeDef, node =>
+        {
+            if (node is not EditChoice choice)
+            {
+                return;
+            }
+            var memberNodeDef = ParseName(value);
+            if (memberNodeDef is not null && choice.Members.Count > 0)
+            {
+                throw new ArgumentException("Open choices select their body at runtime and cannot contain explicit members.");
+            }
+            choice.MemberNodeDef = memberNodeDef;
+        });
+    }
+
+    public string Pipeline
+    {
+        get => (_node as EditChoice)?.Pipeline?.ToString() ?? String.Empty;
+        set => Edit(nameof(Pipeline), value, Pipeline, node =>
+        {
+            if (node is EditChoice choice)
+            {
+                choice.Pipeline = String.IsNullOrWhiteSpace(value) ? null
+                    : Enum.TryParse<SchemaPipelineMode>(value, ignoreCase: true, out var mode) ? mode
+                    : throw new ArgumentException($"'{value}' is not a pipeline mode.");
+            }
+        });
+    }
+
+    /// <summary>
+    /// A warning when the Value of a field does not fit its data type (see <see cref="DataTypeValueValidator"/>); otherwise null.
+    /// Informational only: the value is still written.
+    /// </summary>
+    public string? ValueWarning => _node is EditField
+        ? DataTypeValueValidator.Validate(_document?.Schema, DataType, Value)
+        : null;
+
+    /// <summary>
+    /// A note when the data type of a field is custom (not registered and not defined in the document); otherwise null.
+    /// </summary>
+    public string? DataTypeNote => _node is EditField && DataTypeValueValidator.IsCustom(_document?.Schema, DataType)
+        ? "Custom data type: its values are not validated."
+        : null;
+
+    /// <summary>
+    /// Writes <paramref name="value"/> to the node through <paramref name="assign"/> (which validates it) and marks the document changed.
+    /// Nothing happens when the text equals the <paramref name="current"/> text (e.g. an editor that lost focus without a change).
+    /// </summary>
+    private void Edit(string propertyName, string? value, string current, Action<EditNode> assign, params string[] dependents)
+    {
+        if (_node is null || _document is null || _document.IsReadOnly
+            || String.Equals((value ?? String.Empty).Trim(), current, StringComparison.Ordinal))
+        {
+            return;
         }
-        node.NodeDef = nodeDef;
+        assign(_node);
+        _document.MarkChanged();
+        OnPropertyChanged(propertyName);
+        foreach (var dependent in dependents)
+        {
+            OnPropertyChanged(dependent);
+        }
     }
 
     private static string Format<T>(SchemaValueOrRef<T> value) => value switch
@@ -111,12 +221,12 @@ internal sealed partial class NodeFacets : ObservableObject
         _ => String.Empty
     };
 
-    private static SchemaName? ParseName(string text)
+    private static SchemaName? ParseName(string? text)
         => String.IsNullOrWhiteSpace(text) ? (SchemaName?)null : new SchemaName(text.Trim());
 
-    private static SchemaValueOrRef<T> ParseValueOrRef<T>(string text, string what, Func<string, string, T> parseConstant)
+    private static SchemaValueOrRef<T> ParseValueOrRef<T>(string? text, string what, Func<string, string, T> parseConstant)
     {
-        text = text.Trim();
+        text = text?.Trim() ?? String.Empty;
         if (text.Length == 0)
         {
             return default;

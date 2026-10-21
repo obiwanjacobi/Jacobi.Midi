@@ -22,7 +22,6 @@ public class SchemaEditorTests
         var group = Assert.IsType<EditGroup>(Assert.Single(schema.Members));
         Assert.Equal("SysEx", group.Name);
 
-        document.ApplyNodeEdits(group, "SysEx", "sys.uint8");
         group.Properties.Add(new EditProperty { Name = "description", Value = "The complete system-exclusive message." });
         var addedGroup = document.AddGroup(group, "Header");
         document.AddField(
@@ -85,8 +84,11 @@ public class SchemaEditorTests
                 var selectedField = Assert.IsType<EditGroup>(Assert.Single(loaded.Members)).Members[0];
                 viewModel.SelectedNode = selectedField;
 
-                Assert.Equal(String.Empty, viewModel.NodeDataType);
-                viewModel.ApplyNodeEditsCommand.Execute(null);
+                // a field with a node def and no data type can be edited
+                Assert.Equal(String.Empty, viewModel.NodeFacets.DataType);
+                var name = selectedField.Name;
+                viewModel.NodeFacets.Name = name + "X";
+                viewModel.NodeFacets.Name = name;
 
                 Assert.Same(loaded, document.Schema);
                 Assert.Same(selectedField, viewModel.SelectedNode);
@@ -127,7 +129,7 @@ public class SchemaEditorTests
                 var document = new SchemaWorkspaceDocument(schema, SchemaFormat.Xml);
                 var message = Assert.IsType<EditGroup>(schema.Members[0]);
                 var scope = Assert.IsType<EditGroup>(message.Members[0]);
-                document.ApplyNodeEdits(scope, "ChecksumScope", String.Empty);
+                new NodeFacets(document, scope).Name = "ChecksumScope";
 
                 var saved = SchemaFileService.Serialize(schema, SchemaFormat.Xml);
                 Assert.Equal(source.Replace("ChecksumBlock", "ChecksumScope", StringComparison.Ordinal), saved);
@@ -223,8 +225,7 @@ public class SchemaEditorTests
                 foreach (var branch in Assert.IsType<EditGroup>(Assert.Single(schema.Members)).Members.OfType<EditGroup>())
                 {
                         viewModel.SelectedNode = branch.Members.Single(node => node.Name == "ChecksumBlock");
-                        viewModel.NodeName = "ChecksumScope";
-                        viewModel.ApplyNodeEditsCommand.Execute(null);
+                        viewModel.NodeFacets.Name = "ChecksumScope";
                 }
 
                 var saved = SchemaFileService.Serialize(schema, SchemaFormat.Xml);
@@ -258,7 +259,7 @@ public class SchemaEditorTests
                 var schema = SchemaFileService.Parse(source, SchemaFormat.Xml);
                 Assert.Equal(source, SchemaFileService.Serialize(schema, SchemaFormat.Xml));
                 var document = new SchemaWorkspaceDocument(schema, SchemaFormat.Xml);
-                document.ApplyNodeEdits(schema.Members[0], "Renamed", String.Empty);
+                new NodeFacets(document, schema.Members[0]).Name = "Renamed";
                 Assert.Equal(source.Replace("name=\"Root\"", "name=\"Renamed\"", StringComparison.Ordinal),
                         SchemaFileService.Serialize(schema, SchemaFormat.Xml));
         }
@@ -276,7 +277,7 @@ public class SchemaEditorTests
                 var schema = SchemaFileService.Parse(source, SchemaFormat.Xml);
                 var document = new SchemaWorkspaceDocument(schema, SchemaFormat.Xml);
                 var root = Assert.IsType<EditGroup>(schema.Members[0]);
-                document.ApplyNodeEdits(root.Members[0], "Renamed", "sys.uint8");
+                new NodeFacets(document, root.Members[0]).Name = "Renamed";
                 Assert.Single(root.Members[0].Properties, property => property.Name == "description").Value = "New";
                 document.AddField(root, "Added", "sys.uint8", "2A");
 
@@ -345,17 +346,16 @@ public class SchemaEditorTests
                 viewModel.AddNodeCommand.Execute(SchemaNodeKind.Group);
                 var header = Assert.IsType<EditGroup>(Assert.Single(root.Members));
                 Assert.Same(header, viewModel.SelectedNode);
-                Assert.Equal("NewGroup", viewModel.NodeName);
+                Assert.Equal("NewGroup", viewModel.NodeFacets.Name);
                 viewModel.AddNodeCommand.Execute(SchemaNodeKind.Field);
                 var field = Assert.IsType<EditField>(Assert.Single(header.Members));
                 Assert.Same(field, viewModel.SelectedNode);
-                Assert.Equal("NewField", viewModel.NodeName);
-                Assert.Equal("sys.uint8", viewModel.NodeDataType);
+                Assert.Equal("NewField", viewModel.NodeFacets.Name);
+                Assert.Equal("sys.uint8", viewModel.NodeFacets.DataType);
 
-                // the properties are edited on the Properties tab: applying the General tab keeps them
+                // the General tab edits the node live and keeps its properties
                 field.Properties.Add(new EditProperty { Name = "description", Value = "A parameter" });
-                viewModel.NodeName = "Renamed";
-                viewModel.ApplyNodeEditsCommand.Execute(null);
+                viewModel.NodeFacets.Name = "Renamed";
                 Assert.Equal("Renamed", field.Name);
                 Assert.Equal("A parameter", Assert.Single(field.Properties, property => property.Name == "description").Value);
                 Assert.Same(field, viewModel.SelectedNode);
@@ -405,11 +405,13 @@ public class SchemaEditorTests
 
                 Assert.True(viewModel.DeleteItemCommand.CanExecute(null));
                 viewModel.DeleteItemCommand.Execute(null);
+                viewModel.ConfirmDialog!.ConfirmCommand.Execute(null);
                 Assert.Empty(root.Members);
                 Assert.Same(root, viewModel.SelectedNode);
                 Assert.Equal(revision + 1, document.Revision);
 
                 viewModel.DeleteItemCommand.Execute(null);
+                viewModel.ConfirmDialog!.ConfirmCommand.Execute(null);
                 Assert.Empty(document.Schema.Members);
                 Assert.Same(document.Schema, viewModel.SelectedNode);
                 Assert.False(viewModel.DeleteItemCommand.CanExecute(null));
@@ -418,6 +420,7 @@ public class SchemaEditorTests
                 document.Schema.NodeDefs.Add(definition);
                 viewModel.SelectedNode = definition;
                 viewModel.DeleteItemCommand.Execute(null);
+                viewModel.ConfirmDialog!.ConfirmCommand.Execute(null);
                 Assert.Empty(document.Schema.NodeDefs);
                 Assert.Same(document.Schema, viewModel.SelectedNode);
         }
@@ -434,7 +437,7 @@ public class SchemaEditorTests
                 var second = viewModel.SelectedDocument;
                 Assert.Equal("NewSchema2", second!.Schema.Name);
                 Assert.Same(second.Schema, viewModel.SelectedItem);
-                Assert.Equal(String.Empty, viewModel.NodeName);
+                Assert.Equal(String.Empty, viewModel.NodeFacets.Name);
 
                 viewModel.SelectedDocument = first;
                 Assert.Same(first.Schema, viewModel.SelectedItem);
@@ -451,15 +454,16 @@ public class SchemaEditorTests
                 var revision = document.Revision;
                 var viewModel = new MainViewModel { SelectedDocument = document };
                 viewModel.SelectedNode = field;
-                viewModel.NodeName = "Changed";
-                viewModel.NodeDataType = String.Empty;
-                viewModel.ApplyNodeEditsCommand.Execute(null);
+                // the bound editor shows the error of an invalid edit; the node keeps its value
+                Assert.Throws<ArgumentException>(() => viewModel.NodeFacets.Name = " ");
+                Assert.Throws<ArgumentException>(() => viewModel.NodeFacets.DataType = String.Empty);
+                // leaving an editor without a change writes nothing
+                viewModel.NodeFacets.Name = "Original";
 
                 Assert.Equal("Original", field.Name);
                 Assert.Equal("sys.uint8", field.DataType?.ToString());
                 Assert.False(document.IsDirty);
                 Assert.Equal(revision, document.Revision);
-                Assert.Contains("not applied", viewModel.StatusMessage);
         }
 
         [Fact]

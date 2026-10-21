@@ -184,8 +184,7 @@ public class AssemblyInspectionTests
         Assert.Same(schema.Document, viewModel.ActiveDocument);
 
         var name = node.Name;
-        viewModel.NodeName = "Changed";
-        viewModel.ApplyNodeEditsCommand.Execute(null);
+        viewModel.NodeFacets.Name = "Changed";
         Assert.Equal(name, node.Name);
 
         Assert.False(viewModel.CanAddMembers);

@@ -8,34 +8,44 @@ namespace Jacobi.Midi.Tests.SchemaEditor;
 public class NodeFacetsTests
 {
     [Fact]
-    public void Apply_WritesCountAndSelectedIndexAsConstantOrReference()
+    public void Edit_WritesCountAndSelectedIndexAsConstantOrReference()
     {
         var document = new SchemaWorkspaceDocument(SchemaFileService.CreateDocument("test"), SchemaFormat.Json);
         var root = document.Schema.Members.OfType<EditGroup>().Single();
         var repeat = document.AddRepeat(root, "Items", 1);
-        var facets = NodeFacets.Read(repeat);
+        var facets = new NodeFacets(document, repeat);
         Assert.Equal("1", facets.Count);
 
         facets.Count = "ref:test.SysEx.Length";
-        document.ApplyNodeEdits(repeat, "Items", String.Empty, facets);
         Assert.True(repeat.Count is SchemaNodeRef);
 
         facets.Count = "3";
-        document.ApplyNodeEdits(repeat, "Items", String.Empty, facets);
-        Assert.Equal("3", NodeFacets.Read(repeat).Count);
+        Assert.Equal("3", new NodeFacets(document, repeat).Count);
     }
 
     [Fact]
-    public void Apply_InvalidValueChangesNothing()
+    public void Edit_InvalidValueChangesNothing()
     {
         var document = new SchemaWorkspaceDocument(SchemaFileService.CreateDocument("test"), SchemaFormat.Json);
         var root = document.Schema.Members.OfType<EditGroup>().Single();
         var choice = document.AddChoice(root, "Pick", 2);
-        var facets = NodeFacets.Read(choice);
-        facets.NodeDef = "Body";
-        facets.SelectedIndex = "abc";
-        Assert.Throws<ArgumentException>(() => document.ApplyNodeEdits(choice, "Pick", String.Empty, facets));
-        Assert.Null(choice.NodeDef);
-        Assert.Equal("2", NodeFacets.Read(choice).SelectedIndex);
+        var revision = document.Revision;
+        var facets = new NodeFacets(document, choice);
+
+        Assert.Throws<ArgumentException>(() => facets.SelectedIndex = "abc");
+
+        Assert.Equal("2", facets.SelectedIndex);
+        Assert.Equal(revision, document.Revision);
+    }
+
+    [Fact]
+    public void Edit_IsIgnoredForAReadOnlyDocument()
+    {
+        var document = new SchemaWorkspaceDocument(SchemaFileService.CreateDocument("test"), SchemaFormat.Json) { IsReadOnly = true };
+        var root = document.Schema.Members.OfType<EditGroup>().Single();
+
+        new NodeFacets(document, root).Name = "Changed";
+
+        Assert.NotEqual("Changed", root.Name);
     }
 }

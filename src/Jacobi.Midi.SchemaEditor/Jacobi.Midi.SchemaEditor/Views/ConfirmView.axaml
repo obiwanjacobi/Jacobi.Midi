@@ -1,0 +1,29 @@
+<!--
+    A confirmation dialog: shown as an overlay (so it works in the Desktop and the Browser host)
+    to confirm an action that cannot be undone, such as deleting an item. See ConfirmViewModel.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Jacobi.Midi.SchemaEditor.ViewModels"
+             x:Class="Jacobi.Midi.SchemaEditor.Views.ConfirmView"
+             x:DataType="vm:ConfirmViewModel">
+
+    <Grid Background="#99000000">
+        <Border MaxWidth="560" Margin="32" Padding="20" CornerRadius="8"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                Background="{DynamicResource AppBackgroundPanelBrush}"
+                BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="1">
+            <StackPanel Spacing="12">
+                <TextBlock Text="{Binding Caption}" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
+                <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap"
+                           Foreground="{DynamicResource AppTextHeadingBrush}" />
+                <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Foreground="{DynamicResource AppTextBodyBrush}" />
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,6,0,0">
+                    <Button Content="Cancel" Command="{Binding CancelCommand}" IsDefault="False" IsCancel="True" />
+                    <Button Content="{Binding ConfirmText}" Classes="accent" Command="{Binding ConfirmCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

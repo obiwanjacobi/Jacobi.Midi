@@ -37,32 +37,6 @@ internal sealed partial class SchemaWorkspaceDocument : ObservableObject
 
     public string DisplayName =>$"{Schema.Name}{(IsDirty ? " *" : String.Empty)}";
 
-    /// <summary>
-    /// Applies the staged values of the General tab to <paramref name="node"/>. Its properties (e.g. 'description' and 'sample')
-    /// are edited on the Properties tab and are not changed.
-    /// </summary>
-    public void ApplyNodeEdits(EditNode node, string name, string dataType, NodeFacets? facets = null)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        SchemaName? fieldType = String.IsNullOrWhiteSpace(dataType) ? (SchemaName?)null : new SchemaName(dataType);
-        if (node is EditField field)
-        {
-            var hasNodeDef = facets is null ? field.NodeDef is not null : !String.IsNullOrWhiteSpace(facets.NodeDef);
-            if (fieldType is null && !hasNodeDef)
-            {
-                throw new ArgumentException("A field data type or node definition is required.", nameof(dataType));
-            }
-            facets?.Apply(node);
-            field.DataType = fieldType;
-        }
-        else
-        {
-            facets?.Apply(node);
-        }
-        node.Name = name;
-        MarkChanged();
-    }
-
     public EditField AddField(EditGroup parent, string name, string dataType, string sampleValue)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);

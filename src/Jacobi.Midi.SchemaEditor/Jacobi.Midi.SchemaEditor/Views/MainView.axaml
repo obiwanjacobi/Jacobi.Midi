@@ -11,6 +11,7 @@
              xmlns:asm="clr-namespace:Jacobi.Midi.SchemaEditor.Assemblies"
              xmlns:midi="clr-namespace:Jacobi.Midi.SchemaEditor.Midi"
              mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="900"
+             xmlns:local="clr-namespace:Jacobi.Midi.SchemaEditor.Views"
              x:Class="Jacobi.Midi.SchemaEditor.Views.MainView"
              x:DataType="vm:MainViewModel">
 
@@ -124,6 +125,11 @@
         <!-- modal overlay of the close document dialog -->
         <Panel Grid.RowSpan="4" IsVisible="{Binding CloseDialog, Converter={x:Static ObjectConverters.IsNotNull}}">
             <rn:CloseDocumentView DataContext="{Binding CloseDialog}" />
+        </Panel>
+
+        <!-- modal overlay of a confirmation (e.g. delete) -->
+        <Panel Grid.RowSpan="4" IsVisible="{Binding ConfirmDialog, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <local:ConfirmView DataContext="{Binding ConfirmDialog}" />
         </Panel>
     </Grid>
 </UserControl>

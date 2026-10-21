@@ -191,12 +191,66 @@ public class DocumentItemTests
 
         Assert.True(viewModel.DeleteItemCommand.CanExecute(null));
         viewModel.DeleteItemCommand.Execute(null);
+        viewModel.ConfirmDialog!.ConfirmCommand.Execute(null);
         Assert.Empty(schema.NodeDefs);
         Assert.Same(schema, viewModel.SelectedItem);
         Assert.Null(viewModel.SelectedNodeDef);
 
         // the document itself cannot be deleted
         Assert.False(viewModel.DeleteItemCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void Delete_AsksForConfirmation()
+    {
+        var viewModel = new MainViewModel();
+        viewModel.NewDocumentCommand.Execute(null);
+        var root = Assert.IsType<EditGroup>(Assert.Single(viewModel.SelectedDocument!.Schema.Members));
+        viewModel.AddNodeCommand.Execute(SchemaNodeKind.Field);
+        var field = Assert.IsType<EditField>(viewModel.SelectedNode);
+
+        viewModel.DeleteItemCommand.Execute(null);
+        Assert.Contains(field.Name, viewModel.ConfirmDialog!.Title);
+        viewModel.ConfirmDialog.CancelCommand.Execute(null);
+        Assert.Null(viewModel.ConfirmDialog);
+        Assert.Contains(field, root.Members);
+        Assert.Same(field, viewModel.SelectedNode);
+
+        viewModel.DeleteItemCommand.Execute(null);
+        viewModel.ConfirmDialog!.ConfirmCommand.Execute(null);
+        Assert.DoesNotContain(field, root.Members);
+        Assert.Same(root, viewModel.SelectedNode);
+
+        // the confirmation of a group mentions its members
+        viewModel.AddNodeCommand.Execute(SchemaNodeKind.Group);
+        var group = Assert.IsType<EditGroup>(viewModel.SelectedNode);
+        viewModel.AddNodeCommand.Execute(SchemaNodeKind.Field);
+        viewModel.SelectedNode = group;
+        viewModel.DeleteItemCommand.Execute(null);
+        Assert.Contains("1 member(s)", viewModel.ConfirmDialog!.Message);
+    }
+
+    [Fact]
+    public void DocumentName_AChangedNameAsksForConfirmation()
+    {
+        var viewModel = new MainViewModel();
+        viewModel.NewDocumentCommand.Execute(null);
+        var schema = viewModel.SelectedDocument!.Schema;
+        var oldName = schema.Name;
+        Assert.Same(schema, viewModel.SelectedItem);
+
+        viewModel.DocumentName = "Other";
+        Assert.NotNull(viewModel.RenameDialog);
+        viewModel.RenameDialog!.CancelCommand.Execute(null);
+        Assert.Null(viewModel.RenameDialog);
+        Assert.Equal(oldName, schema.Name);
+        Assert.Equal(oldName, viewModel.DocumentName);
+
+        viewModel.DocumentName = "Other";
+        viewModel.RenameDialog!.ConfirmCommand.Execute(null);
+        Assert.Equal("Other", schema.Name);
+        Assert.Equal("Other", viewModel.DocumentName);
+        Assert.Null(viewModel.RenameDialog);
     }
 
     [Fact]
@@ -208,14 +262,13 @@ public class DocumentItemTests
         viewModel.AddNodeDefCommand.Execute(SchemaNodeKind.Group);
         var definition = Assert.IsType<EditGroup>(viewModel.SelectedNodeDef);
 
-        // the staged values and the details are those of the node def; the document keeps its own
-        Assert.Equal("NewGroupDef", viewModel.NodeName);
+        // the edited values and the details are those of the node def; the document keeps its own
+        Assert.Equal("NewGroupDef", viewModel.NodeFacets.Name);
         Assert.Equal(schema.Name, viewModel.DocumentName);
         Assert.True(viewModel.SelectedNodeDefDetails!.ShowProcessorsTab);
         Assert.Equal($"{schema.Name}/NodeDefs/NewGroupDef", viewModel.SelectedItemPath);
 
-        viewModel.NodeName = "Renamed";
-        viewModel.ApplyNodeEditsCommand.Execute(null);
+        viewModel.NodeFacets.Name = "Renamed";
         Assert.Equal("Renamed", definition.Name);
         Assert.Equal(schema.Name, viewModel.SelectedDocument!.Schema.Name);
         Assert.Same(schema, viewModel.SelectedItem);
@@ -226,6 +279,7 @@ public class DocumentItemTests
 
         // deleting the nested node selects its parent node def; selecting another item forgets the node def
         viewModel.DeleteItemCommand.Execute(null);
+        viewModel.ConfirmDialog!.ConfirmCommand.Execute(null);
         Assert.Same(definition, viewModel.SelectedNodeDef);
         viewModel.SelectedItem = schema.Members[0];
         Assert.Null(viewModel.SelectedNodeDef);
