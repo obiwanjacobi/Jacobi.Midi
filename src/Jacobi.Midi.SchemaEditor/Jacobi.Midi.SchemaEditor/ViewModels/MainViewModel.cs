@@ -94,7 +94,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// The active tab of the left panel: <see cref="SchemaLeftTab"/> (the schema tree) or <see cref="AssembliesLeftTab"/>.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(CanPin), nameof(DataTypeOptions), nameof(ProcessorOptions), nameof(SelectedItemPath))]
+    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(CanPin), nameof(DataTypeOptions), nameof(SelectedItemPath))]
     public partial int SelectedLeftTab { get; set; }
 
     public const int SchemaLeftTab = 0;
@@ -111,7 +111,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// The read-only document of the embedded schema selected in the assembly tree; null when none is selected.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(CanPin), nameof(DataTypeOptions), nameof(ProcessorOptions))]
+    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(CanPin), nameof(DataTypeOptions))]
     public partial SchemaWorkspaceDocument? InspectedDocument { get; private set; }
 
     /// <summary>
@@ -155,41 +155,10 @@ internal sealed partial class MainViewModel : ViewModelBase
     public IReadOnlyList<string> DataTypeOptions => Models.DataTypeOptions.Get(ActiveDocument?.Schema);
 
     /// <summary>
-    /// The processors to choose from for a processor of a node, data type def or document, in two sections:
-    /// the processors of the processor namespaces of the opened assemblies (e.g. 'sys.*')
-    /// and references to the processor defs of the <see cref="ActiveDocument"/>. The processor editors also accept a custom value.
+    /// The processors a processor def can reference: the processors of the processor namespaces of the opened assemblies (e.g. 'sys.*').
+    /// The processors of nodes, data type defs and the document are offered by their <see cref="ItemDetailsViewModel.ProcessorOptions"/>.
     /// </summary>
-    public IReadOnlyList<ProcessorOption> ProcessorOptions
-    {
-        get
-        {
-            var options = new List<ProcessorOption> { new("Global processors", IsHeader: true) };
-            options.AddRange(GetProcessorKeys().Select(key => new ProcessorOption(key)));
-            var processorDefs = ActiveDocument?.Schema.ProcessorDefs ?? [];
-            if (processorDefs.Count > 0)
-            {
-                options.Add(new("Processor defs", IsHeader: true));
-                options.AddRange(processorDefs
-                    .Select(def => def.Name)
-                    .Order(StringComparer.OrdinalIgnoreCase)
-                    .Select(name => new ProcessorOption($"{SchemaNodeRef.Prefix}{name}")));
-            }
-            return options;
-        }
-    }
-
-    /// <summary>
-    /// The processors a processor def can reference: the global processors of <see cref="ProcessorOptions"/>.
-    /// </summary>
-    public IReadOnlyList<string> ProcessorKeyOptions => GetProcessorKeys();
-
-    private string[] GetProcessorKeys()
-        => OpenedAssemblies.Assemblies
-            .SelectMany(assembly => assembly.ProcessorNamespaces)
-            .SelectMany(item => item.ProcessorKeys)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Order(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+    public IReadOnlyList<string> ProcessorKeyOptions => ProcessorCatalog.GetProcessorKeys();
 
     /// <summary>
     /// The node defs to choose from for the nodeDef of the edited node: the node defs of the same kind
@@ -273,7 +242,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     public const int ProcessorDefsTab = 6;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(CanPin), nameof(DataTypeOptions), nameof(ProcessorOptions))]
+    [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(CanPin), nameof(DataTypeOptions))]
     [NotifyCanExecuteChangedFor(nameof(InstantiateSchemaCommand))]
     [NotifyCanExecuteChangedFor(nameof(CloseDocumentCommand))]
     public partial SchemaWorkspaceDocument? SelectedDocument { get; set; }
@@ -371,6 +340,13 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     public partial ItemDetailsViewModel? ItemDetails { get; private set; }
+
+    /// <summary>
+    /// The effective value processors of the edited repeat (count) or choice (selected index), edited in its General tab;
+    /// null for other nodes.
+    /// </summary>
+    [ObservableProperty]
+    public partial ItemDetailsViewModel? ValueProcessorDetails { get; private set; }
 
     /// <summary>
     /// The General tab content: the <see cref="SelectedNode"/> (edited through the staged node values of this view model)
@@ -1269,9 +1245,10 @@ internal sealed partial class MainViewModel : ViewModelBase
     private void LoadStagedNode()
     {
         var node = EditedNode;
+        ValueProcessorDetails?.Dispose();
+        ValueProcessorDetails = ActiveDocument is null ? null : ItemDetailsViewModel.CreateValueProcessors(ActiveDocument, node, ProcessorCatalog);
         // the data type defs, processor defs and opened assemblies may have changed since the last selection
         OnPropertyChanged(nameof(DataTypeOptions));
-        OnPropertyChanged(nameof(ProcessorOptions));
         OnPropertyChanged(nameof(ProcessorKeyOptions));
         OnPropertyChanged(nameof(NodeDefOptions));
         OnPropertyChanged(nameof(MemberNodeDefOptions));

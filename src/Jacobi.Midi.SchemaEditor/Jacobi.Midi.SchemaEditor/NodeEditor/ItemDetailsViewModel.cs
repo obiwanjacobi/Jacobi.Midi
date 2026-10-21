@@ -31,13 +31,16 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
     private readonly EditProcessorDef? _definition;
     private readonly bool _isDocument;
     private readonly ProcessorCatalog? _catalog;
+    // the pipeline stage the processors must have (Semantic for value processors); null for any stage
+    private readonly PipelineStage? _processorStage;
 
     private ItemDetailsViewModel(SchemaWorkspaceDocument document, INotifyPropertyChanged item,
         IList<EditProperty> properties, IList<EditProcessorRef>? processors, Func<EffectiveItem> resolve,
-        ProcessorCatalog? catalog, EditProcessorDef? definition = null, bool isDocument = false)
+        ProcessorCatalog? catalog, EditProcessorDef? definition = null, bool isDocument = false, PipelineStage? processorStage = null)
     {
         _isDocument = isDocument;
         _catalog = catalog;
+        _processorStage = processorStage;
         _document = document;
         _item = item;
         _properties = properties;
@@ -71,6 +74,31 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
     }
 
     /// <summary>
+    /// Creates the details of the value processors of a repeat (count) or choice (selected index);
+    /// null for other nodes. Only <see cref="Processors"/> applies: value processors are not properties of the node.
+    /// </summary>
+    /// <param name="catalog">The processors to check the processor properties against; null to not check them.</param>
+    public static ItemDetailsViewModel? CreateValueProcessors(SchemaWorkspaceDocument document, EditNode? node, ProcessorCatalog? catalog = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        if (node is null || EffectiveNodeResolver.GetValueProcessors(node) is not { } valueProcessors)
+        {
+            return null;
+        }
+        var schema = document.Schema;
+        // value processors convert the count or index value: only semantic processors can
+        return new(document, node, new List<EditProperty>(), valueProcessors,
+            () => EffectiveNodeResolver.ResolveValueProcessors(schema, node), catalog, processorStage: PipelineStage.Semantic);
+    }
+
+    /// <summary>
+    /// The processors to choose from for an own processor: all processors and processor defs of the document,
+    /// or only the semantic ones for value processors.
+    /// </summary>
+    public IReadOnlyList<ProcessorOption> ProcessorOptions
+        => _catalog?.GetProcessorOptions(_document.Schema, _processorStage) ?? [];
+
+    /// <summary>
     /// True when the item has processors (nodes and data type defs).
     /// </summary>
     public bool HasProcessors => _processors is not null;
@@ -101,7 +129,18 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
     public partial IReadOnlyList<PropertyRow> Properties { get; private set; } = [];
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ConversionNote))]
     public partial IReadOnlyList<ProcessorRow> Processors { get; private set; } = [];
+
+    /// <summary>
+    /// For value processors: the note that the count or selected index value is converted by them; null when there are none.
+    /// </summary>
+    public string? ConversionNote => Processors.Count switch
+    {
+        0 => null,
+        1 => "The value is converted by 1 value processor.",
+        var count => $"The value is converted by {count} value processors."
+    };
 
     /// <summary>
     /// The definitions that could not be resolved within the document, so the effective values may be incomplete.

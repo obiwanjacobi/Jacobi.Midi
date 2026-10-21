@@ -153,6 +153,23 @@
                 <ItemsControl ItemsSource="{Binding Processors}" />
             </StackPanel>
         </DataTemplate>
+        <!-- the value processors of a repeat (count) or choice (selected index), shown in its General tab -->
+        <DataTemplate x:Key="ValueProcessorsPanelTemplate" x:DataType="ne:ItemDetailsViewModel">
+            <StackPanel Spacing="6">
+                <ItemsControl ItemsSource="{Binding Unresolved}" IsVisible="{Binding HasUnresolved}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource AppTextAccentBrush}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="Value processors" Classes="label" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Content="Add value processor" Command="{Binding AddProcessorCommand}" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding Processors}" />
+            </StackPanel>
+        </DataTemplate>
         <DataTemplate x:Key="PropertiesPanelTemplate" x:DataType="ne:ItemDetailsViewModel">
             <StackPanel Spacing="10">
                 <ItemsControl ItemsSource="{Binding Unresolved}" IsVisible="{Binding HasUnresolved}">
@@ -179,7 +196,7 @@
                     <Grid ColumnDefinitions="*,140,Auto,Auto" ColumnSpacing="8">
                         <ComboBox Classes="options processors" IsEditable="True" IsVisible="{Binding IsOwn}"
                                   Text="{Binding Processor, UpdateSourceTrigger=LostFocus}" PlaceholderText="namespace.id or ref:name"
-                                  ItemsSource="{Binding $parent[ne:NodeEditorControl].((vm:MainViewModel)DataContext).ProcessorOptions}">
+                                  ItemsSource="{Binding Details.ProcessorOptions}">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="ne:ProcessorOption">
                                     <Panel>
@@ -229,7 +246,11 @@
                         <StackPanel Spacing="4">
                             <TextBlock Text="Count" Classes="label" />
                             <TextBox Text="{Binding NodeFacets.Count}" PlaceholderText="number, ref:path or pub:ns.name" />
+                            <TextBlock Text="{Binding ValueProcessorDetails.ConversionNote}" Classes="kind" TextWrapping="Wrap"
+                                       IsVisible="{Binding ValueProcessorDetails.ConversionNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}" />
                         </StackPanel>
+                        <ContentControl Content="{Binding ValueProcessorDetails}" ContentTemplate="{StaticResource ValueProcessorsPanelTemplate}"
+                                        IsVisible="{Binding ValueProcessorDetails, Converter={x:Static ObjectConverters.IsNotNull}}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Byte size" Classes="label" />
                             <TextBox Text="{Binding NodeFacets.ByteSize}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
@@ -251,7 +272,11 @@
                         <StackPanel Spacing="4">
                             <TextBlock Text="Selected index" Classes="label" />
                             <TextBox Text="{Binding NodeFacets.SelectedIndex}" PlaceholderText="number, ref:path or pub:ns.name" />
+                            <TextBlock Text="{Binding ValueProcessorDetails.ConversionNote}" Classes="kind" TextWrapping="Wrap"
+                                       IsVisible="{Binding ValueProcessorDetails.ConversionNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}" />
                         </StackPanel>
+                        <ContentControl Content="{Binding ValueProcessorDetails}" ContentTemplate="{StaticResource ValueProcessorsPanelTemplate}"
+                                        IsVisible="{Binding ValueProcessorDetails, Converter={x:Static ObjectConverters.IsNotNull}}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Member node def" Classes="label" />
                             <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.MemberNodeDef}" ItemsSource="{Binding MemberNodeDefOptions}" PlaceholderText="optional: makes the choice open" />

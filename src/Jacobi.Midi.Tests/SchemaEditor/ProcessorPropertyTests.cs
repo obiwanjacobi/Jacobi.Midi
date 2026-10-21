@@ -142,6 +142,53 @@ public class ProcessorPropertyTests
         Assert.Contains("Test.renamed", editor.BasedOnOptions);
     }
 
+    [Fact]
+    public void ValueProcessors_MergeTheNodeDefAndOwnAndEditTheOwn()
+    {
+        var schema = SchemaFileService.CreateDocument("Test");
+        var definition = new EditRepeat(null) { Name = "def", Count = 1, Members = [], Processors = [], Properties = [], ValueProcessors = [] };
+        definition.ValueProcessors.Add(new EditProcessorRef { Processor = new SchemaName("sys.scale") });
+        schema.NodeDefs.Add(definition);
+        var root = (EditGroup)schema.Members[0];
+        var repeat = new EditRepeat(root) { Name = "repeat", Count = 1, Members = [], Processors = [], Properties = [], ValueProcessors = [] };
+        root.Members.Add(repeat);
+        repeat.NodeDef = new SchemaName("def");
+        var document = new SchemaWorkspaceDocument(schema, SchemaFormat.Json);
+        using var details = ItemDetailsViewModel.CreateValueProcessors(document, repeat, CreateCatalog())!;
+
+        var inherited = Assert.Single(details.Processors);
+        Assert.False(inherited.IsOwn);
+        Assert.Equal("nodeDef def", inherited.Source);
+
+        // only semantic processors (and the processor defs of one) can be value processors
+        schema.ProcessorDefs.Add(new EditProcessorDef { Name = "scaled", Processor = "sys.scale", Properties = [] });
+        schema.ProcessorDefs.Add(new EditProcessorDef { Name = "aligned", Processor = "sys.align", Properties = [] });
+        var options = details.ProcessorOptions.Where(option => !option.IsHeader).Select(option => option.Text).ToList();
+        Assert.Contains("sys.scale", options);
+        Assert.Contains("sys.map", options);
+        Assert.DoesNotContain("sys.align", options);
+        Assert.Contains("ref:scaled", options);
+        Assert.DoesNotContain("ref:aligned", options);
+        using (var nodeDetails = ItemDetailsViewModel.Create(document, repeat, CreateCatalog())!)
+        {
+            Assert.Contains(nodeDetails.ProcessorOptions, option => option.Text == "sys.align");
+        }
+
+        details.AddProcessorCommand.Execute(null);
+        Assert.Single(repeat.ValueProcessors);
+        Assert.Empty(repeat.Processors);
+        var own = details.Processors.Single(row => row.IsOwn);
+        own.Processor = "sys.map";
+        Assert.Equal("sys.map", Assert.Single(repeat.ValueProcessors).Processor.ToString());
+
+        Assert.Equal("The value is converted by 2 value processors.", details.ConversionNote);
+
+        details.RemoveProcessorCommand.Execute(details.Processors.Single(row => row.IsOwn));
+        Assert.Empty(repeat.ValueProcessors);
+        Assert.Equal("The value is converted by 1 value processor.", details.ConversionNote);
+        Assert.Null(ItemDetailsViewModel.CreateValueProcessors(document, root));
+    }
+
     private static ProcessorCatalog CreateCatalog()
     {
         var manager = new ProcessorManager();

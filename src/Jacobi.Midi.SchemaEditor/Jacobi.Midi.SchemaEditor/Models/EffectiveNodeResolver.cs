@@ -104,6 +104,35 @@ internal static class EffectiveNodeResolver
     }
 
     /// <summary>
+    /// Resolves the effective value processors of a repeat (count) or choice (selected index): those of the node def chain
+    /// overridden by the node's own, the way the schema compiler merges them. Properties are not part of the result.
+    /// </summary>
+    public static EffectiveItem ResolveValueProcessors(EditDocument document, EditNode node)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(node);
+        var unresolved = new List<string>();
+        var processors = new List<ResolvedProcessor>();
+        // the node def chain is nearest first; merge the farthest first
+        foreach (var nodeDef in GetNodeDefChain(document, node, unresolved).AsEnumerable().Reverse())
+        {
+            MergeProcessors(document, processors, GetValueProcessors(nodeDef), $"nodeDef {nodeDef.Name}", own: false, unresolved);
+        }
+        MergeProcessors(document, processors, GetValueProcessors(node), OwnSource, own: true, unresolved);
+        return new([], processors, unresolved.Distinct().ToList());
+    }
+
+    /// <summary>
+    /// The (authored) value processors of a repeat (count) or choice (selected index); null for other nodes.
+    /// </summary>
+    public static IList<EditProcessorRef>? GetValueProcessors(EditNode node) => node switch
+    {
+        EditRepeat repeat => repeat.ValueProcessors,
+        EditChoice choice => choice.ValueProcessors,
+        _ => null
+    };
+
+    /// <summary>
     /// The (authored) processors of a node, or null for a node without processors.
     /// </summary>
     public static IList<EditProcessorRef>? GetProcessors(EditNode node) => node switch
