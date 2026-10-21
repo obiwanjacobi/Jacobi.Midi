@@ -35,8 +35,6 @@
                             <MenuItem Header="Open files…" Command="{Binding OpenFilesCommand}" />
                             <MenuItem Header="Open assemblies…" Command="{Binding OpenAssembliesCommand}" ToolTip.Tip="Open .dll files to use their embedded schemas and processors" />
                             <Separator />
-                            <MenuItem Header="Instantiate…" Command="{Binding InstantiateSchemaCommand}" ToolTip.Tip="Provide values for the selected group of the active document" />
-                            <Separator />
                             <MenuItem Header="Save" Command="{Binding SaveDocumentCommand}" IsEnabled="{Binding HasSelectedDocument}" />
                             <MenuItem Header="Save as…" Command="{Binding SaveDocumentAsCommand}" IsEnabled="{Binding HasSelectedDocument}" />
                         </MenuFlyout>
@@ -81,7 +79,8 @@
                                        Text="Select a node to edit its name, type and documentation."
                                        TextWrapping="Wrap" Margin="0,14,0,0" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" />
                             <st:SchemaTreeControl Documents="{Binding TreeDocuments}"
-                                                  SelectedItem="{Binding SelectedItem, Mode=TwoWay}" />
+                                                  SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                                                  InstantiateCommand="{Binding InstantiateSchemaCommand}" />
                         </DockPanel>
                     </TabItem>
                     <TabItem Header="Assemblies">

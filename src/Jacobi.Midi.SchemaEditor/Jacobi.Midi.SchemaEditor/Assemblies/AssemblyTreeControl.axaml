@@ -36,7 +36,14 @@
                 </DataTemplate>
                 <!-- the nodes of an embedded schema; matches Group, Repeat and Choice -->
                 <TreeDataTemplate x:DataType="models:EditGroup" ItemsSource="{Binding Members}">
-                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,5">
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,5" Background="Transparent">
+                        <StackPanel.ContextFlyout>
+                            <MenuFlyout FlyoutPresenterClasses="noScroll">
+                                <MenuItem Header="Instantiate…" ToolTip.Tip="Provide values for this group"
+                                          Command="{Binding $parent[asm:AssemblyTreeControl].((vm:MainViewModel)DataContext).InstantiateSchemaCommand}"
+                                          CommandParameter="{Binding}" />
+                            </MenuFlyout>
+                        </StackPanel.ContextFlyout>
                         <TextBlock Text="{Binding Name}" Foreground="{DynamicResource AppTextBodyBrush}" />
                         <TextBlock Text="{Binding Kind}" Foreground="{DynamicResource AppTextMutedBrush}" />
                     </StackPanel>

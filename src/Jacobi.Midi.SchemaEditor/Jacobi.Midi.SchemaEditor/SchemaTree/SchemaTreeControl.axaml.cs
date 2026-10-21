@@ -1,5 +1,6 @@
 ﻿using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data;
@@ -14,6 +15,7 @@ namespace Jacobi.Midi.SchemaEditor.SchemaTree;
 /// Assign <see cref="Documents"/> to show schemas (an observable collection is followed); <see cref="SelectedItem"/> reflects
 /// (and can set) the selected item; a selected root is reported as the document itself.
 /// An item that is not shown in the tree (a node def) is kept by the host but not selected in the tree.
+/// The context menu of a group executes <see cref="InstantiateCommand"/> with that group as parameter.
 /// </summary>
 internal partial class SchemaTreeControl : UserControl
 {
@@ -23,6 +25,9 @@ internal partial class SchemaTreeControl : UserControl
     public static readonly StyledProperty<object?> SelectedItemProperty =
         AvaloniaProperty.Register<SchemaTreeControl, object?>(nameof(SelectedItem),
             defaultBindingMode: BindingMode.TwoWay);
+
+    public static readonly StyledProperty<ICommand?> InstantiateCommandProperty =
+        AvaloniaProperty.Register<SchemaTreeControl, ICommand?>(nameof(InstantiateCommand));
 
     private readonly SchemaTreeViewModel _viewModel = new();
     // set while the selection is synchronized between the control and its view model
@@ -53,6 +58,15 @@ internal partial class SchemaTreeControl : UserControl
     {
         get => GetValue(SelectedItemProperty);
         set => SetValue(SelectedItemProperty, value);
+    }
+
+    /// <summary>
+    /// The command of the Instantiate item in the context menu of a group; its parameter is the <see cref="EditGroup"/>.
+    /// </summary>
+    public ICommand? InstantiateCommand
+    {
+        get => GetValue(InstantiateCommandProperty);
+        set => SetValue(InstantiateCommandProperty, value);
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)

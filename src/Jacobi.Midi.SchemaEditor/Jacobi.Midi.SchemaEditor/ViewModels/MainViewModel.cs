@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
@@ -759,10 +759,25 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// read-only, an embedded schema selected in the assembly tree). The document and the documents it includes
     /// (taken from the open documents and the embedded schemas of the opened assemblies) are compiled first; when that fails the problem is reported and no dialog opens.
     /// </summary>
+    /// <param name="group">
+    /// The group to instantiate (from the context menu of a tree); it is selected in the tree of the active left tab first.
+    /// Null instantiates the selected group.
+    /// </param>
     [RelayCommand(CanExecute = nameof(CanInstantiateSchema))]
-    private void InstantiateSchema()
+    private void InstantiateSchema(EditGroup? group)
     {
-        if (ActiveDocument is not { } active || SelectedItem is not EditGroup root)
+        if (group is not null && !ReferenceEquals(group, SelectedItem))
+        {
+            if (SelectedLeftTab == AssembliesLeftTab)
+            {
+                SelectedAssemblyItem = group;
+            }
+            else
+            {
+                SelectedItem = group;
+            }
+        }
+        if (ActiveDocument is not { } active || SelectedItem is not EditGroup root || root is EditDocument)
         {
             return;
         }
@@ -855,8 +870,10 @@ internal sealed partial class MainViewModel : ViewModelBase
             : $"Renamed {dialog.OldName} to {dialog.NewName}.";
     }
 
-    private bool CanInstantiateSchema()
-        => ActiveDocument is not null && SelectedItem is EditGroup and not EditDocument;
+    private bool CanInstantiateSchema(EditGroup? group)
+        => group is not null
+            ? group is not EditDocument
+            : ActiveDocument is not null && SelectedItem is EditGroup and not EditDocument;
 
     private void CloseInstantiateDialog(InstantiateSchemaViewModel dialog, bool confirmed)
     {

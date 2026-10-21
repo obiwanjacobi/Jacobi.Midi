@@ -18,4 +18,13 @@
     <Style Selector="TabItem">
         <Setter Property="FontSize" Value="11" />
     </Style>
+
+    <!--
+        Short menus (the context menus of the trees) never scroll. With the default (Auto) scrolling, a rounding difference
+        between the extent and the viewport shows the scroll down arrow, which then takes the room of the item.
+        Use with FlyoutPresenterClasses="noScroll" on a MenuFlyout.
+    -->
+    <Style Selector="MenuFlyoutPresenter.noScroll">
+        <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Disabled" />
+    </Style>
 </Styles>
