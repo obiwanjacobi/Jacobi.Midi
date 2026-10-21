@@ -9,6 +9,17 @@ namespace Jacobi.Midi.Tests.SchemaEditor;
 public class AssemblyWorkspaceTests
 {
     [Fact]
+    public void MainViewModel_PreloadsTheSysAndMidiProcessors()
+    {
+        var viewModel = new MainViewModel();
+
+        Assert.Contains("sys", viewModel.OpenedAssemblies.Processors.Namespaces, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("midi", viewModel.OpenedAssemblies.Processors.Namespaces, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains(viewModel.OpenedAssemblies.Assemblies, assembly => assembly.Schemas.Any(schema => schema.Name == "Midi"));
+        Assert.All(viewModel.OpenedAssemblies.Assemblies, assembly => Assert.False(assembly.HasProblems, String.Join("; ", assembly.Problems)));
+    }
+
+    [Fact]
     public void Load_AddsEmbeddedSchemasToTheSchemaSet()
     {
         var workspace = new AssemblyWorkspace();

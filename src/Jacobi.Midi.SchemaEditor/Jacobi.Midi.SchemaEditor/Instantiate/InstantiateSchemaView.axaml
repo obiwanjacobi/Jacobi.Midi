@@ -123,10 +123,17 @@
                     <TextBlock Text="Provide a value for each field. Select the body of an open choice and add copies of an open repeat."
                                Classes="note" TextWrapping="Wrap" IsVisible="{Binding HasRoot}" />
                 </StackPanel>
-                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,14,0,0">
-                    <Button Content="Cancel" Command="{Binding CancelCommand}" IsVisible="{Binding HasRoot}" />
-                    <Button Content="OK" Classes="accent" Command="{Binding ConfirmCommand}" />
-                </StackPanel>
+                <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="0,14,0,0">
+                    <!-- the outcome of the last Save As or Send -->
+                    <TextBlock Text="{Binding StatusMessage}" Classes="note" TextWrapping="Wrap" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                        <Button Content="Save As…" Command="{Binding SaveAsCommand}" IsVisible="{Binding HasRoot}"
+                                ToolTip.Tip="Serialize the values and save them to a SysEx (.syx) file" />
+                        <Button Content="Send" Command="{Binding SendCommand}" IsVisible="{Binding HasRoot}"
+                                ToolTip.Tip="Serialize the values and send them to the active MIDI endpoint" />
+                        <Button Content="Close" Classes="accent" Command="{Binding CloseCommand}" />
+                    </StackPanel>
+                </Grid>
                 <TextBlock Text="{Binding Error}" IsVisible="{Binding HasError}" TextWrapping="Wrap" DockPanel.Dock="Top"
                            Foreground="{DynamicResource AppTextBodyBrush}" />
                 <ScrollViewer HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding HasRoot}">
@@ -134,5 +141,24 @@
                 </ScrollViewer>
             </DockPanel>
         </Border>
+
+        <!-- popup with the problem that prevented Save As or Send (e.g. the execution plan could not be built) -->
+        <Grid IsVisible="{Binding HasProblem}" Background="#66000000">
+            <Border MaxWidth="760" Margin="48" Padding="20" CornerRadius="8"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="{DynamicResource AppBackgroundPanelBrush}"
+                    BorderBrush="Orange" BorderThickness="1">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="CANNOT SERIALIZE" FontSize="11" FontWeight="Bold" LetterSpacing="1.4"
+                               Foreground="Orange" Margin="0,0,0,10" />
+                    <Button DockPanel.Dock="Bottom" Content="OK" Classes="accent" HorizontalAlignment="Right" Margin="0,14,0,0"
+                            Command="{Binding DismissProblemCommand}" />
+                    <ScrollViewer MaxHeight="420">
+                        <SelectableTextBlock Text="{Binding Problem}" TextWrapping="Wrap" FontFamily="Consolas,Menlo,monospace" FontSize="12"
+                                             Foreground="{DynamicResource AppTextBodyBrush}" />
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>

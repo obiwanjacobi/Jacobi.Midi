@@ -36,5 +36,6 @@ Known gaps and loose ends, collected while building the editor.
 ## Instantiate dialog
 
 - [ ] Field values are free text. They get a (non-blocking) warning from `DataTypeValueValidator`, but data type def `options` are not offered as a list.
-- [ ] The confirmed instance (`MainViewModel.LastInstance`) is not used yet; it should implement `IValueSource`/`IOpenChoiceSource` so it can be written by the serializer.
+- [x] The confirmed instance (`MainViewModel.LastInstance`) is not used yet; it should implement `IValueSource`/`IOpenChoiceSource` so it can be written by the serializer. Fixed: `LastInstance` is removed; `InstanceValueSource` writes the instance for *Save As* and *Send*.
 - [ ] Processors are not checked: only includes (open documents) and schema compilation are verified before the dialog opens.
+- [ ] Open choice bodies mismatch: `SchemaInstantiator` offers groups at any depth that declare the member node def as bodies of an open choice, but the serializer (`ExecutionPlan.BuildOpenChoiceBodies`) only accepts roots. *Save As*/*Send* with a nested body fails with "is not a known group that conforms to the nodeDef". Either offer only roots, or let the serializer accept nested groups (possibly through the `Target` of `OpenChoiceSourceResult`).

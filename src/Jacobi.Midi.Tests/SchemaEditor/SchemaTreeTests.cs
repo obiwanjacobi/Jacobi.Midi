@@ -1,3 +1,4 @@
+using Jacobi.Midi.SchemaEditor.Assemblies;
 using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.SchemaEditor.SchemaTree;
 using Jacobi.Midi.SchemaEditor.Services;
@@ -162,9 +163,9 @@ public class SchemaTreeTests
         viewModel.NewDocumentCommand.Execute(null);
         viewModel.SelectedItem = viewModel.SelectedDocument!.Schema.Members[0];
 
-        // no assemblies: nothing of the schema tab remains in the node editor
+        // the first pre-loaded assembly is selected: nothing of the schema tab remains in the node editor
         viewModel.SelectedLeftTab = MainViewModel.AssembliesLeftTab;
-        Assert.Null(viewModel.SelectedAssemblyItem);
+        Assert.Same(viewModel.OpenedAssemblies.Assemblies[0], Assert.IsType<LoadedAssembly>(viewModel.SelectedAssemblyItem));
         Assert.Null(viewModel.SelectedItem);
         Assert.Null(viewModel.ActiveDocument);
         Assert.Equal(String.Empty, viewModel.SelectedItemPath);

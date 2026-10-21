@@ -96,6 +96,39 @@ public readonly record struct SysEx7Message : IUniversalPacket
         return true;
     }
 
+    /// <summary>
+    /// Splits a MIDI 1.0 SysEx message into SysEx7 UMPs: one Complete packet for up to six payload bytes,
+    /// otherwise a Start, zero or more Continue and an End packet. The F0/F7 framing is not transmitted in the packets.
+    /// </summary>
+    /// <param name="group">The UMP group (0-15).</param>
+    /// <param name="sysEx">The complete message, starting with F0 and ending with F7.</param>
+    /// <exception cref="ArgumentException">The message is not framed by F0/F7 or its payload holds a byte above 7F.</exception>
+    public static SysEx7Message[] FromSystemExclusive(byte group, ReadOnlySpan<byte> sysEx)
+    {
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(group, (byte)15);
+        if (sysEx.Length < 2 || sysEx[0] != 0xF0 || sysEx[^1] != 0xF7)
+            throw new ArgumentException("Expected a SysEx message that starts with F0 and ends with F7.", nameof(sysEx));
+
+        var payload = sysEx[1..^1];
+        var index = payload.IndexOfAnyInRange((byte)0x80, (byte)0xFF);
+        if (index >= 0)
+            throw new ArgumentException($"The SysEx payload byte {payload[index]:X2} at offset {index + 1} is not a 7-bit value.", nameof(sysEx));
+
+        if (payload.Length <= 6)
+            return [new SysEx7Message(group, SysExPacketStatus.Complete, payload)];
+
+        var packets = new SysEx7Message[(payload.Length + 5) / 6];
+        for (int packet = 0; packet < packets.Length; packet++)
+        {
+            var status = packet == 0 ? SysExPacketStatus.Start
+                : packet == packets.Length - 1 ? SysExPacketStatus.End
+                : SysExPacketStatus.Continue;
+            var offset = packet * 6;
+            packets[packet] = new SysEx7Message(group, status, payload.Slice(offset, Math.Min(6, payload.Length - offset)));
+        }
+        return packets;
+    }
+
     private static bool IsValid(ulong data)
     {
         var word0 = (uint)data;

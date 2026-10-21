@@ -36,6 +36,11 @@ internal sealed partial class MainViewModel : ViewModelBase
         new("Assemblies") { Patterns = ["*.dll"] }
     ];
 
+    private static readonly FilePickerFileType[] SysExFileTypes =
+    [
+        new("SysEx files") { Patterns = ["*.syx"] }
+    ];
+
     private readonly Dictionary<SchemaWorkspaceDocument, IStorageFile> _storageFiles = [];
     private IStorageProvider? _storageProvider;
     private IClipboard? _clipboard;
@@ -65,6 +70,17 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// The opened assemblies with their embedded schemas (not editable, not part of <see cref="Documents"/>) and processors.
     /// </summary>
     public AssemblyWorkspace OpenedAssemblies { get; } = new();
+
+    public MainViewModel()
+    {
+        // pre-loaded: the 'sys' processors of the serializer, and the base 'midi' schema and 'midi' processors
+        // that the vendor and device schemas build on
+        foreach (var assembly in (Assembly[])[typeof(Jacobi.BinarySerializer.Processors.ProcessorFactory).Assembly,
+            typeof(Jacobi.Midi.Device.Processors.ProcessorFactory).Assembly])
+        {
+            OpenedAssemblies.Load(assembly, Path.GetFileName(assembly.Location));
+        }
+    }
 
     /// <summary>
     /// The active tab of the left panel: <see cref="SchemaLeftTab"/> (the schema tree) or <see cref="AssembliesLeftTab"/>.
@@ -194,12 +210,6 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     public partial InstantiateSchemaViewModel? InstantiateDialog { get; private set; }
-
-    /// <summary>
-    /// The instance that the user confirmed in the last instantiate dialog; null when there is none yet.
-    /// </summary>
-    [ObservableProperty]
-    public partial InstanceNode? LastInstance { get; private set; }
 
     /// <summary>
     /// The rename dialog while it is shown; null otherwise.
@@ -792,7 +802,12 @@ internal sealed partial class MainViewModel : ViewModelBase
                 .Where(schema => !workspace.Any(open => String.Equals(open.Name, schema.Name, StringComparison.OrdinalIgnoreCase)))
                 .ToList();
             var instantiator = SchemaInstantiator.Create(active.Schema, [.. workspace, .. embedded]);
-            InstantiateDialog = new InstantiateSchemaViewModel(instantiator.Create(root), CloseInstantiateDialog);
+            var instance = instantiator.Create(root);
+            // the processors of the opened assemblies are used when the values are serialized
+            Func<byte[]>? serialize = instantiator.FindRootName(root) is { } rootName
+                ? () => instantiator.Serialize(rootName, instance, OpenedAssemblies.Processors)
+                : null;
+            InstantiateDialog = new InstantiateSchemaViewModel(instance, serialize, SaveSysExFile, MidiBar, CloseInstantiateDialog);
         }
         catch (Exception exception) when (IsSchemaError(exception))
         {
@@ -875,14 +890,41 @@ internal sealed partial class MainViewModel : ViewModelBase
             ? group is not EditDocument
             : ActiveDocument is not null && SelectedItem is EditGroup and not EditDocument;
 
-    private void CloseInstantiateDialog(InstantiateSchemaViewModel dialog, bool confirmed)
+    private void CloseInstantiateDialog(InstantiateSchemaViewModel dialog) => InstantiateDialog = null;
+
+    /// <summary>
+    /// Lets the user pick a SysEx (.syx) file, starting with <paramref name="suggestedName"/>, and saves <paramref name="bytes"/> to it.
+    /// </summary>
+    /// <returns>The name of the saved file; null when the user cancelled.</returns>
+    /// <exception cref="InvalidOperationException">The platform does not provide file-save access.</exception>
+    private async Task<string?> SaveSysExFile(string suggestedName, byte[] bytes)
     {
-        InstantiateDialog = null;
-        if (confirmed && dialog.Root is { } instance)
+        if (_storageProvider is null || !_storageProvider.CanSave)
         {
-            LastInstance = instance;
-            StatusMessage = $"Instantiated {instance.Name} with {instance.Fields().Count()} field value(s).";
+            throw new InvalidOperationException("This platform does not provide file-save access.");
         }
+
+        var file = await _storageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Save SysEx",
+            SuggestedFileName = suggestedName,
+            DefaultExtension = "syx",
+            FileTypeChoices = SysExFileTypes
+        });
+        if (file is null)
+        {
+            return null;
+        }
+
+        await using var stream = await file.OpenWriteAsync();
+        if (stream.CanSeek)
+        {
+            stream.Position = 0;
+            stream.SetLength(0);
+        }
+        await stream.WriteAsync(bytes);
+        await stream.FlushAsync();
+        return file.Name;
     }
 
     [RelayCommand]

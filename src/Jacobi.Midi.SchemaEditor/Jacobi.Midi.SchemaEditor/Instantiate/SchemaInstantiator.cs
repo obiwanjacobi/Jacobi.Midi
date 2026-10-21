@@ -1,3 +1,6 @@
+using System.Buffers;
+using Jacobi.BinarySerializer;
+using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.SchemaEditor.Models;
 
@@ -138,6 +141,55 @@ internal sealed class SchemaInstantiator
         return current is null
             ? throw new InvalidOperationException($"The compiled schema has no node '{path}'.")
             : Build(current, documentName, new SchemaPath(path));
+    }
+
+    /// <summary>
+    /// The name of the root (<c>Document.Root</c>) that holds <paramref name="group"/>: the root of the plan its instance is written with.
+    /// Null for (a group in) a node def: it has no plan.
+    /// </summary>
+    public SchemaName? FindRootName(EditGroup group)
+    {
+        ArgumentNullException.ThrowIfNull(group);
+        EditNode topNode = group;
+        for (EditNode? node = group; node is not null and not EditDocument; node = node.Parent)
+        {
+            topNode = node;
+        }
+        if (topNode.Parent is not EditDocument owner)
+        {
+            return null;
+        }
+        return new SchemaName($"{owner.Name}{SchemaName.Separator}{topNode.Name}");
+    }
+
+    /// <summary>
+    /// Writes the values of <paramref name="instance"/> with the plan of <paramref name="root"/> (see <see cref="FindRootName"/>).
+    /// An instance of a nested node is written as a range of that plan: only its fields are written,
+    /// but the logic of the groups that lead to it (e.g. SysEx framing, checksums) still applies.
+    /// </summary>
+    /// <param name="processors">The processors the schemas use (those of the opened assemblies).</param>
+    /// <returns>The serialized bytes.</returns>
+    /// <exception cref="InvalidOperationException">The plan cannot be built or a value cannot be written; the message describes the problem.</exception>
+    public byte[] Serialize(SchemaName root, InstanceNode instance, IProcessorProvider processors)
+    {
+        ArgumentNullException.ThrowIfNull(instance);
+        ArgumentNullException.ThrowIfNull(processors);
+        var serializer = new SerializerBuilder()
+            .AddSchemas(_schemas)
+            .AddProcessors(processors)
+            .Build();
+        var plan = serializer.GetPlan(root);
+        var output = new ArrayBufferWriter<byte>();
+        if (String.Equals(plan.Root.Path.Value, instance.Path.Value, StringComparison.OrdinalIgnoreCase))
+        {
+            // the engine enters the root with the source itself; the items of a root repeat are found by its path
+            serializer.Serialize(plan, new InstanceValueSource(instance is InstanceRepeat ? null : instance, instance), output);
+        }
+        else
+        {
+            serializer.Serialize(plan.CreateRange(instance.Path), new InstanceValueSource(null, instance), output);
+        }
+        return output.WrittenSpan.ToArray();
     }
 
     /// <summary>

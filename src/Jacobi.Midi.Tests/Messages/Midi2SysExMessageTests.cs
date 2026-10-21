@@ -210,6 +210,38 @@ public class Midi2SysExMessageTests
         Assert.Throws<ArgumentOutOfRangeException>(() => V2.SysEx8Message.CreateAbort(16, 0));
     }
 
+    [Theory]
+    [InlineData(0, new[] { V2.SysExPacketStatus.Complete })]
+    [InlineData(6, new[] { V2.SysExPacketStatus.Complete })]
+    [InlineData(7, new[] { V2.SysExPacketStatus.Start, V2.SysExPacketStatus.End })]
+    [InlineData(12, new[] { V2.SysExPacketStatus.Start, V2.SysExPacketStatus.End })]
+    [InlineData(13, new[] { V2.SysExPacketStatus.Start, V2.SysExPacketStatus.Continue, V2.SysExPacketStatus.End })]
+    public void SysEx7FromSystemExclusiveSplitsThePayload(int length, V2.SysExPacketStatus[] statuses)
+    {
+        byte[] payload = Enumerable.Range(0, length).Select(index => (byte)(index + 1)).ToArray();
+        byte[] sysEx = [0xF0, .. payload, 0xF7];
+
+        var packets = V2.SysEx7Message.FromSystemExclusive(3, sysEx);
+
+        Assert.Equal(statuses, packets.Select(packet => packet.Status));
+        Assert.All(packets, packet => Assert.Equal(3, packet.Group));
+        var transmitted = packets.SelectMany(packet =>
+        {
+            var bytes = new byte[packet.PayloadLength];
+            packet.CopyPayloadTo(bytes);
+            return bytes;
+        });
+        Assert.Equal(payload, transmitted);
+    }
+
+    [Theory]
+    [InlineData(new byte[] { 0x01, 0x02, 0xF7 })]
+    [InlineData(new byte[] { 0xF0, 0x01, 0x02 })]
+    [InlineData(new byte[] { 0xF0, 0x80, 0xF7 })]
+    [InlineData(new byte[] { 0xF0 })]
+    public void SysEx7FromSystemExclusiveRejectsInvalidMessages(byte[] sysEx)
+        => Assert.Throws<ArgumentException>(() => V2.SysEx7Message.FromSystemExclusive(0, sysEx));
+
     private static byte[] ReadWireBytes(IUniversalPacket packet)
     {
         byte[] bytes = new byte[(int)packet.PacketKind * 4];

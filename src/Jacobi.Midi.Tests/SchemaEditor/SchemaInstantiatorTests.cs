@@ -246,9 +246,9 @@ public class SchemaInstantiatorTests
         Assert.Equal(repeat.Name, instance.Name);
         Assert.Equal($"{root.Name}.{repeat.Name}", instance.Path.Value);
 
-        dialog.ConfirmCommand.Execute(null);
+        Assert.True(dialog.CanSerialize);
+        dialog.CloseCommand.Execute(null);
         Assert.Null(viewModel.InstantiateDialog);
-        Assert.Same(instance, viewModel.LastInstance);
 
         viewModel.SelectedItem = root;
         viewModel.InstantiateSchemaCommand.Execute(null);
@@ -269,9 +269,9 @@ public class SchemaInstantiatorTests
         Assert.Null(dialog.Root);
         Assert.True(dialog.HasError);
         Assert.Contains("not loaded", dialog.Error);
-        dialog.ConfirmCommand.Execute(null);
+        Assert.False(dialog.CanSerialize);
+        dialog.CloseCommand.Execute(null);
         Assert.Null(viewModel.InstantiateDialog);
-        Assert.Null(viewModel.LastInstance);
     }
 
     [Fact]
@@ -314,6 +314,118 @@ public class SchemaInstantiatorTests
         var dialog = Assert.IsType<InstantiateSchemaViewModel>(viewModel.InstantiateDialog);
         Assert.False(dialog.HasError, dialog.Error);
         Assert.Equal(root.Name, dialog.Root!.Name);
+    }
+
+    private const string Serializable = """
+        {
+          "name": "Ser",
+          "nodeDefs": [{ "name": "Body", "kind": "group" }],
+          "members": [
+            { "name": "Msg", "kind": "group", "members": [
+                { "name": "Start", "kind": "field", "datatype": "sys.uint8", "value": "240" },
+                { "name": "Head", "kind": "group", "members": [{ "name": "A", "kind": "field", "datatype": "sys.uint8" }] },
+                { "name": "Data", "kind": "repeat", "count": 2, "members": [{ "name": "V", "kind": "field", "datatype": "sys.uint8" }] },
+                { "name": "End", "kind": "field", "datatype": "sys.uint8", "value": "247" }] },
+            { "name": "Env", "kind": "group", "members": [{ "name": "Payload", "kind": "choice", "memberNodeDef": "Body" }] },
+            { "name": "BodyB", "kind": "group", "nodeDef": "Body", "members": [{ "name": "Value", "kind": "field", "datatype": "sys.uint8" }] }
+          ]
+        }
+        """;
+
+    [Fact]
+    public void Serialize_WritesTheValuesOfARoot()
+    {
+        var (instantiator, document) = CreateInstantiator(Serializable);
+        var msg = (EditGroup)document.Members.Single(member => member.Name == "Msg");
+        var root = Assert.IsType<InstanceGroup>(instantiator.Create(msg));
+        Field(root, "Head", "A").Value = "1";
+        var data = Assert.IsType<InstanceRepeat>(root.Members[2]);
+        ((InstanceField)data.Items[0].Members[0]).Value = "2";
+        ((InstanceField)data.Items[1].Members[0]).Value = "3";
+
+        var bytes = instantiator.Serialize(instantiator.FindRootName(msg)!.Value, root, TestHelpers.CreateProcessors());
+
+        Assert.Equal([0xF0, 0x01, 0x02, 0x03, 0xF7], bytes);
+    }
+
+    [Fact]
+    public void Serialize_WritesANestedGroupAsARangeOfItsRoot()
+    {
+        var (instantiator, document) = CreateInstantiator(Serializable);
+        var msg = (EditGroup)document.Members.Single(member => member.Name == "Msg");
+        var head = (EditGroup)msg.Members.Single(member => member.Name == "Head");
+        var instance = Assert.IsType<InstanceGroup>(instantiator.Create(head));
+        ((InstanceField)instance.Members[0]).Value = "5";
+
+        Assert.Equal("Ser.Msg", instantiator.FindRootName(head)!.Value.ToString());
+        var bytes = instantiator.Serialize(instantiator.FindRootName(head)!.Value, instance, TestHelpers.CreateProcessors());
+
+        Assert.Equal([0x05], bytes);
+    }
+
+    [Fact]
+    public void Serialize_WritesTheSelectedBodyOfAnOpenChoice()
+    {
+        var (instantiator, document) = CreateInstantiator(Serializable);
+        var env = (EditGroup)document.Members.Single(member => member.Name == "Env");
+        var root = Assert.IsType<InstanceGroup>(instantiator.Create(env));
+        var choice = Assert.IsType<InstanceChoice>(root.Members[0]);
+        choice.SelectedOption = choice.Options.Single(option => option.Name == "Ser.BodyB");
+        ((InstanceField)((InstanceGroup)choice.Selected!).Members[0]).Value = "7";
+
+        var bytes = instantiator.Serialize(instantiator.FindRootName(env)!.Value, root, TestHelpers.CreateProcessors());
+
+        Assert.Equal([0x07], bytes);
+    }
+
+    [Fact]
+    public void Serialize_ReportsAnInvalidValue()
+    {
+        var (instantiator, document) = CreateInstantiator(Serializable);
+        var msg = (EditGroup)document.Members.Single(member => member.Name == "Msg");
+        var root = Assert.IsType<InstanceGroup>(instantiator.Create(msg));
+        Field(root, "Head", "A").Value = "abc";
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => instantiator.Serialize(instantiator.FindRootName(msg)!.Value, root, TestHelpers.CreateProcessors()));
+        Assert.Contains("'abc'", exception.Message);
+    }
+
+    [Fact]
+    public async Task SaveAs_ShowsAPlanProblemInThePopup()
+    {
+        var (instantiator, document) = CreateInstantiator(Serializable);
+        var msg = (EditGroup)document.Members.Single(member => member.Name == "Msg");
+        var saved = false;
+        var dialog = new InstantiateSchemaViewModel(instantiator.Create(msg),
+            () => throw new Jacobi.BinarySerializer.Execution.ExecutionPlanException("Msg", ["Msg: Unknown processor 'sys.bytepacker'."]),
+            (_, _) => { saved = true; return Task.FromResult<string?>("file.syx"); },
+            new Jacobi.Midi.SchemaEditor.Midi.MidiBarViewModel(null), _ => { });
+
+        await dialog.SaveAsCommand.ExecuteAsync(null);
+
+        Assert.False(saved);
+        Assert.True(dialog.HasProblem);
+        Assert.Contains("sys.bytepacker", dialog.Problem);
+        dialog.DismissProblemCommand.Execute(null);
+        Assert.False(dialog.HasProblem);
+    }
+
+    [Fact]
+    public void FindRootName_IsNullForANodeDef()
+    {
+        var (instantiator, document) = CreateInstantiator(Serializable);
+
+        Assert.Null(instantiator.FindRootName((EditGroup)document.NodeDefs.Single()));
+    }
+
+    private static InstanceField Field(InstanceGroup root, string group, string field)
+        => (InstanceField)((InstanceGroup)root.Members.Single(member => member.Name == group)).Members.Single(member => member.Name == field);
+
+    private static (SchemaInstantiator Instantiator, EditDocument Document) CreateInstantiator(string json)
+    {
+        var document = EditNodeMapper.ToEditDocument(JsonSerializer.Deserialize(json));
+        return (SchemaInstantiator.Create(document, [document]), document);
     }
 
     private static InstanceGroup CreateRoot(string json, string root)
