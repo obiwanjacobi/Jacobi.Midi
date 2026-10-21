@@ -412,6 +412,156 @@ public class SchemaInstantiatorTests
     }
 
     [Fact]
+    public void Deserialize_ReadsTheValuesOfARoot()
+    {
+        var (instantiator, document) = CreateInstantiator(Serializable);
+        var msg = (EditGroup)document.Members.Single(member => member.Name == "Msg");
+        var root = Assert.IsType<InstanceGroup>(instantiator.Create(msg));
+
+        var read = instantiator.Deserialize(instantiator.FindRootName(msg)!.Value, root, [0xF0, 0x01, 0x02, 0x03, 0xF7], TestHelpers.CreateProcessors());
+
+        Assert.Equal(5, read);
+        Assert.Equal("1", Field(root, "Head", "A").Value);
+        var data = Assert.IsType<InstanceRepeat>(root.Members[2]);
+        Assert.Equal(["2", "3"], data.Items.Select(item => ((InstanceField)item.Members[0]).Value));
+    }
+
+    [Fact]
+    public void Deserialize_ReadsANestedGroupAsARangeOfItsRoot()
+    {
+        var (instantiator, document) = CreateInstantiator(Serializable);
+        var msg = (EditGroup)document.Members.Single(member => member.Name == "Msg");
+        var head = (EditGroup)msg.Members.Single(member => member.Name == "Head");
+        var instance = Assert.IsType<InstanceGroup>(instantiator.Create(head));
+
+        instantiator.Deserialize(instantiator.FindRootName(head)!.Value, instance, [0x05], TestHelpers.CreateProcessors());
+
+        Assert.Equal("5", ((InstanceField)instance.Members[0]).Value);
+    }
+
+    [Fact]
+    public void Deserialize_ReadsTheSelectedBodyOfAnOpenChoice()
+    {
+        var (instantiator, document) = CreateInstantiator(Serializable);
+        var env = (EditGroup)document.Members.Single(member => member.Name == "Env");
+        var root = Assert.IsType<InstanceGroup>(instantiator.Create(env));
+        var choice = Assert.IsType<InstanceChoice>(root.Members[0]);
+
+        Assert.Throws<InvalidOperationException>(
+            () => instantiator.Deserialize(instantiator.FindRootName(env)!.Value, root, [0x07], TestHelpers.CreateProcessors()));
+
+        choice.SelectedOption = choice.Options.Single(option => option.Name == "Ser.BodyB");
+        instantiator.Deserialize(instantiator.FindRootName(env)!.Value, root, [0x07], TestHelpers.CreateProcessors());
+
+        Assert.Equal("7", ((InstanceField)((InstanceGroup)choice.Selected!).Members[0]).Value);
+    }
+
+    [Fact]
+    public void Deserialize_AddsAndRemovesTheItemsOfAnOpenRepeatAndSelectsTheAlternativeOfAChoice()
+    {
+        var (instantiator, document) = CreateInstantiator("""
+            {
+              "name": "Dyn",
+              "members": [
+                { "name": "Msg", "kind": "group", "members": [
+                    { "name": "Count", "kind": "field", "datatype": "sys.uint8" },
+                    { "name": "Data", "kind": "repeat", "count": { "ref": "Msg.Count" }, "members": [{ "name": "V", "kind": "field", "datatype": "sys.uint8" }] },
+                    { "name": "Mode", "kind": "choice", "selectedIndex": { "ref": "Msg.Count" }, "members": [
+                        { "name": "None", "kind": "group", "members": [{ "name": "N", "kind": "field", "datatype": "sys.uint8" }] },
+                        { "name": "One", "kind": "group", "members": [{ "name": "A", "kind": "field", "datatype": "sys.uint8" }] },
+                        { "name": "Two", "kind": "group", "members": [{ "name": "B", "kind": "field", "datatype": "sys.uint8" }] }] }] }
+              ]
+            }
+            """);
+        var msg = (EditGroup)document.Members.Single();
+        var root = Assert.IsType<InstanceGroup>(instantiator.Create(msg));
+        var data = Assert.IsType<InstanceRepeat>(root.Members[1]);
+        var mode = Assert.IsType<InstanceChoice>(root.Members[2]);
+        var rootName = instantiator.FindRootName(msg)!.Value;
+
+        instantiator.Deserialize(rootName, root, [0x02, 0x0A, 0x0B, 0x0C], TestHelpers.CreateProcessors());
+        Assert.Equal(["10", "11"], data.Items.Select(item => ((InstanceField)item.Members[0]).Value));
+        Assert.Equal("Two", mode.SelectedOption!.Name);
+        Assert.Equal("12", ((InstanceField)((InstanceGroup)mode.Selected!).Members[0]).Value);
+
+        instantiator.Deserialize(rootName, root, [0x01, 0x0D, 0x0E], TestHelpers.CreateProcessors());
+        Assert.Equal(["13"], data.Items.Select(item => ((InstanceField)item.Members[0]).Value));
+        Assert.Equal("One", mode.SelectedOption!.Name);
+    }
+
+    [Fact]
+    public void Deserialize_ReportsBytesThatDoNotMatchAndKeepsTheValuesReadBeforeThem()
+    {
+        var (instantiator, document) = CreateInstantiator(Serializable);
+        var msg = (EditGroup)document.Members.Single(member => member.Name == "Msg");
+        var root = Assert.IsType<InstanceGroup>(instantiator.Create(msg));
+
+        // the End field expects F7
+        Assert.Throws<InvalidOperationException>(
+            () => instantiator.Deserialize(instantiator.FindRootName(msg)!.Value, root, [0xF0, 0x01, 0x02, 0x03, 0x00], TestHelpers.CreateProcessors()));
+
+        Assert.Equal("1", Field(root, "Head", "A").Value);
+    }
+
+    [Fact]
+    public void Match_ShowsTheReadErrorAndTheTrailingBytes()
+    {
+        var (instantiator, document) = CreateInstantiator(Serializable);
+        var msg = (EditGroup)document.Members.Single(member => member.Name == "Msg");
+        var root = instantiator.Create(msg);
+        var rootName = instantiator.FindRootName(msg)!.Value;
+        (string, byte[])? file = ("dump.syx", [0xF0, 0x01, 0x02, 0x03, 0xF7, 0xF0, 0x01, 0xF7]);
+        var match = new SysExMatchViewModel(bytes => instantiator.Deserialize(rootName, root, bytes, TestHelpers.CreateProcessors()),
+            () => Task.FromResult(file), new Jacobi.Midi.SchemaEditor.Midi.MidiBarViewModel(null));
+
+        match.LoadFileCommand.Execute(null);
+
+        Assert.Equal(["dump.syx #1", "dump.syx #2"], match.Buffers.Select(buffer => buffer.Source));
+        Assert.Same(match.Buffers[0], match.SelectedBuffer);
+        Assert.False(match.HasError, match.Error);
+        Assert.Equal("1", Field((InstanceGroup)root, "Head", "A").Value);
+
+        match.SelectedBuffer = match.Buffers[1];
+        Assert.True(match.HasError);
+        Assert.False(match.HasWarning);
+
+        match.SelectedBuffer = new SysExBuffer("extra", [0xF0, 0x04, 0x05, 0x06, 0xF7, 0x7E]);
+        Assert.False(match.HasError, match.Error);
+        Assert.Contains("1 trailing byte(s)", match.Warning);
+        Assert.Contains("7E", match.Warning);
+    }
+
+    [Fact]
+    public void MatchCommand_OpensTheDialogInMatchMode()
+    {
+        var viewModel = new MainViewModel();
+        viewModel.NewDocumentCommand.Execute(null);
+        viewModel.SelectedItem = viewModel.SelectedDocument!.Schema.Members.Single();
+
+        Assert.True(viewModel.MatchSchemaCommand.CanExecute(null));
+        viewModel.MatchSchemaCommand.Execute(null);
+
+        var dialog = Assert.IsType<InstantiateSchemaViewModel>(viewModel.InstantiateDialog);
+        Assert.True(dialog.IsMatch);
+        Assert.True(dialog.Match!.CanMatch);
+        Assert.StartsWith("Match ", dialog.Title);
+        dialog.CloseCommand.Execute(null);
+        Assert.Null(viewModel.InstantiateDialog);
+    }
+
+    [Theory]
+    [InlineData(new byte[] { 0x01, 0x02 }, 1)]
+    [InlineData(new byte[] { 0xF0, 0x01, 0xF7 }, 1)]
+    [InlineData(new byte[] { 0xF0, 0x01, 0xF7, 0xF0, 0x02, 0xF7, 0xF0, 0x03 }, 3)]
+    public void SysExBuffer_SplitsAFileIntoItsMessages(byte[] data, int count)
+    {
+        var buffers = SysExBuffer.Split("file.syx", data);
+
+        Assert.Equal(count, buffers.Count);
+        Assert.Equal(data, buffers.SelectMany(buffer => buffer.Bytes));
+    }
+
+    [Fact]
     public void FindRootName_IsNullForANodeDef()
     {
         var (instantiator, document) = CreateInstantiator(Serializable);

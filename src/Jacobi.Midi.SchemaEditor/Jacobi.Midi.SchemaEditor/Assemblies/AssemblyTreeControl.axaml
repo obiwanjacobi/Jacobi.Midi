@@ -42,6 +42,9 @@
                                 <MenuItem Header="Instantiate…" ToolTip.Tip="Provide values for this group"
                                           Command="{Binding $parent[asm:AssemblyTreeControl].((vm:MainViewModel)DataContext).InstantiateSchemaCommand}"
                                           CommandParameter="{Binding}" />
+                                <MenuItem Header="Match…" ToolTip.Tip="Read a SysEx file or received message into the values of this group"
+                                          Command="{Binding $parent[asm:AssemblyTreeControl].((vm:MainViewModel)DataContext).MatchSchemaCommand}"
+                                          CommandParameter="{Binding}" />
                             </MenuFlyout>
                         </StackPanel.ContextFlyout>
                         <TextBlock Text="{Binding Name}" Foreground="{DynamicResource AppTextBodyBrush}" />

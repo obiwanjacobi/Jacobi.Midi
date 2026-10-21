@@ -118,11 +118,37 @@
                 BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="1">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Top" Spacing="3" Margin="0,0,0,14">
-                    <TextBlock Text="INSTANTIATE" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
+                    <TextBlock Text="{Binding Heading}" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
                     <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource AppTextHeadingBrush}" />
-                    <TextBlock Text="Provide a value for each field. Select the body of an open choice and add copies of an open repeat."
-                               Classes="note" TextWrapping="Wrap" IsVisible="{Binding HasRoot}" />
+                    <TextBlock Text="{Binding Instruction}" Classes="note" TextWrapping="Wrap" IsVisible="{Binding HasRoot}" />
                 </StackPanel>
+                <!-- match mode: the buffer to read and the outcome of reading it -->
+                <Border DockPanel.Dock="Top" IsVisible="{Binding IsMatch}" Margin="0,0,0,12" Padding="10" CornerRadius="6"
+                        Background="{DynamicResource AppBackgroundCardBrush}" BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="1">
+                    <StackPanel Spacing="6" DataContext="{Binding Match}" x:DataType="inst:SysExMatchViewModel">
+                        <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="8">
+                            <Button Content="Load File…" Command="{Binding LoadFileCommand}" IsEnabled="{Binding CanMatch}"
+                                    ToolTip.Tip="Load a SysEx (.syx) file and match its message(s) with the schema" />
+                            <Button Grid.Column="1" Content="{Binding ReceiveButtonText}" Command="{Binding ReceiveCommand}" IsEnabled="{Binding CanMatch}"
+                                    ToolTip.Tip="Wait for the next SysEx message on the group selected in the MIDI bar and match it" />
+                            <ComboBox Grid.Column="2" ItemsSource="{Binding Buffers}" SelectedItem="{Binding SelectedBuffer}"
+                                      IsEnabled="{Binding HasBuffers}" PlaceholderText="No SysEx loaded or received" HorizontalAlignment="Stretch" />
+                            <Button Grid.Column="3" Content="Match" Command="{Binding MatchCommand}"
+                                    ToolTip.Tip="Read the selected SysEx again, e.g. after selecting the body of an open choice" />
+                        </Grid>
+                        <SelectableTextBlock Text="{Binding SelectedBuffer.BytesText, FallbackValue=''}" FontFamily="Consolas,Menlo,monospace" FontSize="11"
+                                             TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"
+                                             IsVisible="{Binding SelectedBuffer, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        <TextBlock Text="{Binding Status}" Classes="note" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding Warning}" Foreground="Orange" FontSize="11" TextWrapping="Wrap" IsVisible="{Binding HasWarning}" />
+                        <Border IsVisible="{Binding HasError}" Padding="8" CornerRadius="4" BorderBrush="Orange" BorderThickness="1">
+                            <ScrollViewer MaxHeight="140">
+                                <SelectableTextBlock Text="{Binding Error}" TextWrapping="Wrap" FontFamily="Consolas,Menlo,monospace" FontSize="12"
+                                                     Foreground="{DynamicResource AppTextBodyBrush}" />
+                            </ScrollViewer>
+                        </Border>
+                    </StackPanel>
+                </Border>
                 <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="0,14,0,0">
                     <!-- the outcome of the last Save As or Send -->
                     <TextBlock Text="{Binding StatusMessage}" Classes="note" TextWrapping="Wrap" VerticalAlignment="Center" />

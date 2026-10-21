@@ -235,6 +235,30 @@ internal sealed partial class InstanceRepeat : InstanceNode
         }
     }
 
+    /// <summary>
+    /// Ensures the repeat has an item at <paramref name="index"/> (adding copies of the group when needed) and returns it.
+    /// Used when the values are read: the data decides how many items there are.
+    /// </summary>
+    internal InstanceRepeatItem GetOrAddItem(int index)
+    {
+        while (Items.Count <= index)
+        {
+            AddNewItem();
+        }
+        return Items[index];
+    }
+
+    /// <summary>
+    /// Removes the items from <paramref name="count"/> on (of an open repeat only), e.g. after reading fewer items than it held.
+    /// </summary>
+    internal void Truncate(int count)
+    {
+        while (IsOpen && Items.Count > count)
+        {
+            Items.RemoveAt(Items.Count - 1);
+        }
+    }
+
     internal override void RefreshPaths()
     {
         base.RefreshPaths();

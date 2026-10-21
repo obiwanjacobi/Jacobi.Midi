@@ -15,7 +15,7 @@ namespace Jacobi.Midi.SchemaEditor.SchemaTree;
 /// Assign <see cref="Documents"/> to show schemas (an observable collection is followed); <see cref="SelectedItem"/> reflects
 /// (and can set) the selected item; a selected root is reported as the document itself.
 /// An item that is not shown in the tree (a node def) is kept by the host but not selected in the tree.
-/// The context menu of a group executes <see cref="InstantiateCommand"/> with that group as parameter.
+/// The context menu of a group executes <see cref="InstantiateCommand"/> or <see cref="MatchCommand"/> with that group as parameter.
 /// </summary>
 internal partial class SchemaTreeControl : UserControl
 {
@@ -28,6 +28,9 @@ internal partial class SchemaTreeControl : UserControl
 
     public static readonly StyledProperty<ICommand?> InstantiateCommandProperty =
         AvaloniaProperty.Register<SchemaTreeControl, ICommand?>(nameof(InstantiateCommand));
+
+    public static readonly StyledProperty<ICommand?> MatchCommandProperty =
+        AvaloniaProperty.Register<SchemaTreeControl, ICommand?>(nameof(MatchCommand));
 
     private readonly SchemaTreeViewModel _viewModel = new();
     // set while the selection is synchronized between the control and its view model
@@ -67,6 +70,15 @@ internal partial class SchemaTreeControl : UserControl
     {
         get => GetValue(InstantiateCommandProperty);
         set => SetValue(InstantiateCommandProperty, value);
+    }
+
+    /// <summary>
+    /// The command of the Match item in the context menu of a group; its parameter is the <see cref="EditGroup"/>.
+    /// </summary>
+    public ICommand? MatchCommand
+    {
+        get => GetValue(MatchCommandProperty);
+        set => SetValue(MatchCommandProperty, value);
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)

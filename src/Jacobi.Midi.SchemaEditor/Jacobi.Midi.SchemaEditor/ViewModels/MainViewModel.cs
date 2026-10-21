@@ -243,7 +243,7 @@ internal sealed partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(CanPin), nameof(DataTypeOptions))]
-    [NotifyCanExecuteChangedFor(nameof(InstantiateSchemaCommand))]
+    [NotifyCanExecuteChangedFor(nameof(InstantiateSchemaCommand), nameof(MatchSchemaCommand))]
     [NotifyCanExecuteChangedFor(nameof(CloseDocumentCommand))]
     public partial SchemaWorkspaceDocument? SelectedDocument { get; set; }
 
@@ -280,7 +280,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(SelectedItemPath))]
     [NotifyPropertyChangedFor(nameof(IsDocumentSelected))]
     [NotifyCanExecuteChangedFor(nameof(DeleteItemCommand))]
-    [NotifyCanExecuteChangedFor(nameof(InstantiateSchemaCommand))]
+    [NotifyCanExecuteChangedFor(nameof(InstantiateSchemaCommand), nameof(MatchSchemaCommand))]
     public partial object? SelectedItem { get; set; }
 
     /// <summary>
@@ -808,7 +808,18 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// Null instantiates the selected group.
     /// </param>
     [RelayCommand(CanExecute = nameof(CanInstantiateSchema))]
-    private void InstantiateSchema(EditGroup? group)
+    private void InstantiateSchema(EditGroup? group) => OpenInstantiateDialog(group, isMatch: false);
+
+    /// <summary>
+    /// Opens the instantiate dialog in match mode for the selected group (see <see cref="InstantiateSchema"/>):
+    /// a SysEx file or a message received from MIDI is read (deserialized) with the schema into the values of the group,
+    /// with the plan of its root (a nested group is read as a range of that plan). Read problems are shown in the dialog.
+    /// </summary>
+    /// <param name="group">The group to match (from the context menu of a tree); null matches the selected group.</param>
+    [RelayCommand(CanExecute = nameof(CanInstantiateSchema))]
+    private void MatchSchema(EditGroup? group) => OpenInstantiateDialog(group, isMatch: true);
+
+    private void OpenInstantiateDialog(EditGroup? group, bool isMatch)
     {
         if (group is not null && !ReferenceEquals(group, SelectedItem))
         {
@@ -837,17 +848,26 @@ internal sealed partial class MainViewModel : ViewModelBase
                 .ToList();
             var instantiator = SchemaInstantiator.Create(active.Schema, [.. workspace, .. embedded]);
             var instance = instantiator.Create(root);
-            // the processors of the opened assemblies are used when the values are serialized
-            Func<byte[]>? serialize = instantiator.FindRootName(root) is { } rootName
-                ? () => instantiator.Serialize(rootName, instance, OpenedAssemblies.Processors)
+            // the processors of the opened assemblies are used when the values are serialized (or deserialized)
+            var rootName = instantiator.FindRootName(root);
+            Func<byte[]>? serialize = rootName is { } writeRoot
+                ? () => instantiator.Serialize(writeRoot, instance, OpenedAssemblies.Processors)
                 : null;
-            InstantiateDialog = new InstantiateSchemaViewModel(instance, serialize, SaveSysExFile, MidiBar, CloseInstantiateDialog);
+            SysExMatchViewModel? match = null;
+            if (isMatch)
+            {
+                Func<byte[], long>? deserialize = rootName is { } readRoot
+                    ? bytes => instantiator.Deserialize(readRoot, instance, bytes, OpenedAssemblies.Processors)
+                    : null;
+                match = new SysExMatchViewModel(deserialize, OpenSysExFile, MidiBar);
+            }
+            InstantiateDialog = new InstantiateSchemaViewModel(instance, serialize, SaveSysExFile, MidiBar, CloseInstantiateDialog, match);
         }
         catch (Exception exception) when (IsSchemaError(exception))
         {
             // the error is shown in the dialog: the status bar is easily overlooked
-            StatusMessage = $"Cannot instantiate {root.Name}: {exception.Message}";
-            InstantiateDialog = new InstantiateSchemaViewModel(root.Name, exception.Message, CloseInstantiateDialog);
+            StatusMessage = $"Cannot {(isMatch ? "match" : "instantiate")} {root.Name}: {exception.Message}";
+            InstantiateDialog = new InstantiateSchemaViewModel(root.Name, exception.Message, CloseInstantiateDialog, isMatch);
         }
     }
 
@@ -924,6 +944,36 @@ internal sealed partial class MainViewModel : ViewModelBase
             : ActiveDocument is not null && SelectedItem is EditGroup and not EditDocument;
 
     private void CloseInstantiateDialog(InstantiateSchemaViewModel dialog) => InstantiateDialog = null;
+
+    /// <summary>
+    /// Lets the user pick a SysEx (.syx) file and reads it.
+    /// </summary>
+    /// <returns>The name and contents of the file; null when the user cancelled.</returns>
+    /// <exception cref="InvalidOperationException">The platform does not provide file-open access.</exception>
+    private async Task<(string Name, byte[] Bytes)?> OpenSysExFile()
+    {
+        if (_storageProvider is null || !_storageProvider.CanOpen)
+        {
+            throw new InvalidOperationException("This platform does not provide file-open access.");
+        }
+
+        var files = await _storageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Open SysEx",
+            AllowMultiple = false,
+            FileTypeFilter = SysExFileTypes
+        });
+        if (files.Count == 0)
+        {
+            return null;
+        }
+
+        var file = files[0];
+        await using var stream = await file.OpenReadAsync();
+        using var buffer = new MemoryStream();
+        await stream.CopyToAsync(buffer);
+        return (file.Name, buffer.ToArray());
+    }
 
     /// <summary>
     /// Lets the user pick a SysEx (.syx) file, starting with <paramref name="suggestedName"/>, and saves <paramref name="bytes"/> to it.

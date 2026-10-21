@@ -81,7 +81,8 @@
                                        TextWrapping="Wrap" Margin="0,14,0,0" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" />
                             <st:SchemaTreeControl Documents="{Binding TreeDocuments}"
                                                   SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
-                                                  InstantiateCommand="{Binding InstantiateSchemaCommand}" />
+                                                  InstantiateCommand="{Binding InstantiateSchemaCommand}"
+                                                  MatchCommand="{Binding MatchSchemaCommand}" />
                         </DockPanel>
                     </TabItem>
                     <TabItem Header="Assemblies">

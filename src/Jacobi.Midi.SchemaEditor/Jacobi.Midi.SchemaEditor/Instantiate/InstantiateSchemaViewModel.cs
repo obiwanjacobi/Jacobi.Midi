@@ -13,6 +13,7 @@ namespace Jacobi.Midi.SchemaEditor.Instantiate;
 /// The view model of the instantiate dialog: lets the user provide the values of a group (the <see cref="Root"/> instance tree),
 /// serialize them to a SysEx file (Save As) or send them to the active MIDI connection (Send),
 /// or shows the <see cref="Error"/> that prevented the instantiation.
+/// In match mode (<see cref="Match"/>) the values are read from a SysEx file or a received message first.
 /// </summary>
 internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
 {
@@ -29,11 +30,14 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
     /// </param>
     /// <param name="midi">The MIDI connection the values are sent to.</param>
     /// <param name="close">Called with this view model when the dialog closes.</param>
+    /// <param name="match">The match part (match mode): reads the values from a SysEx buffer; null to instantiate.</param>
     public InstantiateSchemaViewModel(InstanceNode root, Func<byte[]>? serialize, Func<string, byte[], Task<string?>> saveFile,
-        MidiBarViewModel midi, Action<InstantiateSchemaViewModel> close)
+        MidiBarViewModel midi, Action<InstantiateSchemaViewModel> close, SysExMatchViewModel? match = null)
     {
         Root = root;
-        Title = $"Instantiate {root.Name}";
+        Match = match;
+        Title = match is null ? $"Instantiate {root.Name}" : $"Match {root.Name}";
+        Heading = match is null ? "INSTANTIATE" : "MATCH";
         _serialize = serialize;
         _saveFile = saveFile;
         _midi = midi;
@@ -45,10 +49,11 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Creates a dialog that only shows why <paramref name="name"/> could not be instantiated.</summary>
-    public InstantiateSchemaViewModel(string name, string error, Action<InstantiateSchemaViewModel> close)
+    /// <summary>Creates a dialog that only shows why <paramref name="name"/> could not be instantiated (or matched).</summary>
+    public InstantiateSchemaViewModel(string name, string error, Action<InstantiateSchemaViewModel> close, bool isMatch = false)
     {
-        Title = $"Cannot instantiate {name}";
+        Title = isMatch ? $"Cannot match {name}" : $"Cannot instantiate {name}";
+        Heading = isMatch ? "MATCH" : "INSTANTIATE";
         Error = error;
         _close = close;
     }
@@ -56,7 +61,20 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
     /// <summary>The node to fill out; null when the dialog shows an <see cref="Error"/>.</summary>
     public InstanceNode? Root { get; }
 
+    /// <summary>The match part in match mode: loads or receives a SysEx buffer and reads it into the <see cref="Root"/>; null to instantiate.</summary>
+    public SysExMatchViewModel? Match { get; }
+
+    public bool IsMatch => Match is not null;
+
     public string Title { get; }
+
+    /// <summary>The caption above the title: INSTANTIATE or MATCH.</summary>
+    public string Heading { get; }
+
+    /// <summary>The instruction below the title.</summary>
+    public string Instruction => IsMatch
+        ? "Load a SysEx file or receive a message from MIDI: it is read with the schema into the values below. Select the body of an open choice before matching."
+        : "Provide a value for each field. Select the body of an open choice and add copies of an open repeat.";
 
     /// <summary>The reason the instantiation failed; empty when the dialog shows the <see cref="Root"/>.</summary>
     public string Error { get; } = String.Empty;
@@ -94,6 +112,7 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
         {
             _midi.PropertyChanged -= OnMidiPropertyChanged;
         }
+        Match?.Detach();
         _close(this);
     }
 

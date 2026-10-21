@@ -193,6 +193,10 @@ var abort = V2.SysEx8Message.CreateAbort(group: 0, streamId: 1);
 allocates a framed byte array so the existing manufacturer and universal SysEx
 views can be reused. Start/Continue/End packets must first be reassembled; a
 manufacturer ID or universal header can span more than one packet.
+`V2.SysEx7Assembler` does that for the packets of one Group: the reverse of
+`SysEx7Message.FromSystemExclusive`, it returns the framed (`F0` … `F7`) message
+when an End (or Complete) packet arrives. A new Start discards an unfinished
+message; Continue/End packets without a Start and other packets are ignored.
 
 SysEx8 exposes the Stream ID independently from its payload. `CreateAbort`
 produces an End packet with wire ByteCount `0xF`, zero data bytes, and

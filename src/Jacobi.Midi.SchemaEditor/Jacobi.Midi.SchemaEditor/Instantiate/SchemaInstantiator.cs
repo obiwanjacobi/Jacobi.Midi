@@ -1,5 +1,6 @@
 using System.Buffers;
 using Jacobi.BinarySerializer;
+using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.SchemaEditor.Models;
@@ -190,6 +191,46 @@ internal sealed class SchemaInstantiator
             serializer.Serialize(plan.CreateRange(instance.Path), new InstanceValueSource(null, instance), output);
         }
         return output.WrittenSpan.ToArray();
+    }
+
+    /// <summary>
+    /// Reads <paramref name="bytes"/> into <paramref name="instance"/> with the plan of <paramref name="root"/> (see <see cref="FindRootName"/>):
+    /// the reverse of <see cref="Serialize"/>. An instance of a nested node is read as a range of that plan.
+    /// The fields are filled out, the items of the repeats added and the alternatives of the choices selected as they are read;
+    /// the body of an open choice must be selected beforehand. When the read fails, the values read up to the failure remain.
+    /// </summary>
+    /// <param name="processors">The processors the schemas use (those of the opened assemblies).</param>
+    /// <returns>The number of bytes that were read (the bytes after them are not part of the instance).</returns>
+    /// <exception cref="ExecutionPlanException">The plan cannot be built.</exception>
+    /// <exception cref="InvalidOperationException">The bytes do not match the schema; the message describes the problem.</exception>
+    public long Deserialize(SchemaName root, InstanceNode instance, byte[] bytes, IProcessorProvider processors)
+    {
+        ArgumentNullException.ThrowIfNull(instance);
+        ArgumentNullException.ThrowIfNull(bytes);
+        ArgumentNullException.ThrowIfNull(processors);
+        var serializer = new SerializerBuilder()
+            .AddSchemas(_schemas)
+            .AddProcessors(processors)
+            .Build();
+        var plan = serializer.GetPlan(root);
+        var input = new ReadOnlySequence<byte>(bytes);
+        var isRoot = String.Equals(plan.Root.Path.Value, instance.Path.Value, StringComparison.OrdinalIgnoreCase);
+        // the engine enters the root with the sink itself; the items of a root repeat are found by its path
+        var sink = new InstanceValueSink(isRoot && instance is not InstanceRepeat ? instance : null, instance);
+        sink.Begin();
+        var completed = false;
+        try
+        {
+            var read = isRoot
+                ? serializer.Deserialize(plan, input, sink)
+                : serializer.Deserialize(plan.CreateRange(instance.Path), input, sink);
+            completed = true;
+            return read;
+        }
+        finally
+        {
+            sink.End(completed);
+        }
     }
 
     /// <summary>
