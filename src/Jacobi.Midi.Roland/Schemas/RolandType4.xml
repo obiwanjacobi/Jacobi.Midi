@@ -10,6 +10,10 @@
   The model id is device specific (GP-8 = 0x13) and is therefore not fixed here.
   The device id is the MIDI basic channel - 1 (0000nnnn).
   The content of the Address and Data is described by a device schema (see Gp8.xml).
+
+  The midi.* properties tag the messages for the address map mechanism (see docs/analysis/address-map-proposal.md):
+    midi.message  request (RQ1) or data (DT1)
+    midi.role     the value a node holds: addressStart, addressSize, device.<name> or data
 -->
 <schema name="Roland">
   <includes>
@@ -21,45 +25,43 @@
       <processor name="ref:midi.sysexbyte"/>
     </field>
   </nodeDefs>
-  
+
   <members>
     <group name="Message">
       <processors>
         <processor name="midi.sysex"/>
-        <processor name="sys.bytepacker" byteorder="big"/>
       </processors>
       <members>
-        <group name="RQ1">
+        <group name="RQ1" midi.message="request">
           <members>
             <field name="RolandId" datatype="sys.uint8" value="0x41"/>
-            <field name="DeviceId" datatype="sys.uint8"/>
-            <field name="ModelId" datatype="sys.uint8"/>
+            <field name="DeviceId" datatype="sys.uint8" midi.role="device.deviceId"/>
+            <field name="ModelId" datatype="sys.uint8" midi.role="device.modelId"/>
             <field name="Command" datatype="sys.uint8" value="0x11"/>
             <group name="ChecksumScope">
               <processors>
                 <processor name="roland.checksum"/>
               </processors>
               <members>
-                <field name="Address" nodeDef="sysex16"/>
-                <field name="Size" nodeDef="sysex16"/>
-                <choice name="Data" memberNodeDef="messageBody"/>
+                <field name="Address" nodeDef="sysex16" midi.role="addressStart"/>
+                <field name="Size" nodeDef="sysex16" midi.role="addressSize"/>
               </members>
             </group>
           </members>
         </group>
-        <group name="DT1">
+        <group name="DT1" midi.message="data" midi.messageInterval="20">
           <members>
             <field name="RolandId" datatype="sys.uint8" value="0x41"/>
-            <field name="DeviceId" datatype="sys.uint8"/>
-            <field name="ModelId" datatype="sys.uint8"/>
+            <field name="DeviceId" datatype="sys.uint8" midi.role="device.deviceId"/>
+            <field name="ModelId" datatype="sys.uint8" midi.role="device.modelId"/>
             <field name="Command" datatype="sys.uint8" value="0x12"/>
             <group name="ChecksumScope">
               <processors>
                 <processor name="roland.checksum"/>
               </processors>
               <members>
-                <field name="Address" nodeDef="sysex16"/>
-                <choice name="Data" memberNodeDef="messageBody"/>
+                <field name="Address" nodeDef="sysex16" midi.role="addressStart"/>
+                <choice name="Data" memberNodeDef="messageBody" midi.role="data"/>
               </members>
             </group>
           </members>

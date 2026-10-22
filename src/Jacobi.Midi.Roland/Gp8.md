@@ -103,7 +103,7 @@ Parameter number is the low 6 bits of the address. Every parameter is one 7-bit 
 | | **Turbo overdrive** | |
 | 08 | Tone | 0-100 |
 | 09 | Drive | 0-100 |
-| 0A | Turbo | 0 = off, 1 = on *(verify)* |
+| 0A | Turbo | 0 = off, 1 = on *(verify: the bulk dump in the tests has 0, 32, 78 and 100 here, so the schema treats it as 0-100)* |
 | | **Distortion** | |
 | 0B | Tone | 0-100 |
 | 0C | Dist | 0-100 |
@@ -150,8 +150,11 @@ The address numbers 0D onward follow the order of the OCR text; the group bounda
 
 | Concept | Schema |
 |---------|--------|
-| Frame, command, address, size, data, checksum | `RolandType4.xml` (group `Message`) |
-| Address bit fields | `Gp8.xml` (group `Address`) |
-| Parameters 00-31 | `Gp8.xml` (group `Patch`) |
+| Frame, command, address, size, data, checksum | `RolandType4.xml` (group `Message`, tagged with `midi.message` / `midi.role`) |
+| Address map: temporary patch `00 00`, memory patches `40 00` + n x `00 40` | `Gp8.xml` (root `AddressMap`, `midi.addressStart` / `midi.addressSize`) |
+| Parameters 00-31 (one sound, atomic) | `Gp8.xml` (nodeDef `patch`, `midi.atomic`) |
 
-Open items (checksum processor, multi-byte data, number split across address bytes, reuse of the patch for the 128 memory programs) are marked `[TODO]` in the schemas.
+The address bit fields (m, g, bbb, nnn, pppppp) are not modelled as fields: in the 7-bit address space they are linear,
+so the address map finds the patch and parameter from the address (see `docs/analysis/address-map-proposal.md`).
+
+Open items (the temporary patch address, the Turbo value range) are marked `[TODO]` in the schemas.

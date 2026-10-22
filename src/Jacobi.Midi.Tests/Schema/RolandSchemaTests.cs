@@ -1,5 +1,6 @@
 ﻿using System.Buffers;
 using Jacobi.BinarySerializer;
+using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Xunit;
@@ -100,6 +101,7 @@ internal class AddressMapReadModel : IValueSink, IOpenChoiceSink
 
     public OpenChoiceSinkResult EnterOpenChoice(OpenChoiceContext context)
     {
-        return new(this, "Gp8.AddressMap");
+        // the first DT1 of the dump holds memory patch 1 (address 40 00)
+        return new(this, "Gp8.AddressMap", "AddressMap.Memory.Patch", new InstancePath([0]));
     }
 }
