@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Yamaha G50 Guitar MIDI Converter - SysEx messages and data (Owner's Manual, MIDI Data Format, 1996).
+
+  The G50 is not address based: the bulk dumps are named by an ASCII header (format 7A), a parameter is
+  changed by group and parameter number (model 56). The device number byte is fixed (no device id).
+
+    Bulk Dump          F0 43 00 7A bb bb "LM  0256xx" <16 bytes> data cs F7
+    Dump Request       F0 43 20 7A       "LM  0256xx" <16 bytes> F7
+    Parameter Change   F0 43 10 56 gg pp 0d 0ddddddd F7
+
+    xx  OM = 1 memory, MA = all memory, SY = system
+    The 16 bytes after the header are zero, except the last: the block number (All Memory Bulk Dump)
+    or the memory number (1 Memory Dump Request).
+
+  Data: "Internal parameters are all 8 bit data, bit 7 is assigned as the 1st bit of the MSB (byte),
+  MSB and LSB are always separated into 2 bytes and transmitted and received in order."
+  Each parameter is 2 bytes: 0000000d 0ddddddd (the 'param' nodeDef).
+
+  - Bulk dumps and dump requests are recognized in Play mode only.
+  - A 1 Memory Bulk Dump overwrites the currently selected memory and the edit buffer.
+  - All Memory Bulk Dump: 16 blocks of 8 memories (block 0-15), then the system data (block 16).
+    There is an interval of 150 ms between the blocks.
+  - Parameter Change: received in Play mode only; changes to the current memory go to the edit buffer.
+
+  Legend:
+    [OK]   available now
+    [TODO] not available yet
+-->
+<schema name="G50">
+  <includes>
+    <include schema="midi" />
+  </includes>
+  <nodeDefs>
+    <!-- One parameter: 8 bits in 2 bytes (MSB holds bit 7). -->
+    <field name="param" datatype="sys.uint16" byteLength="2">
+      <processor name="ref:midi.sysexbyte" />
+    </field>
+    <!-- Byte count of a bulk dump (2 x 7 bits). -->
+    <field name="byteCount" datatype="sys.uint16" byteLength="2">
+      <processor name="ref:midi.sysexbyte" />
+    </field>
+    <!-- The dump header: "LM  0256" + the dump type (OM, MA, SY). -->
+    <field name="header" datatype="sys.string" byteLength="10">
+      <processor name="ref:midi.string" />
+    </field>
+    <!-- The 16 bytes after the header with a number in the last byte (block or memory number). -->
+    <group name="numbered">
+      <processors>
+        <processor name="sys.bitpacker" byteLength="16" />
+      </processors>
+      <members>
+        <field name="Number" datatype="sys.uint8" bits="7" bitoffset="120" />
+      </members>
+    </group>
+    <!-- The 16 bytes after the header, all zero. -->
+    <group name="reserved">
+      <processors>
+        <processor name="sys.bitpacker" byteLength="16" />
+      </processors>
+      <members>
+        <field name="Number" datatype="sys.uint8" bits="7" bitoffset="120" value="0" />
+      </members>
+    </group>
+
+    <!-- < Table 1 > One memory: 25 parameters, 50 bytes. The comment gives the range and the byte offset. -->
+    <group name="memory">
+      <members>
+        <field name="PlayingStyle" nodeDef="param" />              <!-- 0: 0 = pick, 1 = finger/slap                          (0x00) -->
+        <field name="NoteOnLevel" nodeDef="param" />               <!-- 1: 0-9 (1-10)                                          (0x02) -->
+        <field name="NoteOffLevel" nodeDef="param" />              <!-- 2: 0-9 (1-10)                                          (0x04) -->
+        <field name="Velocity" nodeDef="param" />                  <!-- 3: 0 = narrow, 1 = normal, 2 = wide, 3-129 = fixed 1-127 (0x06) -->
+        <field name="Chromatic" nodeDef="param" />                 <!-- 4: 0 = off, 1 = on, 2 = auto                           (0x08) -->
+        <field name="Transpose" nodeDef="param" />                 <!-- 5: 0-48 (-24 - +24)                                    (0x0A) -->
+        <field name="PitchBendRange" nodeDef="param" />            <!-- 6: 0-24                                                (0x0C) -->
+        <field name="ProgramNumber" nodeDef="param" />             <!-- 7: 0 = off, 1-128 (1-128)                              (0x0E) -->
+        <field name="ProgramBankMsb" nodeDef="param" />            <!-- 8: 0 = off, 1-128 (0-127)                              (0x10) -->
+        <field name="ProgramBankLsb" nodeDef="param" />            <!-- 9: 0 = off, 1-128 (0-127)                              (0x12) -->
+        <field name="Volume" nodeDef="param" />                    <!-- 10: 0 = off, 1-128 (0-127)                             (0x14) -->
+        <field name="Pan" nodeDef="param" />                       <!-- 11: 0 = off, 1-31 (L15-R15)                            (0x16) -->
+        <field name="AssignableControlNumber1" nodeDef="param" />  <!-- 12: 0 = off, 1-119 (CC 1-120), 120 = AT                (0x18) -->
+        <field name="AssignableControlValue1" nodeDef="param" />   <!-- 13: 0-127                                              (0x1A) -->
+        <field name="AssignableControlNumber2" nodeDef="param" />  <!-- 14: 0 = off, 1-119 (CC 1-120), 120 = AT                (0x1C) -->
+        <field name="AssignableControlValue2" nodeDef="param" />   <!-- 15: 0-127                                              (0x1E) -->
+        <field name="Split" nodeDef="param" />                     <!-- 16: 0 = off, 1-5 (string 1-5), 6-15 (pick 1-10)        (0x20) -->
+        <field name="SplitMemory2Number" nodeDef="param" />        <!-- 17: 0-127 (1-128)                                      (0x22) -->
+        <field name="SplitMemory2Location" nodeDef="param" />      <!-- 18: 0 = lo, 1 = hi                                     (0x24) -->
+        <field name="PickingPositionControl" nodeDef="param" />    <!-- 19: 0 = off, 1-119 (CC 1-120), 120 = AT                (0x26) -->
+        <field name="PickingFrontPositionValue" nodeDef="param" /> <!-- 20: 0-127                                              (0x28) -->
+        <field name="PickingRearPositionValue" nodeDef="param" />  <!-- 21: 0-127                                              (0x2A) -->
+        <field name="TouchControl" nodeDef="param" />              <!-- 22: 0 = off, 1-119 (CC 1-120), 120 = AT                (0x2C) -->
+        <field name="TouchControlSensitivity" nodeDef="param" />   <!-- 23: 0-14 (-7 - +7)                                     (0x2E) -->
+        <field name="SustainHoldPedal" nodeDef="param" />          <!-- 24: 0 = sus1, 1 = sus2, 2-129 (1-128)                  (0x30) -->
+      </members>
+    </group>
+
+    <!-- < Table 2 > System: 10 parameters, 20 bytes. -->
+    <group name="system">
+      <members>
+        <field name="MidiCh" nodeDef="param" />                    <!-- 0: 0-14 = s1-9,11-16 (single), 15-30 = c1-16 (common), 31-46 = m1-16 (mono) (0x00) -->
+        <field name="Tuning" nodeDef="param" />                    <!-- 1: 0-5 (440-445 Hz)                                    (0x02) -->
+        <field name="E1StringSens" nodeDef="param" />              <!-- 2: 0-49 (1-50)                                         (0x04) -->
+        <field name="B2StringSens" nodeDef="param" />              <!-- 3: 0-49 (1-50)                                         (0x06) -->
+        <field name="G3StringSens" nodeDef="param" />              <!-- 4: 0-49 (1-50)                                         (0x08) -->
+        <field name="D4StringSens" nodeDef="param" />              <!-- 5: 0-49 (1-50)                                         (0x0A) -->
+        <field name="A5StringSens" nodeDef="param" />              <!-- 6: 0-49 (1-50)                                         (0x0C) -->
+        <field name="E6StringSens" nodeDef="param" />              <!-- 7: 0-49 (1-50)                                         (0x0E) -->
+        <field name="G1DFunction" nodeDef="param" />               <!-- 8: 0 = DE, 1 = pgm, 2 = octave                         (0x10) -->
+        <field name="Hold" nodeDef="param" />                      <!-- 9: 0 = hold1, 1 = hold2  (Hold1/2)                     (0x12) -->
+      </members>
+    </group>
+  </nodeDefs>
+
+  <members>
+    <group name="Message">
+      <processors>
+        <processor name="midi.sysex" />
+      </processors>
+      <members>
+        <!--
+          Bulk dumps.
+          [TODO] The manual does not say what the byte count and checksum cover. As in the other Yamaha "LM" formats
+          (TX81Z, DX7II) both are taken to cover the header and the data: 1 memory = 76 (00 4C), all memory block
+          of 8 memories = 426 (03 2A), system = 46 (00 2E). Verify against a real dump.
+          The byte count excludes the checksum, so the window (byteSize) is the Content group inside the ChecksumScope.
+          The writer only derives a byte count for a sibling group, so it cannot derive this one: the 1 memory and
+          system dumps have a constant byte count instead.
+        -->
+        <group name="OneMemoryBulk">
+          <members>
+            <field name="YamahaId" datatype="sys.uint8" value="0x43" />
+            <field name="DeviceNumber" datatype="sys.uint8" value="0x00" />
+            <field name="ModelId" datatype="sys.uint8" value="0x7A" />
+            <field name="ByteCount" nodeDef="byteCount" value="76" />
+            <group name="ChecksumScope">
+              <processors>
+                <processor name="yamaha.checksum" />
+              </processors>
+              <members>
+                <group name="Content">
+                  <byteSize ref="Message.OneMemoryBulk.ByteCount" />
+                  <members>
+                    <field name="Header" nodeDef="header" value="LM  0256OM" />
+                    <group name="Reserved" nodeDef="reserved" />
+                    <group name="Memory" nodeDef="memory" />
+                  </members>
+                </group>
+              </members>
+            </group>
+          </members>
+        </group>
+
+        <!-- One block of the All Memory Bulk Dump: block 0-15 = 8 memories (memory 1-8 ... 121-128), block 16 = system. -->
+        <group name="AllMemoryBulk">
+          <members>
+            <field name="YamahaId" datatype="sys.uint8" value="0x43" />
+            <field name="DeviceNumber" datatype="sys.uint8" value="0x00" />
+            <field name="ModelId" datatype="sys.uint8" value="0x7A" />
+            <!-- [TODO] 426 (8 memories) or 46 (system): the value model must supply it, the writer cannot derive it yet. -->
+            <field name="ByteCount" nodeDef="byteCount" />
+            <group name="ChecksumScope">
+              <processors>
+                <processor name="yamaha.checksum" />
+              </processors>
+              <members>
+                <group name="Content">
+                  <byteSize ref="Message.AllMemoryBulk.ByteCount" />
+                  <members>
+                    <field name="Header" nodeDef="header" value="LM  0256MA" />
+                    <group name="Block" nodeDef="numbered" />
+                    <choice name="Data">
+                      <selectedIndex ref="Message.AllMemoryBulk.ChecksumScope.Content.Block.Number" />
+                      <valueProcessors>
+                        <processor name="sys.map" to="sys.int32" default="0">
+                          <properties>
+                            <property name="16" value="1" />
+                          </properties>
+                        </processor>
+                      </valueProcessors>
+                      <members>
+                        <repeat name="Memories" count="8">
+                          <members>
+                            <group name="Memory" nodeDef="memory" />
+                          </members>
+                        </repeat>
+                        <group name="System" nodeDef="system" />
+                      </members>
+                    </choice>
+                  </members>
+                </group>
+              </members>
+            </group>
+          </members>
+        </group>
+
+        <group name="SystemBulk">
+          <members>
+            <field name="YamahaId" datatype="sys.uint8" value="0x43" />
+            <field name="DeviceNumber" datatype="sys.uint8" value="0x00" />
+            <field name="ModelId" datatype="sys.uint8" value="0x7A" />
+            <field name="ByteCount" nodeDef="byteCount" value="46" />
+            <group name="ChecksumScope">
+              <processors>
+                <processor name="yamaha.checksum" />
+              </processors>
+              <members>
+                <group name="Content">
+                  <byteSize ref="Message.SystemBulk.ByteCount" />
+                  <members>
+                    <field name="Header" nodeDef="header" value="LM  0256SY" />
+                    <group name="Reserved" nodeDef="reserved" />
+                    <group name="System" nodeDef="system" />
+                  </members>
+                </group>
+              </members>
+            </group>
+          </members>
+        </group>
+
+        <!-- Dump requests: the G50 answers with the matching bulk dump. -->
+        <group name="OneMemoryDumpRequest">
+          <members>
+            <field name="YamahaId" datatype="sys.uint8" value="0x43" />
+            <field name="DeviceNumber" datatype="sys.uint8" value="0x20" />
+            <field name="ModelId" datatype="sys.uint8" value="0x7A" />
+            <field name="Header" nodeDef="header" value="LM  0256OM" />
+            <!-- Number: the memory number 0-127 (memory 1-128) -->
+            <group name="Memory" nodeDef="numbered" />
+          </members>
+        </group>
+        <group name="AllMemoryDumpRequest">
+          <members>
+            <field name="YamahaId" datatype="sys.uint8" value="0x43" />
+            <field name="DeviceNumber" datatype="sys.uint8" value="0x20" />
+            <field name="ModelId" datatype="sys.uint8" value="0x7A" />
+            <field name="Header" nodeDef="header" value="LM  0256MA" />
+            <group name="Reserved" nodeDef="reserved" />
+          </members>
+        </group>
+        <group name="SystemDumpRequest">
+          <members>
+            <field name="YamahaId" datatype="sys.uint8" value="0x43" />
+            <field name="DeviceNumber" datatype="sys.uint8" value="0x20" />
+            <field name="ModelId" datatype="sys.uint8" value="0x7A" />
+            <field name="Header" nodeDef="header" value="LM  0256SY" />
+            <group name="Reserved" nodeDef="reserved" />
+          </members>
+        </group>
+
+        <!--
+          Parameter Change: one parameter of < Table 1 > (groups 0-2) or < Table 2 > (group 3).
+          [TODO] select the parameter (field) from the group and parameter number.
+        -->
+        <group name="ParameterChange">
+          <members>
+            <field name="YamahaId" datatype="sys.uint8" value="0x43" />
+            <field name="DeviceNumber" datatype="sys.uint8" value="0x10" />
+            <field name="ModelId" datatype="sys.uint8" value="0x56" />
+            <!-- 0 = Edit Buffer, 1 = 2nd Memory for Split Function, 2 = Hold Memory for Hold Function, 3 = System -->
+            <field name="ParameterGroup" datatype="sys.uint8" />
+            <!-- PRM# of < Table 1 > or < Table 2 > -->
+            <field name="ParameterNumber" datatype="sys.uint8" />
+            <field name="Data" nodeDef="param" />
+          </members>
+        </group>
+      </members>
+    </group>
+  </members>
+</schema>

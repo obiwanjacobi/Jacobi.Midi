@@ -31,6 +31,7 @@ internal static class TestHelpers
         var processors = new ProcessorManager();
         processors.Register(new Jacobi.BinarySerializer.Processors.ProcessorFactory());
         processors.Register(new Jacobi.Midi.Roland.Processors.ProcessorFactory());
+        processors.Register(new Jacobi.Midi.Yamaha.Processors.ProcessorFactory());
         processors.Register(new Jacobi.Midi.Device.Processors.ProcessorFactory());
         return processors;
     }
@@ -42,6 +43,8 @@ internal static class TestHelpers
         Assert.True(midiDocs.Count() > 0);
         var rolandDocs = schemaSetBuilder.LoadFromAssembly(AssemblyPathOf("Jacobi.Midi.Roland"), "Jacobi.Midi.Roland.Schemas");
         Assert.True(rolandDocs.Count() > 0);
+        var yamahaDocs = schemaSetBuilder.LoadFromAssembly(AssemblyPathOf("Jacobi.Midi.Yamaha"), "Jacobi.Midi.Yamaha.Schemas");
+        Assert.True(yamahaDocs.Count() > 0);
         documents.ForEach(document => schemaSetBuilder.AddDocument(document));
         return schemaSetBuilder.Compile();
     }
