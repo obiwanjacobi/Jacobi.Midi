@@ -11,7 +11,7 @@
   The device id is the MIDI basic channel - 1 (0000nnnn).
   The content of the Address and Data is described by a device schema (see Gp8.xml).
 
-  The midi.* properties tag the messages for the address map mechanism (see docs/analysis/address-map-proposal.md):
+  The midi.* properties tag the messages for the address map mechanism (see src/Jacobi.Midi.Device/Addressing/readme.md):
     midi.message  request (RQ1) or data (DT1)
     midi.role     the value a node holds: addressStart, addressSize, device.<name> or data
 -->

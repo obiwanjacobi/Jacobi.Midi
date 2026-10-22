@@ -17,7 +17,7 @@
   In the 7-bit address space this is linear: the temporary patch at 00 00 and the 128 memory patches
   from 40 00 with a stride of 00 40 (64 addresses, of which 0x32 are used).
 
-  The midi.* properties describe the address map (see docs/analysis/address-map-proposal.md):
+  The midi.* properties describe the address map (see src/Jacobi.Midi.Device/Addressing/readme.md):
     midi.addressStart  absolute start address (wire form, as in the manual)
     midi.addressSize   number of addresses of a node; on a repeat the size of one item (the stride)
     midi.atomic        the group is always transferred as a whole

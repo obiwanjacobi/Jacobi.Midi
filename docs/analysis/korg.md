@@ -194,7 +194,7 @@ Links & references
 
 Notes
 
-What this means for the address map mechanism (see `address-map-proposal.md`):
+What this means for the address map mechanism (see `src/Jacobi.Midi.Device/Addressing/readme.md`):
 
 - **Devices without addresses are not a concern of the address map** (DS-8, R3, Prophecy, i5M, EX-800): their dumps are ordinary schemas (function code, index and scope fields, an open choice for the body). The EX-800 RAM chart documents offsets, but they are not sent: its memory dump is one plain schema.
 - **The N1/N5 fits the address map** (3-byte addresses, linear part and drum repeats, range writes from a mid-point). It accepts the same parameters in several formats (N5/NS5R, XG, GS) with different layouts; these can be modelled as separate maps, one per format. N5 and NS5R share the addresses and differ only in the model id (a device value).

@@ -128,7 +128,7 @@ Links & references
 
 Notes
 
-What this means for the address map mechanism (see `address-map-proposal.md`):
+What this means for the address map mechanism (see `src/Jacobi.Midi.Device/Addressing/readme.md`):
 
 - The same envelope tagging works. The device number + message type byte is a bit-packed byte: a constant type nibble plus a device parameter nibble. Group ID and Model ID are constants or device parameters.
 - **Requests without a size.** The mechanism must request at known boundaries: one parameter (Parameter Request) or one dump block (Dump Request). This needs a tag for groups that are dump blocks (e.g. `midi.block`).

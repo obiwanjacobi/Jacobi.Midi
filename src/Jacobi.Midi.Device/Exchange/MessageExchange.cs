@@ -37,11 +37,11 @@ public sealed class MessageExchangeFactory(IMidiSession session, Serializer seri
 }
 
 /// <summary>
-/// Transfers schema node ranges to and from one device over its own connection: sends the requests or data messages
-/// for a range, decodes the data that comes back and does the read-modify-write for atomic groups.
-/// Every transfer is given by a <see cref="PlanRange"/> (a range of a plan of the serializer); the address map and
-/// the messages are deduced from the schemas of its plan. A transfer ends when its range is exhausted.
-/// Disposing it closes the connection.
+/// Transfers schema node ranges to and from one device over its own connection. Every transfer is given by a
+/// <see cref="PlanRange"/> (a range of a plan of the serializer); the address map and the messages are deduced from
+/// the schemas of its plan. The range is cut into blocks, and each block is transferred by a state machine of the
+/// device's exchange protocol (<see cref="IExchangeProtocol"/>); this class runs those machines: it sends, waits and
+/// decodes. Transfers to the device run one at a time. Disposing it closes the connection.
 /// </summary>
 public sealed class MessageExchange : IAsyncDisposable
 {
@@ -49,9 +49,10 @@ public sealed class MessageExchange : IAsyncDisposable
     private readonly ISysExPort _port;
     private readonly DeviceValues _device;
     private readonly MessageExchangeOptions _options;
+    private readonly SemaphoreSlim _transfers = new(1, 1);
     private readonly Lock _lock = new();
-    private readonly List<PendingBlock> _pending = [];
     private readonly List<Listener> _listeners = [];
+    private ActiveTransfer? _active;
 
     internal MessageExchange(AddressMaps maps, ISysExPort port, DeviceValues device, MessageExchangeOptions options)
     {
@@ -64,17 +65,22 @@ public sealed class MessageExchange : IAsyncDisposable
         _port.Received += OnReceived;
     }
 
+    /// <inheritdoc cref="Receive(PlanRange, IValueSink, IProgress{AddressBlockResult}?, CancellationToken)"/>
+    public Task<AddressTransferResult> Receive(PlanRange range, IValueSink sink, CancellationToken ct)
+        => Receive(range, sink, null, ct);
+
     /// <summary>
     /// Requests the data of the range (widened to atomic groups) and decodes each completed block into the sink.
-    /// Blocks that are not answered within the timeout are reported in the result, not thrown.
+    /// Blocks that are not answered, or are rejected, are reported in the result (and to the progress), not thrown.
     /// </summary>
-    public async Task<AddressTransferResult> Receive(PlanRange range, IValueSink sink, CancellationToken ct)
+    public async Task<AddressTransferResult> Receive(PlanRange range, IValueSink sink, IProgress<AddressBlockResult>? progress, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(range);
         ArgumentNullException.ThrowIfNull(sink);
 
         var map = _maps.Get(range);
         var device = DeviceFor(map);
+        var protocol = ProtocolFor(map);
         var widened = map.WidenToAtomic(range);
         var blocks = SelectBlocks(map, widened, map.Protocol.Requests, device);
         if (blocks.Count == 0)
@@ -83,25 +89,32 @@ public sealed class MessageExchange : IAsyncDisposable
         }
 
         var results = new List<AddressBlockResult>();
-        foreach (var (request, block) in blocks)
+        foreach (var transfer in blocks)
         {
-            results.Add(await ReceiveBlock(map, device, request, block, sink, ct));
+            var result = await Run(map, device, transfer, protocol.Receive(transfer, Settings), null, sink, ct);
+            results.Add(result);
+            progress?.Report(result);
         }
         return new AddressTransferResult(results);
     }
+
+    /// <inheritdoc cref="Send(PlanRange, IValueSource, IProgress{AddressBlockResult}?, CancellationToken)"/>
+    public Task<AddressTransferResult> Send(PlanRange range, IValueSource source, CancellationToken ct)
+        => Send(range, source, null, ct);
 
     /// <summary>
     /// Encodes the range from the source and sends it as data messages. An atomic group the range only partly covers
     /// is completed with the device's current data first and written back as a whole. The transfer ends when the
     /// source has supplied the last logical field of the range.
     /// </summary>
-    public async Task<AddressTransferResult> Send(PlanRange range, IValueSource source, CancellationToken ct)
+    public async Task<AddressTransferResult> Send(PlanRange range, IValueSource source, IProgress<AddressBlockResult>? progress, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(range);
         ArgumentNullException.ThrowIfNull(source);
 
         var map = _maps.Get(range);
         var device = DeviceFor(map);
+        var protocol = ProtocolFor(map);
         var widened = map.WidenToAtomic(range);
         var values = source;
         if (map.GetAddressRange(widened) != map.GetAddressRange(range))
@@ -119,26 +132,18 @@ public sealed class MessageExchange : IAsyncDisposable
         }
 
         var results = new List<AddressBlockResult>();
-        foreach (var (message, block) in SelectBlocks(map, widened, map.Protocol.DataMessages, device))
+        foreach (var transfer in SelectBlocks(map, widened, map.Protocol.DataMessages, device))
         {
-            try
-            {
-                var bytes = map.CreateData(message, block, values, device);
-                await _port.Send(bytes, ct);
-                results.Add(new AddressBlockResult(block, AddressBlockStatus.Completed));
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                results.Add(new AddressBlockResult(block, AddressBlockStatus.Failed, exception));
-            }
-            await Pause(message, ct);
+            var result = await Run(map, device, transfer, protocol.Send(transfer, Settings), values, null, ct);
+            results.Add(result);
+            progress?.Report(result);
         }
         return new AddressTransferResult(results);
     }
 
     /// <summary>
     /// Decodes data messages the device sends on its own into the sink, for the nodes of the range, until cancelled.
-    /// Sends nothing. Data outside the range, and replies to a pending <see cref="Receive"/>, are not delivered.
+    /// Sends nothing. Data outside the range, and data that belongs to a running transfer, are not delivered.
     /// A message is decoded as a whole: the sink can get fields around the range (e.g. the rest of a patch).
     /// </summary>
     public async Task Listen(PlanRange range, IValueSink sink, CancellationToken ct)
@@ -155,7 +160,7 @@ public sealed class MessageExchange : IAsyncDisposable
         try
         {
             // decode on the caller's flow, not on the receive thread
-            await foreach (var data in listener.Channel.Reader.ReadAllAsync(ct))
+            await foreach (var data in listener.Inbox.Reader.ReadAllAsync(ct))
             {
                 data.Decode(sink);
             }
@@ -177,7 +182,131 @@ public sealed class MessageExchange : IAsyncDisposable
     {
         _port.Received -= OnReceived;
         await _port.DisposeAsync();
+        _transfers.Dispose();
     }
+
+    private TransferSettings Settings => new(_options.ResponseTimeout);
+
+    // Runs the state machine of one transfer: executes its actions and feeds it the events, then decodes the data it
+    // accepted (receive). One transfer at a time, so replies without an address (ack, nak) belong to it.
+    private async Task<AddressBlockResult> Run(AddressMap map, DeviceValues device, Transfer transfer, ITransferMachine machine,
+        IValueSource? values, IValueSink? sink, CancellationToken ct)
+    {
+        await _transfers.WaitAsync(ct);
+        var active = new ActiveTransfer(map, device, transfer.Block);
+        lock (_lock)
+        {
+            _active = active;
+        }
+
+        try
+        {
+            var received = new List<ReceivedData>();
+            var action = machine.Start();
+            while (true)
+            {
+                switch (action)
+                {
+                    case SendMessage send:
+                        await _port.Send(Build(map, device, transfer, send.Message, values), ct);
+                        action = machine.OnSent();
+                        break;
+
+                    case WaitForMessage wait:
+                        action = await Wait(active, machine, DateTime.UtcNow + wait.Timeout, received, ct);
+                        break;
+
+                    case Pause pause:
+                        await Task.Delay(pause.Duration, ct);
+                        while (active.Inbox.Reader.TryRead(out _))
+                        {
+                            // messages during a pause are not delivered to the machine
+                        }
+                        action = machine.OnElapsed();
+                        break;
+
+                    case Complete done:
+                        if (done.Status == AddressBlockStatus.Completed && sink is not null)
+                        {
+                            // decode on the caller's flow, in address order
+                            foreach (var data in received.OrderBy(d => d.Address))
+                            {
+                                data.Decode(sink);
+                            }
+                        }
+                        return new AddressBlockResult(transfer.Block, done.Status) { Reason = done.Reason };
+
+                    default:
+                        throw new InvalidOperationException($"The exchange machine {machine.GetType().Name} returned an unexpected action after '{transfer.Message.Name}'.");
+                }
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return new AddressBlockResult(transfer.Block, AddressBlockStatus.Failed, exception) { Reason = exception.Message };
+        }
+        finally
+        {
+            lock (_lock)
+            {
+                _active = null;
+            }
+            _transfers.Release();
+        }
+    }
+
+    // waits for a message for the machine until the deadline; ignored messages do not extend it
+    private static async Task<ExchangeAction> Wait(ActiveTransfer active, ITransferMachine machine, DateTime deadline,
+        List<ReceivedData> received, CancellationToken ct)
+    {
+        while (true)
+        {
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+            {
+                return machine.OnElapsed();
+            }
+
+            ExchangeMessage message;
+            using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                timeout.CancelAfter(remaining);
+                try
+                {
+                    message = await active.Inbox.Reader.ReadAsync(timeout.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    return machine.OnElapsed();
+                }
+            }
+
+            var next = machine.OnMessage(message);
+            if (next is Ignore)
+            {
+                continue;
+            }
+            if (message.Data is { } data)
+            {
+                received.Add(data);
+            }
+            return next;
+        }
+    }
+
+    private static byte[] Build(AddressMap map, DeviceValues device, Transfer transfer, AddressMessage message, IValueSource? values)
+        => message.Kind switch
+        {
+            AddressMessageKind.Request => map.Protocol.CreateRequest(message, transfer.Block.Addresses, device),
+            AddressMessageKind.Data => map.CreateData(message, transfer.Block,
+                values ?? throw new InvalidOperationException($"'{message.Name}': there are no values to send."), device),
+            _ => throw new InvalidOperationException($"'{message.Name}': a {message.Kind} message is not sent by the exchange."),
+        };
+
+    private IExchangeProtocol ProtocolFor(AddressMap map)
+        => _options.Protocol
+            ?? ExchangeProtocols.Find(map.Protocol.Exchange)
+            ?? throw new InvalidOperationException($"The exchange protocol '{map.Protocol.Exchange}' of '{map.Root}' is not known.");
 
     // the device values of the map root, with the client's values over them; all values the messages need must be known
     private DeviceValues DeviceFor(AddressMap map)
@@ -191,135 +320,79 @@ public sealed class MessageExchange : IAsyncDisposable
         return device;
     }
 
-    private async Task<AddressBlockResult> ReceiveBlock(AddressMap map, DeviceValues device, AddressMessage request, AddressBlock block, IValueSink sink, CancellationToken ct)
-    {
-        var pending = new PendingBlock(map, device, block);
-        lock (_lock)
-        {
-            _pending.Add(pending);
-        }
-
-        try
-        {
-            await _port.Send(map.Protocol.CreateRequest(request, block.Addresses, device), ct);
-
-            var timeout = Task.Delay(_options.ResponseTimeout, ct);
-            if (await Task.WhenAny(pending.Completed, timeout) != pending.Completed)
-            {
-                ct.ThrowIfCancellationRequested();
-                return new AddressBlockResult(block, AddressBlockStatus.TimedOut);
-            }
-
-            // decode on the caller's flow, in address order
-            foreach (var data in pending.Received.OrderBy(d => d.Address))
-            {
-                data.Decode(sink);
-            }
-            await Pause(request, ct);
-            return new AddressBlockResult(block, AddressBlockStatus.Completed);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            return new AddressBlockResult(block, AddressBlockStatus.Failed, exception);
-        }
-        finally
-        {
-            lock (_lock)
-            {
-                _pending.Remove(pending);
-            }
-        }
-    }
-
     // Picks the messages for a range: a range message where one exists, else the atomic message for the atomic
     // groups and the field message for the remaining fields. Only messages whose device values are known are used.
-    private static List<(AddressMessage Message, AddressBlock Block)> SelectBlocks(AddressMap map, PlanRange range,
-        IReadOnlyList<AddressMessage> messages, DeviceValues device)
+    private static List<Transfer> SelectBlocks(AddressMap map, PlanRange range, IReadOnlyList<AddressMessage> messages, DeviceValues device)
     {
         var usable = messages.Where(m => m.DeviceValueNames.All(name => device.TryGet(name, out _))).ToList();
 
         if (usable.FirstOrDefault(m => m.Unit == AddressUnit.Range) is { } rangeMessage)
         {
-            return [.. map.Split(range, rangeMessage).Select(b => (rangeMessage, b))];
+            return [.. map.Split(range, rangeMessage).Select(b => new Transfer(rangeMessage, b))];
         }
 
-        var blocks = new List<(AddressMessage, AddressBlock)>();
+        var transfers = new List<Transfer>();
         if (usable.FirstOrDefault(m => m.Unit == AddressUnit.Atomic) is { } atomicMessage)
         {
-            blocks.AddRange(map.Split(range, atomicMessage).Select(b => (atomicMessage, b)));
+            transfers.AddRange(map.Split(range, atomicMessage).Select(b => new Transfer(atomicMessage, b)));
         }
         if (usable.FirstOrDefault(m => m.Unit == AddressUnit.Field) is { } fieldMessage)
         {
-            var covered = blocks.Select(b => b.Item2.Addresses).ToList();
-            blocks.AddRange(map.Split(range, fieldMessage)
+            var covered = transfers.Select(t => t.Block.Addresses).ToList();
+            transfers.AddRange(map.Split(range, fieldMessage)
                 .Where(b => !covered.Any(c => c.Contains(b.Addresses)))
-                .Select(b => (fieldMessage, b)));
+                .Select(b => new Transfer(fieldMessage, b)));
         }
-        return [.. blocks.OrderBy(b => b.Item2.Addresses.Start)];
+        return [.. transfers.OrderBy(t => t.Block.Addresses.Start)];
     }
-
-    private static Task Pause(AddressMessage message, CancellationToken ct)
-        => message.Interval > TimeSpan.Zero ? Task.Delay(message.Interval, ct) : Task.CompletedTask;
 
     // raised by the port, possibly on a background thread
     private void OnReceived(ReadOnlyMemory<byte> sysEx)
     {
         var message = sysEx.ToArray();
+        ActiveTransfer? active;
         List<Listener> listeners;
         lock (_lock)
         {
-            foreach (var pending in _pending)
+            active = _active;
+            listeners = [.. _listeners];
+        }
+
+        if (active is not null)
+        {
+            if (active.Map.TryReadData(message, active.Device, out var data))
             {
-                if (pending.Map.TryReadData(message, pending.Device, out var data) && pending.TryAccept(data))
+                if (data.Block.Addresses.Overlaps(active.Block.Addresses))
                 {
+                    active.Inbox.Writer.TryWrite(new ExchangeMessage(AddressMessageKind.Data, data.Message, data));
                     return;
                 }
             }
-            listeners = [.. _listeners];
+            else if (active.Map.Protocol.TryReadReply(message, active.Device, out var reply))
+            {
+                active.Inbox.Writer.TryWrite(new ExchangeMessage(reply.Kind, reply));
+                return;
+            }
         }
 
         foreach (var listener in listeners)
         {
             if (listener.Map.TryReadData(message, listener.Device, out var data) && data.Block.Addresses.Overlaps(listener.Span))
             {
-                listener.Channel.Writer.TryWrite(data);
+                listener.Inbox.Writer.TryWrite(data);
             }
         }
     }
 
     /// <summary>
-    /// A requested block that waits for its data: collects the data messages that fall inside it until all its
-    /// addresses are covered (a device may answer one request with several messages).
+    /// The transfer that is running: the map and block it is for, and the messages for its machine.
     /// </summary>
-    private sealed class PendingBlock(AddressMap map, DeviceValues device, AddressBlock block)
+    private sealed class ActiveTransfer(AddressMap map, DeviceValues device, AddressBlock block)
     {
-        private readonly bool[] _covered = new bool[block.Addresses.Size];
-        private readonly TaskCompletionSource _completed = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
         public AddressMap Map { get; } = map;
         public DeviceValues Device { get; } = device;
-        public List<ReceivedData> Received { get; } = [];
-        public Task Completed => _completed.Task;
-
-        public bool TryAccept(ReceivedData data)
-        {
-            var overlap = block.Addresses.Intersect(data.Block.Addresses);
-            if (overlap.IsEmpty || _completed.Task.IsCompleted)
-            {
-                return false;
-            }
-
-            Received.Add(data);
-            for (var address = overlap.Start; address < overlap.End; address++)
-            {
-                _covered[address - block.Addresses.Start] = true;
-            }
-            if (_covered.All(c => c))
-            {
-                _completed.TrySetResult();
-            }
-            return true;
-        }
+        public AddressBlock Block { get; } = block;
+        public Channel<ExchangeMessage> Inbox { get; } = Channel.CreateUnbounded<ExchangeMessage>(new UnboundedChannelOptions { SingleReader = true });
     }
 
     /// <summary>
@@ -330,6 +403,6 @@ public sealed class MessageExchange : IAsyncDisposable
         public AddressMap Map { get; } = map;
         public DeviceValues Device { get; } = device;
         public AddressRange Span { get; } = span;
-        public Channel<ReceivedData> Channel { get; } = System.Threading.Channels.Channel.CreateUnbounded<ReceivedData>(new UnboundedChannelOptions { SingleReader = true });
+        public Channel<ReceivedData> Inbox { get; } = Channel.CreateUnbounded<ReceivedData>(new UnboundedChannelOptions { SingleReader = true });
     }
 }

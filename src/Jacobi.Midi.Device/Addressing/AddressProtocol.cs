@@ -7,40 +7,59 @@ namespace Jacobi.Midi.Device.Addressing;
 
 /// <summary>
 /// The addressed-data messages that can carry one open choice contract (memberNodeDef), found through their
-/// <c>midi.*</c> tags: the requests and data messages, how to fill them and which body group (device map) a data
-/// message carries. Generic: all vendor specifics are in the schemas.
+/// <c>midi.*</c> tags: the requests, data messages and replies, how to fill and recognise them, which body group
+/// (device map) a data message carries, and which exchange protocol the envelope uses.
+/// Generic: all vendor specifics are in the schemas.
 /// </summary>
 internal sealed class AddressProtocol
 {
+    /// <summary>The exchange protocol of an envelope without replies: requests are answered with data, data is not acknowledged.</summary>
+    public const string OneWay = "oneWay";
+    /// <summary>The exchange protocol of an envelope with ack/nak replies: received data is acknowledged by the device.</summary>
+    public const string Acknowledged = "acknowledged";
+
     private readonly Serializer _serializer;
     private readonly IReadOnlyList<BodyCandidate> _bodies;
 
-    private AddressProtocol(Serializer serializer, SchemaName contract, AddressSpace addressSpace,
-        IReadOnlyList<AddressMessage> requests, IReadOnlyList<AddressMessage> dataMessages, IReadOnlyList<BodyCandidate> bodies)
+    private AddressProtocol(Serializer serializer, SchemaName contract, AddressSpace addressSpace, string exchange,
+        IReadOnlyList<AddressMessage> requests, IReadOnlyList<AddressMessage> dataMessages, IReadOnlyList<AddressMessage> replies,
+        IReadOnlyList<BodyCandidate> bodies)
     {
         _serializer = serializer;
         Contract = contract;
         AddressSpace = addressSpace;
+        Exchange = exchange;
         Requests = requests;
         DataMessages = dataMessages;
+        Replies = replies;
         _bodies = bodies;
     }
 
     /// <summary>The open choice contract (the nodeDef the map roots conform to).</summary>
     public SchemaName Contract { get; }
     public AddressSpace AddressSpace { get; }
+    /// <summary>
+    /// The name of the exchange protocol (<c>midi.exchange</c> on the envelope root or the map root); without the tag
+    /// it is <see cref="Acknowledged"/> when the envelope has ack or nak replies, else <see cref="OneWay"/>.
+    /// </summary>
+    public string Exchange { get; }
     public IReadOnlyList<AddressMessage> Requests { get; }
     public IReadOnlyList<AddressMessage> DataMessages { get; }
+    /// <summary>The device's replies: the ack, nak and error messages.</summary>
+    public IReadOnlyList<AddressMessage> Replies { get; }
 
     /// <summary>
     /// Finds the messages of a contract in the schemas: the data messages (<c>midi.message="data"</c>) that contain an
-    /// open choice with <c>midi.role="data"</c> whose memberNodeDef is the contract, and the requests
-    /// (<c>midi.message="request"</c>) in the same envelope roots. Problems are added to <paramref name="errors"/>.
+    /// open choice with <c>midi.role="data"</c> whose memberNodeDef is the contract, and the requests and replies
+    /// (<c>midi.message="request"</c>, <c>ack</c>, <c>nak</c>, <c>error</c>) in the same envelope roots.
+    /// Problems are added to <paramref name="errors"/>.
     /// </summary>
     internal static AddressProtocol Create(SchemaSet schemas, Serializer serializer, SchemaName contract, List<string> errors)
     {
         var requests = new List<AddressMessage>();
         var dataMessages = new List<AddressMessage>();
+        var replies = new List<AddressMessage>();
+        var exchanges = new List<string>();
         var bodies = new List<BodyCandidate>();
 
         foreach (var document in schemas.Documents)
@@ -64,6 +83,11 @@ internal sealed class AddressProtocol
                 {
                     requests.AddRange(found.Where(m => m.Kind == AddressMessageKind.Request));
                     dataMessages.AddRange(found.Where(m => m.Kind == AddressMessageKind.Data));
+                    replies.AddRange(found.Where(m => IsReply(m.Kind)));
+                    if (MidiProperties.Find(root, MidiProperties.Exchange) is { } exchange)
+                    {
+                        exchanges.Add(exchange);
+                    }
                 }
             }
         }
@@ -72,18 +96,28 @@ internal sealed class AddressProtocol
         {
             errors.Add($"There is no data message (midi.message=\"data\" with an open choice midi.role=\"data\") for the contract '{contract}'.");
         }
+        if (exchanges.Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
+        {
+            errors.Add($"The envelopes of the contract '{contract}' declare different exchange protocols: {String.Join(", ", exchanges)}.");
+        }
 
+        var inferred = replies.Any(r => r.Kind is AddressMessageKind.Ack or AddressMessageKind.Nak) ? Acknowledged : OneWay;
         var addressSpace = AddressSpaceOf(requests.Concat(dataMessages), errors);
-        return new AddressProtocol(serializer, contract, addressSpace, requests, dataMessages, bodies);
+        return new AddressProtocol(serializer, contract, addressSpace, exchanges.FirstOrDefault() ?? inferred,
+            requests, dataMessages, replies, bodies);
     }
 
-    /// <summary>A copy with the message settings of a map root applied (<c>midi.unit</c>, <c>midi.maxDataSize</c>, <c>midi.messageInterval</c>).</summary>
+    /// <summary>
+    /// A copy with the settings of a map root applied (<c>midi.unit</c>, <c>midi.maxDataSize</c>,
+    /// <c>midi.messageInterval</c>, <c>midi.exchange</c>).
+    /// </summary>
     internal AddressProtocol WithOverrides(SchemaNode mapRoot, List<string> errors)
     {
         var unit = Unit(mapRoot, errors);
         var maxDataSize = Number(mapRoot, MidiProperties.MaxDataSize, errors);
         var interval = Number(mapRoot, MidiProperties.MessageInterval, errors);
-        if (unit is null && maxDataSize is null && interval is null)
+        var exchange = MidiProperties.Find(mapRoot, MidiProperties.Exchange);
+        if (unit is null && maxDataSize is null && interval is null && exchange is null)
         {
             return this;
         }
@@ -96,9 +130,39 @@ internal sealed class AddressProtocol
         };
 
         // a unit override only applies to data messages: the requests keep what the device answers to
-        return new AddressProtocol(_serializer, Contract, AddressSpace,
-            [.. Requests.Select(r => Apply(r) with { Unit = r.Unit })], [.. DataMessages.Select(Apply)], _bodies);
+        return new AddressProtocol(_serializer, Contract, AddressSpace, exchange ?? Exchange,
+            [.. Requests.Select(r => Apply(r) with { Unit = r.Unit })], [.. DataMessages.Select(Apply)], Replies, _bodies);
     }
+
+    /// <summary>
+    /// Recognises a reply of the device (ack, nak or error): the constants match and the device values in it agree with
+    /// <paramref name="device"/>. Returns false for any other message.
+    /// </summary>
+    public bool TryReadReply(ReadOnlyMemory<byte> sysEx, DeviceValues device, out AddressMessage reply)
+    {
+        foreach (var candidate in Replies)
+        {
+            try
+            {
+                var sink = new EnvelopeSink(_ => throw new InvalidOperationException($"'{candidate.Name}': a reply carries no data."));
+                var read = _serializer.Deserialize(candidate.Range, new ReadOnlySequence<byte>(sysEx), sink);
+                if (read == sysEx.Length && sink.Device.All(v => !device.TryGet(v.Key, out var expected) || expected == v.Value))
+                {
+                    reply = candidate;
+                    return true;
+                }
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // not this reply
+            }
+        }
+        reply = null!;
+        return false;
+    }
+
+    private static bool IsReply(AddressMessageKind kind)
+        => kind is AddressMessageKind.Ack or AddressMessageKind.Nak or AddressMessageKind.Error;
 
     /// <summary>
     /// Selects the body group (device map) for the device values read from an envelope: of the groups that conform
@@ -199,7 +263,7 @@ internal sealed class AddressProtocol
 
             if (!Enum.TryParse<AddressMessageKind>(kindText, ignoreCase: true, out var kind))
             {
-                errors.Add($"{member.Path}: '{MidiProperties.Message}' must be request or data, not '{kindText}'.");
+                errors.Add($"{member.Path}: '{MidiProperties.Message}' must be request, data, ack, nak or error, not '{kindText}'.");
                 continue;
             }
 
@@ -249,6 +313,19 @@ internal sealed class AddressProtocol
 
     private static void Validate(AddressMessage message, List<string> errors)
     {
+        if (IsReply(message.Kind))
+        {
+            // a reply only identifies itself (and the device): no address, size or data
+            foreach (var role in new[] { MidiProperties.RoleAddressStart, MidiProperties.RoleAddressSize, MidiProperties.RoleData })
+            {
+                if (message.Roles.ContainsKey(role))
+                {
+                    errors.Add($"{message.Name}: a reply ({message.Kind}) has no role '{role}'.");
+                }
+            }
+            return;
+        }
+
         if (!message.Roles.TryGetValue(MidiProperties.RoleAddressStart, out var address) || address is not FieldInfo)
         {
             errors.Add($"{message.Name}: the message has no field with the role '{MidiProperties.RoleAddressStart}'.");

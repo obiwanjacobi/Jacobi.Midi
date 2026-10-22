@@ -3,12 +3,19 @@ using Jacobi.BinarySerializer.Execution;
 namespace Jacobi.Midi.Device.Addressing;
 
 /// <summary>
-/// Whether a message asks for data or carries data (<c>midi.message</c>).
+/// What a message is for (<c>midi.message</c>): it asks for data, carries data, or is the device's reply to a message
+/// it received. The exchange protocols reason in these kinds, not in message bytes.
 /// </summary>
 public enum AddressMessageKind
 {
     Request,
     Data,
+    /// <summary>The device accepted the message (e.g. Korg DATA LOAD COMPLETED, Roland ACK).</summary>
+    Ack,
+    /// <summary>The device could not process the message (e.g. Korg DATA LOAD ERROR, Roland RJC).</summary>
+    Nak,
+    /// <summary>The device received a message it could not read (e.g. Korg FORMAT ERROR, Roland ERR).</summary>
+    Error,
 }
 
 /// <summary>

@@ -155,6 +155,6 @@ The address numbers 0D onward follow the order of the OCR text; the group bounda
 | Parameters 00-31 (one sound, atomic) | `Gp8.xml` (nodeDef `patch`, `midi.atomic`) |
 
 The address bit fields (m, g, bbb, nnn, pppppp) are not modelled as fields: in the 7-bit address space they are linear,
-so the address map finds the patch and parameter from the address (see `docs/analysis/address-map-proposal.md`).
+so the address map finds the patch and parameter from the address (see [the address map](../Jacobi.Midi.Device/Addressing/readme.md)).
 
 Open items (the temporary patch address, the Turbo value range) are marked `[TODO]` in the schemas.

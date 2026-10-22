@@ -20,6 +20,7 @@ internal static class MidiProperties
     public const string Message = "midi.message";
     public const string Role = "midi.role";
     public const string AddressBits = "midi.addressBits";
+    public const string Exchange = "midi.exchange";
 
     // values of midi.role
     public const string RoleAddressStart = "addressStart";
