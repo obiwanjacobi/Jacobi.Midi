@@ -122,7 +122,7 @@ Display Letter 0-31   08,00,00…   06,00,00…   10,00,00…
 ```
 
 - Parts are a repeat in the middle address byte (N5 `01,nn,xx`, XG `08,nn,xx`, `nn` = part 00-1F). Drums are indexed by drum setup in the high byte and note number in the middle byte (`3n,rr,xx`, `rr` = 0C-6C).
-- **GS block numbers are not linear in the part number**: in `40,1x,xx`, x = 0 is part 10 and x = 1-9 are parts 1-9; parts 17-32 use `50,1x,xx`, where x = 0 is part 26, x = 1 part 17, x = 2 part 18 (the manual shows only these rows). The address of a repeat item is not `start + index × stride` there.
+- GS parts are addressed by **block number** `40,1x,xx` (parts 17-32: `50,1x,xx`), a linear repeat of 16 blocks. The block numbers are labelled with other part numbers: block 0 is part 10 (drums), blocks 1-9 are parts 1-9 (and in `50`: block 0 is part 26, blocks 1-2 parts 17-18; the manual shows only these rows). This is the normal GS convention (Roland SC-55: block 0 = part 10, blocks 1-9 = parts 1-9, blocks A-F = parts 11-16): a naming of the blocks, not a non-linear address.
 - "For address items of `.... xx`, the value section can be set consecutively. Settings can also be started from a mid-point address", e.g. `F0 42 30 42 12 01 00 36 3C 3B 3A F7` sets the scale of part 1 for E, F and F# (addresses `01,00,36`-`38`) to -4, -5, -6 cent: a range write, like a Roland DT1.
 - Master tune is 4 addresses of 4 bits each (as in Yamaha XG). Panpot "OFF" is a special two-byte value at the 1-byte panpot address: `F0 42 3n 4C 12 01 nn 14 11 mm F7`.
 
@@ -196,11 +196,12 @@ Notes
 
 What this means for the address map mechanism (see `address-map-proposal.md`):
 
-- **No address on the wire** (DS-8, R3, Prophecy, i5M, EX-800): a message reaches its object through its function code (contract), index fields and sometimes a scope field. The `addressStart` role cannot be required; an index role (→ the repeat instance of the target) and a scope role are needed. The layout offsets are still useful inside the mechanism (atomic groups, widening), just not sent. The EX-800 RAM chart even documents such offsets.
-- **The N1/N5 fits the address map** (3-byte addresses, part and drum repeats, range writes from a mid-point), but has **several address maps over the same parameters** (N5, XG, GS: different envelopes, different layouts). A device map should be reachable through more than one address map, or the parameters must be modelled once with per-envelope addresses.
-- **Non-linear repeat addressing** (N1/N5 GS block numbers): the item → address relation can be a permutation, not `start + index × stride`.
+- **Devices without addresses are not a concern of the address map** (DS-8, R3, Prophecy, i5M, EX-800): their dumps are ordinary schemas (function code, index and scope fields, an open choice for the body). The EX-800 RAM chart documents offsets, but they are not sent: its memory dump is one plain schema.
+- **The N1/N5 fits the address map** (3-byte addresses, linear part and drum repeats, range writes from a mid-point). It accepts the same parameters in several formats (N5/NS5R, XG, GS) with different layouts; these can be modelled as separate maps, one per format. N5 and NS5R share the addresses and differ only in the model id (a device value).
+
+Concerns outside the address map, for the schemas and the message exchange of these devices:
+
 - **A request names its reply**: an envelope has several data messages, so the request → reply pairing must be explicit.
-- **Packing**: 7-to-8 packing (R3, Prophecy, i5M) and nibble packing with a checksum (EX-800) need layout processors on the data (e.g. `korg.pack7`, a nibble processor), chained with the bit-packer of the dump layout. The EX-800 has bit fields that cross byte boundaries.
-- **The EX-800 is a dump-only device**: one request, one dump of everything, a checksum and an error message: an atomic map root.
-- **Keyed parameter changes** need a separate binding: a key per field (with strides for repeated blocks), a generic value encoding, and parameters that are part of a field (the R3 name characters).
+- **Packing**: 7-to-8 packing (R3, Prophecy, i5M) and nibble packing with a checksum (EX-800) need layout processors (e.g. `korg.pack7`, a nibble processor), chained with the bit-packer of the dump layout. The EX-800 has bit fields that cross byte boundaries.
+- **Keyed parameter changes** need their own binding: a key per field (with strides for repeated blocks), a generic value encoding, and parameters that are part of a field (the R3 name characters).
 - **The exchange is a state machine**: ACK/NAK after every message with wait-before-next flow control (i5M), write confirmation with error codes (DS-8, Prophecy), device modes that decide which requests are accepted (i5M, DS-8 panel modes), receive-only devices (N1/N5), a delayed dump (EX-800), device-initiated dumps and parameter changes. This, together with the Roland handshake (retries) and the Yamaha header/footer framing, argues for explicit exchange protocols separate from the content binding.
