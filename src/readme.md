@@ -170,8 +170,7 @@ await using var connection = await session.Connect(endpointId,
 ## Resources
 
 Windows:
-https://microsoft.github.io/MIDI/
-
+- https://microsoft.github.io/MIDI/
 
 Cross platform UI for tools:
 - avalonia >= 11.3: works on Win/Mac/Lin but not native rendered.
@@ -179,9 +178,17 @@ Cross platform UI for tools:
 - MAUI 11: native but Linux support is unofficial/community solutions (GTK4)
 
 X-plat MIDI v1:
-https://github.com/atsushieno/managed-midi / https://github.com/managed-midi/managed-midi
-MIDI v2: https://github.com/atsushieno/cmidi2
-https://github.com/celtera/libremidi
+- https://github.com/atsushieno/managed-midi / https://github.com/managed-midi/managed-midi
 
-Windows Specific MIDI v2: https://microsoft.github.io/MIDI/
-https://midi2.dev/
+MIDI v2:
+- https://github.com/atsushieno/cmidi2
+- https://github.com/celtera/libremidi
+
+Windows Specific MIDI v2:
+- https://microsoft.github.io/MIDI/
+- https://midi2.dev/
+
+Related programs/devices:
+
+- https://docs.electra.one/luacourse/chapters/1-midi/6-sysex.html
+- https://johnkorchok.com/downloads/sounddiver_v3.0_manual.pdf
