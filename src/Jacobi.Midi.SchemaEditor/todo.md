@@ -30,6 +30,27 @@ Known gaps and loose ends, collected while building the editor.
 
 - [ ] The Document view categories hold the document collection instances from when the document was loaded; replacing a collection (instead of changing its contents) is not reflected.
 
+## Reverse-engineering workbench
+
+- [x] Phase 1 (Compare): `Schema | Workbench` mode switch, session (title, save/open), captures from .syx / pasted hex / Receive, baseline and variants with change notes, message slots, byte view (`HexView`) with difference, changed-bits, derived and annotation marks, interpret strip, annotations.
+- [ ] A message slot of a variant with a different length is compared byte by byte up to the shorter length; the proposal's alignment on the longest common subsequence is not done.
+- [ ] The layers of the byte view cannot be toggled; there is only a legend.
+- [ ] The interpret strip does not check the rows against the change notes (they are free text, not parsed) and there are no sweeps yet. Needs a way to enter the noted value.
+- [ ] Keyboard: `Ctrl+Tab` (next unknown span), `Ctrl+1…9` (focus a variant), `Enter`/`F2` (define/rename a field) are not implemented; arrows, Shift+arrows, Home/End and Tab/Shift+Tab are.
+- [ ] Receive only assembles SysEx7 UMPs (`SysEx7Assembler`), like Match; SysEx8 is not received.
+- [x] The selection is also shown in the ASCII column (and bytes can be selected there); the panels are sized with splitters (with a minimum size).
+- [x] Phase 2 (Build), first part: one root per message slot (`Message<n>`, `midi.sysex` framing) with `Wip_<offset>` placeholders, Define / Apply / Remove field, a live preview of the field's value in every capture (on a copy of the schema), field coverage under the bytes, double-click selects a field or unknown span, interpret strip rows set the data type.
+- [x] Decimal display (Hex/Decimal switch: the bytes and offsets of the byte view; the tooltip shows both), find a value (decimal, hex or hex bytes; as one byte, 7-bit packed or nibbles; in the focused variant or the baseline, changed bytes first) and notes on slots (in the session, the slots list and the slot headers).
+- [x] Moving the slots splitter moved the slots list down (the splitter resized the header row); fixed values for fields (checked by the reader in every capture); define the selected field at the same position in the other slots (where the bytes are the same, or where they are unknown).
+- [ ] Find only looks in the focused variant (or the baseline); finding in all captures, and finding a value in the slots that changed only, may help.
+- [ ] Frame proposal: header constants, checksum detection (`roland.checksum`, `yamaha.checksum`, `sys.crc`) and address fields are not proposed yet.
+- [ ] A slot is matched to its root by name (`Message<n>`); a renamed root is not found. Matching by reading (the root that reads the baseline message) would be more robust.
+- [ ] Slots with the same layout cannot be turned into a repeat or a shared node def yet; fields cannot be grouped (e.g. a checksum scope) from the workbench.
+- [ ] The field preview copies and compiles the schema on every change of the name, data type or processor; fine for small schemas, may need a debounce for large ones.
+- [ ] The field panel edits one processor per field: *Apply* replaces all processors of the field with that one, so a field that got more processors in Schema mode loses the others.
+
+- [ ] The serializer does not report which input bytes a field was read from (`IValueSink.SetField` gets no byte position), so the workbench computes positions itself from the schema. That fails for fields of variable size and for fields below processors that transform the bytes (7-bit packing, nibbles). Possible solution: a read trace in Jacobi.BinarySerializer (e.g. a service via `ValueContext.Services`), with transforming processors mapping positions back to the input. See `workbench-proposal.md`.
+
 ## Build & test
 
 - [ ] `dotnet test` fails on the .NET 11 SDK: the test project uses Microsoft.Testing.Platform and needs the opt-in in a `global.json`. Run `Jacobi.Midi.Tests.exe` directly until then.

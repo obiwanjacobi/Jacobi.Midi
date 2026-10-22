@@ -10,6 +10,7 @@
              xmlns:rn="clr-namespace:Jacobi.Midi.SchemaEditor.Document"
              xmlns:asm="clr-namespace:Jacobi.Midi.SchemaEditor.Assemblies"
              xmlns:midi="clr-namespace:Jacobi.Midi.SchemaEditor.Midi"
+             xmlns:wb="clr-namespace:Jacobi.Midi.SchemaEditor.Workbench"
              mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="900"
              xmlns:local="clr-namespace:Jacobi.Midi.SchemaEditor.Views"
              x:Class="Jacobi.Midi.SchemaEditor.Views.MainView"
@@ -27,7 +28,19 @@
         </Border>
 
         <Border Grid.Row="1" Padding="12,8" Background="{DynamicResource AppBackgroundToolbarBrush}" BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="8">
+                <!-- the mode of the window: author schemas or reverse engineer a device -->
+                <TabStrip Grid.Column="1" SelectedIndex="{Binding SelectedMode}" VerticalAlignment="Center" Margin="4,0,12,0">
+                    <TabStrip.Styles>
+                        <Style Selector="TabStripItem">
+                            <Setter Property="Padding" Value="12,4" />
+                            <Setter Property="MinHeight" Value="0" />
+                            <Setter Property="FontSize" Value="14" />
+                        </Style>
+                    </TabStrip.Styles>
+                    <TabStripItem Content="Schema" ToolTip.Tip="Author and edit schemas" />
+                    <TabStripItem Content="Workbench" ToolTip.Tip="Reverse engineer the SysEx dumps of a device" />
+                </TabStrip>
                 <Button Grid.Column="0" VerticalAlignment="Center" ToolTip.Tip="Menu">
                     <PathIcon Width="16" Height="16" Data="M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z" />
                     <Button.Flyout>
@@ -41,7 +54,7 @@
                         </MenuFlyout>
                     </Button.Flyout>
                 </Button>
-                <ListBox Grid.Column="1" ItemsSource="{Binding Documents}"
+                <ListBox Grid.Column="2" ItemsSource="{Binding Documents}" IsVisible="{Binding IsSchemaMode}"
                          SelectedItem="{Binding SelectedDocument, Mode=TwoWay}"
                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
                          ScrollViewer.VerticalScrollBarVisibility="Disabled">
@@ -64,14 +77,20 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-                <Button Grid.Column="2" VerticalAlignment="Center" ToolTip.Tip="Close the active document"
+                <Button Grid.Column="3" VerticalAlignment="Center" ToolTip.Tip="Close the active document" IsVisible="{Binding IsSchemaMode}"
                         Command="{Binding CloseDocumentCommand}">
                     <PathIcon Width="12" Height="12" Data="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" />
                 </Button>
             </Grid>
         </Border>
 
-        <Grid Grid.Row="2" ColumnDefinitions="280,*" ColumnSpacing="1" Background="{DynamicResource AppDividerBrush}">
+        <!-- Workbench mode -->
+        <Panel Grid.Row="2" Grid.RowSpan="2" IsVisible="{Binding IsWorkbenchMode}">
+            <wb:WorkbenchView DataContext="{Binding Workbench}" />
+        </Panel>
+
+        <!-- Schema mode -->
+        <Grid Grid.Row="2" ColumnDefinitions="280,*" ColumnSpacing="1" Background="{DynamicResource AppDividerBrush}" IsVisible="{Binding IsSchemaMode}">
             <Border Grid.Column="0" Padding="18" Background="{DynamicResource AppBackgroundPanelBrush}">
                 <TabControl SelectedIndex="{Binding SelectedLeftTab}" Padding="0">
                     <TabItem Header="Schema">
@@ -109,7 +128,7 @@
             </Border>
         </Grid>
 
-        <Border Grid.Row="3" Padding="16,8" Background="{DynamicResource AppBackgroundHeaderBrush}">
+        <Border Grid.Row="3" Padding="16,8" Background="{DynamicResource AppBackgroundHeaderBrush}" IsVisible="{Binding IsSchemaMode}">
             <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="{DynamicResource AppTextSecondaryBrush}" />
         </Border>
 

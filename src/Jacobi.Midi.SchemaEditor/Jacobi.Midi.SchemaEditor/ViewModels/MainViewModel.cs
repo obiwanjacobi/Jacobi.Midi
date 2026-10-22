@@ -17,6 +17,7 @@ using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.SchemaEditor.NodeEditor;
 using Jacobi.Midi.SchemaEditor.SchemaTree;
 using Jacobi.Midi.SchemaEditor.Services;
+using Jacobi.Midi.SchemaEditor.Workbench;
 using YamlDotNet.Core;
 
 namespace Jacobi.Midi.SchemaEditor.ViewModels;
@@ -39,6 +40,12 @@ internal sealed partial class MainViewModel : ViewModelBase
     private static readonly FilePickerFileType[] SysExFileTypes =
     [
         new("SysEx files") { Patterns = ["*.syx"] }
+    ];
+
+    private static readonly FilePickerFileType[] SessionFileTypes =
+    [
+        new("Workbench sessions") { Patterns = ["*" + WorkbenchSessionFile.Extension] },
+        new("JSON files") { Patterns = ["*.json"] }
     ];
 
     private readonly Dictionary<SchemaWorkspaceDocument, IStorageFile> _storageFiles = [];
@@ -146,8 +153,75 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// </summary>
     public bool CanPin => SelectedLeftTab == SchemaLeftTab && SelectedDocument is not null;
 
-    public ObservableCollection<SysExMessage> SysExMessages { get; } = [];
-    public ObservableCollection<SysExComparisonRow> ComparedBytes { get; } = [];
+    /// <summary>
+    /// The mode of the main window: <see cref="SchemaMode"/> (author schemas) or <see cref="WorkbenchMode"/>
+    /// (reverse engineer the dumps of a device in the <see cref="Workbench"/>).
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSchemaMode), nameof(IsWorkbenchMode))]
+    public partial int SelectedMode { get; set; }
+
+    public const int SchemaMode = 0;
+    public const int WorkbenchMode = 1;
+
+    public bool IsSchemaMode => SelectedMode != WorkbenchMode;
+    public bool IsWorkbenchMode => SelectedMode == WorkbenchMode;
+
+    /// <summary>
+    /// The reverse-engineering workbench shown in <see cref="WorkbenchMode"/>; it receives dumps through the <see cref="MidiBar"/>.
+    /// </summary>
+    public WorkbenchViewModel Workbench => field ??= new WorkbenchViewModel(new WorkbenchStorage
+    {
+        OpenSysEx = OpenSysExFile,
+        OpenSession = OpenSessionFile,
+        SaveSession = SaveSessionFile
+    }, MidiBar, new WorkbenchSchemaHost
+    {
+        FindDocument = name => Documents.FirstOrDefault(document => !document.IsReadOnly
+            && String.Equals(document.Schema.Name, name, StringComparison.OrdinalIgnoreCase)),
+        CreateDocument = CreateWorkbenchDocument,
+        Compile = CreateInstantiator,
+        Processors = OpenedAssemblies.Processors
+    });
+
+    // the target schema of the workbench: an empty XML document (like the device schemas)
+    private SchemaWorkspaceDocument CreateWorkbenchDocument(string name)
+    {
+        AddDocument(WorkbenchSchema.CreateEmpty(name), SchemaFormat.Xml, null, null);
+        SelectedDocument!.IsDirty = true;
+        StatusMessage = $"Created {name} from the workbench.";
+        return SelectedDocument;
+    }
+
+    partial void OnSelectedModeChanged(int value)
+    {
+        if (value == WorkbenchMode)
+        {
+            // the target schema may have been edited (or opened, closed) in Schema mode
+            Workbench.RefreshSchema();
+        }
+    }
+
+    /// <summary>
+    /// Compiles <paramref name="document"/> with the documents it includes: the open documents and the embedded schemas
+    /// of the opened assemblies (an open document takes precedence by name). Other documents with the name of
+    /// <paramref name="document"/> are left out, so a copy of an open document can be compiled.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">An include is not loaded or the schema does not compile.</exception>
+    private SchemaInstantiator CreateInstantiator(EditDocument document)
+    {
+        var workspace = Documents.Select(item => item.Schema)
+            .Where(schema => ReferenceEquals(schema, document) || !String.Equals(schema.Name, document.Name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var embedded = OpenedAssemblies.Assemblies
+            .SelectMany(assembly => assembly.Schemas)
+            .Select(schema => schema.Document.Schema)
+            .Where(schema => !String.Equals(schema.Name, document.Name, StringComparison.OrdinalIgnoreCase)
+                && !workspace.Any(open => String.Equals(open.Name, schema.Name, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+        return SchemaInstantiator.Create(document, [.. workspace, .. embedded]);
+    }
+
     /// <summary>
     /// The data types to choose from for a field: the types registered in the <see cref="DataTypeRegistry"/>
     /// followed by the data type defs of the <see cref="ActiveDocument"/>. The data type editors also accept a custom value.
@@ -400,24 +474,6 @@ internal sealed partial class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(SelectedItemPath));
         }
     }
-
-    [ObservableProperty]
-    public partial string HexInput { get; set; } = String.Empty;
-
-    [ObservableProperty]
-    public partial string ReverseFieldName { get; set; } = "CapturedBytes";
-
-    [ObservableProperty]
-    public partial string ReverseFieldDataType { get; set; } = "sys.bytes";
-
-    [ObservableProperty]
-    public partial int SelectedByteStart { get; set; }
-
-    [ObservableProperty]
-    public partial int SelectedByteLength { get; set; } = 1;
-
-    [ObservableProperty]
-    public partial SysExMessage? SelectedSysExMessage { get; set; }
 
     [ObservableProperty]
     public partial string StatusMessage { get; set; } = "Create a schema or open an existing JSON, XML, or YAML file.";
@@ -842,13 +898,7 @@ internal sealed partial class MainViewModel : ViewModelBase
         try
         {
             // the embedded schemas of the opened assemblies can be included too; an open document takes precedence by name
-            var workspace = Documents.Select(document => document.Schema).ToList();
-            var embedded = OpenedAssemblies.Assemblies
-                .SelectMany(assembly => assembly.Schemas)
-                .Select(schema => schema.Document.Schema)
-                .Where(schema => !workspace.Any(open => String.Equals(open.Name, schema.Name, StringComparison.OrdinalIgnoreCase)))
-                .ToList();
-            var instantiator = SchemaInstantiator.Create(active.Schema, [.. workspace, .. embedded]);
+            var instantiator = CreateInstantiator(active.Schema);
             var instance = instantiator.Create(root);
             // the processors of the opened assemblies are used when the values are serialized (or deserialized)
             var rootName = instantiator.FindRootName(root);
@@ -1012,111 +1062,71 @@ internal sealed partial class MainViewModel : ViewModelBase
         return file.Name;
     }
 
-    [RelayCommand]
-    private void ImportSysEx()
+    /// <summary>
+    /// Lets the user pick a workbench session file and reads it.
+    /// </summary>
+    /// <returns>The file and its text; null when the user cancelled.</returns>
+    /// <exception cref="InvalidOperationException">The platform does not provide file-open access.</exception>
+    private async Task<(SessionFile File, string Text)?> OpenSessionFile()
     {
-        var tokens = HexInput
-            .Replace(",", " ", StringComparison.Ordinal)
-            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (tokens.Length == 0)
+        if (_storageProvider is null || !_storageProvider.CanOpen)
         {
-            StatusMessage = "Enter a space- or comma-separated SysEx byte sequence first.";
-            return;
+            throw new InvalidOperationException("This platform does not provide file-open access.");
         }
 
-        var bytes = new byte[tokens.Length];
-        for (var index = 0; index < tokens.Length; index++)
+        var files = await _storageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            var token = tokens[index].StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? tokens[index][2..] : tokens[index];
-            if (!Byte.TryParse(token, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out bytes[index]))
+            Title = "Open workbench session",
+            AllowMultiple = false,
+            FileTypeFilter = SessionFileTypes
+        });
+        if (files.Count == 0)
+        {
+            return null;
+        }
+
+        var file = files[0];
+        await using var stream = await file.OpenReadAsync();
+        using var reader = new StreamReader(stream);
+        return (new SessionFile(file.Name, file), await reader.ReadToEndAsync());
+    }
+
+    /// <summary>
+    /// Writes a workbench session to <paramref name="target"/>; without a target the user picks a file, starting with <paramref name="suggestedName"/>.
+    /// </summary>
+    /// <returns>The written file; null when the user cancelled.</returns>
+    /// <exception cref="InvalidOperationException">The platform does not provide file-save access.</exception>
+    private async Task<SessionFile?> SaveSessionFile(SessionFile? target, string suggestedName, string text)
+    {
+        if (target?.Handle is not IStorageFile file)
+        {
+            if (_storageProvider is null || !_storageProvider.CanSave)
             {
-                StatusMessage = $"'{tokens[index]}' is not a two-digit hexadecimal byte.";
-                return;
+                throw new InvalidOperationException("This platform does not provide file-save access.");
             }
+            var picked = await _storageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "Save workbench session",
+                SuggestedFileName = suggestedName,
+                DefaultExtension = "json",
+                FileTypeChoices = SessionFileTypes
+            });
+            if (picked is null)
+            {
+                return null;
+            }
+            file = picked;
         }
 
-        var message = new SysExMessage(bytes);
-        SysExMessages.Add(message);
-        SelectedSysExMessage = message;
-        if (SysExMessages.Count == 1)
+        await using var stream = await file.OpenWriteAsync();
+        if (stream.CanSeek)
         {
-            SelectedByteStart = message.HasStartMarker ? 1 : 0;
-            SelectedByteLength = Math.Max(1, message.Bytes.Length - (message.HasStartMarker ? 1 : 0) - (message.HasEndMarker ? 1 : 0));
+            stream.Position = 0;
+            stream.SetLength(0);
         }
-        UpdateByteSelection();
-        UpdateComparison();
-        StatusMessage = $"Imported {bytes.Length} bytes. {message.BoundarySummary}.";
-    }
-
-    [RelayCommand]
-    private async Task ExportSysEx()
-    {
-        if (SysExMessages.Count == 0)
-        {
-            StatusMessage = "Import a SysEx message before exporting it.";
-            return;
-        }
-        if (_clipboard is null)
-        {
-            StatusMessage = $"SysEx bytes: {SysExMessages[0].Hex}";
-            return;
-        }
-
-        try
-        {
-            await _clipboard.SetTextAsync(SysExMessages[0].Hex);
-            StatusMessage = "Copied the first SysEx message as hexadecimal text.";
-        }
-        catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException)
-        {
-            StatusMessage = $"Could not copy SysEx bytes: {exception.Message}";
-        }
-    }
-
-    [RelayCommand]
-    private void AddSelectedBytes()
-    {
-        if (SelectedSysExMessage is null || SelectedDocument is null)
-        {
-            StatusMessage = "Import a SysEx message and open a schema before isolating bytes.";
-            return;
-        }
-
-        var bytes = SelectedSysExMessage.Bytes;
-        if (SelectedByteStart < 0 || SelectedByteLength < 1 || SelectedByteStart + SelectedByteLength > bytes.Length)
-        {
-            StatusMessage = "The selected byte range is outside the imported message.";
-            return;
-        }
-        if (Enumerable.Range(SelectedByteStart, SelectedByteLength).Any(index => SelectedSysExMessage.ByteCells[index].IsStart || SelectedSysExMessage.ByteCells[index].IsEnd))
-        {
-            StatusMessage = "F0 and F7 delimiters are detected automatically; select only message data bytes.";
-            return;
-        }
-
-        var selectedBytes = bytes.AsSpan(SelectedByteStart, SelectedByteLength).ToArray();
-        var sample = String.Join(' ', selectedBytes.Select(value => value.ToString("X2")));
-        try
-        {
-            var field = SelectedDocument.AddField(
-                GetTargetGroup() ?? throw new InvalidOperationException("Select a group before adding a node."),
-                ReverseFieldName.Trim(),
-                ReverseFieldDataType.Trim(),
-                sample);
-            SelectedNode = field;
-            StatusMessage = $"Added {ReverseFieldName} from bytes {SelectedByteStart}–{SelectedByteStart + SelectedByteLength - 1}.";
-        }
-        catch (Exception exception) when (IsSchemaError(exception))
-        {
-            StatusMessage = $"Selected bytes were not added: {exception.Message}";
-        }
-    }
-
-    public void SelectByte(int index)
-    {
-        SelectedByteStart = index;
-        SelectedByteLength = 1;
-        UpdateByteSelection();
+        await using var writer = new StreamWriter(stream, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        await writer.WriteAsync(text);
+        return new SessionFile(file.Name, file);
     }
 
     partial void OnSelectedDocumentChanged(SchemaWorkspaceDocument? value)
@@ -1299,10 +1309,6 @@ internal sealed partial class MainViewModel : ViewModelBase
         _ => true
     };
 
-    partial void OnSelectedByteStartChanged(int value) => UpdateByteSelection();
-    partial void OnSelectedByteLengthChanged(int value) => UpdateByteSelection();
-    partial void OnSelectedSysExMessageChanged(SysExMessage? value) => UpdateByteSelection();
-
     private void AddDocument(EditDocument schema, SchemaFormat format, string? fileName, IStorageFile? storageFile)
     {
         var document = new SchemaWorkspaceDocument(schema, format, fileName);
@@ -1468,44 +1474,6 @@ internal sealed partial class MainViewModel : ViewModelBase
         SchemaFormat.Yaml => SchemaFileTypes[3],
         _ => throw new ArgumentOutOfRangeException(nameof(format))
     };
-
-    private void UpdateByteSelection()
-    {
-        if (SelectedSysExMessage is null)
-        {
-            return;
-        }
-
-        foreach (var cell in SelectedSysExMessage.ByteCells)
-        {
-            cell.IsSelected = cell.Index >= SelectedByteStart
-                && cell.Index < SelectedByteStart + Math.Max(SelectedByteLength, 0);
-        }
-    }
-
-    private void UpdateComparison()
-    {
-        ComparedBytes.Clear();
-        if (SysExMessages.Count < 2)
-        {
-            return;
-        }
-
-        var first = SysExMessages[0].Bytes;
-        var second = SysExMessages[1].Bytes;
-        for (var index = 0; index < Math.Max(first.Length, second.Length); index++)
-        {
-            var left = index < first.Length ? first[index].ToString("X2") : "—";
-            var right = index < second.Length ? second[index].ToString("X2") : "—";
-            ComparedBytes.Add(new SysExComparisonRow
-            {
-                Index = index,
-                Left = left,
-                Right = right,
-                IsDifferent = !String.Equals(left, right, StringComparison.Ordinal)
-            });
-        }
-    }
 
     private static bool IsSchemaOrFileError(Exception exception)
         => IsSchemaError(exception) || IsStorageError(exception);

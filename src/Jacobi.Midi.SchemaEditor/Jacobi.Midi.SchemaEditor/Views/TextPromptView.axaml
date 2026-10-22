@@ -1,0 +1,42 @@
+<!--
+    A text prompt: shown as an overlay (so it works in the Desktop and the Browser host)
+    to ask for a line or a block of text, such as a title or pasted hex bytes. See TextPromptViewModel.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Jacobi.Midi.SchemaEditor.ViewModels"
+             x:Class="Jacobi.Midi.SchemaEditor.Views.TextPromptView"
+             x:DataType="vm:TextPromptViewModel">
+
+    <Grid Background="#99000000">
+        <Border Width="560" Margin="32" Padding="20" CornerRadius="8"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                Background="{DynamicResource AppBackgroundPanelBrush}"
+                BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="1">
+            <StackPanel Spacing="12">
+                <TextBlock Text="{Binding Caption}" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
+                <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap"
+                           Foreground="{DynamicResource AppTextHeadingBrush}" />
+                <TextBlock Text="{Binding Message}" TextWrapping="Wrap" IsVisible="{Binding HasMessage}"
+                           Foreground="{DynamicResource AppTextBodyBrush}" />
+                <!-- a block of text (pasted hex) is shown in a monospace font -->
+                <TextBox x:Name="Input" Text="{Binding Text}" PlaceholderText="{Binding Placeholder}"
+                         AcceptsReturn="{Binding AcceptsReturn}" TextWrapping="Wrap" MaxHeight="260"
+                         Classes.block="{Binding AcceptsReturn}">
+                    <TextBox.Styles>
+                        <Style Selector="TextBox.block">
+                            <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, monospace" />
+                            <Setter Property="MinHeight" Value="120" />
+                        </Style>
+                    </TextBox.Styles>
+                </TextBox>
+                <TextBlock Text="{Binding Error}" IsVisible="{Binding HasError}" Foreground="Orange" FontSize="12" TextWrapping="Wrap" />
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,6,0,0">
+                    <Button Content="Cancel" Command="{Binding CancelCommand}" IsCancel="True" />
+                    <Button Content="{Binding ConfirmText}" Classes="accent" Command="{Binding ConfirmCommand}" IsDefault="True" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

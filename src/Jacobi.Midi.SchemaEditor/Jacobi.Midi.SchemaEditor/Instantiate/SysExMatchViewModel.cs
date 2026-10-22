@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using Jacobi.Midi.Core;
 using Jacobi.Midi.Messages.V2;
 using Jacobi.Midi.SchemaEditor.Midi;
+using Jacobi.Midi.SchemaEditor.Workbench;
 
 namespace Jacobi.Midi.SchemaEditor.Instantiate;
 
@@ -31,26 +32,7 @@ internal sealed record SysExBuffer(string Source, byte[] Bytes)
     /// </summary>
     public static IReadOnlyList<SysExBuffer> Split(string name, byte[] data)
     {
-        ArgumentNullException.ThrowIfNull(data);
-        if (data.Length == 0 || data[0] != 0xF0)
-        {
-            return [new SysExBuffer(name, data)];
-        }
-
-        var messages = new List<byte[]>();
-        var start = 0;
-        while (start < data.Length)
-        {
-            var end = Array.IndexOf(data, (byte)0xF7, start);
-            var next = end < 0 ? data.Length : end + 1;
-            messages.Add(data[start..next]);
-            // skip anything between the messages
-            start = Array.IndexOf(data, (byte)0xF0, next);
-            if (start < 0)
-            {
-                break;
-            }
-        }
+        var messages = SysExSplitter.Split(data);
         return messages.Count == 1
             ? [new SysExBuffer(name, messages[0])]
             : messages.Select((bytes, index) => new SysExBuffer($"{name} #{index + 1}", bytes)).ToList();

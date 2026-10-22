@@ -496,23 +496,6 @@ public class SchemaEditorTests
                 Assert.True(document.IsDirty);
         }
 
-        [Fact]
-        public void CapturedBytes_AreAddedToDraftAsFieldSample()
-        {
-                var viewModel = new MainViewModel();
-                viewModel.NewDocumentCommand.Execute(null);
-                viewModel.HexInput = "F0 41 13 F7";
-                viewModel.ImportSysExCommand.Execute(null);
-                viewModel.ReverseFieldName = "Captured";
-                viewModel.AddSelectedBytesCommand.Execute(null);
-
-                var root = Assert.IsType<EditGroup>(Assert.Single(viewModel.SelectedDocument!.Schema.Members));
-                var field = Assert.IsType<EditField>(Assert.Single(root.Members));
-                Assert.Equal("Captured", field.Name);
-                Assert.Equal("41 13", Assert.Single(field.Properties, property => property.Name == "sample").Value);
-                Assert.Same(field, viewModel.SelectedNode);
-        }
-
         [Theory]
     [InlineData("schema.json", nameof(SchemaFormat.Json))]
     [InlineData("schema.xml", nameof(SchemaFormat.Xml))]
@@ -527,19 +510,6 @@ public class SchemaEditorTests
     public void FromFileName_RejectsUnsupportedFormats()
     {
         Assert.Throws<NotSupportedException>(() => SchemaFileService.FromFileName("schema.syx"));
-    }
-
-    [Fact]
-    public void SysExMessage_RecognizesMarkersAndCreatesIndexedBytes()
-    {
-        var message = new SysExMessage([0xF0, 0x41, 0x13, 0xF7]);
-
-        Assert.True(message.HasStartMarker);
-        Assert.True(message.HasEndMarker);
-        Assert.Equal("F0 41 13 F7", message.Hex);
-        Assert.Equal(4, message.ByteCells.Count);
-        Assert.Equal("F0", message.ByteCells[0].Marker);
-        Assert.Equal("F7", message.ByteCells[3].Marker);
     }
 
 }

@@ -1,0 +1,374 @@
+<!--
+    The reverse-engineering workbench (the Workbench mode of the main window). See WorkbenchViewModel.
+    Left: the captures (baseline and variants) and the message slots. Centre: the byte view of the baseline with the
+    comparison drawn on it, and the interpret strip for the selected bytes. Right: the selection with its note.
+-->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:wb="using:Jacobi.Midi.SchemaEditor.Workbench"
+             xmlns:views="using:Jacobi.Midi.SchemaEditor.Views"
+             x:Class="Jacobi.Midi.SchemaEditor.Workbench.WorkbenchView"
+             x:DataType="wb:WorkbenchViewModel">
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.section">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="LetterSpacing" Value="1.2" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextLabelBrush}" />
+        </Style>
+        <Style Selector="TextBlock.note">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}" />
+        </Style>
+        <Style Selector="TextBlock.mono">
+            <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, monospace" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style Selector="Button.row">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="2,0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+        </Style>
+        <Style Selector="Button.small">
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="MinHeight" Value="0" />
+        </Style>
+    </UserControl.Styles>
+
+    <Panel Background="{DynamicResource AppBackgroundBaseBrush}">
+        <!-- no session yet -->
+        <StackPanel IsVisible="{Binding HasNoSession}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" MaxWidth="520">
+            <TextBlock Text="REVERSE-ENGINEERING WORKBENCH" Classes="section" HorizontalAlignment="Center" />
+            <TextBlock Text="Find out what the bytes of a device dump mean" FontSize="20" FontWeight="SemiBold"
+                       HorizontalAlignment="Center" Foreground="{DynamicResource AppTextHeadingBrush}" />
+            <TextBlock TextWrapping="Wrap" TextAlignment="Center" Foreground="{DynamicResource AppTextBodyBrush}"
+                       Text="Capture a dump of the device, change one parameter, capture again: the bytes that differ belong to that parameter." />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8" Margin="0,8,0,0">
+                <Button Content="New session…" Classes="accent" Command="{Binding NewSessionCommand}" />
+                <Button Content="Open session…" Command="{Binding OpenSessionCommand}" />
+            </StackPanel>
+            <TextBlock Text="{Binding Status}" Classes="note" HorizontalAlignment="Center" />
+        </StackPanel>
+
+        <!-- the session -->
+        <Grid IsVisible="{Binding HasSession}" RowDefinitions="Auto,*,Auto">
+            <Border Padding="18,10" Background="{DynamicResource AppBackgroundPanelBrush}"
+                    BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="0,0,0,1">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <StackPanel Spacing="1">
+                        <TextBlock Text="REVERSE-ENGINEERING SESSION" Classes="section" />
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Text="{Binding DisplayTitle}" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource AppTextHeadingBrush}" />
+                            <TextBlock Text="{Binding SessionFileName}" Classes="note" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <Button Content="New…" Command="{Binding NewSessionCommand}" />
+                        <Button Content="Open…" Command="{Binding OpenSessionCommand}" />
+                        <Button Content="Save" Command="{Binding SaveSessionCommand}" />
+                        <Button Content="Save as…" Command="{Binding SaveSessionAsCommand}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- the panels are sized with the splitters; each keeps a minimum size -->
+            <Grid Grid.Row="1" Background="{DynamicResource AppDividerBrush}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="290" MinWidth="200" />
+                    <ColumnDefinition Width="4" />
+                    <ColumnDefinition Width="*" MinWidth="360" />
+                    <ColumnDefinition Width="4" />
+                    <ColumnDefinition Width="300" MinWidth="200" />
+                </Grid.ColumnDefinitions>
+                <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="{DynamicResource AppDividerBrush}" />
+                <GridSplitter Grid.Column="3" ResizeDirection="Columns" Background="{DynamicResource AppDividerBrush}" />
+
+                <!-- left: captures and slots -->
+                <Grid Background="{DynamicResource AppBackgroundPanelBrush}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="3*" MinHeight="100" />
+                        <RowDefinition Height="4" />
+                        <!-- the splitter sizes the rows next to it: the slots header is part of the slots row -->
+                        <RowDefinition Height="2*" MinHeight="110" />
+                    </Grid.RowDefinitions>
+                    <GridSplitter Grid.Row="3" ResizeDirection="Rows" Background="{DynamicResource AppDividerBrush}" />
+                    <TextBlock Text="CAPTURES" Classes="section" Margin="14,14,14,0" />
+                    <WrapPanel Grid.Row="1" Margin="14,8" ItemSpacing="6" LineSpacing="6">
+                        <Button Content="Load .syx…" Classes="small" Command="{Binding LoadSysExCommand}" />
+                        <Button Content="Paste hex…" Classes="small" Command="{Binding PasteHexCommand}" />
+                        <Button Content="{Binding ReceiveButtonText}" Classes="small" Command="{Binding ReceiveCommand}"
+                                ToolTip.Tip="Receive a dump from the MIDI connection of the MIDI bar (start the connection first)." />
+                    </WrapPanel>
+                    <ListBox Grid.Row="2" ItemsSource="{Binding Captures}" SelectedItem="{Binding SelectedCapture}" Margin="8,0" Background="Transparent">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="wb:Capture">
+                                <StackPanel Spacing="4" Margin="0,2">
+                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+                                        <TextBlock Text="★" IsVisible="{Binding IsBaseline}" Foreground="{DynamicResource AppTextAccentBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Label}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource AppTextHeadingBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="2" Text="{Binding DifferenceText}" FontSize="11" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource AppTextAccentBrush}" />
+                                    </Grid>
+                                    <TextBlock Text="{Binding Summary}" Classes="note" />
+                                    <TextBox Text="{Binding ChangeNote}" PlaceholderText="What was changed? e.g. reverb level 40"
+                                             FontSize="12" IsVisible="{Binding !IsBaseline}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Button Content="Set as baseline" Classes="small" IsVisible="{Binding !IsBaseline}"
+                                                Command="{Binding $parent[UserControl].((wb:WorkbenchViewModel)DataContext).SetBaselineCommand}"
+                                                CommandParameter="{Binding}" />
+                                        <CheckBox Content="Hide" IsChecked="{Binding IsHidden}" IsVisible="{Binding !IsBaseline}" FontSize="11" MinHeight="0"
+                                                  ToolTip.Tip="Leave this capture out of the comparison." />
+                                        <Button Content="Remove" Classes="small"
+                                                Command="{Binding $parent[UserControl].((wb:WorkbenchViewModel)DataContext).RemoveCaptureCommand}"
+                                                CommandParameter="{Binding}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <DockPanel Grid.Row="4">
+                    <TextBlock DockPanel.Dock="Top" Text="SLOTS" Classes="section" Margin="14,10,14,6" />
+                    <ListBox ItemsSource="{Binding Slots}" SelectedItem="{Binding SelectedSlot}" Margin="8,0,8,8" Background="Transparent">
+                        <ListBox.Styles>
+                            <Style Selector="ListBoxItem">
+                                <Setter Property="Padding" Value="8,3" />
+                                <Setter Property="MinHeight" Value="0" />
+                            </Style>
+                        </ListBox.Styles>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="wb:SlotComparison">
+                                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="6">
+                                    <TextBlock Text="{Binding Header}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextBodyBrush}" />
+                                    <TextBlock Grid.Column="1" Text="Δ" IsVisible="{Binding HasDifference}" FontWeight="Bold"
+                                               Foreground="{DynamicResource AppTextAccentBrush}" />
+                                    <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Note}" IsVisible="{Binding HasNote}" FontSize="11"
+                                               FontStyle="Italic" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Note}"
+                                               Foreground="{DynamicResource AppTextAccentBrush}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    </DockPanel>
+                </Grid>
+
+                <!-- centre: byte view and interpret strip -->
+                <Grid Grid.Column="2" Background="{DynamicResource AppBackgroundBaseBrush}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" MinHeight="120" />
+                        <RowDefinition Height="4" />
+                        <RowDefinition Height="230" MinHeight="90" />
+                    </Grid.RowDefinitions>
+                    <GridSplitter Grid.Row="2" ResizeDirection="Rows" Background="{DynamicResource AppDividerBrush}" />
+                    <StackPanel Spacing="6" Margin="14,10">
+                    <!-- find a value, and the number base of the bytes -->
+                    <WrapPanel ItemSpacing="6" LineSpacing="6">
+                        <TextBox Width="170" Text="{Binding FindText}" PlaceholderText="Find value: 70, 0x46, 46 00"
+                                 ToolTip.Tip="Decimal (70, -12), hex (0x46, $46, 46h) or hex bytes (46 00). Searches the selected variant, or the baseline. Enter: find, Escape: clear.">
+                            <TextBox.KeyBindings>
+                                <KeyBinding Gesture="Enter" Command="{Binding FindCommand}" />
+                                <KeyBinding Gesture="Escape" Command="{Binding ClearFindCommand}" />
+                            </TextBox.KeyBindings>
+                        </TextBox>
+                        <Button Content="Find" Classes="small" Command="{Binding FindCommand}" VerticalAlignment="Center" />
+                        <Button Content="◀" Classes="small" Command="{Binding PreviousMatchCommand}" ToolTip.Tip="Previous match" VerticalAlignment="Center" />
+                        <Button Content="▶" Classes="small" Command="{Binding NextMatchCommand}" ToolTip.Tip="Next match" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding FindStatus}" Classes="note" VerticalAlignment="Center" MaxWidth="420" TextTrimming="CharacterEllipsis"
+                                   ToolTip.Tip="{Binding FindStatus}" />
+                        <ToggleSwitch IsChecked="{Binding ShowDecimal}" OnContent="Decimal" OffContent="Hex" VerticalAlignment="Center" Margin="12,0,0,0"
+                                      ToolTip.Tip="Show the bytes in decimal, as the device display shows values" />
+                    </WrapPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="16">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Border Width="14" Height="12" CornerRadius="2" Background="#B0E38B3C" VerticalAlignment="Center" />
+                            <TextBlock Text="differs (stronger: in more variants)" Classes="note" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Border Width="14" Height="12" CornerRadius="2" BorderThickness="1" BorderBrush="{DynamicResource AppTextMutedBrush}"
+                                    Background="{DynamicResource AppBackgroundCardBrush}" VerticalAlignment="Center" />
+                            <TextBlock Text="hatched: probably derived (checksum)" Classes="note" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock Text="dots: changed bits · dashed: found value · Tab: next difference" Classes="note" VerticalAlignment="Center" />
+                    </StackPanel>
+                    </StackPanel>
+
+                    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Padding="6,0">
+                        <wb:HexView x:Name="Bytes" Slots="{Binding Slots}" Annotations="{Binding Annotations}" Layouts="{Binding Layouts}"
+                                    Matches="{Binding MatchRanges}" SlotNotes="{Binding SlotNotes}" ShowDecimal="{Binding ShowDecimal}"
+                                    Selection="{Binding Selection}" HorizontalAlignment="Left" VerticalAlignment="Top" />
+                    </ScrollViewer>
+                    <TextBlock Grid.Row="1" Text="Load, paste or receive a dump: the first one is the baseline."
+                               IsVisible="{Binding !HasCaptures}" Classes="note" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                    <!-- the interpret strip -->
+                    <Border Grid.Row="3" Padding="14,10" Background="{DynamicResource AppBackgroundPanelBrush}">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="0,0,0,8">
+                                <TextBlock Text="INTERPRET" Classes="section" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding SelectionText}" Classes="note" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                                <StackPanel Spacing="2">
+                                    <StackPanel Orientation="Horizontal" IsVisible="{Binding HasSelection}">
+                                        <Border Width="150" />
+                                        <ItemsControl ItemsSource="{Binding InterpretationColumns}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="x:String">
+                                                    <TextBlock Text="{Binding}" Width="120" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                                               ToolTip.Tip="{Binding}" Foreground="{DynamicResource AppTextLabelBrush}" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                    <ItemsControl ItemsSource="{Binding Interpretations}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="wb:Interpretation">
+                                                <!-- a click takes the data type of the row for the field -->
+                                                <Button Classes="row" CommandParameter="{Binding}"
+                                                        Command="{Binding $parent[UserControl].((wb:WorkbenchViewModel)DataContext).Field.UseInterpretationCommand}"
+                                                        ToolTip.Tip="Use this interpretation as the data type of the field">
+                                                <StackPanel Orientation="Horizontal" Margin="0,1">
+                                                    <TextBlock Text="{Binding Name}" Width="150" FontSize="12" Foreground="{DynamicResource AppTextSecondaryBrush}" />
+                                                    <ItemsControl ItemsSource="{Binding Values}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <StackPanel Orientation="Horizontal" />
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate x:DataType="x:String">
+                                                                <TextBlock Text="{Binding}" Width="120" Classes="mono" TextTrimming="CharacterEllipsis"
+                                                                           ToolTip.Tip="{Binding}" Foreground="{DynamicResource AppTextHeadingBrush}" />
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </StackPanel>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+                </Grid>
+
+                <!-- right: the selection -->
+                <ScrollViewer Grid.Column="4" Background="{DynamicResource AppBackgroundPanelBrush}">
+                    <StackPanel Spacing="10" Margin="14">
+                        <TextBlock Text="SELECTION" Classes="section" />
+                        <TextBlock Text="{Binding SelectionText}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource AppTextHeadingBrush}" />
+
+                        <!-- the field of the selected bytes -->
+                        <Border Padding="12" CornerRadius="6" Background="{DynamicResource AppBackgroundCardBrush}"
+                                DataContext="{Binding Field}" x:DataType="wb:WorkbenchFieldViewModel">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="{Binding Heading}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource AppTextCaptionBrush}" />
+                                <TextBlock Text="{Binding Hint}" Classes="note" IsVisible="{Binding Hint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                <StackPanel Spacing="6" IsVisible="{Binding HasField}">
+                                    <TextBlock Text="Name" Classes="note" />
+                                    <TextBox Text="{Binding Name}" PlaceholderText="e.g. ReverbLevel" />
+                                    <TextBlock Text="Data type" Classes="note" />
+                                    <ComboBox ItemsSource="{Binding DataTypeOptions}" IsEditable="True" Text="{Binding DataType}" HorizontalAlignment="Stretch" />
+                                    <TextBlock Text="Processor (optional)" Classes="note" />
+                                    <ComboBox ItemsSource="{Binding ProcessorOptions}" IsEditable="True" Text="{Binding Processor}" HorizontalAlignment="Stretch" />
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                        <CheckBox Content="Fixed value" IsChecked="{Binding IsFixed}"
+                                                  ToolTip.Tip="The field always holds this value (e.g. the manufacturer id); a capture with other bytes here is flagged." />
+                                        <TextBox Grid.Column="1" Text="{Binding FixedValue}" IsEnabled="{Binding IsFixed}" PlaceholderText="e.g. 65 or 0x41" />
+                                    </Grid>
+
+                                    <TextBlock Text="VALUES" Classes="section" Margin="0,6,0,0" />
+                                    <ItemsControl ItemsSource="{Binding Values}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="wb:FieldValue">
+                                                <StackPanel Margin="0,2">
+                                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                        <TextBlock Text="{Binding Column}" FontSize="12" TextTrimming="CharacterEllipsis"
+                                                                   Foreground="{DynamicResource AppTextSecondaryBrush}" />
+                                                        <TextBlock Grid.Column="1" Text="{Binding Value}" Classes="mono" MaxWidth="160" TextTrimming="CharacterEllipsis"
+                                                                   ToolTip.Tip="{Binding Value}" Foreground="{DynamicResource AppTextHeadingBrush}" />
+                                                    </Grid>
+                                                    <TextBlock Text="{Binding Problem}" IsVisible="{Binding HasProblem}" FontSize="11" TextWrapping="Wrap" Foreground="Orange" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Text="{Binding Error}" IsVisible="{Binding HasError}" FontSize="11" TextWrapping="Wrap" Foreground="Orange" />
+
+                                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0">
+                                        <Button Content="Define field" Classes="accent" Command="{Binding DefineCommand}" IsVisible="{Binding IsDefining}" />
+                                        <Button Content="Apply" Classes="accent" Command="{Binding ApplyCommand}" IsVisible="{Binding IsEditing}" />
+                                        <Button Content="Remove field" Command="{Binding RemoveCommand}" IsVisible="{Binding IsEditing}"
+                                                ToolTip.Tip="Turn the field back into unknown bytes" />
+                                    </StackPanel>
+
+                                    <!-- the same field at the same position in the other slots (e.g. the manufacturer id) -->
+                                    <StackPanel Spacing="4" Margin="0,8,0,0">
+                                        <TextBlock Text="OTHER SLOTS" Classes="section" />
+                                        <TextBlock Classes="note" Text="The same field at the same position in the other messages, e.g. a manufacturer id." />
+                                        <CheckBox Content="Only where the bytes are the same" IsChecked="{Binding CopyRequiresSameBytes}" FontSize="12"
+                                                  ToolTip.Tip="Off: also where the bytes differ, e.g. an address or a parameter at the same position." />
+                                        <Button Content="{Binding CopyText}" Command="{Binding CopyToOtherSlotsCommand}" HorizontalAlignment="Stretch"
+                                                ToolTip.Tip="Defines this field (name, data type, processor, fixed value) at the same position in the other slots, where the bytes are unknown." />
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="{Binding SchemaText}" Classes="note" />
+
+                        <StackPanel Spacing="4" IsVisible="{Binding HasNoteSlot}">
+                            <TextBlock Text="{Binding SlotNoteCaption}" Classes="section" />
+                            <TextBox Text="{Binding SlotNoteText, UpdateSourceTrigger=LostFocus}" TextWrapping="Wrap"
+                                     PlaceholderText="What is this message? e.g. 'probably the compressor'" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4" IsVisible="{Binding HasSelection}">
+                            <TextBlock Text="NOTE ON THE BYTES" Classes="section" />
+                            <TextBox Text="{Binding AnnotationText, UpdateSourceTrigger=LostFocus}" AcceptsReturn="True" TextWrapping="Wrap"
+                                     MinHeight="70" PlaceholderText="A note on these bytes, e.g. 'tone A/B?'" />
+                            <TextBlock Text="The note is kept in the session, not in the schema. Clear it to remove it." Classes="note" />
+                        </StackPanel>
+
+                        <TextBlock Text="COMPARISON" Classes="section" Margin="0,8,0,0" />
+                        <StackPanel Spacing="4" IsVisible="{Binding FocusedVariant, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <TextBlock Classes="note" Text="{Binding FocusedVariant.Label, StringFormat='Only the differences of {0} are highlighted.'}" />
+                            <Button Content="Highlight all variants" Classes="small" Command="{Binding ClearFocusCommand}" />
+                        </StackPanel>
+                        <TextBlock Classes="note" IsVisible="{Binding FocusedVariant, Converter={x:Static ObjectConverters.IsNull}}"
+                                   Text="The differences of all visible variants are highlighted. Select a variant to see only its differences." />
+                        <TextBlock Text="{Binding ComparisonRemarks}" IsVisible="{Binding HasComparisonRemarks}" FontSize="11"
+                                   TextWrapping="Wrap" Foreground="Orange" />
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <Border Grid.Row="2" Padding="16,6" Background="{DynamicResource AppBackgroundHeaderBrush}"
+                    BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="0,1,0,0">
+                <TextBlock Text="{Binding Status}" FontSize="11" Foreground="{DynamicResource AppTextSecondaryBrush}" />
+            </Border>
+        </Grid>
+
+        <!-- modal overlays -->
+        <Panel IsVisible="{Binding Prompt, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <views:TextPromptView DataContext="{Binding Prompt}" />
+        </Panel>
+        <Panel IsVisible="{Binding Confirmation, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <views:ConfirmView DataContext="{Binding Confirmation}" />
+        </Panel>
+    </Panel>
+</UserControl>
