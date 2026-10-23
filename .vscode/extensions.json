@@ -1,0 +1,7 @@
+{
+  "recommendations": [
+    "redhat.vscode-xml",
+    "ms-dotnettools.csharp",
+    "ms-dotnettools.csdevkit"
+  ]
+}
