@@ -15,13 +15,17 @@ internal static class WindowsMidiEndpointMapper
                 block.Number, block.Name, block.IsActive, MapDirection(block.Direction),
                 new MidiGroup(block.FirstGroup.Index), block.GroupCount))
             .ToImmutableArray();
-        var terminalBlocks = endpoint.GetGroupTerminalBlocks();
+        var terminalBlocks = endpoint.GetGroupTerminalBlocks()
+            .Select(block => new MidiGroupTerminalBlockInfo(
+                block.Number, block.Name, MapDirection(block.Direction),
+                new MidiGroup(block.FirstGroup.Index), block.GroupCount))
+            .ToImmutableArray();
         MidiDirections? directions = null;
         if (blocks.Length > 0)
             directions = blocks.Where(block => block.IsActive)
                 .Aggregate(MidiDirections.None, (value, block) => value | block.Directions);
-        else if (terminalBlocks.Count > 0)
-            directions = terminalBlocks.Aggregate(MidiDirections.None, (value, block) => value | MapDirection(block.Direction));
+        else if (terminalBlocks.Length > 0)
+            directions = terminalBlocks.Aggregate(MidiDirections.None, (value, block) => value | block.Directions);
 
         var hasDeclaredInfo = endpoint.DeclaredEndpointInfoLastUpdateTime != default;
         var isMidi1Transport = transport.NativeDataFormat == Native.MidiEndpointNativeDataFormat.Midi1ByteFormat;
@@ -39,7 +43,8 @@ internal static class WindowsMidiEndpointMapper
             SupportsMidi2 = hasDeclaredInfo ? declared.SupportsMidi20Protocol : isMidi1Transport ? false : null,
             ActiveProtocol = protocol,
             IsDiscoveryComplete = endpoint.IsEndpointDiscoveryComplete,
-            FunctionBlocks = blocks
+            FunctionBlocks = blocks,
+            GroupTerminalBlocks = terminalBlocks
         })
         {
             Transport = transport.TransportCode
@@ -71,6 +76,7 @@ internal static class WindowsMidiEndpointMapper
             && a.Directions == b.Directions && a.SupportsMidi1 == b.SupportsMidi1
             && a.SupportsMidi2 == b.SupportsMidi2 && a.ActiveProtocol == b.ActiveProtocol
             && a.IsDiscoveryComplete == b.IsDiscoveryComplete
-            && a.FunctionBlocks.SequenceEqual(b.FunctionBlocks);
+            && a.FunctionBlocks.SequenceEqual(b.FunctionBlocks)
+            && a.GroupTerminalBlocks.SequenceEqual(b.GroupTerminalBlocks);
     }
 }

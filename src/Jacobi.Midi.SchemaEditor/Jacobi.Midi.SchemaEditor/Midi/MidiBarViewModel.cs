@@ -27,6 +27,8 @@ internal sealed partial class MidiBarViewModel : ObservableObject, IAsyncDisposa
         if (api is not null)
             _service = new MidiConnectionService(api, SessionName);
 
+        UpdateGroups(null);
+
         StatusText = api is null
             ? "MIDI is not available on this platform."
             : "MIDI not started.";
@@ -38,25 +40,40 @@ internal sealed partial class MidiBarViewModel : ObservableObject, IAsyncDisposa
     public ObservableCollection<MidiEndpointInfo> Endpoints { get; } = [];
 
     /// <summary>
-    /// Display numbers for the UMP groups (1-16). The list index is the <see cref="MidiGroup"/> value.
+    /// The UMP groups the selected endpoint declares, with their names.
+    /// All 16 groups (without names) when no endpoint is selected or the endpoint declares no blocks.
     /// </summary>
-    public IReadOnlyList<int> GroupNumbers { get; } = Enumerable.Range(1, 16).ToArray();
+    public ObservableCollection<MidiGroupItem> Groups { get; } = [];
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ToggleConnectionCommand))]
     public partial MidiEndpointInfo? SelectedEndpoint { get; set; }
 
-    /// <summary>
-    /// Zero-based index into <see cref="GroupNumbers"/>.
-    /// </summary>
+    partial void OnSelectedEndpointChanged(MidiEndpointInfo? value) => UpdateGroups(value);
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Group))]
-    public partial int SelectedGroupIndex { get; set; }
+    public partial MidiGroupItem? SelectedGroup { get; set; }
 
     /// <summary>
     /// The selected UMP group (value 0-15).
     /// </summary>
-    public MidiGroup Group => new((byte)Math.Clamp(SelectedGroupIndex, 0, 15));
+    public MidiGroup Group => SelectedGroup?.Group ?? default;
+
+    // keeps the selected group when the new endpoint declares it, otherwise selects its first group
+    private void UpdateGroups(MidiEndpointInfo? endpoint)
+    {
+        var current = Group;
+        var groups = endpoint?.Capabilities.GetDeclaredGroups() ?? [];
+        if (groups.IsEmpty)
+            groups = [.. Enumerable.Range(0, 16).Select(value => new MidiGroup((byte)value))];
+
+        Groups.Clear();
+        foreach (var group in groups)
+            Groups.Add(new MidiGroupItem(group, endpoint?.Capabilities.GetGroupName(group)));
+
+        SelectedGroup = Groups.FirstOrDefault(item => item.Group == current) ?? Groups[0];
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSelectEndpoint))]

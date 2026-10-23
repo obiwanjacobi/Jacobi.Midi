@@ -83,15 +83,66 @@ public sealed record MidiEndpointCapabilities
     public MidiProtocol? ActiveProtocol { get; init; }
     public bool IsDiscoveryComplete { get; init; }
     public ImmutableArray<MidiFunctionBlockInfo> FunctionBlocks { get; init; } = [];
+    public ImmutableArray<MidiGroupTerminalBlockInfo> GroupTerminalBlocks { get; init; } = [];
+
+    /// <summary>
+    /// The name of the blocks that include <paramref name="group"/>: the active function blocks when the endpoint
+    /// declares function blocks, otherwise its group terminal blocks. Distinct names are joined with " / ".
+    /// Null when no block includes the group.
+    /// </summary>
+    public string? GetGroupName(MidiGroup group)
+    {
+        var distinct = DeclaringBlocks()
+            .Where(block => block.Includes(group) && !String.IsNullOrWhiteSpace(block.Name))
+            .Select(block => block.Name).Distinct().ToArray();
+        return distinct.Length > 0 ? String.Join(" / ", distinct) : null;
+    }
+
+    /// <summary>
+    /// The groups the endpoint declares: those of its active function blocks when the endpoint declares function blocks,
+    /// otherwise those of its group terminal blocks. In ascending order; empty when the endpoint declares no blocks.
+    /// </summary>
+    public ImmutableArray<MidiGroup> GetDeclaredGroups()
+        => [.. Enumerable.Range(0, 16)
+            .Select(value => new MidiGroup((byte)value))
+            .Where(group => DeclaringBlocks().Any(block => block.Includes(group)))];
+
+    // function blocks supersede group terminal blocks
+    private IEnumerable<(string Name, Func<MidiGroup, bool> Includes)> DeclaringBlocks()
+        => FunctionBlocks.Length > 0
+            ? FunctionBlocks.Where(block => block.IsActive).Select(block => (block.Name, (Func<MidiGroup, bool>)block.IncludesGroup))
+            : GroupTerminalBlocks.Select(block => (block.Name, (Func<MidiGroup, bool>)block.IncludesGroup));
 }
 
+/// <summary>
+/// A MIDI 2.0 function block declared by the endpoint itself (through UMP endpoint discovery).
+/// </summary>
 public sealed record MidiFunctionBlockInfo(
     byte Number,
     string Name,
     bool IsActive,
     MidiDirections Directions,
     MidiGroup FirstGroup,
-    byte GroupCount);
+    byte GroupCount)
+{
+    public bool IncludesGroup(MidiGroup group)
+        => group.Value >= FirstGroup.Value && group.Value < FirstGroup.Value + GroupCount;
+}
+
+/// <summary>
+/// A group terminal block declared by the transport (e.g. the USB descriptors), such as a MIDI 1.0 port mapped to a group.
+/// Function blocks, when the endpoint declares them, supersede group terminal blocks.
+/// </summary>
+public sealed record MidiGroupTerminalBlockInfo(
+    byte Number,
+    string Name,
+    MidiDirections Directions,
+    MidiGroup FirstGroup,
+    byte GroupCount)
+{
+    public bool IncludesGroup(MidiGroup group)
+        => group.Value >= FirstGroup.Value && group.Value < FirstGroup.Value + GroupCount;
+}
 
 public enum MidiEndpointChangeType
 {
