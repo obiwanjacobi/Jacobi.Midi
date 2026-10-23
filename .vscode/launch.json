@@ -2,11 +2,23 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "SchemaEditor.Desktop",
+            "name": "SchemaEditor.Desktop (Debug)",
             "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "build SchemaEditor.Desktop",
+            "preLaunchTask": "build SchemaEditor.Desktop (Debug)",
             "program": "${workspaceFolder}/src/Jacobi.Midi.SchemaEditor/Jacobi.Midi.SchemaEditor.Desktop/bin/Debug/net11.0-windows10.0.26100.0/Jacobi.Midi.SchemaEditor.Desktop.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/Jacobi.Midi.SchemaEditor/Jacobi.Midi.SchemaEditor.Desktop",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": "SchemaEditor.Desktop (Release)",
+            "type": "coreclr",
+            "request": "launch",
+            "noDebug": true,
+            "preLaunchTask": "build SchemaEditor.Desktop (Release)",
+            "program": "${workspaceFolder}/src/Jacobi.Midi.SchemaEditor/Jacobi.Midi.SchemaEditor.Desktop/bin/Release/net11.0-windows10.0.26100.0/Jacobi.Midi.SchemaEditor.Desktop.dll",
             "args": [],
             "cwd": "${workspaceFolder}/src/Jacobi.Midi.SchemaEditor/Jacobi.Midi.SchemaEditor.Desktop",
             "console": "internalConsole",

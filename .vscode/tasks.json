@@ -2,7 +2,7 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "build SchemaEditor.Desktop",
+            "label": "build SchemaEditor.Desktop (Debug)",
             "command": "dotnet",
             "type": "process",
             "args": [
@@ -13,7 +13,24 @@
             ],
             "problemMatcher": "$msCompile",
             "group": "build"
-        }
+        },
+        {
+            "label": "build SchemaEditor.Desktop (Release)",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/src/Jacobi.Midi.SchemaEditor/Jacobi.Midi.SchemaEditor.Desktop/Jacobi.Midi.SchemaEditor.Desktop.csproj",
+                "--configuration",
+                "Release",
+                "--framework",
+                "net11.0-windows10.0.26100.0",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary"
+            ],
+            "problemMatcher": "$msCompile",
+            "group": "build"
+        },
         {
             "label": "build Jacobi.Midi",
             "command": "dotnet",
