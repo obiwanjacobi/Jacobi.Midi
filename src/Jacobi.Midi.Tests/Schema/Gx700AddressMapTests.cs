@@ -94,8 +94,8 @@ public class Gx700AddressMapTests
         Assert.Equal("VINTAGE TWIN", Value(common, "AddressMap.Memory.Patch.Common.Name", 0));
 
         var preamp = Decode(map, messages[0x04]);
-        Assert.Equal((byte)1, Value(preamp, "AddressMap.Memory.Patch.Preamp.On", 0));
-        Assert.Equal((byte)1, Value(preamp, "AddressMap.Memory.Patch.Preamp.Type", 0));   // Clean Twin
+        Assert.Equal(true, Value(preamp, "AddressMap.Memory.Patch.Preamp.On", 0));
+        Assert.Equal("Clean Twin", Value(preamp, "AddressMap.Memory.Patch.Preamp.Type", 0));
 
         // flanger resonance 07 08 = 7 * 16 + 8
         var modulation = Decode(map, messages[0x09]);

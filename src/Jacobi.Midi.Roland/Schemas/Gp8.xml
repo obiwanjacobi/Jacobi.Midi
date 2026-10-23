@@ -6,25 +6,23 @@
   A bulk dump sends one whole patch per DT1. In RQ1, even when the address is in the middle of a sound,
   or the size does not cover a whole sound, the data of one whole sound is output: a patch is atomic.
 
-  Address (2 x 7 bits, as sent):   MSB = 0 m g bbb nn     LSB = 0 n pppppp
+  The address in the GP-8 Owners Manual is specified as linear: "00mg bbbn nnpp pppp" but that is not
+  how it is sent over the wire or specified in the schema.
+  Address (2 x 7 bits, as sent):   MSB = 0mg bbbnn  LSB = 0npp pppp
     m       0 = temporary parameter, 1 = memory parameter
     g       group (0 = A, 1 = B)
     bbb     bank (0-7  = 1-8)
     nnn     number (0-7 = 1-8)     (2 high bits in the MSB, the low bit in the LSB)
-    pppppp  parameter number (0x00-0x31), see the patch nodeDef below
-  Memory parameter 1 = group A, bank 1, number 1 ... memory parameter 128 = group B, bank 8, number 8.
+    pppppp  parameter number (0x00-0x31)
 
   In the 7-bit address space this is linear: the temporary patch at 00 00 and the 128 memory patches
-  from 40 00 with a stride of 00 40 (64 addresses, of which 0x32 are used).
+  from 20 00 with a stride of 00 40 (64 addresses, of which 0x32 are used).
 
   The midi.* properties describe the address map (see src/Jacobi.Midi.Device/Addressing/readme.md):
     midi.addressStart  absolute start address (wire form, as in the manual)
     midi.addressSize   number of addresses of a node; on a repeat the size of one item (the stride)
     midi.atomic        the group is always transferred as a whole
     midi.device.*      device values fixed for the GP-8 (used by the message envelope)
-
-  Legend:
-    [TODO] not available yet
 -->
 <schema name="Gp8">
   <includes>
@@ -112,11 +110,11 @@
         <group name="Equalizer">
           <members>
             <!-- 0x10: 0-100 -->
-            <field name="HiLevel" datatype="roland.level"/>
+            <field name="HiLevel" datatype="int50"/>
             <!-- 0x11: 0-100 -->
-            <field name="MidLevel" datatype="roland.level"/>
+            <field name="MidLevel" datatype="int50"/>
             <!-- 0x12: 0-100 -->
-            <field name="LoLevel" datatype="roland.level"/>
+            <field name="LoLevel" datatype="int50"/>
             <!-- 0x13: 0-100 -->
             <field name="OutLevel" datatype="roland.level"/>
           </members>
@@ -162,6 +160,7 @@
       </members>
     </group>
   </nodeDefs>
+
   <dataTypeDefs>
     <dataTypeDef name="upDown" basedOn="sys.uint8" min="0" max="100">
     <processors>
@@ -175,6 +174,7 @@
         </processor>
       </processors>
     </dataTypeDef>
+    <dataTypeDef name="int50" basedOn="sys.int8" min="-50" max="50" shift="-50" />
     <dataTypeDef name="delayTime" basedOn="sys.uint16" min="0" max="1000">
       <processors>
         <processor name="sys.bitslicer" bits="7" byteorder="big"/>
@@ -234,8 +234,7 @@
   <members>
     <group name="AddressMap" nodeDef="roland.messageBody16" midi.device.modelId="0x13">
       <members>
-        <!-- [TODO] verify the temporary patch address (m = 0) against the manual. -->
-        <group name="Temporary" nodeDef="patch" midi.addressSize="0x00-40"/>
+        <group name="Temporary" nodeDef="patch" midi.addressStart="0x00-00"/>
         <repeat name="Memory" count="128" midi.addressStart="0x40-00" midi.addressSize="0x00-40">
           <members>
             <group name="Patch" nodeDef="patch"/>
