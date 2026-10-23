@@ -49,7 +49,7 @@ Known gaps and loose ends, collected while building the editor.
 - [ ] The field preview copies and compiles the schema on every change of the name, data type or processor; fine for small schemas, may need a debounce for large ones.
 - [ ] The field panel edits one processor per field: *Apply* replaces all processors of the field with that one, so a field that got more processors in Schema mode loses the others.
 
-- [ ] The serializer does not report which input bytes a field was read from (`IValueSink.SetField` gets no byte position), so the workbench computes positions itself from the schema. That fails for fields of variable size and for fields below processors that transform the bytes (7-bit packing, nibbles). Possible solution: a read trace in Jacobi.BinarySerializer (e.g. a service via `ValueContext.Services`), with transforming processors mapping positions back to the input. See `workbench-proposal.md`.
+- [ ] The serializer does not report which input bytes a field was read from (`IValueSink.SetField` gets no byte position), so the workbench computes positions itself from the schema. That fails for fields of variable size and for fields below processors that transform the bytes (7-bit packing, nibbles). Possible solution: a read trace in Jacobi.BinarySerializer (e.g. a service via `ValueContext.Services`), with transforming processors mapping positions back to the input. See `workbench.md`.
 
 ## Build & test
 
