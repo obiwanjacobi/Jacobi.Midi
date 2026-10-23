@@ -57,6 +57,9 @@ Treat the code itself as the source of truth and check the readme files for curr
 ## Build & Test
 
 - Target framework is .NET 11 (preview) with C# 15 language features.
-- Build and test from `src/`: `dotnet build Jacobi.Midi.slnx` and `dotnet test Jacobi.Midi.slnx`.
+- Build from `src/`: `dotnet build Jacobi.Midi.slnx`.
+- Test from `src/`: `dotnet test --project Jacobi.Midi.Tests`. The repo-local `global.json` (repo root) switches `dotnet test` to the Microsoft.Testing.Platform runner, which the xunit.v3 test project requires.
+  - Do not run `dotnet test` on the solution: it also contains `Jacobi.BinarySerializer.Tests` (NUnit, VSTest runner), and in this mode all test projects must use Microsoft.Testing.Platform, so the run is refused.
+  - Run the Jacobi.BinarySerializer tests from within that repository (its own `src/`), where the `global.json` of this repo does not apply.
 - The sibling `Jacobi.BinarySerializer` repository must be present next to this one for the build to succeed.
 - Changes in the schema format or processor API usually originate in Jacobi.BinarySerializer; keep the schemas in this repo (Roland, Device) and the Schema Editor in sync with it.
