@@ -91,7 +91,7 @@ internal sealed partial class WorkbenchFieldViewModel : ObservableObject
     [ObservableProperty]
     public partial string DataType { get; set; } = "sys.uint8";
 
-    /// <summary>An optional processor, e.g. 'ref:Midi.sysexbyte' (7-bit bytes) or 'ref:Midi.string' (ASCII).</summary>
+    /// <summary>An optional processor, e.g. 'Midi.sysexbyte' (7-bit bytes) or 'Midi.string' (ASCII).</summary>
     [ObservableProperty]
     public partial string Processor { get; set; } = String.Empty;
 
@@ -100,7 +100,7 @@ internal sealed partial class WorkbenchFieldViewModel : ObservableObject
     public partial IReadOnlyList<string> DataTypeOptions { get; private set; } = Models.DataTypeOptions.Get(null);
 
     /// <summary>The processors that are often needed for SysEx data.</summary>
-    public IReadOnlyList<string> ProcessorOptions { get; } = ["", "ref:Midi.sysexbyte", "ref:Midi.string"];
+    public IReadOnlyList<string> ProcessorOptions { get; } = ["", "Midi.sysexbyte", "Midi.string"];
 
     /// <summary>The value of the field in each compared capture (with the name, data type and processor as entered).</summary>
     [ObservableProperty]
@@ -366,12 +366,12 @@ internal sealed partial class WorkbenchFieldViewModel : ObservableObject
     {
         if (bytes.Length >= 3 && !bytes.ContainsAnyExceptInRange((byte)0x20, (byte)0x7E))
         {
-            return ("sys.string", "ref:Midi.string");
+            return ("sys.string", "Midi.string");
         }
         return bytes.Length switch
         {
             1 => ("sys.uint8", String.Empty),
-            2 => ("sys.uint16", "ref:Midi.sysexbyte"),
+            2 => ("sys.uint16", "Midi.sysexbyte"),
             _ => ("sys.bytes", String.Empty)
         };
     }
@@ -389,9 +389,9 @@ internal sealed partial class WorkbenchFieldViewModel : ObservableObject
         {
             "uint8" => ("sys.uint8", ""),
             "int8" => ("sys.int8", ""),
-            "7-bit, MSB first" when length == 2 => ("sys.uint16", "ref:Midi.sysexbyte"),
-            "7-bit, MSB first" => ("sys.uint32", "ref:Midi.sysexbyte"),
-            "ascii" => ("sys.string", "ref:Midi.string"),
+            "7-bit, MSB first" when length == 2 => ("sys.uint16", "Midi.sysexbyte"),
+            "7-bit, MSB first" => ("sys.uint32", "Midi.sysexbyte"),
+            "ascii" => ("sys.string", "Midi.string"),
             "hex" => ("sys.bytes", ""),
             _ => null
         };

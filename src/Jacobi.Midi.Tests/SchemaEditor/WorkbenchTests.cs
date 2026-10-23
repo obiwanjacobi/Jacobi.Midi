@@ -451,7 +451,7 @@ public class WorkbenchTests
         workbench.Selection = new ByteRange(0, 9, 2);
         var field = workbench.Field;
         Assert.Equal("sys.uint16", field.DataType);
-        Assert.Equal("ref:Midi.sysexbyte", field.Processor);
+        Assert.Equal("Midi.sysexbyte", field.Processor);
         Assert.Equal("128", Assert.Single(field.Values).Value);
 
         field.Name = "Size";

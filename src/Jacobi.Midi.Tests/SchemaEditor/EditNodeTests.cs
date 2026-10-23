@@ -162,7 +162,7 @@ public class EditNodeTests
         edit.Properties.Add(new EditProperty { Name = "custom", Value = null });
         edit.Properties.Add(new EditProperty { Name = "custom", Value = "second" });
         var processors = edit is EditField field ? field.Processors : ((EditGroup)edit).Processors;
-        var processor = new EditProcessorRef { Processor = new SchemaName("ref:Other.map"), PublishNamespace = "node", Properties = [] };
+        var processor = new EditProcessorRef { Processor = new SchemaName("Other.map"), PublishNamespace = "node", Properties = [] };
         processor.Properties.Add(new EditProperty { Name = "option", Value = null });
         processors.Add(processor);
         if (edit is EditGroup group)
@@ -214,15 +214,15 @@ public class EditNodeTests
                   { "name": "Status", "kind": "field", "datatype": "sys.uint8", "value": "240", "byteOffset": 0 },
                   { "name": "Payload", "kind": "field", "nodeDef": "Other.Payload", "datatype": "sys.bytes",
                     "value": { "pub": "header.value" }, "byteLength": { "ref": "Root.Items[].Length" },
-                    "processors": [{ "name": "ref:map", "pubns": "payload", "extra": "value" }] },
+                    "processors": [{ "name": "map", "pubns": "payload", "extra": "value" }] },
                   { "name": "Flags", "kind": "group", "byteSize": 3,
                     "processors": [{ "name": "sys.bitpacker", "bitorder": "little" }],
                     "members": [{ "name": "Mode", "kind": "field", "datatype": "sys.uint8" }] },
                   { "name": "Items", "kind": "repeat", "count": { "ref": "Root.Status" }, "byteSize": 12,
-                    "valueProcessors": [{ "name": "ref:map", "pubns": "count" }],
+                    "valueProcessors": [{ "name": "map", "pubns": "count" }],
                     "members": [{ "name": "Entry", "kind": "field", "datatype": "Scaled", "byteLength": 2 }] },
                   { "name": "Variant", "kind": "choice", "selectedIndex": { "pub": "header.index" },
-                    "valueProcessors": [{ "name": "ref:map" }],
+                    "valueProcessors": [{ "name": "map" }],
                     "members": [{ "name": "Body", "kind": "choice", "memberNodeDef": "BodyType", "pipeline": "isolate" }] }
                 ] }]
             }

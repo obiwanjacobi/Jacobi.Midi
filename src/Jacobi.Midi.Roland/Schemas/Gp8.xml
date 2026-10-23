@@ -159,7 +159,7 @@
         <field name="ExtControlOut2" datatype="paramVal" />
         <!-- 0x20: 0 = off, 100 = on -->
         <field name="Name" datatype="sys.string" byteLength="16">
-          <processor name="ref:midi.string" />
+          <processor name="midi.string" />
         </field>
         <!-- 0x21-0x30: ASCII 32-127 -->
         <field name="EndOfString" datatype="sys.uint8" value="0" />

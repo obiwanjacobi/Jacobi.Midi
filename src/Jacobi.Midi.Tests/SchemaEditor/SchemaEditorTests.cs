@@ -66,9 +66,9 @@ public class SchemaEditorTests
                                 "members": [
                                     { "name": "Inherited", "kind": "field", "nodeDef": "Payload", "value": "240", "byteOffset": -1,
                                         "byteLength": { "ref": "Root.Items[].Length" },
-                                        "processors": [{ "name": "ref:mapping", "pubns": "field", "option": "custom" }] },
+                                        "processors": [{ "name": "mapping", "pubns": "field", "option": "custom" }] },
                                     { "name": "Items", "kind": "repeat", "count": { "ref": "Root.Inherited" },
-                                        "valueProcessors": [{ "name": "ref:mapping" }], "members": [
+                                        "valueProcessors": [{ "name": "mapping" }], "members": [
                                             { "name": "Length", "kind": "field", "datatype": "Scaled" }] },
                                     { "name": "Flags", "kind": "group", "byteSize": 2,
                                         "processors": [{ "name": "sys.bitpacker", "bitorder": "little" }],
@@ -111,7 +111,7 @@ public class SchemaEditorTests
                             <nodeDefs>
                                 <!-- Shared 7-bit representation. -->
                                 <field name="sysex16" datatype="sys.uint16" byteLength="2">
-                                    <processor name="ref:midi.sysexbyte" />
+                                    <processor name="midi.sysexbyte" />
                                 </field>
                             </nodeDefs>
                             <members><group name="Message"><members>
@@ -135,7 +135,7 @@ public class SchemaEditorTests
                 Assert.Equal(source.Replace("ChecksumBlock", "ChecksumScope", StringComparison.Ordinal), saved);
                 var restored = SchemaFileService.Parse(saved, SchemaFormat.Xml);
                 var definition = Assert.IsType<EditField>(Assert.Single(restored.NodeDefs));
-                Assert.Equal("ref:midi.sysexbyte", Assert.Single(definition.Processors).Processor.ToString());
+                Assert.Equal("midi.sysexbyte", Assert.Single(definition.Processors).Processor.ToString());
                 Assert.True(definition.ByteLength is int length && length == 2);
                 Assert.Equal(saved, SchemaFileService.Serialize(schema, SchemaFormat.Xml));
         }
@@ -168,7 +168,7 @@ public class SchemaEditorTests
                             <nodeDefs>
                                 <group name="messageBody" />
                                 <field name="sysex16" datatype="sys.uint16" byteLength="2" >
-                                    <processor name="ref:midi.sysexbyte" />
+                                    <processor name="midi.sysexbyte" />
                                 </field>
                             </nodeDefs>
 
@@ -238,7 +238,7 @@ public class SchemaEditorTests
                 Assert.DoesNotContain("<valueProcessors", saved);
                 var restored = SchemaFileService.Parse(saved, SchemaFormat.Xml);
                 var definition = Assert.IsType<EditField>(restored.NodeDefs.Single(node => node.Name == "sysex16"));
-                Assert.Equal("ref:midi.sysexbyte", Assert.Single(definition.Processors).Processor.ToString());
+                Assert.Equal("midi.sysexbyte", Assert.Single(definition.Processors).Processor.ToString());
                 Assert.True(definition.ByteLength is int length && length == 2);
                 Assert.Equal(saved, SchemaFileService.Serialize(restored, SchemaFormat.Xml));
         }

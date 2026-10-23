@@ -83,7 +83,7 @@ public class ProcessorPropertyTests
         }
 
         var root = (EditGroup)schema.Members[0];
-        root.Processors.Add(new EditProcessorRef { Processor = new SchemaName("ref:align"), Properties = [Property("bytes", "4")] });
+        root.Processors.Add(new EditProcessorRef { Processor = new SchemaName("align"), Properties = [Property("bytes", "4")] });
         using (var details = ItemDetailsViewModel.Create(document, root, catalog)!)
         {
             var processor = Assert.Single(details.Processors);
@@ -167,8 +167,8 @@ public class ProcessorPropertyTests
         Assert.Contains("sys.scale", options);
         Assert.Contains("sys.map", options);
         Assert.DoesNotContain("sys.align", options);
-        Assert.Contains("ref:scaled", options);
-        Assert.DoesNotContain("ref:aligned", options);
+        Assert.Contains("scaled", options);
+        Assert.DoesNotContain("aligned", options);
         using (var nodeDetails = ItemDetailsViewModel.Create(document, repeat, CreateCatalog())!)
         {
             Assert.Contains(nodeDetails.ProcessorOptions, option => option.Text == "sys.align");

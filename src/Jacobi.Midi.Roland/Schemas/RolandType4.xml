@@ -11,6 +11,9 @@
   The device id is the MIDI basic channel - 1 (0000nnnn).
   The content of the Address and Data is described by a device schema (see Gp8.xml).
 
+  Message32 is the same format with 4 address bytes (and 4 size bytes in RQ1), as used by the GX-700
+  (see Gx700.xml). Its data is the open choice 'messageBody32': a device map conforms to one address size only.
+
   The midi.* properties tag the messages for the address map mechanism (see src/Jacobi.Midi.Device/Addressing/readme.md):
     midi.message  request (RQ1) or data (DT1)
     midi.role     the value a node holds: addressStart, addressSize, device.<name> or data
@@ -22,7 +25,11 @@
   <nodeDefs>
     <group name="messageBody"/>
     <field name="sysex16" datatype="sys.uint16" byteLength="2">
-      <processor name="ref:midi.sysexbyte"/>
+      <processor name="midi.sysexbyte"/>
+    </field>
+    <group name="messageBody32"/>
+    <field name="sysex32" datatype="sys.uint32" byteLength="4">
+      <processor name="midi.sysexbyte"/>
     </field>
   </nodeDefs>
 
@@ -62,6 +69,49 @@
               <members>
                 <field name="Address" nodeDef="sysex16" midi.role="addressStart"/>
                 <choice name="Data" memberNodeDef="messageBody" midi.role="data"/>
+              </members>
+            </group>
+          </members>
+        </group>
+      </members>
+    </group>
+
+    <!-- The messages with a 4 byte address. -->
+    <group name="Message32">
+      <processors>
+        <processor name="midi.sysex"/>
+      </processors>
+      <members>
+        <group name="RQ1" midi.message="request">
+          <members>
+            <field name="RolandId" datatype="sys.uint8" value="0x41"/>
+            <field name="DeviceId" datatype="sys.uint8" midi.role="device.deviceId"/>
+            <field name="ModelId" datatype="sys.uint8" midi.role="device.modelId"/>
+            <field name="Command" datatype="sys.uint8" value="0x11"/>
+            <group name="ChecksumScope">
+              <processors>
+                <processor name="roland.checksum"/>
+              </processors>
+              <members>
+                <field name="Address" nodeDef="sysex32" midi.role="addressStart"/>
+                <field name="Size" nodeDef="sysex32" midi.role="addressSize"/>
+              </members>
+            </group>
+          </members>
+        </group>
+        <group name="DT1" midi.message="data" midi.messageInterval="20">
+          <members>
+            <field name="RolandId" datatype="sys.uint8" value="0x41"/>
+            <field name="DeviceId" datatype="sys.uint8" midi.role="device.deviceId"/>
+            <field name="ModelId" datatype="sys.uint8" midi.role="device.modelId"/>
+            <field name="Command" datatype="sys.uint8" value="0x12"/>
+            <group name="ChecksumScope">
+              <processors>
+                <processor name="roland.checksum"/>
+              </processors>
+              <members>
+                <field name="Address" nodeDef="sysex32" midi.role="addressStart"/>
+                <choice name="Data" memberNodeDef="messageBody32" midi.role="data"/>
               </members>
             </group>
           </members>

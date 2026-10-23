@@ -59,16 +59,17 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
     {
         ArgumentNullException.ThrowIfNull(document);
         var schema = document.Schema;
+        Func<string, bool>? isProcessorKey = catalog is null ? null : catalog.IsProcessorKey;
         return item switch
         {
             EditNode node => new(document, node, node.Properties, EffectiveNodeResolver.GetProcessors(node),
-                () => EffectiveNodeResolver.Resolve(schema, node), catalog, isDocument: node is EditDocument),
+                () => EffectiveNodeResolver.Resolve(schema, node, isProcessorKey), catalog, isDocument: node is EditDocument),
             EditDataTypeDef definition => new(document, definition, definition.Properties, definition.Processors,
-                () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, definition.Processors), catalog),
+                () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, definition.Processors, isProcessorKey), catalog),
             EditProcessorDef definition => new(document, definition, definition.Properties, null,
                 () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, null), catalog, definition),
             EditProcessorRef processor => new(document, processor, processor.Properties, null,
-                () => EffectiveNodeResolver.ResolveProcessorRef(schema, processor), catalog),
+                () => EffectiveNodeResolver.ResolveProcessorRef(schema, processor, isProcessorKey), catalog),
             _ => null
         };
     }
@@ -86,9 +87,10 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
             return null;
         }
         var schema = document.Schema;
+        Func<string, bool>? isProcessorKey = catalog is null ? null : catalog.IsProcessorKey;
         // value processors convert the count or index value: only semantic processors can
         return new(document, node, new List<EditProperty>(), valueProcessors,
-            () => EffectiveNodeResolver.ResolveValueProcessors(schema, node), catalog, processorStage: PipelineStage.Semantic);
+            () => EffectiveNodeResolver.ResolveValueProcessors(schema, node, isProcessorKey), catalog, processorStage: PipelineStage.Semantic);
     }
 
     /// <summary>
@@ -306,22 +308,12 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
     }
 
     /// <summary>
-    /// The processor key of a processor ref: its own key, or the key of the local processor def it references.
-    /// Null for a reference to a processor def that is not in the document.
+    /// The processor key of a processor ref: the key of the local processor def it names, otherwise its name as key.
+    /// The name of a processor def of another schema is then not a known processor key (see <see cref="ProcessorCatalog"/>).
     /// </summary>
-    private string? GetProcessorKey(EditProcessorRef processor)
-    {
-        var name = processor.Processor;
-        if (!name.IsReference)
-        {
-            return name.FullName;
-        }
-        var schema = _document.Schema;
-        var isLocal = String.IsNullOrEmpty(name.Namespace) || String.Equals(name.Namespace, schema.Name, StringComparison.OrdinalIgnoreCase);
-        return isLocal
-            ? schema.ProcessorDefs.FirstOrDefault(def => String.Equals(def.Name, name.Name, StringComparison.OrdinalIgnoreCase))?.Processor
-            : null;
-    }
+    private string GetProcessorKey(EditProcessorRef processor)
+        => EffectiveNodeResolver.FindProcessorDef(_document.Schema, processor.Processor)?.Processor
+            ?? processor.Processor.FullName;
 
     /// <summary>
     /// Listens to the item's own entries: any change other than a property value changes the merge result.
@@ -542,7 +534,7 @@ internal sealed class ProcessorRow : ObservableObject
     public IReadOnlyList<PropertyRow> Properties { get; }
 
     /// <summary>
-    /// The processor key ('namespace.id') or definition reference ('ref:name'). Invalid input is ignored.
+    /// The processor key ('namespace.id') or processor def name ('name' or 'document.name'). Invalid input is ignored.
     /// </summary>
     public string Processor
     {

@@ -45,6 +45,9 @@ internal static class WorkbenchSchema
     /// <summary>The name prefix of a placeholder field: work in progress.</summary>
     public const string PlaceholderPrefix = "Wip_";
 
+    /// <summary>The schema with the processor defs the workbench offers (e.g. 'Midi.sysexbyte').</summary>
+    public const string MidiSchema = "Midi";
+
     private const string SysExProcessor = "midi.sysex";
     private const string PlaceholderDataType = "sys.bytes";
 
@@ -158,7 +161,7 @@ internal static class WorkbenchSchema
     /// Describes <paramref name="range"/> (message offsets) with a new field: the placeholder that contains the range is split
     /// into the field and placeholders for the bytes before and after it.
     /// </summary>
-    /// <param name="processor">An optional processor of the field, e.g. 'ref:Midi.sysexbyte'.</param>
+    /// <param name="processor">An optional processor of the field, e.g. 'Midi.sysexbyte'.</param>
     /// <param name="value">The fixed value of the field (e.g. a manufacturer id); null or empty for a field that holds a parameter.</param>
     /// <exception cref="InvalidOperationException">The range is not inside one placeholder, or the name is not valid.</exception>
     public static EditField DefineField(SchemaWorkspaceDocument document, MessageLayout layout, ByteRange range,
@@ -338,24 +341,21 @@ internal static class WorkbenchSchema
     }
 
     /// <summary>
-    /// Adds an include of the schema that a processor reference refers to ('ref:Midi.sysexbyte' needs the 'Midi' schema),
-    /// when the document does not include it yet.
+    /// Adds an include of the <see cref="MidiSchema"/> when the processor is one of its processor defs
+    /// ('Midi.sysexbyte' needs the 'Midi' schema) and the document does not include it yet.
+    /// A processor name cannot tell a processor def of another schema from a processor key ('namespace.id'),
+    /// so only the schema the workbench takes its processors from is included.
     /// </summary>
     public static void EnsureInclude(SchemaWorkspaceDocument document, string? processor)
     {
         ArgumentNullException.ThrowIfNull(document);
-        const string reference = "ref:";
-        if (processor?.Trim() is not { } text || !text.StartsWith(reference, StringComparison.Ordinal))
+        if (String.IsNullOrWhiteSpace(processor))
         {
             return;
         }
-        var separator = text.IndexOf(SchemaName.Separator, reference.Length);
-        if (separator <= reference.Length)
-        {
-            return;
-        }
-        var schema = text[reference.Length..separator];
-        if (!String.Equals(schema, document.Schema.Name, StringComparison.OrdinalIgnoreCase)
+        var schema = new SchemaName(processor.Trim()).Namespace;
+        if (String.Equals(schema, MidiSchema, StringComparison.OrdinalIgnoreCase)
+            && !String.Equals(schema, document.Schema.Name, StringComparison.OrdinalIgnoreCase)
             && !document.Schema.Includes.Any(include => String.Equals(include.Schema, schema, StringComparison.OrdinalIgnoreCase)))
         {
             document.AddInclude(schema);

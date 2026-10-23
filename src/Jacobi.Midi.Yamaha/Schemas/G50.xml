@@ -34,15 +34,15 @@
   <nodeDefs>
     <!-- One parameter: 8 bits in 2 bytes (MSB holds bit 7). -->
     <field name="param" datatype="sys.uint16" byteLength="2">
-      <processor name="ref:midi.sysexbyte" />
+      <processor name="midi.sysexbyte" />
     </field>
     <!-- Byte count of a bulk dump (2 x 7 bits). -->
     <field name="byteCount" datatype="sys.uint16" byteLength="2">
-      <processor name="ref:midi.sysexbyte" />
+      <processor name="midi.sysexbyte" />
     </field>
     <!-- The dump header: "LM  0256" + the dump type (OM, MA, SY). -->
     <field name="header" datatype="sys.string" byteLength="10">
-      <processor name="ref:midi.string" />
+      <processor name="midi.string" />
     </field>
     <!-- The 16 bytes after the header with a number in the last byte (block or memory number). -->
     <group name="numbered">

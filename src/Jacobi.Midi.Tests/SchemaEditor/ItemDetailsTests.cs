@@ -46,17 +46,17 @@ public class ItemDetailsTests
         var document = CreateDocument();
         document.ProcessorDefs.Add(new EditProcessorDef { Name = "align", Processor = "sys.align", Properties = [Property("bytes", "4"), Property("relative", "root")] });
         var definition = Group(null, "def");
-        definition.Processors.Add(new EditProcessorRef { Processor = new SchemaName("ref:align") });
+        definition.Processors.Add(new EditProcessorRef { Processor = new SchemaName("align") });
         definition.Processors.Add(new EditProcessorRef { Processor = new SchemaName("sys.checksum") });
         document.NodeDefs.Add(definition);
         var group = Group(Root(document), "group");
         group.NodeDef = new SchemaName("def");
-        var own = new EditProcessorRef { Processor = new SchemaName("ref:align"), Properties = [Property("bytes", "8")] };
+        var own = new EditProcessorRef { Processor = new SchemaName("align"), Properties = [Property("bytes", "8")] };
         group.Processors.Add(own);
 
         var effective = EffectiveNodeResolver.Resolve(document, group);
 
-        Assert.Equal(["sys.checksum", "ref:align"], effective.Processors.Select(p => p.Processor.Processor.ToString()));
+        Assert.Equal(["sys.checksum", "align"], effective.Processors.Select(p => p.Processor.Processor.ToString()));
         var align = effective.Processors[1];
         Assert.True(align.IsOwn);
         Assert.Same(own, align.Processor);
@@ -72,16 +72,34 @@ public class ItemDetailsTests
         document.Includes.Add(new EditDocumentRef { Schema = "midi" });
         var field = Field(Root(document), "field", dataType: "midi.sysexbyte");
         field.NodeDef = new SchemaName("midi.byte");
-        field.Processors.Add(new EditProcessorRef { Processor = new SchemaName("ref:midi.sysex") });
+        field.Processors.Add(new EditProcessorRef { Processor = new SchemaName("midi.sysex") });
 
         var effective = EffectiveNodeResolver.Resolve(document, field);
 
-        Assert.Equal(3, effective.Unresolved.Count);
+        Assert.Equal(2, effective.Unresolved.Count);
         Assert.Contains(effective.Unresolved, message => message.Contains("nodeDef 'midi.byte'"));
         Assert.Contains(effective.Unresolved, message => message.Contains("dataType 'midi.sysexbyte'"));
-        Assert.Contains(effective.Unresolved, message => message.Contains("processorDef 'ref:midi.sysex'"));
+        // without the processor keys 'midi.sysex' may be a processor key or a processorDef of the included schema
+        Assert.DoesNotContain(effective.Unresolved, message => message.Contains("midi.sysex'"));
         // built-in types are not reported
         Assert.Empty(EffectiveNodeResolver.Resolve(document, Field(Root(document), "plain", dataType: "sys.uint8")).Unresolved);
+    }
+
+    [Fact]
+    public void Resolve_WithProcessorKeys_ReportsProcessorDefsOfOtherDocuments()
+    {
+        var document = CreateDocument();
+        document.Includes.Add(new EditDocumentRef { Schema = "midi" });
+        var field = Field(Root(document), "field", dataType: "sys.uint16");
+        field.Processors.Add(new EditProcessorRef { Processor = new SchemaName("midi.sysex") });
+        field.Processors.Add(new EditProcessorRef { Processor = new SchemaName("midi.sysexbyte") });
+        field.Processors.Add(new EditProcessorRef { Processor = new SchemaName("other.unknown") });
+
+        var effective = EffectiveNodeResolver.Resolve(document, field, key => key == "midi.sysex");
+
+        Assert.Equal(2, effective.Unresolved.Count);
+        Assert.Contains(effective.Unresolved, message => message.Contains("processorDef 'midi.sysexbyte' is defined in the included schema 'midi'"));
+        Assert.Contains(effective.Unresolved, message => message.Contains("processor 'other.unknown' is not a known processor"));
     }
 
     [Fact]

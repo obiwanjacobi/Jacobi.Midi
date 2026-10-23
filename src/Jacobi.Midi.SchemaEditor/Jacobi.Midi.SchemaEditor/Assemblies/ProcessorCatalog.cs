@@ -27,6 +27,12 @@ internal sealed class ProcessorCatalog(ProcessorManager processors)
         => GetProcessor(processorKey)?.Properties;
 
     /// <summary>
+    /// True when <paramref name="processorKey"/> ('namespace.id') is a processor of the loaded processor factories.
+    /// A processor name that is not, designates a processor def of a schema (e.g. 'midi.sysexbyte').
+    /// </summary>
+    public bool IsProcessorKey(string? processorKey) => GetProcessor(processorKey) is not null;
+
+    /// <summary>
     /// The pipeline stage of the processor with <paramref name="processorKey"/>; null when the processor is not known.
     /// </summary>
     public PipelineStage? GetStage(string? processorKey)
@@ -54,7 +60,7 @@ internal sealed class ProcessorCatalog(ProcessorManager processors)
 
     /// <summary>
     /// The processors to choose from in the processor drop-down list, in two sections: the processors of the loaded
-    /// processor factories and references to the processor defs of <paramref name="document"/> ('ref:name').
+    /// processor factories and the names of the processor defs of <paramref name="document"/>.
     /// With a <paramref name="stage"/>, only the processors of that stage (and the defs that reference one) are offered.
     /// </summary>
     public IReadOnlyList<ProcessorOption> GetProcessorOptions(EditDocument? document, PipelineStage? stage = null)
@@ -70,7 +76,7 @@ internal sealed class ProcessorCatalog(ProcessorManager processors)
             options.AddRange(processorDefs
                 .Select(def => def.Name)
                 .Order(StringComparer.OrdinalIgnoreCase)
-                .Select(name => new ProcessorOption($"{SchemaNodeRef.Prefix}{name}")));
+                .Select(name => new ProcessorOption(name)));
         }
         return options;
     }

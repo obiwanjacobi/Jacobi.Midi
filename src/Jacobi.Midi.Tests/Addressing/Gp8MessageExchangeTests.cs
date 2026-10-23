@@ -169,7 +169,7 @@ public class Gp8MessageExchangeTests
     {
         var serializer = CreateSerializer();
 
-        Assert.Equal(["Gp8.AddressMap"], AddressProtocol.FindMapRoots(serializer.Schemas).Select(r => r.FullName));
+        Assert.Equal(["Gp8.AddressMap", "Gx700.AddressMap"], AddressProtocol.FindMapRoots(serializer.Schemas).Select(r => r.FullName).Order());
         new AddressMaps(serializer).PrepareAll();
     }
 

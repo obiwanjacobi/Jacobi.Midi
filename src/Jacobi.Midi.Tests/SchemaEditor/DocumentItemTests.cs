@@ -346,7 +346,7 @@ public class DocumentItemTests
         var document = new SchemaWorkspaceDocument(schema, SchemaFormat.Json);
         var definition = document.AddProcessorDef("align", "sys.align");
         definition.Properties.Add(new EditProperty { Name = "bytes", Value = "4" });
-        var processor = document.AddProcessor("ref:align");
+        var processor = document.AddProcessor("align");
         using var details = ItemDetailsViewModel.Create(document, processor)!;
 
         var inherited = Assert.Single(details.Properties);

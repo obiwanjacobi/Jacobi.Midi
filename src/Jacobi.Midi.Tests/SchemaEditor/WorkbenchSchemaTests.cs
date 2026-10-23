@@ -61,10 +61,10 @@ public class WorkbenchSchemaTests
         Assert.Equal([(1, 5), (6, 1), (7, 4)], layout.Spans.Select(span => (span.Start, span.Length)));
         Assert.Equal(1, layout.DescribedCount);
 
-        var name = WorkbenchSchema.DefineField(document, layout, new ByteRange(0, 7, 3), "Name", "sys.string", "ref:Midi.string");
+        var name = WorkbenchSchema.DefineField(document, layout, new ByteRange(0, 7, 3), "Name", "sys.string", "Midi.string");
         layout = WorkbenchSchema.GetLayout(root, Baseline);
         Assert.Equal(["Wip_1", "Level", "Name", "Wip_10"], layout.Spans.Select(span => span.Field.Name));
-        Assert.Equal("ref:Midi.string", Assert.Single(name.Processors).Processor.ToString());
+        Assert.Equal("Midi.string", Assert.Single(name.Processors).Processor.ToString());
 
         WorkbenchSchema.RemoveField(document, layout, level);
         layout = WorkbenchSchema.GetLayout(root, Baseline);

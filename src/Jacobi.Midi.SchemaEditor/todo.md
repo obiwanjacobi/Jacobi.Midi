@@ -20,6 +20,8 @@ Known gaps and loose ends, collected while building the editor.
 - [ ] Resolution only uses definitions in the edited document; definitions in included schemas are reported as unresolved. Loading the includes (paths / embedded Device & Roland schemas) would give the real result.
 - [ ] Editing a node def or processor def does not refresh the Processors/Properties tabs of a node that uses it until that node is selected again.
 - [ ] Data type defs and processor defs only show their own entries (no `basedOn` inheritance shown).
+- [ ] Since processor names lost the `ref:` prefix, a processor `namespace.name` can be a processor def of an included schema (`midi.sysexbyte`, a def in `Midi.xml`) or a processor key (`midi.sysex`); both are used as processor (`<processor name="..."/>`) with the same namespace. `EffectiveNodeResolver` tells them apart with the processor keys of the `ProcessorCatalog` (`IsProcessorKey`): a name that no loaded processor factory knows is a processor def of another schema. Without a catalog nothing is reported. The properties of processor defs of included schemas are still not merged (see the item above).
+- [ ] Use the Jacobi.BinarySerializer objects as much as possible instead of re-implementing its rules in the editor: e.g. resolve the effective processors and properties through a compiled `SchemaSet` of the edited document and its includes (`SchemaProcessorRef.Definition` / `Key`, `EffectiveProperties`), rather than `EffectiveNodeResolver` looking up names itself.
 
 ## Document items
 
@@ -48,6 +50,7 @@ Known gaps and loose ends, collected while building the editor.
 - [ ] Slots with the same layout cannot be turned into a repeat or a shared node def yet; fields cannot be grouped (e.g. a checksum scope) from the workbench.
 - [ ] The field preview copies and compiles the schema on every change of the name, data type or processor; fine for small schemas, may need a debounce for large ones.
 - [ ] The field panel edits one processor per field: *Apply* replaces all processors of the field with that one, so a field that got more processors in Schema mode loses the others.
+- [ ] `WorkbenchSchema.EnsureInclude` only adds an include of `WorkbenchSchema.MidiSchema` for a processor named `Midi.*` (without the `ref:` prefix a processor name does not tell a schema from a processor namespace). Review which references need an include: node def and data type values, and processor def names of another document (the `SchemaSetBuilder` only treats a namespace as a document when that document is in the schema set; otherwise `Midi.sysexbyte` is taken as a processor key).
 
 - [ ] The serializer does not report which input bytes a field was read from (`IValueSink.SetField` gets no byte position), so the workbench computes positions itself from the schema. That fails for fields of variable size and for fields below processors that transform the bytes (7-bit packing, nibbles). Possible solution: a read trace in Jacobi.BinarySerializer (e.g. a service via `ValueContext.Services`), with transforming processors mapping positions back to the input. See `workbench.md`.
 
