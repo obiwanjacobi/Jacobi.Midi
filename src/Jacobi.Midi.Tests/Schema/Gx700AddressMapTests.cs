@@ -66,7 +66,7 @@ public class Gx700AddressMapTests
 
     [Theory]
     [InlineData("gx700-sysex-patch1.syx", 14)]
-    [InlineData("gx700-sysex-systen.syx", 3)]
+    [InlineData("gx700-sysex-system.syx", 3)]
     public void TryReadData_EverySection_RoundTrips(string fileName, int sectionCount)
     {
         var map = CreateMap();
@@ -112,7 +112,7 @@ public class Gx700AddressMapTests
     public void TryReadData_System_Decode()
     {
         var map = CreateMap();
-        var messages = DumpMessages("gx700-sysex-systen.syx");
+        var messages = DumpMessages("gx700-sysex-system.syx");
 
         var map1 = Decode(map, messages[1]);
         Assert.Equal((byte)1, Value(map1, "AddressMap.System.ProgramChangeMap1.Program.Patch", 0));

@@ -4,9 +4,9 @@
 
   Derived from the boss-gx-700-patch-parser by Tom Weatherhead
   (https://github.com/tom-weatherhead/boss-gx-700-patch-parser, src/script.js) and checked against the bulk dumps
-  in Jacobi.Midi.Tests/Schema (gx700-sysex-patch1.syx, gx700-sysex-systen.syx). There is no manual source yet.
+  in Jacobi.Midi.Tests/Schema (gx700-sysex-patch1.syx, gx700-sysex-system.syx). There is no manual source yet.
 
-  Used with the Message32 messages of the RolandType4 schema (4 address bytes): Model-ID 0x79, Device-ID 0x00 in the dumps.
+  Used with the Message32 messages of the Roland schema (4 address bytes): Model-ID 0x79, Device-ID 0x00 in the dumps.
 
     F0 41 <dev> 79 12 <address:4> data <checksum> F7
 
@@ -21,10 +21,10 @@
   and (=) the displayed value. Two kinds of 2 byte values are used:
     nibble8  4 + 4 bits (MSB first): 0F 0F = 0xFF. Tempo, Resonance, Separation; the Program Change map.
     sysex14  7 + 7 bits (MSB first): Delay Time.
-  Lists that recur:
+  Enumerations are dataTypeDefs with a sys.map to the names used by the parser. Lists that recur:
     hiCut     0-15: 500 Hz, 630, 800, 1.00 kHz, 1.25k, 1.60k, 2.00k, 2.50k, 3.15k, 4.00k, 5.00k, 6.30k, 8.00k, 10.0k, 12.5k, Flat
     lowCut    0-10: Flat, 55 Hz, 110, 165, 220, 280, 340, 400, 500, 630, 800
-    midiCc    MIDI CC#1-31, then CC#64-95 (63 entries)
+    midiCc    MIDI CC#1-31, then CC#64-95 (63 entries), at the end of wahPedal, pedal and tempoIn
 
   The midi.* properties describe the address map (see src/Jacobi.Midi.Device/Addressing/readme.md).
 
@@ -35,6 +35,7 @@
 <schema name="Gx700">
   <includes>
     <include schema="midi" />
+    <include schema="roland" />
   </includes>
   <nodeDefs>
     <!-- 8 bits in 2 bytes of 4 bits each (MSB first). -->
@@ -46,252 +47,386 @@
       <processor name="midi.sysexbyte" />
     </field>
 
-    <!-- One patch: 14 sections, one DT1 each. The comment gives the range and the address (offset) in the section. -->
+    <!-- One patch: 14 sections, one DT1 each. The offsets are relative to the start of the section. -->
     <group name="patch">
       <members>
         <!-- Section 00: 66 bytes. -->
         <group name="Common" midi.atomic="true" midi.addressSize="0x01-00">
           <members>
-            <field name="Unknown00" datatype="sys.uint8" />                    <!-- [TODO] 0x4E in the dump (patch level?)       (0x00) -->
-            <!-- [TODO] verify: 01-0D in the dump; most likely the effect chain order (section numbers 1-13). -->
+            <!-- 0x00: [TODO] 0x4E in the dump (patch level?) -->
+            <field name="Unknown00" datatype="sys.uint8" />
+            <!-- 0x01-0x0D: 1-13. [TODO] verify: 01-0D in the dump; most likely the effect chain order (section numbers 1-13). -->
             <repeat name="EffectOrder" count="13">
               <members>
-                <field name="Section" datatype="sys.uint8" />                  <!-- 1-13                                         (0x01-0x0D) -->
+                <field name="Section" datatype="sys.uint8" />
               </members>
             </repeat>
-            <field name="Name" datatype="sys.string" byteLength="12">         <!-- ASCII                                        (0x0E-0x19) -->
+            <!-- 0x0E-0x19: ASCII -->
+            <field name="Name" datatype="sys.string" byteLength="12">
               <processor name="midi.string" />
             </field>
-            <!-- [TODO] 4 blocks of 10 bytes, e.g. 03 07 00 00 00 64 00 00 00 7F (control assignments?). -->
-            <field name="Unknown1A" datatype="sys.bytes" byteLength="40" />    <!--                                              (0x1A-0x41) -->
+            <!-- 0x1A-0x41: [TODO] 4 blocks of 10 bytes, e.g. 03 07 00 00 00 64 00 00 00 7F (control assignments?). -->
+            <field name="Unknown1A" datatype="sys.bytes" byteLength="40" />
           </members>
         </group>
 
         <!-- Section 01: 8 bytes. -->
         <group name="Compressor" midi.atomic="true" midi.addressSize="0x01-00">
           <members>
-            <field name="On" datatype="switch" />                              <!-- 0 = off, 1 = on                              (0x00) -->
-            <field name="Type" datatype="sys.uint8" />                         <!-- 0 = compressor, 1 = limiter                  (0x01) -->
-            <field name="Sustain" datatype="level" />                          <!-- 0-100 (compressor)                           (0x02) -->
-            <field name="Attack" datatype="level" />                           <!-- 0-100 (compressor)                           (0x03) -->
-            <field name="Threshold" datatype="level" />                        <!-- 0-100 (limiter)                              (0x04) -->
-            <field name="Release" datatype="level" />                          <!-- 0-100 (limiter)                              (0x05) -->
-            <field name="Tone" datatype="level" />                             <!-- 0-100 (= -50 - +50)                          (0x06) -->
-            <field name="EffectLevel" datatype="level" />                      <!-- 0-100                                        (0x07) -->
+            <!-- 0x00: 0 = off, 1 = on -->
+            <field name="On" datatype="roland.switch" />
+            <!-- 0x01: 0 = compressor, 1 = limiter -->
+            <field name="Type" datatype="compressorType" />
+            <!-- 0x02: 0-100 (compressor) -->
+            <field name="Sustain" datatype="roland.level" />
+            <!-- 0x03: 0-100 (compressor) -->
+            <field name="Attack" datatype="roland.level" />
+            <!-- 0x04: 0-100 (limiter) -->
+            <field name="Threshold" datatype="roland.level" />
+            <!-- 0x05: 0-100 (limiter) -->
+            <field name="Release" datatype="roland.level" />
+            <!-- 0x06: 0-100 (= -50 - +50) -->
+            <field name="Tone" datatype="roland.level" />
+            <!-- 0x07: 0-100 -->
+            <field name="EffectLevel" datatype="roland.level" />
           </members>
         </group>
 
         <!-- Section 02: 13 bytes. -->
         <group name="Wah" midi.atomic="true" midi.addressSize="0x01-00">
           <members>
-            <field name="On" datatype="switch" />                              <!-- 0 = off, 1 = on                              (0x00) -->
-            <field name="Mode" datatype="sys.uint8" />                         <!-- 0 = pedal wah, 1 = sw-pedal wah, 2 = auto wah (0x01) -->
-            <field name="Frequency" datatype="level" />                        <!-- 0-100 (pedal)                                (0x02) -->
-            <field name="Polarity" datatype="sys.uint8" />                     <!-- 0 = down, 1 = up (auto)                      (0x03) -->
-            <field name="Sensitivity" datatype="level" />                      <!-- 0-100 (auto)                                 (0x04) -->
-            <field name="Manual" datatype="level" />                           <!-- 0-100 (auto)                                 (0x05) -->
-            <field name="Peak" datatype="level" />                             <!-- 0-100                                        (0x06) -->
-            <field name="Pedal" datatype="sys.uint8" />                        <!-- 0 = fixed, 1 = EXP pedal, 2 = FC-200EXP, 3-65 = midiCc (pedal) (0x07) -->
-            <field name="PedalMin" datatype="level" />                         <!-- 0-100 (pedal)                                (0x08) -->
-            <field name="PedalMax" datatype="level" />                         <!-- 0-100 (pedal)                                (0x09) -->
-            <field name="Rate" datatype="level" />                             <!-- 0-100 (auto)                                 (0x0A) -->
-            <field name="Depth" datatype="level" />                            <!-- 0-100 (auto)                                 (0x0B) -->
-            <field name="EffectLevel" datatype="level" />                      <!-- 0-100                                        (0x0C) -->
+            <!-- 0x00: 0 = off, 1 = on -->
+            <field name="On" datatype="roland.switch" />
+            <!-- 0x01: 0 = pedal wah, 1 = sw-pedal wah, 2 = auto wah -->
+            <field name="Mode" datatype="wahMode" />
+            <!-- 0x02: 0-100 (pedal) -->
+            <field name="Frequency" datatype="roland.level" />
+            <!-- 0x03: 0 = down, 1 = up (auto) -->
+            <field name="Polarity" datatype="polarity" />
+            <!-- 0x04: 0-100 (auto) -->
+            <field name="Sensitivity" datatype="roland.level" />
+            <!-- 0x05: 0-100 (auto) -->
+            <field name="Manual" datatype="roland.level" />
+            <!-- 0x06: 0-100 -->
+            <field name="Peak" datatype="roland.level" />
+            <!-- 0x07: 0 = fixed, 1 = EXP pedal, 2 = FC-200EXP, 3-65 = midiCc (pedal) -->
+            <field name="Pedal" datatype="wahPedal" />
+            <!-- 0x08: 0-100 (pedal) -->
+            <field name="PedalMin" datatype="roland.level" />
+            <!-- 0x09: 0-100 (pedal) -->
+            <field name="PedalMax" datatype="roland.level" />
+            <!-- 0x0A: 0-100 (auto) -->
+            <field name="Rate" datatype="roland.level" />
+            <!-- 0x0B: 0-100 (auto) -->
+            <field name="Depth" datatype="roland.level" />
+            <!-- 0x0C: 0-100 -->
+            <field name="EffectLevel" datatype="roland.level" />
           </members>
         </group>
 
         <!-- Section 03: 6 bytes. -->
         <group name="OverdriveDistortion" midi.atomic="true" midi.addressSize="0x01-00">
           <members>
-            <field name="On" datatype="switch" />                              <!-- 0 = off, 1 = on                              (0x00) -->
-            <!-- 0 = Vintage OD, 1 = Turbo OD, 2 = Blues, 3 = Distortion, 4 = Turbo DS, 5 = Metal, 6 = Fuzz -->
-            <field name="Type" datatype="sys.uint8" />                         <!--                                              (0x01) -->
-            <field name="Drive" datatype="level" />                            <!-- 0-100                                        (0x02) -->
-            <field name="Bass" datatype="level" />                             <!-- 0-100 (= -50 - +50)                          (0x03) -->
-            <field name="Treble" datatype="level" />                           <!-- 0-100 (= -50 - +50)                          (0x04) -->
-            <field name="EffectLevel" datatype="level" />                      <!-- 0-100                                        (0x05) -->
+            <!-- 0x00: 0 = off, 1 = on -->
+            <field name="On" datatype="roland.switch" />
+            <!-- 0x01: 0 = Vintage OD, 1 = Turbo OD, 2 = Blues, 3 = Distortion, 4 = Turbo DS, 5 = Metal, 6 = Fuzz -->
+            <field name="Type" datatype="distortionType" />
+            <!-- 0x02: 0-100 -->
+            <field name="Drive" datatype="roland.level" />
+            <!-- 0x03: 0-100 (= -50 - +50) -->
+            <field name="Bass" datatype="roland.level" />
+            <!-- 0x04: 0-100 (= -50 - +50) -->
+            <field name="Treble" datatype="roland.level" />
+            <!-- 0x05: 0-100 -->
+            <field name="EffectLevel" datatype="roland.level" />
           </members>
         </group>
 
         <!-- Section 04: 10 bytes. -->
         <group name="Preamp" midi.atomic="true" midi.addressSize="0x01-00">
           <members>
-            <field name="On" datatype="switch" />                              <!-- 0 = off, 1 = on                              (0x00) -->
-            <!-- 0 = JC-120, 1 = Clean Twin, 2 = Match Drive, 3 = BG Lead, 4 = MS1959 (I), 5 = MS1959 (II),
+            <!-- 0x00: 0 = off, 1 = on -->
+            <field name="On" datatype="roland.switch" />
+            <!-- 0x01: 0 = JC-120, 1 = Clean Twin, 2 = Match Drive, 3 = BG Lead, 4 = MS1959 (I), 5 = MS1959 (II),
                  6 = MS1959 (I+II), 7 = SLDN Lead, 8 = Metal 5150 -->
-            <field name="Type" datatype="sys.uint8" />                         <!--                                              (0x01) -->
-            <field name="Volume" datatype="level" />                           <!-- 0-100                                        (0x02) -->
-            <field name="Bass" datatype="level" />                             <!-- 0-100                                        (0x03) -->
-            <field name="Middle" datatype="level" />                           <!-- 0-100                                        (0x04) -->
-            <field name="Treble" datatype="level" />                           <!-- 0-100                                        (0x05) -->
-            <field name="Presence" datatype="level" />                         <!-- 0-100                                        (0x06) -->
-            <field name="Master" datatype="level" />                           <!-- 0-100                                        (0x07) -->
-            <field name="Bright" datatype="switch" />                          <!-- 0 = off, 1 = on (JC-120, Clean Twin, BG Lead) (0x08) -->
-            <field name="Gain" datatype="sys.uint8" />                         <!-- 0 = low, 1 = middle, 2 = high                (0x09) -->
+            <field name="Type" datatype="preampType" />
+            <!-- 0x02: 0-100 -->
+            <field name="Volume" datatype="roland.level" />
+            <!-- 0x03: 0-100 -->
+            <field name="Bass" datatype="roland.level" />
+            <!-- 0x04: 0-100 -->
+            <field name="Middle" datatype="roland.level" />
+            <!-- 0x05: 0-100 -->
+            <field name="Treble" datatype="roland.level" />
+            <!-- 0x06: 0-100 -->
+            <field name="Presence" datatype="roland.level" />
+            <!-- 0x07: 0-100 -->
+            <field name="Master" datatype="roland.level" />
+            <!-- 0x08: 0 = off, 1 = on (JC-120, Clean Twin, BG Lead) -->
+            <field name="Bright" datatype="roland.switch" />
+            <!-- 0x09: 0 = low, 1 = middle, 2 = high -->
+            <field name="Gain" datatype="preampGain" />
           </members>
         </group>
 
         <!-- Section 05: 4 bytes. -->
         <group name="Loop" midi.atomic="true" midi.addressSize="0x01-00">
           <members>
-            <field name="On" datatype="switch" />                              <!-- 0 = off, 1 = on                              (0x00) -->
-            <field name="ReturnLevel" datatype="level" />                      <!-- 0-100 %                                      (0x01) -->
-            <field name="SendLevel" datatype="level" />                        <!-- 0-100 %                                      (0x02) -->
-            <field name="Mode" datatype="sys.uint8" />                         <!-- 0 = series, 1 = parallel                     (0x03) -->
+            <!-- 0x00: 0 = off, 1 = on -->
+            <field name="On" datatype="roland.switch" />
+            <!-- 0x01: 0-100 % -->
+            <field name="ReturnLevel" datatype="roland.level" />
+            <!-- 0x02: 0-100 % -->
+            <field name="SendLevel" datatype="roland.level" />
+            <!-- 0x03: 0 = series, 1 = parallel -->
+            <field name="Mode" datatype="loopMode" />
           </members>
         </group>
 
         <!-- Section 06: 7 bytes. -->
         <group name="Equalizer" midi.atomic="true" midi.addressSize="0x01-00">
           <members>
-            <field name="On" datatype="switch" />                              <!-- 0 = off, 1 = on                              (0x00) -->
-            <field name="LowGain" datatype="sys.uint8" />                      <!-- 0-40 (= -20 - +20 dB)                        (0x01) -->
-            <!-- 0-20: 100 Hz, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1.00 kHz, 1.25k, 1.60k, 2.00k, 2.50k, 3.15k,
-                 4.00k, 5.00k, 6.30k, 8.00k, 10.0k -->
-            <field name="MiddleFrequency" datatype="sys.uint8" />              <!--                                              (0x02) -->
-            <field name="MiddleGain" datatype="sys.uint8" />                   <!-- 0-40 (= -20 - +20 dB)                        (0x03) -->
-            <field name="MiddleQ" datatype="sys.uint8" />                      <!-- 0-5 (= 0.5, 1, 2, 4, 8, 16)                  (0x04) -->
-            <field name="HighGain" datatype="sys.uint8" />                     <!-- 0-40 (= -20 - +20 dB)                        (0x05) -->
-            <field name="Level" datatype="sys.uint8" />                        <!-- 0-40 (= -20 - +20 dB)                        (0x06) -->
+            <!-- 0x00: 0 = off, 1 = on -->
+            <field name="On" datatype="roland.switch" />
+            <!-- 0x01: 0-40 (= -20 - +20 dB) -->
+            <field name="LowGain" datatype="sys.uint8" />
+            <!-- 0x02: 0-20 (= 100 Hz, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1.00 kHz, 1.25k, 1.60k, 2.00k, 2.50k,
+                 3.15k, 4.00k, 5.00k, 6.30k, 8.00k, 10.0k) -->
+            <field name="MiddleFrequency" datatype="eqMiddleFrequency" />
+            <!-- 0x03: 0-40 (= -20 - +20 dB) -->
+            <field name="MiddleGain" datatype="sys.uint8" />
+            <!-- 0x04: 0-5 (= 0.5, 1, 2, 4, 8, 16) -->
+            <field name="MiddleQ" datatype="eqMiddleQ" />
+            <!-- 0x05: 0-40 (= -20 - +20 dB) -->
+            <field name="HighGain" datatype="sys.uint8" />
+            <!-- 0x06: 0-40 (= -20 - +20 dB) -->
+            <field name="Level" datatype="sys.uint8" />
           </members>
         </group>
 
         <!-- Section 07: 5 bytes. -->
         <group name="SpeakerSimulator" midi.atomic="true" midi.addressSize="0x01-00">
           <members>
-            <field name="On" datatype="switch" />                              <!-- 0 = off, 1 = on                              (0x00) -->
-            <!-- 0 = Small, 1 = Middle, 2 = JC-120, 3-6 = Built-In 1-4, 7-8 = BG Stack 1-2, 9-10 = MS Stack 1-2, 11 = Metal Stack -->
-            <field name="Type" datatype="sys.uint8" />                         <!--                                              (0x01) -->
-            <field name="MicSetting" datatype="sys.uint8" />                   <!-- 1-10 (as read by the parser)                 (0x02) -->
-            <field name="MicLevel" datatype="level" />                         <!-- 0-100                                        (0x03) -->
-            <field name="DirectLevel" datatype="level" />                      <!-- 0-100                                        (0x04) -->
+            <!-- 0x00: 0 = off, 1 = on -->
+            <field name="On" datatype="roland.switch" />
+            <!-- 0x01: 0 = Small, 1 = Middle, 2 = JC-120, 3-6 = Built-In 1-4, 7-8 = BG Stack 1-2, 9-10 = MS Stack 1-2,
+                 11 = Metal Stack -->
+            <field name="Type" datatype="speakerType" />
+            <!-- 0x02: 1-10 (as read by the parser) -->
+            <field name="MicSetting" datatype="sys.uint8" />
+            <!-- 0x03: 0-100 -->
+            <field name="MicLevel" datatype="roland.level" />
+            <!-- 0x04: 0-100 -->
+            <field name="DirectLevel" datatype="roland.level" />
           </members>
         </group>
 
         <!-- Section 08: 5 bytes. -->
         <group name="NoiseSuppressor" midi.atomic="true" midi.addressSize="0x01-00">
           <members>
-            <field name="On" datatype="switch" />                              <!-- 0 = off, 1 = on                              (0x00) -->
-            <field name="Threshold" datatype="level" />                        <!-- 0-100                                        (0x01) -->
-            <field name="Release" datatype="level" />                          <!-- 0-100                                        (0x02) -->
-            <field name="Detect" datatype="sys.uint8" />                       <!-- 0 = guitar in, 1 = NS in                     (0x03) -->
-            <field name="EffectLevel" datatype="level" />                      <!-- 0-100                                        (0x04) -->
+            <!-- 0x00: 0 = off, 1 = on -->
+            <field name="On" datatype="roland.switch" />
+            <!-- 0x01: 0-100 -->
+            <field name="Threshold" datatype="roland.level" />
+            <!-- 0x02: 0-100 -->
+            <field name="Release" datatype="roland.level" />
+            <!-- 0x03: 0 = guitar in, 1 = NS in -->
+            <field name="Detect" datatype="nsDetect" />
+            <!-- 0x04: 0-100 -->
+            <field name="EffectLevel" datatype="roland.level" />
           </members>
         </group>
 
         <!-- Section 09: 77 bytes. Which parameters apply depends on the mode (in parentheses). -->
         <group name="Modulation" midi.atomic="true" midi.addressSize="0x01-00">
           <members>
-            <field name="On" datatype="switch" />                              <!-- 0 = off, 1 = on                              (0x00) -->
-            <!-- 0 = Flanger, 1 = Phaser, 2 = Pitch Shifter, 3 = Harmonist, 4 = Vibrato, 5 = Ring Modulator, 6 = Humanizer -->
-            <field name="Mode" datatype="sys.uint8" />                         <!--                                              (0x01) -->
-            <field name="PhaserType" datatype="sys.uint8" />                   <!-- 0-4 = 4, 6, 8, 10, 12 stage (phaser)         (0x02) -->
-            <field name="VibratoTrigger" datatype="sys.uint8" />               <!-- 0 = off, 1 = on, 2 = auto (vibrato)          (0x03) -->
-            <field name="VibratoRiseTime" datatype="level" />                  <!-- 0-100 (vibrato)                              (0x04) -->
-            <field name="HumanizerMode" datatype="sys.uint8" />                <!-- 0 = auto, 1 = pedal (humanizer)              (0x05) -->
-            <field name="HumanizerVowel1" datatype="sys.uint8" />              <!-- 0-4 = a, e, i, o, u (humanizer)              (0x06) -->
-            <field name="HumanizerVowel2" datatype="sys.uint8" />              <!-- 0-4 = a, e, i, o, u (humanizer)              (0x07) -->
-            <field name="Rate" datatype="level" />                             <!-- 0-100 (flanger, phaser, vibrato, humanizer auto) (0x08) -->
-            <field name="Depth" datatype="level" />                            <!-- 0-100 (flanger, phaser, vibrato, humanizer auto) (0x09) -->
-            <field name="Manual" datatype="level" />                           <!-- 0-100 (flanger, phaser)                      (0x0A) -->
-            <field name="Resonance" nodeDef="nibble8" />                       <!-- 0-200 (= -100 - +100) (flanger, phaser)      (0x0B-0x0C) -->
-            <field name="PhaserStep" datatype="level" />                       <!-- 0 = off, 1-100 (phaser)                      (0x0D) -->
-            <field name="FlangerSeparation" nodeDef="nibble8" />               <!-- 0-200 (= -100 - +100) (flanger)              (0x0E-0x0F) -->
-            <field name="FlangerGate" datatype="level" />                      <!-- 0 = off, 1-100 (flanger)                     (0x10) -->
-            <field name="HumanizerTrigger" datatype="sys.uint8" />             <!-- 0 = off, 1 = auto (humanizer auto)           (0x11) -->
-            <field name="HumanizerPedal" datatype="sys.uint8" />               <!-- 0 = EXP pedal, 1 = FC-200EXP, 2-64 = midiCc (humanizer pedal) (0x12) -->
-            <field name="RingModFrequency" datatype="level" />                 <!-- 0 = intelligent, 1-100 (ring modulator)      (0x13) -->
-            <field name="RingModEffectLevel" datatype="level" />               <!-- 0-100 (ring modulator)                       (0x14) -->
-            <field name="RingModDirectLevel" datatype="level" />               <!-- 0-100 (ring modulator)                       (0x15) -->
-            <field name="PitchShifterMode" datatype="sys.uint8" />             <!-- 0 = slow, 1 = fast, 2 = mono (pitch shifter) (0x16) -->
-            <field name="Pitch1" datatype="sys.uint8" />                       <!-- 0-48 (= -24 - +24 semitones) (pitch shifter) (0x17) -->
-            <field name="Pitch2" datatype="sys.uint8" />                       <!-- 0-48 (= -24 - +24 semitones) (pitch shifter) (0x18) -->
-            <field name="Pitch3" datatype="sys.uint8" />                       <!-- 0-48 (= -24 - +24 semitones) (pitch shifter) (0x19) -->
-            <field name="Fine1" datatype="level" />                            <!-- 0-100 (= -50 - +50) (pitch shifter)          (0x1A) -->
-            <field name="Fine2" datatype="level" />                            <!-- 0-100 (= -50 - +50) (pitch shifter)          (0x1B) -->
-            <field name="Fine3" datatype="level" />                            <!-- 0-100 (= -50 - +50) (pitch shifter)          (0x1C) -->
-            <!-- 0-11 = C, Db, D, Eb, E, F, F#, G, Ab, A, Bb, B major; 12-23 = A, Bb, B, C, C#, D, D#, E, F, F#, G, G# minor -->
-            <field name="HarmonistKey" datatype="sys.uint8" />                 <!-- (harmonist)                                  (0x1D) -->
-            <!-- 0-28 = -2 octaves - +2 octaves in diatonic steps, 14 = unison (harmonist) -->
-            <field name="HarmonistInterval1" datatype="sys.uint8" />           <!--                                              (0x1E) -->
-            <field name="HarmonistInterval2" datatype="sys.uint8" />           <!--                                              (0x1F) -->
-            <field name="HarmonistInterval3" datatype="sys.uint8" />           <!--                                              (0x20) -->
-            <field name="Pan1" datatype="level" />                             <!-- 0-100 (= L100:0R - L0:100R) (pitch shifter, harmonist) (0x21) -->
-            <field name="Pan2" datatype="level" />                             <!-- 0-100 (= L100:0R - L0:100R) (pitch shifter, harmonist) (0x22) -->
-            <field name="Pan3" datatype="level" />                             <!-- 0-100 (= L100:0R - L0:100R) (pitch shifter, harmonist) (0x23) -->
-            <field name="Level1" datatype="level" />                           <!-- 0-100 (pitch shifter, harmonist)             (0x24) -->
-            <field name="Level2" datatype="level" />                           <!-- 0-100 (pitch shifter, harmonist)             (0x25) -->
-            <field name="Level3" datatype="level" />                           <!-- 0-100 (pitch shifter, harmonist)             (0x26) -->
-            <field name="Balance" datatype="level" />                          <!-- 0-100 (= D100:0E - D0:100E) (pitch shifter, harmonist) (0x27) -->
-            <field name="TotalLevel" datatype="level" />                       <!-- 0-100 (pitch shifter, harmonist)             (0x28) -->
-            <!-- [TODO] 12 x 3 bytes, e.g. 1C 13 24 1B 12 24 ... (harmonist user scale: 12 notes x 3 voices?). -->
-            <field name="Unknown29" datatype="sys.bytes" byteLength="36" />    <!--                                              (0x29-0x4C) -->
+            <!-- 0x00: 0 = off, 1 = on -->
+            <field name="On" datatype="roland.switch" />
+            <!-- 0x01: 0 = Flanger, 1 = Phaser, 2 = Pitch Shifter, 3 = Harmonist, 4 = Vibrato, 5 = Ring Modulator,
+                 6 = Humanizer -->
+            <field name="Mode" datatype="modulationMode" />
+            <!-- 0x02: 0-4 (= 4, 6, 8, 10, 12 stage) (phaser) -->
+            <field name="PhaserType" datatype="phaserType" />
+            <!-- 0x03: 0 = off, 1 = on, 2 = auto (vibrato) -->
+            <field name="VibratoTrigger" datatype="vibratoTrigger" />
+            <!-- 0x04: 0-100 (vibrato) -->
+            <field name="VibratoRiseTime" datatype="roland.level" />
+            <!-- 0x05: 0 = auto, 1 = pedal (humanizer) -->
+            <field name="HumanizerMode" datatype="humanizerMode" />
+            <!-- 0x06: 0-4 (= a, e, i, o, u) (humanizer) -->
+            <field name="HumanizerVowel1" datatype="vowel" />
+            <!-- 0x07: 0-4 (= a, e, i, o, u) (humanizer) -->
+            <field name="HumanizerVowel2" datatype="vowel" />
+            <!-- 0x08: 0-100 (flanger, phaser, vibrato, humanizer auto) -->
+            <field name="Rate" datatype="roland.level" />
+            <!-- 0x09: 0-100 (flanger, phaser, vibrato, humanizer auto) -->
+            <field name="Depth" datatype="roland.level" />
+            <!-- 0x0A: 0-100 (flanger, phaser) -->
+            <field name="Manual" datatype="roland.level" />
+            <!-- 0x0B (MSB), 0x0C (LSB): 0-200 (= -100 - +100) (flanger, phaser) -->
+            <field name="Resonance" nodeDef="nibble8" />
+            <!-- 0x0D: 0 = off, 1-100 (phaser) -->
+            <field name="PhaserStep" datatype="roland.level" />
+            <!-- 0x0E (MSB), 0x0F (LSB): 0-200 (= -100 - +100) (flanger) -->
+            <field name="FlangerSeparation" nodeDef="nibble8" />
+            <!-- 0x10: 0 = off, 1-100 (flanger) -->
+            <field name="FlangerGate" datatype="roland.level" />
+            <!-- 0x11: 0 = off, 1 = auto (humanizer auto) -->
+            <field name="HumanizerTrigger" datatype="humanizerTrigger" />
+            <!-- 0x12: 0 = EXP pedal, 1 = FC-200EXP, 2-64 = midiCc (humanizer pedal) -->
+            <field name="HumanizerPedal" datatype="pedal" />
+            <!-- 0x13: 0 = intelligent, 1-100 (ring modulator) -->
+            <field name="RingModFrequency" datatype="roland.level" />
+            <!-- 0x14: 0-100 (ring modulator) -->
+            <field name="RingModEffectLevel" datatype="roland.level" />
+            <!-- 0x15: 0-100 (ring modulator) -->
+            <field name="RingModDirectLevel" datatype="roland.level" />
+            <!-- 0x16: 0 = slow, 1 = fast, 2 = mono (pitch shifter) -->
+            <field name="PitchShifterMode" datatype="pitchShifterMode" />
+            <!-- 0x17: 0-48 (= -24 - +24 semitones) (pitch shifter) -->
+            <field name="Pitch1" datatype="sys.uint8" />
+            <!-- 0x18: 0-48 (= -24 - +24 semitones) (pitch shifter) -->
+            <field name="Pitch2" datatype="sys.uint8" />
+            <!-- 0x19: 0-48 (= -24 - +24 semitones) (pitch shifter) -->
+            <field name="Pitch3" datatype="sys.uint8" />
+            <!-- 0x1A: 0-100 (= -50 - +50) (pitch shifter) -->
+            <field name="Fine1" datatype="roland.level" />
+            <!-- 0x1B: 0-100 (= -50 - +50) (pitch shifter) -->
+            <field name="Fine2" datatype="roland.level" />
+            <!-- 0x1C: 0-100 (= -50 - +50) (pitch shifter) -->
+            <field name="Fine3" datatype="roland.level" />
+            <!-- 0x1D: 0-11 = C, Db, D, Eb, E, F, F#, G, Ab, A, Bb, B major; 12-23 = A, Bb, B, C, C#, D, D#, E, F, F#, G,
+                 G# minor (harmonist) -->
+            <field name="HarmonistKey" datatype="harmonistKey" />
+            <!-- 0x1E: 0-28 (= -2 octaves - +2 octaves in diatonic steps, 14 = unison) (harmonist) -->
+            <field name="HarmonistInterval1" datatype="harmonistInterval" />
+            <!-- 0x1F: 0-28 (= -2 octaves - +2 octaves in diatonic steps, 14 = unison) (harmonist) -->
+            <field name="HarmonistInterval2" datatype="harmonistInterval" />
+            <!-- 0x20: 0-28 (= -2 octaves - +2 octaves in diatonic steps, 14 = unison) (harmonist) -->
+            <field name="HarmonistInterval3" datatype="harmonistInterval" />
+            <!-- 0x21: 0-100 (= L100:0R - L0:100R) (pitch shifter, harmonist) -->
+            <field name="Pan1" datatype="roland.level" />
+            <!-- 0x22: 0-100 (= L100:0R - L0:100R) (pitch shifter, harmonist) -->
+            <field name="Pan2" datatype="roland.level" />
+            <!-- 0x23: 0-100 (= L100:0R - L0:100R) (pitch shifter, harmonist) -->
+            <field name="Pan3" datatype="roland.level" />
+            <!-- 0x24: 0-100 (pitch shifter, harmonist) -->
+            <field name="Level1" datatype="roland.level" />
+            <!-- 0x25: 0-100 (pitch shifter, harmonist) -->
+            <field name="Level2" datatype="roland.level" />
+            <!-- 0x26: 0-100 (pitch shifter, harmonist) -->
+            <field name="Level3" datatype="roland.level" />
+            <!-- 0x27: 0-100 (= D100:0E - D0:100E) (pitch shifter, harmonist) -->
+            <field name="Balance" datatype="roland.level" />
+            <!-- 0x28: 0-100 (pitch shifter, harmonist) -->
+            <field name="TotalLevel" datatype="roland.level" />
+            <!-- 0x29-0x4C: [TODO] 12 x 3 bytes, e.g. 1C 13 24 1B 12 24 ... (harmonist user scale: 12 notes x 3 voices?). -->
+            <field name="Unknown29" datatype="sys.bytes" byteLength="36" />
           </members>
         </group>
 
         <!-- Section 0A: 21 bytes. -->
         <group name="Delay" midi.atomic="true" midi.addressSize="0x01-00">
           <members>
-            <field name="On" datatype="switch" />                              <!-- 0 = off, 1 = on                              (0x00) -->
-            <field name="Mode" datatype="sys.uint8" />                         <!-- 0 = normal, 1 = tempo                        (0x01) -->
-            <field name="TempoIn" datatype="sys.uint8" />                      <!-- 0 = fixed, 1 = control 1, 2 = control 2, 3 = FC-200CTL, 4-66 = midiCc (tempo) (0x02) -->
-            <field name="Tempo" nodeDef="nibble8" />                           <!-- 0-250 (= 50-300 BPM) (tempo, tempo in fixed) (0x03-0x04) -->
-            <field name="TimeCenter" nodeDef="sysex14" />                      <!-- 1-2000 ms (normal)                           (0x05-0x06) -->
-            <!-- [TODO] verify: the parser reads MSB x 256 + LSB, which cannot reach 400 with 7-bit bytes; 7 + 7 bits is assumed. -->
-            <field name="TimeLeft" nodeDef="sysex14" />                        <!-- 1-400 % of the center                        (0x07-0x08) -->
-            <field name="TimeRight" nodeDef="sysex14" />                       <!-- 1-400 % of the center                        (0x09-0x0A) -->
-            <field name="IntervalCenter" datatype="sys.uint8" />               <!-- 0-10 = 1/4, 1/3, 3/8, 1/2, 2/3, 3/4, 1.0, 1.5, 2.0, 3.0, 4.0 (tempo) (0x0B) -->
-            <field name="Feedback" datatype="level" />                         <!-- 0-100                                        (0x0C) -->
-            <field name="LevelCenter" datatype="level" />                      <!-- 0-100                                        (0x0D) -->
-            <field name="LevelLeft" datatype="level" />                        <!-- 0-100                                        (0x0E) -->
-            <field name="LevelRight" datatype="level" />                       <!-- 0-100                                        (0x0F) -->
-            <field name="HighDamp" datatype="sys.uint8" />                     <!-- 0-50 (= -50 - 0)                             (0x10) -->
-            <field name="HighCut" datatype="sys.uint8" />                      <!-- 0-15 = hiCut                                 (0x11) -->
-            <field name="Smooth" datatype="switch" />                          <!-- 0 = off, 1 = on                              (0x12) -->
-            <field name="EffectLevel" datatype="level" />                      <!-- 0-100                                        (0x13) -->
-            <field name="DirectLevel" datatype="level" />                      <!-- 0-100                                        (0x14) -->
+            <!-- 0x00: 0 = off, 1 = on -->
+            <field name="On" datatype="roland.switch" />
+            <!-- 0x01: 0 = normal, 1 = tempo -->
+            <field name="Mode" datatype="delayMode" />
+            <!-- 0x02: 0 = fixed, 1 = control 1, 2 = control 2, 3 = FC-200CTL, 4-66 = midiCc (tempo) -->
+            <field name="TempoIn" datatype="tempoIn" />
+            <!-- 0x03 (MSB), 0x04 (LSB): 0-250 (= 50-300 BPM) (tempo, tempo in fixed) -->
+            <field name="Tempo" nodeDef="nibble8" />
+            <!-- 0x05 (MSB), 0x06 (LSB): 1-2000 ms (normal) -->
+            <field name="TimeCenter" nodeDef="sysex14" />
+            <!-- 0x07 (MSB), 0x08 (LSB): 1-400 % of the center.
+                 [TODO] verify: the parser reads MSB x 256 + LSB, which cannot reach 400 with 7-bit bytes; 7 + 7 bits is assumed. -->
+            <field name="TimeLeft" nodeDef="sysex14" />
+            <!-- 0x09 (MSB), 0x0A (LSB): 1-400 % of the center -->
+            <field name="TimeRight" nodeDef="sysex14" />
+            <!-- 0x0B: 0-10 (= 1/4, 1/3, 3/8, 1/2, 2/3, 3/4, 1.0, 1.5, 2.0, 3.0, 4.0) (tempo) -->
+            <field name="IntervalCenter" datatype="delayInterval" />
+            <!-- 0x0C: 0-100 -->
+            <field name="Feedback" datatype="roland.level" />
+            <!-- 0x0D: 0-100 -->
+            <field name="LevelCenter" datatype="roland.level" />
+            <!-- 0x0E: 0-100 -->
+            <field name="LevelLeft" datatype="roland.level" />
+            <!-- 0x0F: 0-100 -->
+            <field name="LevelRight" datatype="roland.level" />
+            <!-- 0x10: 0-50 (= -50 - 0) -->
+            <field name="HighDamp" datatype="sys.uint8" />
+            <!-- 0x11: 0-15 = hiCut -->
+            <field name="HighCut" datatype="hiCut" />
+            <!-- 0x12: 0 = off, 1 = on -->
+            <field name="Smooth" datatype="roland.switch" />
+            <!-- 0x13: 0-100 -->
+            <field name="EffectLevel" datatype="roland.level" />
+            <!-- 0x14: 0-100 -->
+            <field name="DirectLevel" datatype="roland.level" />
           </members>
         </group>
 
         <!-- Section 0B: 9 bytes. -->
         <group name="Chorus" midi.atomic="true" midi.addressSize="0x01-00">
           <members>
-            <field name="On" datatype="switch" />                              <!-- 0 = off, 1 = on                              (0x00) -->
-            <field name="Mode" datatype="sys.uint8" />                         <!-- 0 = mono, 1 = stereo                         (0x01) -->
-            <field name="Rate" datatype="level" />                             <!-- 0-100                                        (0x02) -->
-            <field name="Depth" datatype="level" />                            <!-- 0-100                                        (0x03) -->
-            <field name="PreDelay" datatype="sys.uint8" />                     <!-- x 0.5 ms                                     (0x04) -->
-            <field name="LowCut" datatype="sys.uint8" />                       <!-- 0-10 = lowCut                                (0x05) -->
-            <field name="HighCut" datatype="sys.uint8" />                      <!-- 0-15 = hiCut                                 (0x06) -->
-            <field name="Lfo" datatype="sys.uint8" />                          <!-- 0-10 (= tri 10:0 sin - tri 0:10 sin)         (0x07) -->
-            <field name="EffectLevel" datatype="level" />                      <!-- 0-100                                        (0x08) -->
+            <!-- 0x00: 0 = off, 1 = on -->
+            <field name="On" datatype="roland.switch" />
+            <!-- 0x01: 0 = mono, 1 = stereo -->
+            <field name="Mode" datatype="chorusMode" />
+            <!-- 0x02: 0-100 -->
+            <field name="Rate" datatype="roland.level" />
+            <!-- 0x03: 0-100 -->
+            <field name="Depth" datatype="roland.level" />
+            <!-- 0x04: x 0.5 ms -->
+            <field name="PreDelay" datatype="sys.uint8" />
+            <!-- 0x05: 0-10 = lowCut -->
+            <field name="LowCut" datatype="lowCut" />
+            <!-- 0x06: 0-15 = hiCut -->
+            <field name="HighCut" datatype="hiCut" />
+            <!-- 0x07: 0-10 (= tri 10:0 sin - tri 0:10 sin) -->
+            <field name="Lfo" datatype="sys.uint8" />
+            <!-- 0x08: 0-100 -->
+            <field name="EffectLevel" datatype="roland.level" />
           </members>
         </group>
 
         <!-- Section 0C: 5 bytes. -->
         <group name="TremoloPan" midi.atomic="true" midi.addressSize="0x01-00">
           <members>
-            <field name="On" datatype="switch" />                              <!-- 0 = off, 1 = on                              (0x00) -->
-            <!-- 0 = tremolo triangle, 1 = tremolo square, 2 = pan triangle, 3 = pan square -->
-            <field name="Mode" datatype="sys.uint8" />                         <!--                                              (0x01) -->
-            <field name="Rate" datatype="level" />                             <!-- 0-100                                        (0x02) -->
-            <field name="Depth" datatype="level" />                            <!-- 0-100                                        (0x03) -->
-            <field name="Balance" datatype="level" />                          <!-- 0-100 (= L100:0R - L0:100R)                  (0x04) -->
+            <!-- 0x00: 0 = off, 1 = on -->
+            <field name="On" datatype="roland.switch" />
+            <!-- 0x01: 0 = tremolo triangle, 1 = tremolo square, 2 = pan triangle, 3 = pan square -->
+            <field name="Mode" datatype="tremoloPanMode" />
+            <!-- 0x02: 0-100 -->
+            <field name="Rate" datatype="roland.level" />
+            <!-- 0x03: 0-100 -->
+            <field name="Depth" datatype="roland.level" />
+            <!-- 0x04: 0-100 (= L100:0R - L0:100R) -->
+            <field name="Balance" datatype="roland.level" />
           </members>
         </group>
 
         <!-- Section 0D: 9 bytes. -->
         <group name="Reverb" midi.atomic="true" midi.addressSize="0x01-00">
           <members>
-            <field name="On" datatype="switch" />                              <!-- 0 = off, 1 = on                              (0x00) -->
-            <field name="Type" datatype="sys.uint8" />                         <!-- 0-4 = Room1, Room2, Hall1, Hall2, Plate      (0x01) -->
-            <field name="Time" datatype="sys.uint8" />                         <!-- 1-100 (= 0.1 - 10 s)                         (0x02) -->
-            <field name="PreDelay" datatype="level" />                         <!-- 0-100 ms                                     (0x03) -->
-            <field name="LowCut" datatype="sys.uint8" />                       <!-- 0-10 = lowCut                                (0x04) -->
-            <field name="HighCut" datatype="sys.uint8" />                      <!-- 0-15 = hiCut                                 (0x05) -->
-            <field name="Diffusion" datatype="sys.uint8" />                    <!-- 0-10                                         (0x06) -->
-            <field name="EffectLevel" datatype="level" />                      <!-- 0-100                                        (0x07) -->
-            <field name="DirectLevel" datatype="level" />                      <!-- 0-100                                        (0x08) -->
+            <!-- 0x00: 0 = off, 1 = on -->
+            <field name="On" datatype="roland.switch" />
+            <!-- 0x01: 0-4 (= Room1, Room2, Hall1, Hall2, Plate) -->
+            <field name="Type" datatype="reverbType" />
+            <!-- 0x02: 1-100 (= 0.1 - 10 s) -->
+            <field name="Time" datatype="sys.uint8" />
+            <!-- 0x03: 0-100 ms -->
+            <field name="PreDelay" datatype="roland.level" />
+            <!-- 0x04: 0-10 = lowCut -->
+            <field name="LowCut" datatype="lowCut" />
+            <!-- 0x05: 0-15 = hiCut -->
+            <field name="HighCut" datatype="hiCut" />
+            <!-- 0x06: 0-10 -->
+            <field name="Diffusion" datatype="sys.uint8" />
+            <!-- 0x07: 0-100 -->
+            <field name="EffectLevel" datatype="roland.level" />
+            <!-- 0x08: 0-100 -->
+            <field name="DirectLevel" datatype="roland.level" />
           </members>
         </group>
       </members>
@@ -303,14 +438,15 @@
     -->
     <group name="system">
       <members>
-        <!-- Section 00: 19 bytes, e.g. 05 01 00 00 00 14 06 04 04 04 00 01 0C 08 00 00 0F 00 01. -->
+        <!-- Section 00: 19 bytes. -->
         <group name="Common" midi.atomic="true" midi.addressSize="0x01-00">
           <members>
-            <field name="Unknown00" datatype="sys.bytes" byteLength="19" />    <!--                                              (0x00-0x12) -->
+            <!-- 0x00-0x12: [TODO] e.g. 05 01 00 00 00 14 06 04 04 04 00 01 0C 08 00 00 0F 00 01 in the dump. -->
+            <field name="Unknown00" datatype="sys.bytes" byteLength="19" />
           </members>
         </group>
         <!--
-          Sections 01 and 02: 64 values of nibble8 each, 1-128 in order in the dump.
+          Sections 01 and 02: 128 bytes each, 64 values of nibble8, 1-128 in order in the dump.
           [TODO] verify: most likely the Program Change map (program 1-64 and 65-128 to a patch).
         -->
         <group name="ProgramChangeMap1" midi.atomic="true" midi.addressSize="0x01-00">
@@ -335,11 +471,772 @@
     </group>
   </nodeDefs>
 
+  <dataTypeDefs>
+    <!-- Compressor.Type. -->
+    <dataTypeDef name="compressorType" basedOn="sys.uint8" min="0" max="1">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="Compressor" />
+            <property name="0" value="Compressor" />
+            <property name="1" value="Limiter" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Wah.Mode. -->
+    <dataTypeDef name="wahMode" basedOn="sys.uint8" min="0" max="2">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="Pedal Wah" />
+            <property name="0" value="Pedal Wah" />
+            <property name="1" value="Sw-Pedal Wah" />
+            <property name="2" value="Auto Wah" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Wah.Polarity. -->
+    <dataTypeDef name="polarity" basedOn="sys.uint8" min="0" max="1">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="Down" />
+            <property name="0" value="Down" />
+            <property name="1" value="Up" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Wah.Pedal: fixed, a pedal or a MIDI CC. -->
+    <dataTypeDef name="wahPedal" basedOn="sys.uint8" min="0" max="65">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="Fixed" />
+            <property name="0" value="Fixed" />
+            <property name="1" value="EXP Pedal" />
+            <property name="2" value="FC-200EXP" />
+            <property name="3" value="MIDI CC#1" />
+            <property name="4" value="MIDI CC#2" />
+            <property name="5" value="MIDI CC#3" />
+            <property name="6" value="MIDI CC#4" />
+            <property name="7" value="MIDI CC#5" />
+            <property name="8" value="MIDI CC#6" />
+            <property name="9" value="MIDI CC#7" />
+            <property name="10" value="MIDI CC#8" />
+            <property name="11" value="MIDI CC#9" />
+            <property name="12" value="MIDI CC#10" />
+            <property name="13" value="MIDI CC#11" />
+            <property name="14" value="MIDI CC#12" />
+            <property name="15" value="MIDI CC#13" />
+            <property name="16" value="MIDI CC#14" />
+            <property name="17" value="MIDI CC#15" />
+            <property name="18" value="MIDI CC#16" />
+            <property name="19" value="MIDI CC#17" />
+            <property name="20" value="MIDI CC#18" />
+            <property name="21" value="MIDI CC#19" />
+            <property name="22" value="MIDI CC#20" />
+            <property name="23" value="MIDI CC#21" />
+            <property name="24" value="MIDI CC#22" />
+            <property name="25" value="MIDI CC#23" />
+            <property name="26" value="MIDI CC#24" />
+            <property name="27" value="MIDI CC#25" />
+            <property name="28" value="MIDI CC#26" />
+            <property name="29" value="MIDI CC#27" />
+            <property name="30" value="MIDI CC#28" />
+            <property name="31" value="MIDI CC#29" />
+            <property name="32" value="MIDI CC#30" />
+            <property name="33" value="MIDI CC#31" />
+            <property name="34" value="MIDI CC#64" />
+            <property name="35" value="MIDI CC#65" />
+            <property name="36" value="MIDI CC#66" />
+            <property name="37" value="MIDI CC#67" />
+            <property name="38" value="MIDI CC#68" />
+            <property name="39" value="MIDI CC#69" />
+            <property name="40" value="MIDI CC#70" />
+            <property name="41" value="MIDI CC#71" />
+            <property name="42" value="MIDI CC#72" />
+            <property name="43" value="MIDI CC#73" />
+            <property name="44" value="MIDI CC#74" />
+            <property name="45" value="MIDI CC#75" />
+            <property name="46" value="MIDI CC#76" />
+            <property name="47" value="MIDI CC#77" />
+            <property name="48" value="MIDI CC#78" />
+            <property name="49" value="MIDI CC#79" />
+            <property name="50" value="MIDI CC#80" />
+            <property name="51" value="MIDI CC#81" />
+            <property name="52" value="MIDI CC#82" />
+            <property name="53" value="MIDI CC#83" />
+            <property name="54" value="MIDI CC#84" />
+            <property name="55" value="MIDI CC#85" />
+            <property name="56" value="MIDI CC#86" />
+            <property name="57" value="MIDI CC#87" />
+            <property name="58" value="MIDI CC#88" />
+            <property name="59" value="MIDI CC#89" />
+            <property name="60" value="MIDI CC#90" />
+            <property name="61" value="MIDI CC#91" />
+            <property name="62" value="MIDI CC#92" />
+            <property name="63" value="MIDI CC#93" />
+            <property name="64" value="MIDI CC#94" />
+            <property name="65" value="MIDI CC#95" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Modulation.HumanizerPedal: a pedal or a MIDI CC. -->
+    <dataTypeDef name="pedal" basedOn="sys.uint8" min="0" max="64">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="EXP Pedal" />
+            <property name="0" value="EXP Pedal" />
+            <property name="1" value="FC-200EXP" />
+            <property name="2" value="MIDI CC#1" />
+            <property name="3" value="MIDI CC#2" />
+            <property name="4" value="MIDI CC#3" />
+            <property name="5" value="MIDI CC#4" />
+            <property name="6" value="MIDI CC#5" />
+            <property name="7" value="MIDI CC#6" />
+            <property name="8" value="MIDI CC#7" />
+            <property name="9" value="MIDI CC#8" />
+            <property name="10" value="MIDI CC#9" />
+            <property name="11" value="MIDI CC#10" />
+            <property name="12" value="MIDI CC#11" />
+            <property name="13" value="MIDI CC#12" />
+            <property name="14" value="MIDI CC#13" />
+            <property name="15" value="MIDI CC#14" />
+            <property name="16" value="MIDI CC#15" />
+            <property name="17" value="MIDI CC#16" />
+            <property name="18" value="MIDI CC#17" />
+            <property name="19" value="MIDI CC#18" />
+            <property name="20" value="MIDI CC#19" />
+            <property name="21" value="MIDI CC#20" />
+            <property name="22" value="MIDI CC#21" />
+            <property name="23" value="MIDI CC#22" />
+            <property name="24" value="MIDI CC#23" />
+            <property name="25" value="MIDI CC#24" />
+            <property name="26" value="MIDI CC#25" />
+            <property name="27" value="MIDI CC#26" />
+            <property name="28" value="MIDI CC#27" />
+            <property name="29" value="MIDI CC#28" />
+            <property name="30" value="MIDI CC#29" />
+            <property name="31" value="MIDI CC#30" />
+            <property name="32" value="MIDI CC#31" />
+            <property name="33" value="MIDI CC#64" />
+            <property name="34" value="MIDI CC#65" />
+            <property name="35" value="MIDI CC#66" />
+            <property name="36" value="MIDI CC#67" />
+            <property name="37" value="MIDI CC#68" />
+            <property name="38" value="MIDI CC#69" />
+            <property name="39" value="MIDI CC#70" />
+            <property name="40" value="MIDI CC#71" />
+            <property name="41" value="MIDI CC#72" />
+            <property name="42" value="MIDI CC#73" />
+            <property name="43" value="MIDI CC#74" />
+            <property name="44" value="MIDI CC#75" />
+            <property name="45" value="MIDI CC#76" />
+            <property name="46" value="MIDI CC#77" />
+            <property name="47" value="MIDI CC#78" />
+            <property name="48" value="MIDI CC#79" />
+            <property name="49" value="MIDI CC#80" />
+            <property name="50" value="MIDI CC#81" />
+            <property name="51" value="MIDI CC#82" />
+            <property name="52" value="MIDI CC#83" />
+            <property name="53" value="MIDI CC#84" />
+            <property name="54" value="MIDI CC#85" />
+            <property name="55" value="MIDI CC#86" />
+            <property name="56" value="MIDI CC#87" />
+            <property name="57" value="MIDI CC#88" />
+            <property name="58" value="MIDI CC#89" />
+            <property name="59" value="MIDI CC#90" />
+            <property name="60" value="MIDI CC#91" />
+            <property name="61" value="MIDI CC#92" />
+            <property name="62" value="MIDI CC#93" />
+            <property name="63" value="MIDI CC#94" />
+            <property name="64" value="MIDI CC#95" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Delay.TempoIn: fixed, a control or a MIDI CC. -->
+    <dataTypeDef name="tempoIn" basedOn="sys.uint8" min="0" max="66">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="Fixed" />
+            <property name="0" value="Fixed" />
+            <property name="1" value="Control 1" />
+            <property name="2" value="Control 2" />
+            <property name="3" value="FC-200CTL" />
+            <property name="4" value="MIDI CC#1" />
+            <property name="5" value="MIDI CC#2" />
+            <property name="6" value="MIDI CC#3" />
+            <property name="7" value="MIDI CC#4" />
+            <property name="8" value="MIDI CC#5" />
+            <property name="9" value="MIDI CC#6" />
+            <property name="10" value="MIDI CC#7" />
+            <property name="11" value="MIDI CC#8" />
+            <property name="12" value="MIDI CC#9" />
+            <property name="13" value="MIDI CC#10" />
+            <property name="14" value="MIDI CC#11" />
+            <property name="15" value="MIDI CC#12" />
+            <property name="16" value="MIDI CC#13" />
+            <property name="17" value="MIDI CC#14" />
+            <property name="18" value="MIDI CC#15" />
+            <property name="19" value="MIDI CC#16" />
+            <property name="20" value="MIDI CC#17" />
+            <property name="21" value="MIDI CC#18" />
+            <property name="22" value="MIDI CC#19" />
+            <property name="23" value="MIDI CC#20" />
+            <property name="24" value="MIDI CC#21" />
+            <property name="25" value="MIDI CC#22" />
+            <property name="26" value="MIDI CC#23" />
+            <property name="27" value="MIDI CC#24" />
+            <property name="28" value="MIDI CC#25" />
+            <property name="29" value="MIDI CC#26" />
+            <property name="30" value="MIDI CC#27" />
+            <property name="31" value="MIDI CC#28" />
+            <property name="32" value="MIDI CC#29" />
+            <property name="33" value="MIDI CC#30" />
+            <property name="34" value="MIDI CC#31" />
+            <property name="35" value="MIDI CC#64" />
+            <property name="36" value="MIDI CC#65" />
+            <property name="37" value="MIDI CC#66" />
+            <property name="38" value="MIDI CC#67" />
+            <property name="39" value="MIDI CC#68" />
+            <property name="40" value="MIDI CC#69" />
+            <property name="41" value="MIDI CC#70" />
+            <property name="42" value="MIDI CC#71" />
+            <property name="43" value="MIDI CC#72" />
+            <property name="44" value="MIDI CC#73" />
+            <property name="45" value="MIDI CC#74" />
+            <property name="46" value="MIDI CC#75" />
+            <property name="47" value="MIDI CC#76" />
+            <property name="48" value="MIDI CC#77" />
+            <property name="49" value="MIDI CC#78" />
+            <property name="50" value="MIDI CC#79" />
+            <property name="51" value="MIDI CC#80" />
+            <property name="52" value="MIDI CC#81" />
+            <property name="53" value="MIDI CC#82" />
+            <property name="54" value="MIDI CC#83" />
+            <property name="55" value="MIDI CC#84" />
+            <property name="56" value="MIDI CC#85" />
+            <property name="57" value="MIDI CC#86" />
+            <property name="58" value="MIDI CC#87" />
+            <property name="59" value="MIDI CC#88" />
+            <property name="60" value="MIDI CC#89" />
+            <property name="61" value="MIDI CC#90" />
+            <property name="62" value="MIDI CC#91" />
+            <property name="63" value="MIDI CC#92" />
+            <property name="64" value="MIDI CC#93" />
+            <property name="65" value="MIDI CC#94" />
+            <property name="66" value="MIDI CC#95" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- OverdriveDistortion.Type. -->
+    <dataTypeDef name="distortionType" basedOn="sys.uint8" min="0" max="6">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="Vintage OD" />
+            <property name="0" value="Vintage OD" />
+            <property name="1" value="Turbo OD" />
+            <property name="2" value="Blues" />
+            <property name="3" value="Distortion" />
+            <property name="4" value="Turbo DS" />
+            <property name="5" value="Metal" />
+            <property name="6" value="Fuzz" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Preamp.Type. -->
+    <dataTypeDef name="preampType" basedOn="sys.uint8" min="0" max="8">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="JC-120" />
+            <property name="0" value="JC-120" />
+            <property name="1" value="Clean Twin" />
+            <property name="2" value="Match Drive" />
+            <property name="3" value="BG Lead" />
+            <property name="4" value="MS 1959 (I)" />
+            <property name="5" value="MS 1959 (II)" />
+            <property name="6" value="MS 1959 (I + II)" />
+            <property name="7" value="SLDN Lead" />
+            <property name="8" value="Metal 5150" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Preamp.Gain. -->
+    <dataTypeDef name="preampGain" basedOn="sys.uint8" min="0" max="2">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="Low" />
+            <property name="0" value="Low" />
+            <property name="1" value="Middle" />
+            <property name="2" value="High" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Loop.Mode. -->
+    <dataTypeDef name="loopMode" basedOn="sys.uint8" min="0" max="1">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="Series" />
+            <property name="0" value="Series" />
+            <property name="1" value="Parallel" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Equalizer.MiddleFrequency. -->
+    <dataTypeDef name="eqMiddleFrequency" basedOn="sys.uint8" min="0" max="20">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="100 Hz" />
+            <property name="0" value="100 Hz" />
+            <property name="1" value="125 Hz" />
+            <property name="2" value="160 Hz" />
+            <property name="3" value="200 Hz" />
+            <property name="4" value="250 Hz" />
+            <property name="5" value="315 Hz" />
+            <property name="6" value="400 Hz" />
+            <property name="7" value="500 Hz" />
+            <property name="8" value="630 Hz" />
+            <property name="9" value="800 Hz" />
+            <property name="10" value="1.00 kHz" />
+            <property name="11" value="1.25 kHz" />
+            <property name="12" value="1.60 kHz" />
+            <property name="13" value="2.00 kHz" />
+            <property name="14" value="2.50 kHz" />
+            <property name="15" value="3.15 kHz" />
+            <property name="16" value="4.00 kHz" />
+            <property name="17" value="5.00 kHz" />
+            <property name="18" value="6.30 kHz" />
+            <property name="19" value="8.00 kHz" />
+            <property name="20" value="10.0 kHz" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Equalizer.MiddleQ. -->
+    <dataTypeDef name="eqMiddleQ" basedOn="sys.uint8" min="0" max="5">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="0.5" />
+            <property name="0" value="0.5" />
+            <property name="1" value="1" />
+            <property name="2" value="2" />
+            <property name="3" value="4" />
+            <property name="4" value="8" />
+            <property name="5" value="16" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- SpeakerSimulator.Type. -->
+    <dataTypeDef name="speakerType" basedOn="sys.uint8" min="0" max="11">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="Small" />
+            <property name="0" value="Small" />
+            <property name="1" value="Middle" />
+            <property name="2" value="JC-120" />
+            <property name="3" value="Built-In 1" />
+            <property name="4" value="Built-In 2" />
+            <property name="5" value="Built-In 3" />
+            <property name="6" value="Built-In 4" />
+            <property name="7" value="BG Stack 1" />
+            <property name="8" value="BG Stack 2" />
+            <property name="9" value="MS Stack 1" />
+            <property name="10" value="MS Stack 2" />
+            <property name="11" value="Metal Stack" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- NoiseSuppressor.Detect. -->
+    <dataTypeDef name="nsDetect" basedOn="sys.uint8" min="0" max="1">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="Guitar In" />
+            <property name="0" value="Guitar In" />
+            <property name="1" value="NS In" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Modulation.Mode. -->
+    <dataTypeDef name="modulationMode" basedOn="sys.uint8" min="0" max="6">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="Flanger" />
+            <property name="0" value="Flanger" />
+            <property name="1" value="Phaser" />
+            <property name="2" value="Pitch Shifter" />
+            <property name="3" value="Harmonist" />
+            <property name="4" value="Vibrato" />
+            <property name="5" value="Ring Modulator" />
+            <property name="6" value="Humanizer" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Modulation.PhaserType. -->
+    <dataTypeDef name="phaserType" basedOn="sys.uint8" min="0" max="4">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="4 Stage" />
+            <property name="0" value="4 Stage" />
+            <property name="1" value="6 Stage" />
+            <property name="2" value="8 Stage" />
+            <property name="3" value="10 Stage" />
+            <property name="4" value="12 Stage" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Modulation.VibratoTrigger. -->
+    <dataTypeDef name="vibratoTrigger" basedOn="sys.uint8" min="0" max="2">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="Off" />
+            <property name="0" value="Off" />
+            <property name="1" value="On" />
+            <property name="2" value="Auto" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Modulation.HumanizerMode. -->
+    <dataTypeDef name="humanizerMode" basedOn="sys.uint8" min="0" max="1">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="Auto" />
+            <property name="0" value="Auto" />
+            <property name="1" value="Pedal" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Modulation.HumanizerVowel1/2. -->
+    <dataTypeDef name="vowel" basedOn="sys.uint8" min="0" max="4">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="a" />
+            <property name="0" value="a" />
+            <property name="1" value="e" />
+            <property name="2" value="i" />
+            <property name="3" value="o" />
+            <property name="4" value="u" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Modulation.HumanizerTrigger. -->
+    <dataTypeDef name="humanizerTrigger" basedOn="sys.uint8" min="0" max="1">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="Off" />
+            <property name="0" value="Off" />
+            <property name="1" value="Auto" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Modulation.PitchShifterMode. -->
+    <dataTypeDef name="pitchShifterMode" basedOn="sys.uint8" min="0" max="2">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="Slow" />
+            <property name="0" value="Slow" />
+            <property name="1" value="Fast" />
+            <property name="2" value="Mono" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Modulation.HarmonistKey. -->
+    <dataTypeDef name="harmonistKey" basedOn="sys.uint8" min="0" max="23">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="C maj" />
+            <property name="0" value="C maj" />
+            <property name="1" value="Db maj" />
+            <property name="2" value="D maj" />
+            <property name="3" value="Eb maj" />
+            <property name="4" value="E maj" />
+            <property name="5" value="F maj" />
+            <property name="6" value="F# maj" />
+            <property name="7" value="G maj" />
+            <property name="8" value="Ab maj" />
+            <property name="9" value="A maj" />
+            <property name="10" value="Bb maj" />
+            <property name="11" value="B maj" />
+            <property name="12" value="A min" />
+            <property name="13" value="Bb min" />
+            <property name="14" value="B min" />
+            <property name="15" value="C min" />
+            <property name="16" value="C# min" />
+            <property name="17" value="D min" />
+            <property name="18" value="D# min" />
+            <property name="19" value="E min" />
+            <property name="20" value="F min" />
+            <property name="21" value="F# min" />
+            <property name="22" value="G min" />
+            <property name="23" value="G# min" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Modulation.HarmonistInterval1-3: -2 octaves - +2 octaves in diatonic steps. -->
+    <dataTypeDef name="harmonistInterval" basedOn="sys.uint8" min="0" max="28">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="-2Oct" />
+            <property name="0" value="-2Oct" />
+            <property name="1" value="-Oct-7th" />
+            <property name="2" value="-Oct-6th" />
+            <property name="3" value="-Oct-5th" />
+            <property name="4" value="-Oct-4th" />
+            <property name="5" value="-Oct-3rd" />
+            <property name="6" value="-Oct-2nd" />
+            <property name="7" value="-Oct" />
+            <property name="8" value="-7th" />
+            <property name="9" value="-6th" />
+            <property name="10" value="-5th" />
+            <property name="11" value="-4th" />
+            <property name="12" value="-3rd" />
+            <property name="13" value="-2nd" />
+            <property name="14" value="Unison" />
+            <property name="15" value="+2nd" />
+            <property name="16" value="+3rd" />
+            <property name="17" value="+4th" />
+            <property name="18" value="+5th" />
+            <property name="19" value="+6th" />
+            <property name="20" value="+7th" />
+            <property name="21" value="+Oct" />
+            <property name="22" value="+Oct+2nd" />
+            <property name="23" value="+Oct+3rd" />
+            <property name="24" value="+Oct+4th" />
+            <property name="25" value="+Oct+5th" />
+            <property name="26" value="+Oct+6th" />
+            <property name="27" value="+Oct+7th" />
+            <property name="28" value="+2Oct" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Delay.Mode. -->
+    <dataTypeDef name="delayMode" basedOn="sys.uint8" min="0" max="1">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="Normal" />
+            <property name="0" value="Normal" />
+            <property name="1" value="Tempo" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Delay.IntervalCenter: note length relative to the tempo. -->
+    <dataTypeDef name="delayInterval" basedOn="sys.uint8" min="0" max="10">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="1/4" />
+            <property name="0" value="1/4" />
+            <property name="1" value="1/3" />
+            <property name="2" value="3/8" />
+            <property name="3" value="1/2" />
+            <property name="4" value="2/3" />
+            <property name="5" value="3/4" />
+            <property name="6" value="1.0" />
+            <property name="7" value="1.5" />
+            <property name="8" value="2.0" />
+            <property name="9" value="3.0" />
+            <property name="10" value="4.0" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- High cut filter (Delay, Chorus, Reverb). -->
+    <dataTypeDef name="hiCut" basedOn="sys.uint8" min="0" max="15">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="500 Hz" />
+            <property name="0" value="500 Hz" />
+            <property name="1" value="630 Hz" />
+            <property name="2" value="800 Hz" />
+            <property name="3" value="1.00 kHz" />
+            <property name="4" value="1.25 kHz" />
+            <property name="5" value="1.60 kHz" />
+            <property name="6" value="2.00 kHz" />
+            <property name="7" value="2.50 kHz" />
+            <property name="8" value="3.15 kHz" />
+            <property name="9" value="4.00 kHz" />
+            <property name="10" value="5.00 kHz" />
+            <property name="11" value="6.30 kHz" />
+            <property name="12" value="8.00 kHz" />
+            <property name="13" value="10.0 kHz" />
+            <property name="14" value="12.5 kHz" />
+            <property name="15" value="Flat" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Low cut filter (Chorus, Reverb). -->
+    <dataTypeDef name="lowCut" basedOn="sys.uint8" min="0" max="10">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="Flat" />
+            <property name="0" value="Flat" />
+            <property name="1" value="55 Hz" />
+            <property name="2" value="110 Hz" />
+            <property name="3" value="165 Hz" />
+            <property name="4" value="220 Hz" />
+            <property name="5" value="280 Hz" />
+            <property name="6" value="340 Hz" />
+            <property name="7" value="400 Hz" />
+            <property name="8" value="500 Hz" />
+            <property name="9" value="630 Hz" />
+            <property name="10" value="800 Hz" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Chorus.Mode. -->
+    <dataTypeDef name="chorusMode" basedOn="sys.uint8" min="0" max="1">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="Mono" />
+            <property name="0" value="Mono" />
+            <property name="1" value="Stereo" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- TremoloPan.Mode. -->
+    <dataTypeDef name="tremoloPanMode" basedOn="sys.uint8" min="0" max="3">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="Tremolo Triangle" />
+            <property name="0" value="Tremolo Triangle" />
+            <property name="1" value="Tremolo Square" />
+            <property name="2" value="Pan Triangle" />
+            <property name="3" value="Pan Square" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
+    <!-- Reverb.Type. -->
+    <dataTypeDef name="reverbType" basedOn="sys.uint8" min="0" max="4">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string" />
+            <property name="default" value="Room1" />
+            <property name="0" value="Room1" />
+            <property name="1" value="Room2" />
+            <property name="2" value="Hall1" />
+            <property name="3" value="Hall2" />
+            <property name="4" value="Plate" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+  </dataTypeDefs>
+
   <members>
-    <group name="AddressMap" nodeDef="roland.messageBody32" midi.device.modelId="0x79" midi.addressStart="0x00-00-00-00">
+    <group name="AddressMap" nodeDef="roland.messageBody32" midi.device.modelId="0x79">
       <members>
         <!-- [TODO] the temporary (edit) patch address is unknown. -->
-        <repeat name="Memory" count="100" midi.addressSize="0x00-01-00-00">
+        <!-- <group name="Temporary" nodeDef="patch" midi.addressStart="0x00-00-00-00" /> -->
+        <repeat name="Memory" count="100" midi.addressStart="0x00-00-00-00" midi.addressSize="0x00-01-00-00">
           <members>
             <group name="Patch" nodeDef="patch" />
           </members>
