@@ -5,8 +5,8 @@ namespace Jacobi.Midi.Tests.Addressing;
 
 public class AddressSpaceTests
 {
-    private static readonly AddressSpace Gp8 = new(2);
-    private static readonly AddressSpace Roland4 = new(4);
+    private static readonly AddressSpace TwoBytes = new(2);
+    private static readonly AddressSpace FourBytes = new(4);
 
     [Theory]
     [InlineData("0x40-00", 0x2000)]
@@ -21,13 +21,13 @@ public class AddressSpaceTests
     [InlineData("0x00-00", 0)]
     public void Parse_WireForm(string text, long expected)
     {
-        Assert.Equal(expected, Gp8.Parse(text));
+        Assert.Equal(expected, TwoBytes.Parse(text));
     }
 
     [Fact]
     public void Parse_FourBytes()
     {
-        Assert.Equal((3L << 21) | (0x10 << 7), Roland4.Parse("0x03-00-10-00"));
+        Assert.Equal((3L << 21) | (0x10 << 7), FourBytes.Parse("0x03-00-10-00"));
     }
 
     [Theory]
@@ -38,36 +38,36 @@ public class AddressSpaceTests
     [InlineData("0x")]
     public void Parse_Invalid(string text)
     {
-        Assert.Throws<FormatException>(() => Gp8.Parse(text));
+        Assert.Throws<FormatException>(() => TwoBytes.Parse(text));
     }
 
     [Fact]
     public void Parse_OutsideTheAddressSpace()
     {
-        Assert.Throws<FormatException>(() => Gp8.Parse("0x01-00-00"));
+        Assert.Throws<FormatException>(() => TwoBytes.Parse("0x01-00-00"));
     }
 
     [Fact]
     public void Format_WireForm()
     {
-        Assert.Equal("0x40-00", Gp8.Format(0x2000));
-        Assert.Equal("0x03-00-10-00", Roland4.Format(Roland4.Parse("0x03-00-10-00")));
+        Assert.Equal("0x40-00", TwoBytes.Format(0x2000));
+        Assert.Equal("0x03-00-10-00", FourBytes.Format(FourBytes.Parse("0x03-00-10-00")));
     }
 
     [Fact]
     public void Wire_RoundTrip()
     {
         Span<byte> wire = stackalloc byte[2];
-        Gp8.ToWire(0x2145, wire);
+        TwoBytes.ToWire(0x2145, wire);
         Assert.Equal([0x42, 0x45], wire.ToArray());
-        Assert.Equal(0x2145, Gp8.ToLinear(wire));
+        Assert.Equal(0x2145, TwoBytes.ToLinear(wire));
     }
 
     [Fact]
     public void Capacity()
     {
-        Assert.Equal(0x4000, Gp8.Capacity);
-        Assert.Equal(1L << 28, Roland4.Capacity);
+        Assert.Equal(0x4000, TwoBytes.Capacity);
+        Assert.Equal(1L << 28, FourBytes.Capacity);
     }
 
     [Fact]

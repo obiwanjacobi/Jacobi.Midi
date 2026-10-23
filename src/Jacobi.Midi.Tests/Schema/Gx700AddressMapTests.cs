@@ -2,13 +2,12 @@ using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Device.Addressing;
-using Jacobi.Midi.Tests.Schema;
 using Xunit;
 
-namespace Jacobi.Midi.Tests.Addressing;
+namespace Jacobi.Midi.Tests.Schema;
 
 /// <summary>
-/// Tests the Boss GX-700 address map (Gx700.xml with the 4 byte address messages of RolandType4.xml)
+/// Tests the Boss GX-700 address map (Gx700.xml with the 4 byte address messages of Roland.xml)
 /// against the bulk dumps of one patch and of the system.
 /// </summary>
 public class Gx700AddressMapTests

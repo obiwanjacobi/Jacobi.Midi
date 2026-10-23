@@ -24,172 +24,220 @@
     midi.device.*      device values fixed for the GP-8 (used by the message envelope)
 
   Legend:
-    [OK]   available now
     [TODO] not available yet
 -->
 <schema name="Gp8">
   <includes>
-    <include schema="midi" />
+    <include schema="midi"/>
+    <include schema="roland"/>
   </includes>
   <nodeDefs>
     <!-- One patch: the parameters in address order 0x00 - 0x31. Each is one 7-bit byte unless noted. -->
-    <group name="patch" midi.atomic="true">
+    <group name="patch">
       <members>
         <!-- 0x00: effect on/off (MSB) -->
         <group name="EffectSwiches1" byteLength="1">
           <processors>
-            <processor name="sys.bitpacker" />
+            <processor name="sys.bitpacker"/>
           </processors>
           <members>
-            <field name="PhaserOn" datatype="boolVal" bits="1"/>
-            <field name="EqualizerOn" datatype="boolVal" bits="1"/>
-            <field name="DelayOn" datatype="boolVal" bits="1"/>
-            <field name="ChorusOn" datatype="boolVal" bits="1"/>
+            <field name="PhaserOn" datatype="roland.switch" bits="1"/>
+            <field name="EqualizerOn" datatype="roland.switch" bits="1"/>
+            <field name="DelayOn" datatype="roland.switch" bits="1"/>
+            <field name="ChorusOn" datatype="roland.switch" bits="1"/>
           </members>
         </group>
 
         <!-- 0x01: effect on/off (LSB) -->
         <group name="EffectSwiches2" byteLength="1">
           <processors>
-            <processor name="sys.bitpacker" />
+            <processor name="sys.bitpacker"/>
           </processors>
           <members>
-            <field name="DynamicFilterOn" datatype="boolVal" bits="1"/>
-            <field name="CompressorOn" datatype="boolVal" bits="1"/>
-            <field name="TurboOverdriveOn" datatype="boolVal" bits="1"/>
-            <field name="DistortionOn" datatype="boolVal" bits="1"/>
+            <field name="DynamicFilterOn" datatype="roland.switch" bits="1"/>
+            <field name="CompressorOn" datatype="roland.switch" bits="1"/>
+            <field name="TurboOverdriveOn" datatype="roland.switch" bits="1"/>
+            <field name="DistortionOn" datatype="roland.switch" bits="1"/>
           </members>
         </group>
 
         <group name="DynamicFilter">
           <members>
-            <field name="Sens" datatype="paramVal" />
             <!-- 0x02: 0-100 -->
-            <field name="CutoffFreq" datatype="paramVal" />
+            <field name="Sens" datatype="roland.level"/>
             <!-- 0x03: 0-100 -->
-            <field name="Q" datatype="paramVal" />
+            <field name="CutoffFreq" datatype="roland.level"/>
             <!-- 0x04: 0-100 -->
-            <field name="UpDown" datatype="sys.uint8" />
+            <field name="Q" datatype="roland.level"/>
             <!-- 0x05: 0 = down, 100 = up -->
+            <field name="UpDown" datatype="upDown"/>
           </members>
         </group>
         <group name="Compressor">
           <members>
-            <field name="Attack" datatype="paramVal" />
             <!-- 0x06: 0-100 -->
-            <field name="Sustain" datatype="paramVal" />
+            <field name="Attack" datatype="roland.level"/>
             <!-- 0x07: 0-100 -->
+            <field name="Sustain" datatype="roland.level"/>
           </members>
         </group>
         <group name="TurboOverdrive">
           <members>
-            <field name="Tone" datatype="paramVal" />
             <!-- 0x08: 0-100 -->
-            <field name="Drive" datatype="paramVal" />
+            <field name="Tone" datatype="roland.level"/>
             <!-- 0x09: 0-100 -->
-            <field name="Turbo" datatype="paramVal" />
+            <field name="Drive" datatype="roland.level"/>
             <!-- 0x0A: the manual (OCR) says 0 = off, 1 = on, but the bulk dump has 0, 32, 78 and 100 here.
                  [TODO] verify against the manual. -->
-
+            <field name="Turbo" datatype="roland.level"/>
           </members>
         </group>
         <group name="Distortion">
           <members>
-            <field name="Tone" datatype="paramVal" />
             <!-- 0x0B: 0-100 -->
-            <field name="Dist" datatype="paramVal" />
+            <field name="Tone" datatype="roland.level"/>
             <!-- 0x0C: 0-100 -->
+            <field name="Dist" datatype="roland.level"/>
           </members>
         </group>
         <group name="Phaser">
           <members>
-            <field name="Rate" datatype="paramVal" />
             <!-- 0x0D: 0-100 -->
-            <field name="Depth" datatype="paramVal" />
+            <field name="Rate" datatype="roland.level"/>
             <!-- 0x0E: 0-100 -->
-            <field name="Resonance" datatype="paramVal" />
+            <field name="Depth" datatype="roland.level"/>
             <!-- 0x0F: 0-100 -->
+            <field name="Resonance" datatype="roland.level"/>
           </members>
         </group>
         <group name="Equalizer">
           <members>
-            <field name="HiLevel" datatype="paramVal" />
             <!-- 0x10: 0-100 -->
-            <field name="MidLevel" datatype="paramVal" />
+            <field name="HiLevel" datatype="roland.level"/>
             <!-- 0x11: 0-100 -->
-            <field name="LoLevel" datatype="paramVal" />
+            <field name="MidLevel" datatype="roland.level"/>
             <!-- 0x12: 0-100 -->
-            <field name="OutLevel" datatype="paramVal" />
+            <field name="LoLevel" datatype="roland.level"/>
             <!-- 0x13: 0-100 -->
+            <field name="OutLevel" datatype="roland.level"/>
           </members>
         </group>
         <group name="DigitalDelay">
           <members>
-            <field name="ELevel" datatype="paramVal" />
             <!-- 0x14: 0-100 -->
+            <field name="ELevel" datatype="roland.level"/>
             <!-- 0x15 (MSB), 0x16 (LSB): 0-1000 -->
-            <field name="DTime" datatype="sys.uint16" byteLength="2">
-              <processor name="sys.bitslicer" bits="7" byteorder="big" />
-            </field>
-            <field name="Feedback" datatype="paramVal" />
+            <field name="DTime" datatype="delayTime" byteLength="2"/>
             <!-- 0x17: 0-100 -->
+            <field name="Feedback" datatype="roland.level"/>
           </members>
         </group>
         <group name="DigitalChorus">
           <members>
-            <field name="Rate" datatype="paramVal" />
             <!-- 0x18: 0-100 -->
-            <field name="Depth" datatype="paramVal" />
+            <field name="Rate" datatype="roland.level"/>
             <!-- 0x19: 0-100 -->
-            <field name="ELevel" datatype="paramVal" />
+            <field name="Depth" datatype="roland.level"/>
             <!-- 0x1A: 0-100 -->
-            <field name="PreDelay" datatype="paramVal" />
+            <field name="ELevel" datatype="roland.level"/>
             <!-- 0x1B: 0-100 -->
-            <field name="Feedback" datatype="paramVal" />
+            <field name="PreDelay" datatype="roland.level"/>
             <!-- 0x1C: 0-100 -->
+            <field name="Feedback" datatype="roland.level"/>
           </members>
         </group>
-
-        <field name="MasterVolume" datatype="paramVal" />
         <!-- 0x1D: 0-100 -->
-        <field name="Ev5Parameter" datatype="sys.uint8" />
+        <field name="MasterVolume" datatype="roland.level"/>
         <!-- 0x1E: 0 = off, 1-27 (parameter of turned-on effect)-->
-        <field name="ExtControlOut1" datatype="paramVal" />
+        <field name="Ev5Parameter" datatype="effectParam"/>
         <!-- 0x1F: 0 = off, 100 = on -->
-        <field name="ExtControlOut2" datatype="paramVal" />
+        <field name="ExtControlOut1" datatype="switch100"/>
         <!-- 0x20: 0 = off, 100 = on -->
-        <field name="Name" datatype="sys.string" byteLength="16">
-          <processor name="midi.string" />
-        </field>
+        <field name="ExtControlOut2" datatype="switch100"/>
         <!-- 0x21-0x30: ASCII 32-127 -->
-        <field name="EndOfString" datatype="sys.uint8" value="0" />
+        <field name="Name" datatype="sys.string" byteLength="16">
+          <processor name="midi.string"/>
+        </field>
         <!-- 0x31 -->
+        <field name="EndOfString" datatype="sys.uint8" value="0"/>
       </members>
     </group>
   </nodeDefs>
   <dataTypeDefs>
-    <dataTypeDef name="paramVal" basedOn="sys.uint8" min="0" max="100" />
-    <dataTypeDef name="boolVal" basedOn="sys.bool" min="0" max="1" />
+    <dataTypeDef name="upDown" basedOn="sys.uint8" min="0" max="100">
+    <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.string"/>
+            <property name="0" value="Down"/>
+            <property name="100" value="Up"/>
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+    <dataTypeDef name="delayTime" basedOn="sys.uint16" min="0" max="1000">
+      <processors>
+        <processor name="sys.bitslicer" bits="7" byteorder="big"/>
+      </processors>
+    </dataTypeDef>
+    <dataTypeDef name="switch100" basedOn="sys.uint8" min="0" max="100">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="to" value="sys.bool"/>
+            <property name="0" value="False"/>
+            <property name="100" value="True"/>
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+    <dataTypeDef name="effectParam" basedOn="sys.uint8" min="0" max="27">
+      <processors>
+        <processor name="sys.map">
+          <properties>
+            <property name="0" value="Off"/>
+            <!-- [TODO] Name the paramters -->
+            <property name="1" value="Param1"/>
+            <property name="2" value="Param2"/>
+            <property name="3" value="Param3"/>
+            <property name="4" value="Param4"/>
+            <property name="5" value="Param5"/>
+            <property name="6" value="Param6"/>
+            <property name="7" value="Param7"/>
+            <property name="8" value="Param8"/>
+            <property name="9" value="Param9"/>
+            <property name="10" value="Param10"/>
+            <property name="11" value="Param11"/>
+            <property name="12" value="Param12"/>
+            <property name="13" value="Param13"/>
+            <property name="14" value="Param14"/>
+            <property name="15" value="Param15"/>
+            <property name="16" value="Param16"/>
+            <property name="17" value="Param17"/>
+            <property name="18" value="Param18"/>
+            <property name="19" value="Param19"/>
+            <property name="20" value="Param20"/>
+            <property name="21" value="Param21"/>
+            <property name="22" value="Param22"/>
+            <property name="23" value="Param23"/>
+            <property name="24" value="Param24"/>
+            <property name="25" value="Param25"/>
+            <property name="26" value="Param26"/>
+            <property name="27" value="Param27"/>
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
   </dataTypeDefs>
-  <processorDefs>
-    <processor name="bitBoolProc" processor="sys.bitpacker" bitLength="1" />
-    <processor name="valBoolProc" processor="sys.map">
-      <properties>
-        <property name="to" value="sys.bool" />
-        <property name="0" value="False" />
-        <property name="1" value="True" />
-      </properties>
-    </processor>
-  </processorDefs>
 
   <members>
-    <group name="AddressMap" nodeDef="roland.messageBody" midi.device.modelId="0x13" midi.addressStart="0x00-00">
+    <group name="AddressMap" nodeDef="roland.messageBody16" midi.device.modelId="0x13">
       <members>
         <!-- [TODO] verify the temporary patch address (m = 0) against the manual. -->
-        <group name="Temporary" nodeDef="patch" midi.addressSize="0x00-40" />
+        <group name="Temporary" nodeDef="patch" midi.addressSize="0x00-40"/>
         <repeat name="Memory" count="128" midi.addressStart="0x40-00" midi.addressSize="0x00-40">
           <members>
-            <group name="Patch" nodeDef="patch" />
+            <group name="Patch" nodeDef="patch"/>
           </members>
         </repeat>
       </members>

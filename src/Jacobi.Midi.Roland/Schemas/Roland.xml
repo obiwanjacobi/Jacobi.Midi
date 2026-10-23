@@ -22,9 +22,14 @@
   <includes>
     <include schema="midi"/>
   </includes>
+  
   <nodeDefs>
-    <group name="messageBody"/>
+    <group name="messageBody16"/>
     <field name="sysex16" datatype="sys.uint16" byteLength="2">
+      <processor name="midi.sysexbyte"/>
+    </field>
+    <group name="messageBody24"/>
+    <field name="sysex24" datatype="sys.uint32" byteLength="3">
       <processor name="midi.sysexbyte"/>
     </field>
     <group name="messageBody32"/>
@@ -33,8 +38,14 @@
     </field>
   </nodeDefs>
 
+  <dataTypeDefs>
+    <dataTypeDef name="level" basedOn="sys.uint8" min="0" max="100" />
+    <dataTypeDef name="switch" basedOn="sys.bool" min="0" max="1" />
+  </dataTypeDefs>
+  
   <members>
-    <group name="Message">
+    <!-- The messages with a 2 byte address. -->
+    <group name="Message16">
       <processors>
         <processor name="midi.sysex"/>
       </processors>
@@ -68,7 +79,50 @@
               </processors>
               <members>
                 <field name="Address" nodeDef="sysex16" midi.role="addressStart"/>
-                <choice name="Data" memberNodeDef="messageBody" midi.role="data"/>
+                <choice name="Data" memberNodeDef="messageBody16" midi.role="data"/>
+              </members>
+            </group>
+          </members>
+        </group>
+      </members>
+    </group>
+
+    <!-- The messages with a 3 byte address. -->
+    <group name="Message24">
+      <processors>
+        <processor name="midi.sysex"/>
+      </processors>
+      <members>
+        <group name="RQ1" midi.message="request">
+          <members>
+            <field name="RolandId" datatype="sys.uint8" value="0x41"/>
+            <field name="DeviceId" datatype="sys.uint8" midi.role="device.deviceId"/>
+            <field name="ModelId" datatype="sys.uint8" midi.role="device.modelId"/>
+            <field name="Command" datatype="sys.uint8" value="0x11"/>
+            <group name="ChecksumScope">
+              <processors>
+                <processor name="roland.checksum"/>
+              </processors>
+              <members>
+                <field name="Address" nodeDef="sysex24" midi.role="addressStart"/>
+                <field name="Size" nodeDef="sysex24" midi.role="addressSize"/>
+              </members>
+            </group>
+          </members>
+        </group>
+        <group name="DT1" midi.message="data" midi.messageInterval="20">
+          <members>
+            <field name="RolandId" datatype="sys.uint8" value="0x41"/>
+            <field name="DeviceId" datatype="sys.uint8" midi.role="device.deviceId"/>
+            <field name="ModelId" datatype="sys.uint8" midi.role="device.modelId"/>
+            <field name="Command" datatype="sys.uint8" value="0x12"/>
+            <group name="ChecksumScope">
+              <processors>
+                <processor name="roland.checksum"/>
+              </processors>
+              <members>
+                <field name="Address" nodeDef="sysex24" midi.role="addressStart"/>
+                <choice name="Data" memberNodeDef="messageBody24" midi.role="data"/>
               </members>
             </group>
           </members>

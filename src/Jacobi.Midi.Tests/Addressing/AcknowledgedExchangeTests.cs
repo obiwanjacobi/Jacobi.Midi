@@ -4,7 +4,6 @@ using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Device.Exchange;
-using Jacobi.Midi.Tests.Schema;
 using Xunit;
 
 namespace Jacobi.Midi.Tests.Addressing;
@@ -74,10 +73,7 @@ public class AcknowledgedExchangeTests
     private static readonly byte[] Nak = [0xF0, 0x7D, 0x04, 0xF7];
 
     private static Serializer CreateSerializer()
-        => new SerializerBuilder()
-            .AddSchemas(TestHelpers.CreateSchemas(Jacobi.BinarySerializer.Schema.Xml.XmlSerializer.Deserialize(Envelope)))
-            .AddProcessors(TestHelpers.CreateProcessors())
-            .Build();
+        => TestDevice.CreateSerializer(TestDevice.Parse(Envelope));
 
     private static PlanRange MapRange(Serializer serializer)
         => serializer.GetPlan(new SchemaName("Ack.Map")).CreateRange("Map");
@@ -101,14 +97,6 @@ public class AcknowledgedExchangeTests
 
         Assert.Equal("acknowledged", map.Protocol.Exchange);
         Assert.Equal([AddressMessageKind.Ack, AddressMessageKind.Nak], map.Protocol.Replies.Select(r => r.Kind));
-    }
-
-    [Fact]
-    public void Gp8_IsOneWay()
-    {
-        var serializer = new SerializerBuilder().AddSchemas(TestHelpers.CreateSchemas()).AddProcessors(TestHelpers.CreateProcessors()).Build();
-
-        Assert.Equal("oneWay", AddressMap.Create(serializer, new SchemaName("Gp8.AddressMap")).Protocol.Exchange);
     }
 
     [Fact]

@@ -25,7 +25,7 @@ public class RolandSchemaTests
             .AddProcessors(CreateProcessors())
             .Build();
 
-        var plan = serializer.GetPlan(new SchemaName("Roland.Message"));
+        var plan = serializer.GetPlan(new SchemaName("Roland.Message16"));
         Assert.NotNull(plan);
     }
 
@@ -50,8 +50,8 @@ public class RolandSchemaTests
         //  to determine the correct group to return from the OpenChoice calls.
         //      Use the SchemaSet to find the correct group by custom properties (address, size etc)
 
-        var plan = serializer.GetPlan(new SchemaName("Roland.Message"));
-        serializer.Deserialize(plan.CreateRange("Message.DT1"), reader, valueModel);
+        var plan = serializer.GetPlan(new SchemaName("Roland.Message16"));
+        serializer.Deserialize(plan.CreateRange("Message16.DT1"), reader, valueModel);
 
         foreach (var key in valueModel.Values.Keys)
         {
