@@ -28,7 +28,7 @@ resolved with a single lookup: role `R` gets its value from `midi.R` in the map 
 
 | Property | On | Meaning |
 |----------|----|---------|
-| `midi.addressStart` | the map root and any node below it that is not inside a repeat | The **absolute** start address of the node. Optional below the root: a node without it follows its previous sibling (previous start + previous size); the first member starts where its parent starts. Not allowed inside a repeat item (all items would get the same address). |
+| `midi.addressStart` | the map root and any node below it that is not inside a repeat | The **absolute** start address of the node. Optional: the map root starts at address 0 without it; a node below the root without it follows its previous sibling (previous start + previous size); the first member starts where its parent starts. Not allowed inside a repeat item (all items would get the same address). |
 | `midi.addressSize` | any addressed node | The number of addresses the node occupies. On a **repeat** it is the size of one item, which is also the **stride** between items. Optional: the default is the computed size (the encoded byte count, one address per data byte). It must be ≥ the computed size; the addresses after the content are reserved. This is how gaps inside repeated or reused blocks are expressed. |
 | `midi.atomic` | group, repeat item, map root | `true`: the group is **indivisible**; it is always received and sent as a whole (a GP-8 patch, Yamaha dump blocks; a device that only does complete dumps has an atomic root). |
 | `midi.access` | any addressed node, inherited | `readwrite` (default), `read` (e.g. Yamaha System Information) or `write` (trigger addresses such as XG System On, Store To Flash). Receive never requests `write` nodes; send never writes `read` nodes. |
@@ -78,10 +78,16 @@ are the groups tagged `request`, `ack`, `nak` or `error` in the same envelope ro
 
 ## Examples
 
-Roland Type IV envelope ([RolandType4.xml](../../Jacobi.Midi.Roland/Schemas/RolandType4.xml)):
+A complete, stand-alone envelope and device map (no vendor schemas) are the test schemas in
+[TestDevice.cs](../../Jacobi.Midi.Tests/Addressing/TestDevice.cs): 2 address bytes, a `sys.crc` (CRC-7) checksum, an
+atomic patch nodeDef, a non-atomic group and a repeat with reserved addresses.
+
+Roland Type IV envelope ([Roland.xml](../../Jacobi.Midi.Roland/Schemas/Roland.xml)), the messages with a 2 byte address.
+`Message24` and `Message32` are the same messages with 3 and 4 address bytes (`sysex24`/`messageBody24`,
+`sysex32`/`messageBody32`); a device map conforms to one address size only:
 
 ```xml
-<group name="Message">
+<group name="Message16">
   <processors>
     <processor name="midi.sysex"/>
   </processors>
@@ -115,7 +121,7 @@ Roland Type IV envelope ([RolandType4.xml](../../Jacobi.Midi.Roland/Schemas/Rola
           </processors>
           <members>
             <field name="Address" nodeDef="sysex16" midi.role="addressStart"/>
-            <choice name="Data" memberNodeDef="messageBody" midi.role="data"/>
+            <choice name="Data" memberNodeDef="messageBody16" midi.role="data"/>
           </members>
         </group>
       </members>
@@ -128,7 +134,7 @@ GP-8 device map ([Gp8.xml](../../Jacobi.Midi.Roland/Schemas/Gp8.xml)); the patch
 `patch` of 0x32 addresses without addresses of its own:
 
 ```xml
-<group name="AddressMap" nodeDef="roland.messageBody" midi.device.modelId="0x13" midi.addressStart="0x00-00">
+<group name="AddressMap" nodeDef="roland.messageBody16" midi.device.modelId="0x13">
   <members>
     <group name="Temporary" nodeDef="patch" midi.addressSize="0x00-40" />
     <repeat name="Memory" count="128" midi.addressStart="0x40-00" midi.addressSize="0x00-40">
