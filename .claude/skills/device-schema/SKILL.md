@@ -59,7 +59,6 @@ Every device schema starts with a comment that holds what the XML cannot say:
 4. The address layout bit by bit (or, without addresses, how a dump is selected), and what is atomic.
 5. Value conventions: offsets, multi-byte encodings, lists that recur.
 6. A pointer to the `midi.*` properties (`see src/Jacobi.Midi.Device/Addressing/readme.md`).
-7. The legend: `[OK] available now`, `[TODO] not available yet`.
 
 Keep the header in sync with the XML: when an address, size or id changes, change the header too.
 

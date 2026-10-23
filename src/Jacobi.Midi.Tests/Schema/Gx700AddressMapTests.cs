@@ -97,13 +97,13 @@ public class Gx700AddressMapTests
         Assert.Equal(true, Value(preamp, "AddressMap.Memory.Patch.Preamp.On", 0));
         Assert.Equal("Clean Twin", Value(preamp, "AddressMap.Memory.Patch.Preamp.Type", 0));
 
-        // flanger resonance 07 08 = 7 * 16 + 8
+        // flanger resonance 07 08 = 7 * 16 + 8 = 120 (= +20)
         var modulation = Decode(map, messages[0x09]);
-        Assert.Equal((byte)120, Value(modulation, "AddressMap.Memory.Patch.Modulation.Resonance", 0));
+        Assert.Equal(20m, Value(modulation, "AddressMap.Memory.Patch.Modulation.Resonance", 0));
 
         var delay = Decode(map, messages[0x0A]);
-        // tempo 04 06 = 4 * 16 + 6 (= 120 BPM)
-        Assert.Equal((byte)70, Value(delay, "AddressMap.Memory.Patch.Delay.Tempo", 0));
+        // tempo 04 06 = 4 * 16 + 6 = 70 (= 120 BPM)
+        Assert.Equal(120m, Value(delay, "AddressMap.Memory.Patch.Delay.Tempo", 0));
         // time 02 31 = 2 * 128 + 49
         Assert.Equal((ushort)305, Value(delay, "AddressMap.Memory.Patch.Delay.TimeCenter", 0));
     }

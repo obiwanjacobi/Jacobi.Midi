@@ -22,10 +22,6 @@
   - All Memory Bulk Dump: 16 blocks of 8 memories (block 0-15), then the system data (block 16).
     There is an interval of 150 ms between the blocks.
   - Parameter Change: received in Play mode only; changes to the current memory go to the edit buffer.
-
-  Legend:
-    [OK]   available now
-    [TODO] not available yet
 -->
 <schema name="G50">
   <includes>

@@ -5,10 +5,10 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <None Remove="Midi.xml" />
+    <None Remove="Schemas\Midi.xml" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Midi.xml" />
+    <EmbeddedResource Include="Schemas\Midi.xml" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\Jacobi.BinarySerializer\src\Jacobi.BinarySerializer\Jacobi.BinarySerializer.csproj" />

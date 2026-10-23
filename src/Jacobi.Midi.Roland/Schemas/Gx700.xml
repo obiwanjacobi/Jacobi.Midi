@@ -27,10 +27,6 @@
     midiCc    MIDI CC#1-31, then CC#64-95 (63 entries), at the end of wahPedal, pedal and tempoIn
 
   The midi.* properties describe the address map (see src/Jacobi.Midi.Device/Addressing/readme.md).
-
-  Legend:
-    [OK]   available now
-    [TODO] not available yet
 -->
 <schema name="Gx700">
   <includes>
@@ -86,7 +82,7 @@
             <!-- 0x05: 0-100 (limiter) -->
             <field name="Release" datatype="roland.level" />
             <!-- 0x06: 0-100 (= -50 - +50) -->
-            <field name="Tone" datatype="roland.level" />
+            <field name="Tone" datatype="int50" />
             <!-- 0x07: 0-100 -->
             <field name="EffectLevel" datatype="roland.level" />
           </members>
@@ -134,9 +130,9 @@
             <!-- 0x02: 0-100 -->
             <field name="Drive" datatype="roland.level" />
             <!-- 0x03: 0-100 (= -50 - +50) -->
-            <field name="Bass" datatype="roland.level" />
+            <field name="Bass" datatype="int50" />
             <!-- 0x04: 0-100 (= -50 - +50) -->
-            <field name="Treble" datatype="roland.level" />
+            <field name="Treble" datatype="int50" />
             <!-- 0x05: 0-100 -->
             <field name="EffectLevel" datatype="roland.level" />
           </members>
@@ -189,18 +185,18 @@
             <!-- 0x00: 0 = off, 1 = on -->
             <field name="On" datatype="roland.switch" />
             <!-- 0x01: 0-40 (= -20 - +20 dB) -->
-            <field name="LowGain" datatype="sys.uint8" />
+            <field name="LowGain" datatype="int20" />
             <!-- 0x02: 0-20 (= 100 Hz, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1.00 kHz, 1.25k, 1.60k, 2.00k, 2.50k,
                  3.15k, 4.00k, 5.00k, 6.30k, 8.00k, 10.0k) -->
             <field name="MiddleFrequency" datatype="eqMiddleFrequency" />
             <!-- 0x03: 0-40 (= -20 - +20 dB) -->
-            <field name="MiddleGain" datatype="sys.uint8" />
+            <field name="MiddleGain" datatype="int20" />
             <!-- 0x04: 0-5 (= 0.5, 1, 2, 4, 8, 16) -->
             <field name="MiddleQ" datatype="eqMiddleQ" />
             <!-- 0x05: 0-40 (= -20 - +20 dB) -->
-            <field name="HighGain" datatype="sys.uint8" />
+            <field name="HighGain" datatype="int20" />
             <!-- 0x06: 0-40 (= -20 - +20 dB) -->
-            <field name="Level" datatype="sys.uint8" />
+            <field name="Level" datatype="int20" />
           </members>
         </group>
 
@@ -264,11 +260,11 @@
             <!-- 0x0A: 0-100 (flanger, phaser) -->
             <field name="Manual" datatype="roland.level" />
             <!-- 0x0B (MSB), 0x0C (LSB): 0-200 (= -100 - +100) (flanger, phaser) -->
-            <field name="Resonance" nodeDef="nibble8" />
+            <field name="Resonance" nodeDef="nibble8" datatype="int100" />
             <!-- 0x0D: 0 = off, 1-100 (phaser) -->
             <field name="PhaserStep" datatype="roland.level" />
             <!-- 0x0E (MSB), 0x0F (LSB): 0-200 (= -100 - +100) (flanger) -->
-            <field name="FlangerSeparation" nodeDef="nibble8" />
+            <field name="FlangerSeparation" nodeDef="nibble8" datatype="int100" />
             <!-- 0x10: 0 = off, 1-100 (flanger) -->
             <field name="FlangerGate" datatype="roland.level" />
             <!-- 0x11: 0 = off, 1 = auto (humanizer auto) -->
@@ -284,17 +280,17 @@
             <!-- 0x16: 0 = slow, 1 = fast, 2 = mono (pitch shifter) -->
             <field name="PitchShifterMode" datatype="pitchShifterMode" />
             <!-- 0x17: 0-48 (= -24 - +24 semitones) (pitch shifter) -->
-            <field name="Pitch1" datatype="sys.uint8" />
+            <field name="Pitch1" datatype="int24" />
             <!-- 0x18: 0-48 (= -24 - +24 semitones) (pitch shifter) -->
-            <field name="Pitch2" datatype="sys.uint8" />
+            <field name="Pitch2" datatype="int24" />
             <!-- 0x19: 0-48 (= -24 - +24 semitones) (pitch shifter) -->
-            <field name="Pitch3" datatype="sys.uint8" />
+            <field name="Pitch3" datatype="int24" />
             <!-- 0x1A: 0-100 (= -50 - +50) (pitch shifter) -->
-            <field name="Fine1" datatype="roland.level" />
+            <field name="Fine1" datatype="int50" />
             <!-- 0x1B: 0-100 (= -50 - +50) (pitch shifter) -->
-            <field name="Fine2" datatype="roland.level" />
+            <field name="Fine2" datatype="int50" />
             <!-- 0x1C: 0-100 (= -50 - +50) (pitch shifter) -->
-            <field name="Fine3" datatype="roland.level" />
+            <field name="Fine3" datatype="int50" />
             <!-- 0x1D: 0-11 = C, Db, D, Eb, E, F, F#, G, Ab, A, Bb, B major; 12-23 = A, Bb, B, C, C#, D, D#, E, F, F#, G,
                  G# minor (harmonist) -->
             <field name="HarmonistKey" datatype="harmonistKey" />
@@ -335,14 +331,14 @@
             <!-- 0x02: 0 = fixed, 1 = control 1, 2 = control 2, 3 = FC-200CTL, 4-66 = midiCc (tempo) -->
             <field name="TempoIn" datatype="tempoIn" />
             <!-- 0x03 (MSB), 0x04 (LSB): 0-250 (= 50-300 BPM) (tempo, tempo in fixed) -->
-            <field name="Tempo" nodeDef="nibble8" />
+            <field name="Tempo" nodeDef="nibble8" datatype="uint50_300"/>
             <!-- 0x05 (MSB), 0x06 (LSB): 1-2000 ms (normal) -->
-            <field name="TimeCenter" nodeDef="sysex14" />
+            <field name="TimeCenter" nodeDef="sysex14" datatype="uint2000"/>
             <!-- 0x07 (MSB), 0x08 (LSB): 1-400 % of the center.
                  [TODO] verify: the parser reads MSB x 256 + LSB, which cannot reach 400 with 7-bit bytes; 7 + 7 bits is assumed. -->
-            <field name="TimeLeft" nodeDef="sysex14" />
+            <field name="TimeLeft" nodeDef="sysex14" datatype="uint1_400" />
             <!-- 0x09 (MSB), 0x0A (LSB): 1-400 % of the center -->
-            <field name="TimeRight" nodeDef="sysex14" />
+            <field name="TimeRight" nodeDef="sysex14" datatype="uint1_400"/>
             <!-- 0x0B: 0-10 (= 1/4, 1/3, 3/8, 1/2, 2/3, 3/4, 1.0, 1.5, 2.0, 3.0, 4.0) (tempo) -->
             <field name="IntervalCenter" datatype="delayInterval" />
             <!-- 0x0C: 0-100 -->
@@ -354,7 +350,7 @@
             <!-- 0x0F: 0-100 -->
             <field name="LevelRight" datatype="roland.level" />
             <!-- 0x10: 0-50 (= -50 - 0) -->
-            <field name="HighDamp" datatype="sys.uint8" />
+            <field name="HighDamp" datatype="shiftDown50" />
             <!-- 0x11: 0-15 = hiCut -->
             <field name="HighCut" datatype="hiCut" />
             <!-- 0x12: 0 = off, 1 = on -->
@@ -378,12 +374,12 @@
             <!-- 0x03: 0-100 -->
             <field name="Depth" datatype="roland.level" />
             <!-- 0x04: x 0.5 ms -->
-            <field name="PreDelay" datatype="sys.uint8" />
+            <field name="PreDelay" datatype="halves0_50" />
             <!-- 0x05: 0-10 = lowCut -->
             <field name="LowCut" datatype="lowCut" />
             <!-- 0x06: 0-15 = hiCut -->
             <field name="HighCut" datatype="hiCut" />
-            <!-- 0x07: 0-10 (= tri 10:0 sin - tri 0:10 sin) -->
+            <!-- 0x07: 0-10 [TODO] (= tri 10:0 sin - tri 0:10 sin) -->
             <field name="Lfo" datatype="sys.uint8" />
             <!-- 0x08: 0-100 -->
             <field name="EffectLevel" datatype="roland.level" />
@@ -414,7 +410,7 @@
             <!-- 0x01: 0-4 (= Room1, Room2, Hall1, Hall2, Plate) -->
             <field name="Type" datatype="reverbType" />
             <!-- 0x02: 1-100 (= 0.1 - 10 s) -->
-            <field name="Time" datatype="sys.uint8" />
+            <field name="Time" datatype="tenths01_100" />
             <!-- 0x03: 0-100 ms -->
             <field name="PreDelay" datatype="roland.level" />
             <!-- 0x04: 0-10 = lowCut -->
@@ -422,7 +418,7 @@
             <!-- 0x05: 0-15 = hiCut -->
             <field name="HighCut" datatype="hiCut" />
             <!-- 0x06: 0-10 -->
-            <field name="Diffusion" datatype="sys.uint8" />
+            <field name="Diffusion" datatype="uint10" />
             <!-- 0x07: 0-100 -->
             <field name="EffectLevel" datatype="roland.level" />
             <!-- 0x08: 0-100 -->
@@ -472,6 +468,46 @@
   </nodeDefs>
 
   <dataTypeDefs>
+    <!-- -20 - +20 -->
+    <dataTypeDef name="int20" basedOn="sys.uint8" min="-20" max="20" shift="-20">
+      <processors><processor name="sys.scale"/></processors>
+    </dataTypeDef>
+    <!-- -24 - +24 -->
+    <dataTypeDef name="int24" basedOn="sys.uint8" min="-24" max="24" shift="-24">
+      <processors><processor name="sys.scale"/></processors>
+    </dataTypeDef>
+    <!-- -50 - +50 -->
+    <dataTypeDef name="int50" basedOn="sys.uint8" min="-50" max="50" shift="-50">
+      <processors><processor name="sys.scale"/></processors>
+    </dataTypeDef>
+    <!-- -100 - +100 -->
+    <dataTypeDef name="int100" basedOn="sys.uint8" min="-100" max="100" shift="-100">
+      <processors><processor name="sys.scale" /></processors>
+    </dataTypeDef>
+    <!-- +50 - +300 -->
+    <dataTypeDef name="uint50_300" basedOn="sys.uint16" min="50" max="300" shift="50">
+      <processors><processor name="sys.scale"/></processors>
+    </dataTypeDef>
+    <!-- +1 - +400 -->
+    <dataTypeDef name="uint1_400" basedOn="sys.uint16" min="1" max="400"/>
+    <!-- 0 - +2000 -->
+    <dataTypeDef name="uint2000" basedOn="sys.uint16" min="0" max="2000"/>
+    <!-- 0 - +10 -->
+    <dataTypeDef name="uint10" basedOn="sys.uint8" min="0" max="10"/>
+    <!-- -50 - 0 -->
+    <dataTypeDef name="shiftDown50" basedOn="sys.uint8" min="-50" max="0" shift="-50">
+      <processors><processor name="sys.scale"/></processors>
+    </dataTypeDef>
+
+    <!-- 0 - 50 : 0.5 -->
+    <dataTypeDef name="halves0_50" basedOn="sys.uint8" min="0" max="50" scale="0.5">
+      <processors><processor name="sys.scale"/></processors>
+    </dataTypeDef>
+    <!-- 0.1 - 10 : 0.1 -->
+    <dataTypeDef name="tenths01_100" basedOn="sys.uint8" min="0.1" max="10" scale="0.1">
+      <processors><processor name="sys.scale"/></processors>
+    </dataTypeDef>
+    
     <!-- Compressor.Type. -->
     <dataTypeDef name="compressorType" basedOn="sys.uint8" min="0" max="1">
       <processors>
