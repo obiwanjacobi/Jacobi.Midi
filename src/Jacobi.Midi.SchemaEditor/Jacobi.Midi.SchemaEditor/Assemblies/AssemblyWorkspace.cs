@@ -46,7 +46,7 @@ internal sealed class AssemblyWorkspace : ObservableObject
     public bool HasNoAssemblies => !HasAssemblies;
 
     /// <summary>
-    /// Returns the embedded schema that <paramref name="node"/> belongs to, or null when it is not part of one.
+    /// Returns the embedded schema that <paramref name="node"/> (a member or a node def) belongs to, or null when it is not part of one.
     /// </summary>
     public LoadedSchema? FindSchema(EditNode node)
     {
@@ -54,7 +54,8 @@ internal sealed class AssemblyWorkspace : ObservableObject
         {
             node = node.Parent;
         }
-        return Assemblies.SelectMany(assembly => assembly.Schemas).FirstOrDefault(schema => ReferenceEquals(schema.Document.Schema, node));
+        return Assemblies.SelectMany(assembly => assembly.Schemas)
+            .FirstOrDefault(schema => ReferenceEquals(schema.Document.Schema, node) || schema.Document.Schema.NodeDefs.Contains(node));
     }
 
     /// <summary>

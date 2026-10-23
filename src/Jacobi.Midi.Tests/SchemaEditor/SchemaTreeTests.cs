@@ -1,3 +1,4 @@
+using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.SchemaEditor.Assemblies;
 using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.SchemaEditor.SchemaTree;
@@ -31,7 +32,7 @@ public class SchemaTreeTests
     }
 
     [Fact]
-    public void Items_AreTheRootsWithTheMembersBelowThem()
+    public void Items_AreTheRootsWithTheNodeDefsItemAndTheMembersBelowThem()
     {
         var document = SchemaFileService.CreateDocument("Doc");
         var tree = new SchemaTreeViewModel();
@@ -39,7 +40,28 @@ public class SchemaTreeTests
 
         var root = Assert.IsType<SchemaTreeRoot>(Assert.Single(tree.Items.Cast<object>()));
         Assert.Same(document, root.Document);
-        Assert.Same(document.Members, root.Children);
+        Assert.Equal([NodeDefsItem.Get(document), .. document.Members], root.Children.Cast<object>());
+        Assert.Same(document, NodeDefsItem.Get(document).Document);
+    }
+
+    [Fact]
+    public void DocumentTreeChildren_FollowTheMembers()
+    {
+        var document = SchemaFileService.CreateDocument("Doc");
+        var children = DocumentTreeChildren.Get(document);
+        Assert.Same(children, DocumentTreeChildren.Get(document));
+        var added = new EditField(document) { Name = "added", Processors = [], Properties = [] };
+
+        document.Members.Insert(0, added);
+        Assert.Equal([NodeDefsItem.Get(document), .. document.Members], children);
+        document.Members.Move(0, 1);
+        Assert.Equal([NodeDefsItem.Get(document), .. document.Members], children);
+        document.Members[1] = new EditField(document) { Name = "replaced", Processors = [], Properties = [] };
+        Assert.Equal([NodeDefsItem.Get(document), .. document.Members], children);
+        document.Members.RemoveAt(0);
+        Assert.Equal([NodeDefsItem.Get(document), .. document.Members], children);
+        document.Members.Clear();
+        Assert.Equal([NodeDefsItem.Get(document)], children);
     }
 
     [Fact]
@@ -89,20 +111,59 @@ public class SchemaTreeTests
     }
 
     [Fact]
-    public void GetPath_IsNullForItemsThatAreNotInTheTree()
+    public void GetPath_LocatesNodeDefsBelowTheNodeDefsItem()
     {
+        var first = SchemaFileService.CreateDocument("First");
         var document = SchemaFileService.CreateDocument("Doc");
         var tree = new SchemaTreeViewModel();
-        tree.SetDocuments([document]);
+        tree.SetDocuments([first, document]);
         var definition = new EditGroup(null) { Name = "def", Members = [], Processors = [], Properties = [] };
         var nested = new EditField(definition) { Name = "nested", Processors = [], Properties = [] };
         definition.Members.Add(nested);
         document.NodeDefs.Add(definition);
+        var nodeDefs = NodeDefsItem.Get(document);
+
+        Assert.Equal<object>([tree.Roots[1]], tree.GetPath(nodeDefs)!);
+        Assert.Equal<object>([tree.Roots[1], nodeDefs], tree.GetPath(definition)!);
+        Assert.Equal<object>([tree.Roots[1], nodeDefs, definition], tree.GetPath(nested)!);
+        Assert.Same(nodeDefs, tree.ToTreeItem(nodeDefs));
+        Assert.Same(nodeDefs, SchemaTreeViewModel.ToItem(nodeDefs));
+    }
+
+    [Fact]
+    public void GetPath_IsNullForItemsThatAreNotInTheTree()
+    {
+        var document = SchemaFileService.CreateDocument("Doc");
+        var other = SchemaFileService.CreateDocument("Other");
+        var tree = new SchemaTreeViewModel();
+        tree.SetDocuments([document]);
+        // a node def of a document that is not shown
+        var definition = new EditGroup(null) { Name = "def", Members = [], Processors = [], Properties = [] };
+        other.NodeDefs.Add(definition);
 
         Assert.Null(tree.GetPath(definition));
-        Assert.Null(tree.GetPath(nested));
-        Assert.Null(tree.GetPath(SchemaFileService.CreateDocument("Other")));
+        Assert.Null(tree.GetPath(NodeDefsItem.Get(other)));
+        Assert.Null(tree.GetPath(other));
         Assert.Null(tree.GetPath(new EditDocumentRef { Schema = "midi" }));
+    }
+
+    [Fact]
+    public void RemovingTheDocument_ClearsTheSelectionOfItsNodeDefs()
+    {
+        var document = SchemaFileService.CreateDocument("Doc");
+        var definition = new EditGroup(null) { Name = "def", Members = [], Processors = [], Properties = [] };
+        document.NodeDefs.Add(definition);
+        var tree = new SchemaTreeViewModel();
+        tree.SetDocuments([document]);
+
+        tree.SelectedItem = definition;
+        tree.SetDocuments([]);
+        Assert.Null(tree.SelectedItem);
+
+        tree.SetDocuments([document]);
+        tree.SelectedItem = NodeDefsItem.Get(document);
+        tree.SetDocuments([]);
+        Assert.Null(tree.SelectedItem);
     }
 
     [Fact]
@@ -137,6 +198,28 @@ public class SchemaTreeTests
         // the unpinned documents are replaced, the pinned stay
         viewModel.SelectedDocument = first;
         Assert.Equal([first.Schema, second.Schema], viewModel.TreeDocuments);
+    }
+
+    [Fact]
+    public void SelectingANodeDefOfAPinnedDocument_SelectsThatDocument()
+    {
+        var viewModel = new MainViewModel();
+        viewModel.NewDocumentCommand.Execute(null);
+        var first = viewModel.SelectedDocument!;
+        viewModel.AddNodeDefCommand.Execute(SchemaNodeKind.Group);
+        var definition = first.Schema.NodeDefs[0];
+        first.IsPinned = true;
+        viewModel.NewDocumentCommand.Execute(null);
+        var second = viewModel.SelectedDocument!;
+
+        viewModel.SelectedItem = definition;
+        Assert.Same(first, viewModel.SelectedDocument);
+        Assert.Same(definition, viewModel.SelectedItem);
+        Assert.Equal($"{first.Schema.Name}/NodeDefs/{definition.Name}", viewModel.SelectedItemPath);
+
+        viewModel.SelectedItem = NodeDefsItem.Get(second.Schema);
+        Assert.Same(second, viewModel.SelectedDocument);
+        Assert.Same(NodeDefsItem.Get(second.Schema), viewModel.SelectedItem);
     }
 
     [Fact]

@@ -11,11 +11,12 @@ namespace Jacobi.Midi.SchemaEditor.SchemaTree;
 
 /// <summary>
 /// Self-contained control that shows <see cref="Models.EditDocument"/>s as a tree:
-/// each document as a root with its members below it.
+/// each document as a root with a fixed <see cref="NodeDefsItem"/> (its node defs) and its members below it.
 /// Assign <see cref="Documents"/> to show schemas (an observable collection is followed); <see cref="SelectedItem"/> reflects
 /// (and can set) the selected item; a selected root is reported as the document itself.
-/// An item that is not shown in the tree (a node def) is kept by the host but not selected in the tree.
-/// The context menu of a group executes <see cref="InstantiateCommand"/> or <see cref="MatchCommand"/> with that group as parameter.
+/// An item that is not shown in the tree is kept by the host but not selected in the tree.
+/// The context menu of a group executes <see cref="InstantiateCommand"/> or <see cref="MatchCommand"/> with that group as parameter;
+/// the context menu of the node defs item executes <see cref="AddNodeDefCommand"/> with the node kind as parameter.
 /// </summary>
 internal partial class SchemaTreeControl : UserControl
 {
@@ -31,6 +32,9 @@ internal partial class SchemaTreeControl : UserControl
 
     public static readonly StyledProperty<ICommand?> MatchCommandProperty =
         AvaloniaProperty.Register<SchemaTreeControl, ICommand?>(nameof(MatchCommand));
+
+    public static readonly StyledProperty<ICommand?> AddNodeDefCommandProperty =
+        AvaloniaProperty.Register<SchemaTreeControl, ICommand?>(nameof(AddNodeDefCommand));
 
     private readonly SchemaTreeViewModel _viewModel = new();
     // set while the selection is synchronized between the control and its view model
@@ -81,6 +85,16 @@ internal partial class SchemaTreeControl : UserControl
         set => SetValue(MatchCommandProperty, value);
     }
 
+    /// <summary>
+    /// The command of the add items in the context menu of the node defs item; its parameter is the <see cref="Jacobi.BinarySerializer.Schema.SchemaNodeKind"/>.
+    /// The node defs item is selected (by the right click) before the menu opens.
+    /// </summary>
+    public ICommand? AddNodeDefCommand
+    {
+        get => GetValue(AddNodeDefCommandProperty);
+        set => SetValue(AddNodeDefCommandProperty, value);
+    }
+
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
@@ -102,7 +116,7 @@ internal partial class SchemaTreeControl : UserControl
             _synchronizing = true;
             try
             {
-                // an item that is not in the tree (a node def) is not selected in the tree
+                // an item that is not in the tree is not selected in the tree
                 object? treeItem = null;
                 if (SelectedItem is { } item && _viewModel.GetPath(item) is { } path)
                 {

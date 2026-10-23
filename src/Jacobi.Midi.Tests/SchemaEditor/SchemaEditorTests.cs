@@ -1,6 +1,7 @@
 using System.Xml.Linq;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.SchemaEditor.Models;
+using Jacobi.Midi.SchemaEditor.SchemaTree;
 using Jacobi.Midi.SchemaEditor.Services;
 using Jacobi.Midi.SchemaEditor.ViewModels;
 using Xunit;
@@ -422,7 +423,7 @@ public class SchemaEditorTests
                 viewModel.DeleteItemCommand.Execute(null);
                 viewModel.ConfirmDialog!.ConfirmCommand.Execute(null);
                 Assert.Empty(document.Schema.NodeDefs);
-                Assert.Same(document.Schema, viewModel.SelectedNode);
+                Assert.Same(NodeDefsItem.Get(document.Schema), viewModel.SelectedItem);
         }
 
         [Fact]

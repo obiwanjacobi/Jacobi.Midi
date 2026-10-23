@@ -101,7 +101,8 @@
                             <st:SchemaTreeControl Documents="{Binding TreeDocuments}"
                                                   SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
                                                   InstantiateCommand="{Binding InstantiateSchemaCommand}"
-                                                  MatchCommand="{Binding MatchSchemaCommand}" />
+                                                  MatchCommand="{Binding MatchSchemaCommand}"
+                                                  AddNodeDefCommand="{Binding AddNodeDefCommand}" />
                         </DockPanel>
                     </TabItem>
                     <TabItem Header="Assemblies">

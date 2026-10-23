@@ -4,6 +4,7 @@
              xmlns:models="using:Jacobi.Midi.SchemaEditor.Models"
              xmlns:ne="using:Jacobi.Midi.SchemaEditor.NodeEditor"
              xmlns:schema="using:Jacobi.BinarySerializer.Schema"
+             xmlns:st="using:Jacobi.Midi.SchemaEditor.SchemaTree"
              x:Class="Jacobi.Midi.SchemaEditor.NodeEditor.NodeEditorControl"
              x:DataType="vm:MainViewModel">
 
@@ -225,6 +226,14 @@
                         <TextBlock Text="A changed name is confirmed when you leave the box: other documents may include this one by name." Classes="kind" />
                         <TextBox PlaceholderText="Document name" Text="{Binding DocumentName, UpdateSourceTrigger=LostFocus}" />
                         <ContentControl Content="{Binding ItemDetails}" ContentTemplate="{StaticResource DetailsSectionsTemplate}" />
+                    </StackPanel>
+                </DataTemplate>
+                <!-- the fixed node defs item of the schema tree: the Add menu adds a node def -->
+                <DataTemplate x:DataType="st:NodeDefsItem">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="Node defs" Classes="caption" />
+                        <TextBlock Text="Reusable node definitions that nodes refer to by their node def. Use Add to create one; select a node def in the schema tree to edit it."
+                                   TextWrapping="Wrap" Classes="kind" />
                     </StackPanel>
                 </DataTemplate>
                 <DataTemplate x:DataType="models:EditRepeat">
@@ -459,7 +468,7 @@
                 </StackPanel>
             </ToggleButton>
             <Button Grid.Column="2" VerticalAlignment="Bottom" Content="Add ▾" IsEnabled="{Binding CanAdd}"
-                    ToolTip.Tip="Add a node to the selected group, or a processor or property to the selected item">
+                    ToolTip.Tip="Add a node to the selected group (a node def with Node Defs selected), or a processor or property to the selected item">
                 <Button.Flyout>
                     <MenuFlyout Placement="BottomEdgeAlignedRight">
                         <MenuItem Header="Field" Command="{Binding AddNodeCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Field}" IsVisible="{Binding CanAddMembers}" />
@@ -501,63 +510,6 @@
             <!-- the document collections: shown when the document root is selected -->
             <TabItem Header="Includes" IsVisible="{Binding IsDocumentSelected}">
                 <ContentControl Content="{Binding DocumentTabs.Includes}" ContentTemplate="{StaticResource CollectionTabTemplate}" />
-            </TabItem>
-
-            <TabItem Header="Node Defs" IsVisible="{Binding IsDocumentSelected}">
-                <Grid ColumnDefinitions="300,*" ColumnSpacing="16" Margin="0,12,0,0">
-                    <DockPanel>
-                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
-                            <Button Content="Add ▾" ToolTip.Tip="Add a node def and edit it">
-                                <Button.Flyout>
-                                    <MenuFlyout Placement="BottomEdgeAlignedLeft">
-                                        <MenuItem Header="Field" Command="{Binding AddNodeDefCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Field}" />
-                                        <MenuItem Header="Group" Command="{Binding AddNodeDefCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Group}" />
-                                        <MenuItem Header="Repeat" Command="{Binding AddNodeDefCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Repeat}" />
-                                        <MenuItem Header="Choice" Command="{Binding AddNodeDefCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Choice}" />
-                                    </MenuFlyout>
-                                </Button.Flyout>
-                            </Button>
-                            <Button Content="Delete" Command="{Binding DeleteItemCommand}" ToolTip.Tip="Delete the selected node def" />
-                        </StackPanel>
-                        <TreeView x:Name="NodeDefsTree" ItemsSource="{Binding ActiveDocument.Schema.NodeDefs}"
-                                  SelectedItem="{Binding SelectedNodeDef, Mode=TwoWay}">
-                            <TreeView.DataTemplates>
-                                <TreeDataTemplate x:DataType="models:EditGroup" ItemsSource="{Binding Members}">
-                                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,5">
-                                        <TextBlock Text="{Binding Name}" Foreground="{DynamicResource AppTextBodyBrush}" />
-                                        <TextBlock Text="{Binding Kind}" Foreground="{DynamicResource AppTextMutedBrush}" />
-                                    </StackPanel>
-                                </TreeDataTemplate>
-                                <DataTemplate x:DataType="models:EditField">
-                                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,5">
-                                        <TextBlock Text="{Binding Name}" Foreground="{DynamicResource AppTextBodyBrush}" />
-                                        <TextBlock Text="{Binding DataType}" Foreground="{DynamicResource AppTextMutedBrush}" />
-                                    </StackPanel>
-                                </DataTemplate>
-                            </TreeView.DataTemplates>
-                        </TreeView>
-                    </DockPanel>
-                    <TabControl Grid.Column="1" IsVisible="{Binding SelectedNodeDef, Converter={x:Static ObjectConverters.IsNotNull}}">
-                        <TabItem Header="General">
-                            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-                                <ContentControl Margin="0,12,12,0" Content="{Binding SelectedNodeDef}" />
-                            </ScrollViewer>
-                        </TabItem>
-                        <TabItem Header="Processors" IsVisible="{Binding SelectedNodeDefDetails.ShowProcessorsTab, FallbackValue=False}">
-                            <ScrollViewer>
-                                <ContentControl Content="{Binding SelectedNodeDefDetails}" ContentTemplate="{StaticResource ProcessorsPanelTemplate}" Margin="0,12,12,0" />
-                            </ScrollViewer>
-                        </TabItem>
-                        <TabItem Header="Properties" IsVisible="{Binding SelectedNodeDefDetails.ShowPropertiesTab, FallbackValue=False}">
-                            <ScrollViewer>
-                                <ContentControl Content="{Binding SelectedNodeDefDetails}" ContentTemplate="{StaticResource PropertiesPanelTemplate}" Margin="0,12,12,0" />
-                            </ScrollViewer>
-                        </TabItem>
-                    </TabControl>
-                    <TextBlock Grid.Column="1" Text="Select a node def to edit it."
-                               IsVisible="{Binding SelectedNodeDef, Converter={x:Static ObjectConverters.IsNull}}"
-                               HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource AppTextMutedBrush}" />
-                </Grid>
             </TabItem>
 
             <TabItem Header="Data Type Defs" IsVisible="{Binding IsDocumentSelected}">

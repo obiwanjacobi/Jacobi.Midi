@@ -99,7 +99,7 @@ internal sealed partial class CollectionTabViewModel : ObservableObject, IDispos
 
 /// <summary>
 /// The collection tabs of the node editor that are shown when the document root is selected.
-/// The node defs tab is not part of it: it selects a node def so the regular node editor edits it.
+/// The node defs are not part of it: they are shown in the schema tree (below the fixed node defs item of the document).
 /// </summary>
 internal sealed class DocumentTabsViewModel(CollectionTabViewModel includes, CollectionTabViewModel dataTypeDefs,
     CollectionTabViewModel processorDefs) : IDisposable

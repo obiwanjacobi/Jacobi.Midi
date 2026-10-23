@@ -283,7 +283,9 @@ internal sealed partial class MainViewModel : ViewModelBase
     public bool HasSelectedDocument => SelectedDocument is not null;
 
     // The Add menu only offers the items that are valid for the current selection.
-    public bool CanAddMembers => GetTargetGroup() is not null;
+    // With the node defs item selected, the node kinds add a node def.
+    public bool CanAddMembers => GetTargetGroup() is not null || CanAddNodeDefs;
+    private bool CanAddNodeDefs => SelectedItem is NodeDefsItem && ActiveDocument is not null && !IsReadOnly;
     public bool CanAddItemProcessor => ItemDetails?.HasProcessors == true;
     public bool CanAddItemProperty => ItemDetails is not null;
     public bool CanAdd => CanAddMembers || CanAddItemProperty;
@@ -311,9 +313,8 @@ internal sealed partial class MainViewModel : ViewModelBase
     public const int ProcessorsTab = 1;
     public const int PropertiesTab = 2;
     public const int IncludesTab = 3;
-    public const int NodeDefsTab = 4;
-    public const int DataTypeDefsTab = 5;
-    public const int ProcessorDefsTab = 6;
+    public const int DataTypeDefsTab = 4;
+    public const int ProcessorDefsTab = 5;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ActiveDocument), nameof(IsReadOnly), nameof(CanPin), nameof(DataTypeOptions))]
@@ -346,8 +347,8 @@ internal sealed partial class MainViewModel : ViewModelBase
     public partial ConfirmViewModel? ConfirmDialog { get; private set; }
 
     /// <summary>
-    /// The item selected in the schema tree or in the node defs tab: an <see cref="EditNode"/>
-    /// (the <see cref="EditDocument"/> for the root) or null.
+    /// The item selected in the schema tree: an <see cref="EditNode"/> (a member or a node def; the <see cref="EditDocument"/> for the root),
+    /// the <see cref="NodeDefsItem"/> of a document or null.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectedNode))]
@@ -359,13 +360,17 @@ internal sealed partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// The path of the <see cref="SelectedItem"/>, starting with the document name:
-    /// <c>Name/Header/Id</c> for a member or <c>Name/NodeDefs/Header</c> for a node def.
+    /// <c>Name/Header/Id</c> for a member, <c>Name/NodeDefs/Header</c> for a node def or <c>Name/NodeDefs</c> for the node defs item.
     /// </summary>
-    public string SelectedItemPath => GetItemPath(SelectedItem is EditDocument ? SelectedNodeDef ?? SelectedItem : SelectedItem);
+    public string SelectedItemPath => GetItemPath(SelectedItem);
 
     private string GetItemPath(object? item)
     {
         var root = ActiveDocument?.Schema.Name ?? String.Empty;
+        if (item is NodeDefsItem)
+        {
+            return $"{root}/{nameof(EditDocument.NodeDefs)}";
+        }
         if (item is not EditNode node || node is EditDocument)
         {
             return root;
@@ -385,25 +390,10 @@ internal sealed partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// The node def selected in the Node Defs tab of the document root; null when none is selected.
-    /// It is edited next to the tab's tree and does not replace the <see cref="SelectedItem"/>.
+    /// The node the staged node values belong to: the selected node (a member or a node def), not the document root.
+    /// Null when there is none.
     /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SelectedItemPath))]
-    [NotifyCanExecuteChangedFor(nameof(DeleteItemCommand))]
-    public partial EditNode? SelectedNodeDef { get; set; }
-
-    /// <summary>
-    /// The effective processors and properties of the <see cref="SelectedNodeDef"/>; null when none is selected.
-    /// </summary>
-    [ObservableProperty]
-    public partial ItemDetailsViewModel? SelectedNodeDefDetails { get; private set; }
-
-    /// <summary>
-    /// The node the staged node values belong to: the <see cref="SelectedNodeDef"/> while the document root is selected,
-    /// otherwise the selected node. Null when there is none.
-    /// </summary>
-    private EditNode? EditedNode => SelectedItem is EditDocument ? SelectedNodeDef : SelectedItem as EditNode;
+    private EditNode? EditedNode => SelectedItem is EditDocument ? null : SelectedItem as EditNode;
 
     /// <summary>
     /// The <see cref="SelectedItem"/> when it is a schema node, otherwise null.
@@ -430,7 +420,7 @@ internal sealed partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// The General tab content: the <see cref="SelectedNode"/> (edited through the staged node values of this view model)
-    /// or an <see cref="NodeEditor.ItemEditor"/> for the other document items.
+    /// or an <see cref="NodeEditor.ItemEditor"/> for the other document items; the <see cref="NodeDefsItem"/> shows a hint.
     /// </summary>
     [ObservableProperty]
     public partial object? GeneralEditor { get; private set; }
@@ -671,7 +661,7 @@ internal sealed partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// Adds a new node of <paramref name="kind"/> with a default name to the target group (see <see cref="GetTargetGroup"/>)
-    /// and selects it for editing.
+    /// and selects it for editing. With the <see cref="NodeDefsItem"/> selected it adds a node def instead.
     /// </summary>
     [RelayCommand]
     private void AddNode(SchemaNodeKind kind)
@@ -679,6 +669,11 @@ internal sealed partial class MainViewModel : ViewModelBase
         if (ActiveDocument is null || IsReadOnly)
         {
             StatusMessage = "Create or open a schema before adding a node.";
+            return;
+        }
+        if (SelectedItem is NodeDefsItem)
+        {
+            AddNodeDef(kind);
             return;
         }
 
@@ -698,15 +693,7 @@ internal sealed partial class MainViewModel : ViewModelBase
                 SchemaNodeKind.Choice => ActiveDocument.AddChoice(parent, name, selectedIndex: 0),
                 _ => throw new NotSupportedException($"Cannot add a node of kind {kind}.")
             };
-            // a node added to a selected node def stays in the Node Defs tab
-            if (SelectedItem is EditDocument && SelectedNodeDef is not null)
-            {
-                SelectedNodeDef = node;
-            }
-            else
-            {
-                SelectedNode = node;
-            }
+            SelectedNode = node;
             StatusMessage = $"Added {name} to {parent.Name}.";
         }
         catch (Exception exception) when (IsSchemaError(exception))
@@ -716,7 +703,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Adds a top-level node definition of <paramref name="kind"/> and selects it.
+    /// Adds a top-level node definition of <paramref name="kind"/> and selects it (below the <see cref="NodeDefsItem"/> in the schema tree).
     /// </summary>
     [RelayCommand]
     private void AddNodeDef(SchemaNodeKind kind)
@@ -731,10 +718,8 @@ internal sealed partial class MainViewModel : ViewModelBase
         {
             var definition = ActiveDocument.AddNodeDef(kind,
                 GetUniqueName(ActiveDocument.Schema.NodeDefs.Select(existing => existing.Name), $"New{kind}Def"));
-            // the node def is edited next to the Node Defs tab: the document root stays selected
-            SelectedItem = ActiveDocument.Schema;
-            SelectedNodeDef = definition;
-            SelectedEditorTab = NodeDefsTab;
+            SelectedNode = definition;
+            SelectedEditorTab = GeneralTab;
             StatusMessage = $"Added a node def to {ActiveDocument.Schema.Name}.";
         }
         catch (Exception exception) when (IsSchemaError(exception))
@@ -786,7 +771,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Asks to confirm the removal of the selected item or node def (there is no undo); see <see cref="CloseDeleteDialog"/>.
+    /// Asks to confirm the removal of the selected item (there is no undo); see <see cref="CloseDeleteDialog"/>.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanDeleteItem))]
     private void DeleteItem()
@@ -818,7 +803,7 @@ internal sealed partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// Removes <paramref name="item"/> when the user confirmed it and it is still the selected item.
-    /// A removed node selects its parent group, a removed top-level node the document root.
+    /// A removed node selects its parent group, a removed top-level node the document root and a removed node def the <see cref="NodeDefsItem"/>.
     /// </summary>
     private void CloseDeleteDialog(object item, bool confirmed)
     {
@@ -830,17 +815,15 @@ internal sealed partial class MainViewModel : ViewModelBase
 
         try
         {
-            var inNodeDefsTab = SelectedItem is EditDocument;
-            var parent = item is EditNode { Parent: { } group and not EditDocument } ? group : null;
+            var schema = ActiveDocument.Schema;
+            object parent = item switch
+            {
+                EditNode { Parent: { } group and not EditDocument } => group,
+                EditNode node when schema.NodeDefs.Contains(node) => NodeDefsItem.Get(schema),
+                _ => schema
+            };
             ActiveDocument.RemoveItem(item);
-            if (inNodeDefsTab)
-            {
-                SelectedNodeDef = parent;
-            }
-            else
-            {
-                SelectedItem = parent ?? ActiveDocument.Schema;
-            }
+            SelectedItem = parent;
             StatusMessage = "Deleted the selected item.";
         }
         catch (Exception exception) when (IsSchemaError(exception))
@@ -850,9 +833,9 @@ internal sealed partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// The item the Delete command removes: the selected node, or the selected node def while the document root is selected.
+    /// The item the Delete command removes: the selected node or node def; not the document root or the node defs item.
     /// </summary>
-    private object? GetDeletableItem() => SelectedItem is EditDocument ? SelectedNodeDef : SelectedItem;
+    private object? GetDeletableItem() => SelectedItem is EditDocument or NodeDefsItem ? null : SelectedItem;
 
     private bool CanDeleteItem() => !IsReadOnly && GetDeletableItem() is not null;
 
@@ -1186,16 +1169,23 @@ internal sealed partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// The open document <paramref name="item"/> (an <see cref="EditDocument"/> or a node in it) belongs to; null when there is none.
+    /// The open document <paramref name="item"/> (an <see cref="EditDocument"/>, its <see cref="NodeDefsItem"/>, or a member or node def in it)
+    /// belongs to; null when there is none.
     /// </summary>
     private SchemaWorkspaceDocument? FindDocument(object? item)
     {
+        if (item is NodeDefsItem nodeDefs)
+        {
+            return Documents.FirstOrDefault(document => ReferenceEquals(document.Schema, nodeDefs.Document));
+        }
         var node = item as EditNode;
-        while (node is not null and not EditDocument)
+        while (node?.Parent is not null)
         {
             node = node.Parent;
         }
-        return node is EditDocument schema ? Documents.FirstOrDefault(document => ReferenceEquals(document.Schema, schema)) : null;
+        // a node def has no parent: it belongs to the document that has it
+        return node is null ? null
+            : Documents.FirstOrDefault(document => ReferenceEquals(document.Schema, node) || document.Schema.NodeDefs.Contains(node));
     }
 
     /// <summary>
@@ -1221,8 +1211,8 @@ internal sealed partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Shows the item selected in the assembly tree: an embedded schema or one of its nodes in the (read-only) node editor,
-    /// an assembly or a processor namespace as its details.
+    /// Shows the item selected in the assembly tree: an embedded schema, its node defs item or one of its nodes or node defs
+    /// in the (read-only) node editor, an assembly or a processor namespace as its details.
     /// </summary>
     partial void OnSelectedAssemblyItemChanged(object? value)
     {
@@ -1230,6 +1220,7 @@ internal sealed partial class MainViewModel : ViewModelBase
         {
             LoadedSchema loadedSchema => loadedSchema,
             EditNode node => OpenedAssemblies.FindSchema(node),
+            NodeDefsItem nodeDefs => OpenedAssemblies.FindSchema(nodeDefs.Document),
             _ => null
         };
         InspectedAssembly = value as LoadedAssembly;
@@ -1240,16 +1231,9 @@ internal sealed partial class MainViewModel : ViewModelBase
         {
             LoadedSchema loadedSchema => loadedSchema.Document.Schema,
             EditNode node when schema is not null => node,
+            NodeDefsItem nodeDefs when schema is not null => nodeDefs,
             _ => null
         };
-    }
-
-    partial void OnSelectedNodeDefChanged(EditNode? value)
-    {
-        SelectedNodeDefDetails?.Dispose();
-        SelectedNodeDefDetails = ActiveDocument is null || value is null ? null : ItemDetailsViewModel.Create(ActiveDocument, value, ProcessorCatalog);
-        LoadNodeEditors();
-        NotifyAddOptionsChanged();
     }
 
     partial void OnSelectedItemChanged(object? value)
@@ -1269,10 +1253,10 @@ internal sealed partial class MainViewModel : ViewModelBase
         }
 
         var node = value as EditNode;
-        SelectedNodeDef = null;
         ItemDetails?.Dispose();
         ItemDetails = ActiveDocument is null ? null : ItemDetailsViewModel.Create(ActiveDocument, value, ProcessorCatalog);
-        GeneralEditor = node;
+        // the node defs item shows a hint
+        GeneralEditor = value is NodeDefsItem ? value : node;
         DocumentTabs?.Dispose();
         DocumentTabs = ActiveDocument is not null && value is EditDocument ? CreateDocumentTabs(ActiveDocument) : null;
         DocumentName = (value as EditDocument)?.Name ?? String.Empty;
@@ -1305,7 +1289,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     {
         ProcessorsTab => ItemDetails?.ShowProcessorsTab == true,
         PropertiesTab => ItemDetails?.ShowPropertiesTab == true,
-        IncludesTab or NodeDefsTab or DataTypeDefsTab or ProcessorDefsTab => IsDocumentSelected,
+        IncludesTab or DataTypeDefsTab or ProcessorDefsTab => IsDocumentSelected,
         _ => true
     };
 
@@ -1435,8 +1419,7 @@ internal sealed partial class MainViewModel : ViewModelBase
         {
             return null;
         }
-        // while the document root is selected, nodes are added to the node def selected in the Node Defs tab
-        var group = (SelectedItem is EditDocument ? SelectedNodeDef : SelectedItem) switch
+        var group = SelectedItem switch
         {
             EditGroup selected and not EditDocument => selected,
             EditField field => field.Parent,

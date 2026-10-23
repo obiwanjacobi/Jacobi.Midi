@@ -5,13 +5,12 @@ namespace Jacobi.Midi.SchemaEditor.SchemaTree;
 
 /// <summary>
 /// A root item of the schema tree (one per shown document): it shows the name of the <see cref="Models.EditDocument"/>
-/// and holds the items of the active view (the document members, or the document collection categories) as its children.
+/// and holds its <see cref="DocumentTreeChildren"/> (the fixed <see cref="NodeDefsItem"/> and the document members) as its children.
 /// It only exists in the tree; the host sees the selected root as the <see cref="Models.EditDocument"/> itself.
 /// </summary>
 /// <param name="document">The document this root represents.</param>
-/// <param name="children">The root items of the view this root belongs to.</param>
-internal sealed class SchemaTreeRoot(EditDocument document, IEnumerable children)
+internal sealed class SchemaTreeRoot(EditDocument document)
 {
     public EditDocument Document { get; } = document;
-    public IEnumerable Children { get; } = children;
+    public IEnumerable Children { get; } = DocumentTreeChildren.Get(document);
 }

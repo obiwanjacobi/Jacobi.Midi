@@ -7,7 +7,7 @@ namespace Jacobi.Midi.SchemaEditor.SchemaTree;
 
 /// <summary>
 /// View model behind <see cref="SchemaTreeControl"/>.
-/// Exposes the <see cref="Roots"/> (one per document, with its members below it) and the selected item.
+/// Exposes the <see cref="Roots"/> (one per document, with its node defs and members below it) and the selected item.
 /// The tree binds directly to the (observable) <see cref="EditNode"/> model.
 /// </summary>
 internal sealed partial class SchemaTreeViewModel : ObservableObject
@@ -23,7 +23,7 @@ internal sealed partial class SchemaTreeViewModel : ObservableObject
     public IEnumerable Items => Roots;
 
     /// <summary>
-    /// The selected tree item: a <see cref="SchemaTreeRoot"/>, an <see cref="EditNode"/> or null.
+    /// The selected tree item: a <see cref="SchemaTreeRoot"/>, a <see cref="NodeDefsItem"/>, an <see cref="EditNode"/> or null.
     /// </summary>
     [ObservableProperty]
     public partial object? SelectedItem { get; set; }
@@ -53,7 +53,7 @@ internal sealed partial class SchemaTreeViewModel : ObservableObject
             var existing = FindRoot(documents[index]);
             if (existing is null)
             {
-                existing = new SchemaTreeRoot(documents[index], documents[index].Members);
+                existing = new SchemaTreeRoot(documents[index]);
                 added.Add(existing);
                 Roots.Insert(Math.Min(index, Roots.Count), existing);
             }
@@ -77,13 +77,18 @@ internal sealed partial class SchemaTreeViewModel : ObservableObject
 
     /// <summary>
     /// Returns the tree items from the root of its document down to (excluding) the item itself; empty for a document.
-    /// Returns null when the item is not shown in the tree, e.g. a node def or a node of a document that is not shown.
+    /// A node def (and the nodes in it) is found below the <see cref="NodeDefsItem"/> of its document.
+    /// Returns null when the item is not shown in the tree, e.g. a node of a document that is not shown.
     /// </summary>
     public IReadOnlyList<object>? GetPath(object item)
     {
         if (item is EditDocument document)
         {
             return FindRoot(document) is null ? null : [];
+        }
+        if (item is NodeDefsItem nodeDefs)
+        {
+            return FindRoot(nodeDefs.Document) is { } owner ? [owner] : null;
         }
         if (item is not EditNode node)
         {
@@ -96,22 +101,35 @@ internal sealed partial class SchemaTreeViewModel : ObservableObject
             path.Insert(0, parent);
         }
         var top = path.Count > 0 ? (EditNode)path[0] : node;
-        return top.Parent is EditDocument owner && FindRoot(owner) is { } root ? [root, .. path] : null;
+        if (top.Parent is EditDocument member)
+        {
+            return FindRoot(member) is { } root ? [root, .. path] : null;
+        }
+        return FindNodeDefRoot(top) is { } defRoot ? [defRoot, NodeDefsItem.Get(defRoot.Document), .. path] : null;
     }
 
     private SchemaTreeRoot? FindRoot(EditDocument? document)
         => document is null ? null : Roots.FirstOrDefault(root => ReferenceEquals(root.Document, document));
 
+    // the root of the shown document that has the (top-level) node def
+    private SchemaTreeRoot? FindNodeDefRoot(EditNode nodeDef)
+        => Roots.FirstOrDefault(root => root.Document.NodeDefs.Contains(nodeDef));
+
     /// <summary>
-    /// The document a tree item belongs to; null for an item outside a document (a node def).
+    /// The shown document a tree item belongs to; null when there is none.
     /// </summary>
-    private static EditDocument? GetDocument(object item)
+    private EditDocument? GetDocument(object item)
     {
-        var node = ToItem(item) as EditNode;
-        while (node is not null and not EditDocument)
+        var treeItem = ToItem(item);
+        if (treeItem is NodeDefsItem nodeDefs)
+        {
+            return nodeDefs.Document;
+        }
+        var node = treeItem as EditNode;
+        while (node?.Parent is not null)
         {
             node = node.Parent;
         }
-        return node as EditDocument;
+        return node as EditDocument ?? (node is null ? null : FindNodeDefRoot(node)?.Document);
     }
 }

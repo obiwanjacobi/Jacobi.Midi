@@ -1,5 +1,5 @@
 <!--
-    The assembly tree: the opened assemblies with their embedded schemas (and the nodes of those) and processor factories.
+    The assembly tree: the opened assemblies with their embedded schemas (and the node defs and nodes of those) and processor factories.
     The selection is the SelectedAssemblyItem of the MainViewModel; the node editor shows it read-only.
 -->
 <UserControl xmlns="https://github.com/avaloniaui"
@@ -7,6 +7,7 @@
              xmlns:vm="using:Jacobi.Midi.SchemaEditor.ViewModels"
              xmlns:asm="using:Jacobi.Midi.SchemaEditor.Assemblies"
              xmlns:models="using:Jacobi.Midi.SchemaEditor.Models"
+             xmlns:st="using:Jacobi.Midi.SchemaEditor.SchemaTree"
              x:Class="Jacobi.Midi.SchemaEditor.Assemblies.AssemblyTreeControl"
              x:DataType="vm:MainViewModel">
 
@@ -22,10 +23,17 @@
                                    ToolTip.Tip="Some resources or processors could not be loaded." />
                     </StackPanel>
                 </TreeDataTemplate>
-                <TreeDataTemplate x:DataType="asm:LoadedSchema" ItemsSource="{Binding Document.Schema.Members}">
+                <TreeDataTemplate x:DataType="asm:LoadedSchema" ItemsSource="{Binding Children}">
                     <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,5">
                         <TextBlock Text="{Binding Name}" Foreground="{DynamicResource AppTextBodyBrush}" />
                         <TextBlock Text="schema" Foreground="{DynamicResource AppTextMutedBrush}" />
+                    </StackPanel>
+                </TreeDataTemplate>
+                <!-- the fixed first child of an embedded schema: its node defs -->
+                <TreeDataTemplate x:DataType="st:NodeDefsItem" ItemsSource="{Binding Document.NodeDefs}">
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,5">
+                        <TextBlock Text="Node Defs" FontStyle="Italic" Foreground="{DynamicResource AppTextBodyBrush}" />
+                        <TextBlock Text="{Binding Document.NodeDefs.Count}" Foreground="{DynamicResource AppTextMutedBrush}" />
                     </StackPanel>
                 </TreeDataTemplate>
                 <DataTemplate x:DataType="asm:ProcessorNamespaceItem">

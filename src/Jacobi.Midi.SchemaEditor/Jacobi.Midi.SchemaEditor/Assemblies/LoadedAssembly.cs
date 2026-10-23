@@ -1,4 +1,5 @@
 using Jacobi.Midi.SchemaEditor.Models;
+using Jacobi.Midi.SchemaEditor.SchemaTree;
 
 namespace Jacobi.Midi.SchemaEditor.Assemblies;
 
@@ -96,6 +97,11 @@ internal sealed class LoadedSchema(string name, string resource, SchemaWorkspace
     public string Name { get; } = name;
     public string Resource { get; } = resource;
     public SchemaWorkspaceDocument Document { get; } = document;
+
+    /// <summary>
+    /// The children in the assembly tree: the fixed <see cref="NodeDefsItem"/> followed by the members of the schema.
+    /// </summary>
+    public DocumentTreeChildren Children => DocumentTreeChildren.Get(Document.Schema);
 
     /// <summary>
     /// The assembly the schema is embedded in.

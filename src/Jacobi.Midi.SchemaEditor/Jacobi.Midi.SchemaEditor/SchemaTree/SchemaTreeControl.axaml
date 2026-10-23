@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:st="using:Jacobi.Midi.SchemaEditor.SchemaTree"
              xmlns:models="using:Jacobi.Midi.SchemaEditor.Models"
+             xmlns:schema="using:Jacobi.BinarySerializer.Schema"
              x:Class="Jacobi.Midi.SchemaEditor.SchemaTree.SchemaTreeControl">
 
     <DockPanel x:Name="Root" x:DataType="st:SchemaTreeViewModel">
@@ -13,6 +14,25 @@
                     <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,5">
                         <TextBlock Text="{Binding Document.Name}" FontWeight="SemiBold" Foreground="{DynamicResource AppTextBodyBrush}" />
                         <TextBlock Text="document" Foreground="{DynamicResource AppTextMutedBrush}" />
+                    </StackPanel>
+                </TreeDataTemplate>
+                <!-- the fixed first child of a document: its node defs -->
+                <TreeDataTemplate x:DataType="st:NodeDefsItem" ItemsSource="{Binding Document.NodeDefs}">
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,5" Background="Transparent">
+                        <StackPanel.ContextFlyout>
+                            <MenuFlyout FlyoutPresenterClasses="noScroll">
+                                <MenuItem Header="Add Field def" Command="{Binding $parent[st:SchemaTreeControl].AddNodeDefCommand}"
+                                          CommandParameter="{x:Static schema:SchemaNodeKind.Field}" />
+                                <MenuItem Header="Add Group def" Command="{Binding $parent[st:SchemaTreeControl].AddNodeDefCommand}"
+                                          CommandParameter="{x:Static schema:SchemaNodeKind.Group}" />
+                                <MenuItem Header="Add Repeat def" Command="{Binding $parent[st:SchemaTreeControl].AddNodeDefCommand}"
+                                          CommandParameter="{x:Static schema:SchemaNodeKind.Repeat}" />
+                                <MenuItem Header="Add Choice def" Command="{Binding $parent[st:SchemaTreeControl].AddNodeDefCommand}"
+                                          CommandParameter="{x:Static schema:SchemaNodeKind.Choice}" />
+                            </MenuFlyout>
+                        </StackPanel.ContextFlyout>
+                        <TextBlock Text="Node Defs" FontStyle="Italic" Foreground="{DynamicResource AppTextBodyBrush}" />
+                        <TextBlock Text="{Binding Document.NodeDefs.Count}" Foreground="{DynamicResource AppTextMutedBrush}" />
                     </StackPanel>
                 </TreeDataTemplate>
                 <!-- Matches Group, Repeat and Choice. Add a more specific template above this one to style a kind differently. -->
