@@ -78,72 +78,80 @@ are the groups tagged `request`, `ack`, `nak` or `error` in the same envelope ro
 
 ## Examples
 
-A complete, stand-alone envelope and device map (no vendor schemas) are the test schemas in
-[TestDevice.cs](../../Jacobi.Midi.Tests/Addressing/TestDevice.cs): 2 address bytes, a `sys.crc` (CRC-7) checksum, an
-atomic patch nodeDef, a non-atomic group and a repeat with reserved addresses.
+The schemas in the repository:
 
-Roland Type IV envelope ([Roland.xml](../../Jacobi.Midi.Roland/Schemas/Roland.xml)), the messages with a 2 byte address.
-`Message24` and `Message32` are the same messages with 3 and 4 address bytes (`sysex24`/`messageBody24`,
-`sysex32`/`messageBody32`); a device map conforms to one address size only:
+- [TestDevice.cs](../../Jacobi.Midi.Tests/Addressing/TestDevice.cs): a complete envelope and device map without vendor schemas (the test schemas): 2 address bytes, a `sys.crc` (CRC-7) checksum, an atomic patch nodeDef, a non-atomic group and a repeat with reserved addresses.
+- [Roland.xml](../../Jacobi.Midi.Roland/Schemas/Roland.xml): the Roland Type IV envelope (RQ1, DT1). `Message16`, `Message24` and `Message32` are the same messages with 2, 3 and 4 address bytes, each with its own open choice contract (`messageBody16`, `messageBody24`, `messageBody32`); a device map conforms to one address size only.
+- [Gp8.xml](../../Jacobi.Midi.Roland/Schemas/Gp8.xml): a device map with 2 address bytes; a temporary patch and a repeat of 128 memory patches with a stride larger than the patch.
+- [Gx700.xml](../../Jacobi.Midi.Roland/Schemas/Gx700.xml): a device map with 4 address bytes; atomic sections inside a patch.
+
+A minimal stand-alone example (a made-up device, not in the repository). The envelope has a request and a data
+message with a 2 byte address; the checksum and framing processors are left out:
 
 ```xml
-<group name="Message16">
-  <processors>
-    <processor name="midi.sysex"/>
-  </processors>
-  <members>
-    <group name="RQ1" midi.message="request">
-      <members>
-        <field name="RolandId" datatype="sys.uint8" value="0x41"/>
-        <field name="DeviceId" datatype="sys.uint8" midi.role="device.deviceId"/>
-        <field name="ModelId" datatype="sys.uint8" midi.role="device.modelId"/>
-        <field name="Command" datatype="sys.uint8" value="0x11"/>
-        <group name="ChecksumScope">
-          <processors>
-            <processor name="roland.checksum"/>
-          </processors>
-          <members>
-            <field name="Address" nodeDef="sysex16" midi.role="addressStart"/>
-            <field name="Size" nodeDef="sysex16" midi.role="addressSize"/>
-          </members>
-        </group>
-      </members>
-    </group>
-    <group name="DT1" midi.message="data" midi.messageInterval="20">
-      <members>
-        <field name="RolandId" datatype="sys.uint8" value="0x41"/>
-        <field name="DeviceId" datatype="sys.uint8" midi.role="device.deviceId"/>
-        <field name="ModelId" datatype="sys.uint8" midi.role="device.modelId"/>
-        <field name="Command" datatype="sys.uint8" value="0x12"/>
-        <group name="ChecksumScope">
-          <processors>
-            <processor name="roland.checksum"/>
-          </processors>
-          <members>
-            <field name="Address" nodeDef="sysex16" midi.role="addressStart"/>
-            <choice name="Data" memberNodeDef="messageBody16" midi.role="data"/>
-          </members>
-        </group>
-      </members>
-    </group>
-  </members>
-</group>
+<!-- envelope schema 'Acme' -->
+<nodeDefs>
+  <group name="body"/>
+  <field name="address" datatype="sys.uint16" byteLength="2">
+    <processor name="midi.sysexbyte"/>
+  </field>
+</nodeDefs>
+<members>
+  <group name="Messages">
+    <members>
+      <group name="Request" midi.message="request">
+        <members>
+          <field name="Command" datatype="sys.uint8" value="0x01"/>
+          <field name="Model" datatype="sys.uint8" midi.role="device.model"/>
+          <field name="Address" nodeDef="address" midi.role="addressStart"/>
+          <field name="Size" nodeDef="address" midi.role="addressSize"/>
+        </members>
+      </group>
+      <group name="Data" midi.message="data" midi.messageInterval="10">
+        <members>
+          <field name="Command" datatype="sys.uint8" value="0x02"/>
+          <field name="Model" datatype="sys.uint8" midi.role="device.model"/>
+          <field name="Address" nodeDef="address" midi.role="addressStart"/>
+          <choice name="Body" memberNodeDef="body" midi.role="data"/>
+        </members>
+      </group>
+    </members>
+  </group>
+</members>
 ```
 
-GP-8 device map ([Gp8.xml](../../Jacobi.Midi.Roland/Schemas/Gp8.xml)); the patch layout is an atomic group nodeDef
-`patch` of 0x32 addresses without addresses of its own:
+The device map conforms to the envelope's `body` and fixes the device value `model`. `Edit` starts at 0 and
+`Global` follows it; the 16 programs start at wire address `10 00` (linear 0x0800), 0x20 addresses apart:
 
 ```xml
-<group name="AddressMap" nodeDef="roland.messageBody16" midi.device.modelId="0x13">
-  <members>
-    <group name="Temporary" nodeDef="patch" midi.addressSize="0x00-40" />
-    <repeat name="Memory" count="128" midi.addressStart="0x40-00" midi.addressSize="0x00-40">
-      <members>
-        <group name="Patch" nodeDef="patch" />
-      </members>
-    </repeat>
-  </members>
-</group>
+<!-- device schema, includes 'acme' -->
+<nodeDefs>
+  <group name="program" midi.atomic="true">
+    <members>
+      <field name="Level" datatype="sys.uint8"/>
+      <field name="Name" datatype="sys.string" byteLength="8">
+        <processor name="midi.string"/>
+      </field>
+    </members>
+  </group>
+</nodeDefs>
+<members>
+  <group name="AddressMap" nodeDef="acme.body" midi.device.model="0x2A">
+    <members>
+      <group name="Edit" nodeDef="program" midi.addressSize="0x00-10"/>
+      <group name="Global" midi.access="read">
+        <members>
+          <field name="Version" datatype="sys.uint8"/>
+        </members>
+      </group>
+      <repeat name="Programs" count="16" midi.addressStart="0x10-00" midi.addressSize="0x00-20">
+        <members>
+          <group name="Program" nodeDef="program"/>
+        </members>
+      </repeat>
+    </members>
+  </group>
+</members>
 ```
 
 Yamaha envelope and map (CP88 family, a sketch, not yet in the repository; see

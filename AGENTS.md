@@ -14,6 +14,7 @@
 - If a tool does not work as expected, tell the user. Describe the problem and propose an alternative.
 - Use the jargon of the project, how things are called in the code and documentation. When referencing code, use the exact terms used there, in the code itself or its comments.
 - When an item on the todo list is done, mark it of - do not delete it. Marked items are read-only and will never change, even if the item they describe is no longer valid or accurate.
+- Don't copy-paste code or data from project files to document a concept or mechanism. Reference to the files as examples or create stand-alone examples that don't go out of sync when the code evolves.
 
 ## Project Overview
 
