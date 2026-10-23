@@ -4,6 +4,8 @@ using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Jacobi.Midi.SchemaEditor.Models;
 
@@ -17,6 +19,10 @@ namespace Jacobi.Midi.SchemaEditor.SchemaTree;
 /// An item that is not shown in the tree is kept by the host but not selected in the tree.
 /// The context menu of a group executes <see cref="InstantiateCommand"/> or <see cref="MatchCommand"/> with that group as parameter;
 /// the context menu of the node defs item executes <see cref="AddNodeDefCommand"/> with the node kind as parameter.
+/// The arrange commands (<see cref="MoveUpCommand"/>, <see cref="MoveDownCommand"/>, <see cref="IndentCommand"/> and
+/// <see cref="OutdentCommand"/>, executed without parameter on the selected node) are in the context menu of a node and on Alt+arrow keys;
+/// <see cref="ChangeKindCommand"/> (with the node kind as parameter) is in the context menu of a group.
+/// A right click selects the node before its context menu opens.
 /// </summary>
 internal partial class SchemaTreeControl : UserControl
 {
@@ -36,6 +42,21 @@ internal partial class SchemaTreeControl : UserControl
     public static readonly StyledProperty<ICommand?> AddNodeDefCommandProperty =
         AvaloniaProperty.Register<SchemaTreeControl, ICommand?>(nameof(AddNodeDefCommand));
 
+    public static readonly StyledProperty<ICommand?> MoveUpCommandProperty =
+        AvaloniaProperty.Register<SchemaTreeControl, ICommand?>(nameof(MoveUpCommand));
+
+    public static readonly StyledProperty<ICommand?> MoveDownCommandProperty =
+        AvaloniaProperty.Register<SchemaTreeControl, ICommand?>(nameof(MoveDownCommand));
+
+    public static readonly StyledProperty<ICommand?> IndentCommandProperty =
+        AvaloniaProperty.Register<SchemaTreeControl, ICommand?>(nameof(IndentCommand));
+
+    public static readonly StyledProperty<ICommand?> OutdentCommandProperty =
+        AvaloniaProperty.Register<SchemaTreeControl, ICommand?>(nameof(OutdentCommand));
+
+    public static readonly StyledProperty<ICommand?> ChangeKindCommandProperty =
+        AvaloniaProperty.Register<SchemaTreeControl, ICommand?>(nameof(ChangeKindCommand));
+
     private readonly SchemaTreeViewModel _viewModel = new();
     // set while the selection is synchronized between the control and its view model
     private bool _synchronizing;
@@ -47,6 +68,98 @@ internal partial class SchemaTreeControl : UserControl
         // DataContext so bindings on it (EditDocument, SelectedItem) resolve against the host.
         Root.DataContext = _viewModel;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+        // tunnel: the tree handles the arrow keys itself (navigation) before they bubble
+        Tree.AddHandler(KeyDownEvent, OnTreeKeyDown, RoutingStrategies.Tunnel);
+    }
+
+    /// <summary>
+    /// The command that moves the selected node up among its siblings (Alt+Up).
+    /// </summary>
+    public ICommand? MoveUpCommand
+    {
+        get => GetValue(MoveUpCommandProperty);
+        set => SetValue(MoveUpCommandProperty, value);
+    }
+
+    /// <summary>
+    /// The command that moves the selected node down among its siblings (Alt+Down).
+    /// </summary>
+    public ICommand? MoveDownCommand
+    {
+        get => GetValue(MoveDownCommandProperty);
+        set => SetValue(MoveDownCommandProperty, value);
+    }
+
+    /// <summary>
+    /// The command that moves the selected node into the group before it (Alt+Right).
+    /// </summary>
+    public ICommand? IndentCommand
+    {
+        get => GetValue(IndentCommandProperty);
+        set => SetValue(IndentCommandProperty, value);
+    }
+
+    /// <summary>
+    /// The command that moves the selected node out of its parent group (Alt+Left).
+    /// </summary>
+    public ICommand? OutdentCommand
+    {
+        get => GetValue(OutdentCommandProperty);
+        set => SetValue(OutdentCommandProperty, value);
+    }
+
+    /// <summary>
+    /// The command that changes the type of the selected group; its parameter is the <see cref="Jacobi.BinarySerializer.Schema.SchemaNodeKind"/>.
+    /// </summary>
+    public ICommand? ChangeKindCommand
+    {
+        get => GetValue(ChangeKindCommandProperty);
+        set => SetValue(ChangeKindCommandProperty, value);
+    }
+
+    private void OnTreeKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyModifiers != KeyModifiers.Alt)
+        {
+            return;
+        }
+        var command = e.Key switch
+        {
+            Key.Up => MoveUpCommand,
+            Key.Down => MoveDownCommand,
+            Key.Right => IndentCommand,
+            Key.Left => OutdentCommand,
+            _ => null
+        };
+        if (command is null)
+        {
+            return;
+        }
+        if (command.CanExecute(null))
+        {
+            command.Execute(null);
+            // the moved item gets a new container: keep the keyboard focus on it
+            Dispatcher.UIThread.Post(FocusSelectedItem, DispatcherPriority.Loaded);
+        }
+        e.Handled = true;
+    }
+
+    private void FocusSelectedItem()
+    {
+        if (_viewModel.SelectedItem is not { } treeItem || _viewModel.GetPath(SchemaTreeViewModel.ToItem(treeItem)!) is not { } path)
+        {
+            return;
+        }
+        ItemsControl level = Tree;
+        foreach (var ancestor in path)
+        {
+            if (level.ContainerFromItem(ancestor) is not TreeViewItem container)
+            {
+                return;
+            }
+            level = container;
+        }
+        (level.ContainerFromItem(treeItem) as TreeViewItem)?.Focus();
     }
 
     /// <summary>

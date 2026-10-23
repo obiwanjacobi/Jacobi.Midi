@@ -46,6 +46,18 @@
                                 <MenuItem Header="Match…" ToolTip.Tip="Read a SysEx file or received message into the values of this group"
                                           Command="{Binding $parent[st:SchemaTreeControl].MatchCommand}"
                                           CommandParameter="{Binding}" />
+                                <Separator />
+                                <MenuItem Header="Move up" InputGesture="Alt+Up" Command="{Binding $parent[st:SchemaTreeControl].MoveUpCommand}" />
+                                <MenuItem Header="Move down" InputGesture="Alt+Down" Command="{Binding $parent[st:SchemaTreeControl].MoveDownCommand}" />
+                                <MenuItem Header="Move into group above" InputGesture="Alt+Right" Command="{Binding $parent[st:SchemaTreeControl].IndentCommand}" />
+                                <MenuItem Header="Move out of group" InputGesture="Alt+Left" Command="{Binding $parent[st:SchemaTreeControl].OutdentCommand}" />
+                                <Separator />
+                                <MenuItem Header="Change to Group" Command="{Binding $parent[st:SchemaTreeControl].ChangeKindCommand}"
+                                          CommandParameter="{x:Static schema:SchemaNodeKind.Group}" />
+                                <MenuItem Header="Change to Repeat" Command="{Binding $parent[st:SchemaTreeControl].ChangeKindCommand}"
+                                          CommandParameter="{x:Static schema:SchemaNodeKind.Repeat}" />
+                                <MenuItem Header="Change to Choice" Command="{Binding $parent[st:SchemaTreeControl].ChangeKindCommand}"
+                                          CommandParameter="{x:Static schema:SchemaNodeKind.Choice}" />
                             </MenuFlyout>
                         </StackPanel.ContextFlyout>
                         <TextBlock Text="{Binding Name}" Foreground="{DynamicResource AppTextBodyBrush}" />
@@ -53,7 +65,15 @@
                     </StackPanel>
                 </TreeDataTemplate>
                 <DataTemplate x:DataType="models:EditField">
-                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,5">
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,5" Background="Transparent">
+                        <StackPanel.ContextFlyout>
+                            <MenuFlyout FlyoutPresenterClasses="noScroll">
+                                <MenuItem Header="Move up" InputGesture="Alt+Up" Command="{Binding $parent[st:SchemaTreeControl].MoveUpCommand}" />
+                                <MenuItem Header="Move down" InputGesture="Alt+Down" Command="{Binding $parent[st:SchemaTreeControl].MoveDownCommand}" />
+                                <MenuItem Header="Move into group above" InputGesture="Alt+Right" Command="{Binding $parent[st:SchemaTreeControl].IndentCommand}" />
+                                <MenuItem Header="Move out of group" InputGesture="Alt+Left" Command="{Binding $parent[st:SchemaTreeControl].OutdentCommand}" />
+                            </MenuFlyout>
+                        </StackPanel.ContextFlyout>
                         <TextBlock Text="{Binding Name}" Foreground="{DynamicResource AppTextBodyBrush}" />
                         <TextBlock Text="{Binding DataType}" Foreground="{DynamicResource AppTextMutedBrush}" />
                     </StackPanel>

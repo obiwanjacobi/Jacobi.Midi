@@ -354,8 +354,11 @@ internal sealed partial class MainViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(SelectedNode))]
     [NotifyPropertyChangedFor(nameof(SelectedItemPath))]
     [NotifyPropertyChangedFor(nameof(IsDocumentSelected))]
+    [NotifyPropertyChangedFor(nameof(CanArrange), nameof(CanChangeNodeType))]
     [NotifyCanExecuteChangedFor(nameof(DeleteItemCommand))]
     [NotifyCanExecuteChangedFor(nameof(InstantiateSchemaCommand), nameof(MatchSchemaCommand))]
+    [NotifyCanExecuteChangedFor(nameof(MoveNodeUpCommand), nameof(MoveNodeDownCommand), nameof(IndentNodeCommand), nameof(OutdentNodeCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ChangeNodeKindCommand))]
     public partial object? SelectedItem { get; set; }
 
     /// <summary>
@@ -838,6 +841,115 @@ internal sealed partial class MainViewModel : ViewModelBase
     private object? GetDeletableItem() => SelectedItem is EditDocument or NodeDefsItem ? null : SelectedItem;
 
     private bool CanDeleteItem() => !IsReadOnly && GetDeletableItem() is not null;
+
+    /// <summary>
+    /// The selected node (a member or a node def) when it can be moved or changed; null for the document root or a read-only document.
+    /// </summary>
+    private EditNode? ArrangeableNode => !IsReadOnly && ActiveDocument is not null && SelectedItem is EditNode node and not EditDocument ? node : null;
+
+    // The Arrange menu: moving applies to any node, changing the type only to a group, repeat or choice.
+    public bool CanArrange => ArrangeableNode is not null;
+    public bool CanChangeNodeType => ArrangeableNode is EditGroup;
+
+    /// <summary>
+    /// Moves the selected node one place up among its siblings.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanMoveNodeUp))]
+    private void MoveNodeUp() => ArrangeNode(node => ActiveDocument!.MoveNode(node, -1), "Moved {0} up.");
+
+    private bool CanMoveNodeUp() => ArrangeableNode is { } node && ActiveDocument!.CanMoveNode(node, -1);
+
+    /// <summary>
+    /// Moves the selected node one place down among its siblings.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanMoveNodeDown))]
+    private void MoveNodeDown() => ArrangeNode(node => ActiveDocument!.MoveNode(node, 1), "Moved {0} down.");
+
+    private bool CanMoveNodeDown() => ArrangeableNode is { } node && ActiveDocument!.CanMoveNode(node, 1);
+
+    /// <summary>
+    /// Moves the selected node into the group right before it.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanIndentNode))]
+    private void IndentNode() => ArrangeNode(node => ActiveDocument!.IndentNode(node), "Moved {0} into the group before it.");
+
+    private bool CanIndentNode() => ArrangeableNode is { } node && ActiveDocument!.CanIndentNode(node);
+
+    /// <summary>
+    /// Moves the selected node out of its parent group, right after the parent.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanOutdentNode))]
+    private void OutdentNode() => ArrangeNode(node => ActiveDocument!.OutdentNode(node), "Moved {0} out of its group.");
+
+    private bool CanOutdentNode() => ArrangeableNode is { } node && ActiveDocument!.CanOutdentNode(node);
+
+    /// <summary>
+    /// Applies <paramref name="arrange"/> to the selected node and selects it again: moving it in the tree drops its selection there.
+    /// </summary>
+    private void ArrangeNode(Action<EditNode> arrange, string message)
+    {
+        if (ArrangeableNode is not { } node)
+        {
+            return;
+        }
+        try
+        {
+            arrange(node);
+            SelectedItem = null;
+            SelectedItem = node;
+            StatusMessage = String.Format(CultureInfo.CurrentCulture, message, node.Name);
+        }
+        catch (Exception exception) when (IsSchemaError(exception))
+        {
+            StatusMessage = $"{node.Name} was not moved: {exception.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Changes the selected group, repeat or choice into a node of <paramref name="kind"/>. When values of the current kind
+    /// would be lost, the user confirms it first (there is no undo).
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanChangeNodeKind))]
+    private void ChangeNodeKind(SchemaNodeKind kind)
+    {
+        if (!CanChangeNodeKind(kind) || SelectedItem is not EditGroup node)
+        {
+            return;
+        }
+        var lost = SchemaWorkspaceDocument.GetLostByKindChange(node, kind);
+        if (lost.Count == 0)
+        {
+            ApplyNodeKind(node, kind);
+            return;
+        }
+        var what = node.Kind.ToString().ToLowerInvariant();
+        ConfirmDialog = new ConfirmViewModel("CHANGE TYPE", $"Change {what} '{node.Name}' into a {kind.ToString().ToLowerInvariant()}",
+            $"The {String.Join(", ", lost)} of the {what} will be removed. This cannot be undone. Continue?",
+            "Change", (dialog, confirmed) =>
+            {
+                ConfirmDialog = null;
+                if (confirmed && ReferenceEquals(SelectedItem, node))
+                {
+                    ApplyNodeKind(node, kind);
+                }
+            });
+    }
+
+    private bool CanChangeNodeKind(SchemaNodeKind kind)
+        => ArrangeableNode is EditGroup node && node.Kind != kind && kind is SchemaNodeKind.Group or SchemaNodeKind.Repeat or SchemaNodeKind.Choice;
+
+    private void ApplyNodeKind(EditGroup node, SchemaNodeKind kind)
+    {
+        try
+        {
+            SelectedItem = ActiveDocument!.ChangeNodeKind(node, kind);
+            StatusMessage = $"Changed {node.Name} into a {kind.ToString().ToLowerInvariant()}.";
+        }
+        catch (Exception exception) when (IsSchemaError(exception))
+        {
+            StatusMessage = $"The type of {node.Name} was not changed: {exception.Message}";
+        }
+    }
 
     /// <summary>
     /// Opens the instantiate dialog for the selected group of the <see cref="ActiveDocument"/> (an open document or,

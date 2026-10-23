@@ -102,7 +102,12 @@
                                                   SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
                                                   InstantiateCommand="{Binding InstantiateSchemaCommand}"
                                                   MatchCommand="{Binding MatchSchemaCommand}"
-                                                  AddNodeDefCommand="{Binding AddNodeDefCommand}" />
+                                                  AddNodeDefCommand="{Binding AddNodeDefCommand}"
+                                                  MoveUpCommand="{Binding MoveNodeUpCommand}"
+                                                  MoveDownCommand="{Binding MoveNodeDownCommand}"
+                                                  IndentCommand="{Binding IndentNodeCommand}"
+                                                  OutdentCommand="{Binding OutdentNodeCommand}"
+                                                  ChangeKindCommand="{Binding ChangeNodeKindCommand}" />
                         </DockPanel>
                     </TabItem>
                     <TabItem Header="Assemblies">

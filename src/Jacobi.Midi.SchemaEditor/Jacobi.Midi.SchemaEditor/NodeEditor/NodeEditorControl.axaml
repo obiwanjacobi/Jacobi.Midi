@@ -453,7 +453,7 @@
     </UserControl.DataTemplates>
 
     <Grid RowDefinitions="Auto,Auto,*,Auto" Classes.readonly="{Binding IsReadOnly}">
-        <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+        <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="8">
             <StackPanel Spacing="4">
                 <TextBlock Text="NODE EDITOR" FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
                 <TextBlock Text="{Binding SelectedItemPath}" FontSize="22" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
@@ -481,7 +481,22 @@
                     </MenuFlyout>
                 </Button.Flyout>
             </Button>
-            <Button Grid.Column="3" VerticalAlignment="Bottom" Content="Delete" Command="{Binding DeleteItemCommand}"
+            <Button Grid.Column="3" VerticalAlignment="Bottom" Content="Arrange ▾" IsEnabled="{Binding CanArrange}"
+                    ToolTip.Tip="Order the selected node in its parent, move it into or out of a group, or change its type">
+                <Button.Flyout>
+                    <MenuFlyout Placement="BottomEdgeAlignedRight">
+                        <MenuItem Header="Move up" InputGesture="Alt+Up" Command="{Binding MoveNodeUpCommand}" />
+                        <MenuItem Header="Move down" InputGesture="Alt+Down" Command="{Binding MoveNodeDownCommand}" />
+                        <MenuItem Header="Move into group above" InputGesture="Alt+Right" Command="{Binding IndentNodeCommand}" />
+                        <MenuItem Header="Move out of group" InputGesture="Alt+Left" Command="{Binding OutdentNodeCommand}" />
+                        <Separator IsVisible="{Binding CanChangeNodeType}" />
+                        <MenuItem Header="Change to Group" Command="{Binding ChangeNodeKindCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Group}" IsVisible="{Binding CanChangeNodeType}" />
+                        <MenuItem Header="Change to Repeat" Command="{Binding ChangeNodeKindCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Repeat}" IsVisible="{Binding CanChangeNodeType}" />
+                        <MenuItem Header="Change to Choice" Command="{Binding ChangeNodeKindCommand}" CommandParameter="{x:Static schema:SchemaNodeKind.Choice}" IsVisible="{Binding CanChangeNodeType}" />
+                    </MenuFlyout>
+                </Button.Flyout>
+            </Button>
+            <Button Grid.Column="4" VerticalAlignment="Bottom" Content="Delete" Command="{Binding DeleteItemCommand}"
                     ToolTip.Tip="Delete the selected item" />
         </Grid>
 

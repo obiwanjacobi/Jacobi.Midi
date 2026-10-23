@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.SchemaEditor.Services;
@@ -149,6 +150,172 @@ internal sealed partial class SchemaWorkspaceDocument : ObservableObject
         }
         MarkChanged();
     }
+
+    /// <summary>
+    /// True when <paramref name="node"/> can move <paramref name="offset"/> places among its siblings (see <see cref="MoveNode"/>).
+    /// </summary>
+    public bool CanMoveNode(EditNode node, int offset)
+        => FindSiblings(node) is { } siblings && siblings.IndexOf(node) + offset is var index && index >= 0 && index < siblings.Count;
+
+    /// <summary>
+    /// Moves <paramref name="node"/> <paramref name="offset"/> places among its siblings: the members of its parent group,
+    /// or the node defs for a top-level node def. A negative offset moves it up.
+    /// </summary>
+    public void MoveNode(EditNode node, int offset)
+    {
+        if (!CanMoveNode(node, offset))
+        {
+            throw new InvalidOperationException($"'{node.Name}' cannot be moved {(offset < 0 ? "up" : "down")}.");
+        }
+        var siblings = GetSiblings(node);
+        var index = siblings.IndexOf(node);
+        siblings.Move(index, index + offset);
+        MarkChanged();
+    }
+
+    /// <summary>
+    /// True when <paramref name="node"/> can be moved into the group right before it (see <see cref="IndentNode"/>).
+    /// </summary>
+    public bool CanIndentNode(EditNode node)
+        => FindSiblings(node) is { } siblings && siblings.IndexOf(node) is > 0 and var index
+            && siblings[index - 1] is EditGroup and not EditChoice { MemberNodeDef: not null };
+
+    /// <summary>
+    /// Moves <paramref name="node"/> into the group right before it (a group, repeat or closed choice), as its last member.
+    /// </summary>
+    public void IndentNode(EditNode node)
+    {
+        if (!CanIndentNode(node))
+        {
+            throw new InvalidOperationException($"'{node.Name}' has no group before it to move into.");
+        }
+        var siblings = GetSiblings(node);
+        var group = (EditGroup)siblings[siblings.IndexOf(node) - 1];
+        siblings.Remove(node);
+        node.Parent = group;
+        group.Members.Add(node);
+        MarkChanged();
+    }
+
+    /// <summary>
+    /// True when <paramref name="node"/> can be moved out of its parent group (see <see cref="OutdentNode"/>).
+    /// Not for a top-level member or a member of a top-level node def: it would leave the document or the node def.
+    /// </summary>
+    public bool CanOutdentNode(EditNode node)
+        => node.Parent is { Parent: { } outer } parent && parent.Members.Contains(node) && outer.Members.Contains(parent);
+
+    /// <summary>
+    /// Moves <paramref name="node"/> out of its parent group into the group that holds the parent, right after the parent.
+    /// </summary>
+    public void OutdentNode(EditNode node)
+    {
+        if (!CanOutdentNode(node))
+        {
+            throw new InvalidOperationException($"'{node.Name}' cannot be moved out of its parent.");
+        }
+        var parent = node.Parent!;
+        var outer = parent.Parent!;
+        parent.Members.Remove(node);
+        node.Parent = outer;
+        outer.Members.Insert(outer.Members.IndexOf(parent) + 1, node);
+        MarkChanged();
+    }
+
+    /// <summary>
+    /// The values of <paramref name="node"/> that are lost when its kind changes to <paramref name="kind"/> (see <see cref="ChangeNodeKind"/>):
+    /// the count of a repeat, the selected index, member node def and pipeline of a choice and their value processors,
+    /// when they differ from the defaults of a new node. Empty when nothing is lost.
+    /// </summary>
+    public static IReadOnlyList<string> GetLostByKindChange(EditGroup node, SchemaNodeKind kind)
+    {
+        var lost = new List<string>();
+        if (node.Kind == kind)
+        {
+            return lost;
+        }
+        switch (node)
+        {
+            case EditRepeat repeat:
+                if (repeat.Count is not 1)
+                {
+                    lost.Add("count");
+                }
+                if (repeat.ValueProcessors.Count > 0)
+                {
+                    lost.Add("value processors");
+                }
+                break;
+            case EditChoice choice:
+                if (choice.SelectedIndex is not 0)
+                {
+                    lost.Add("selected index");
+                }
+                if (choice.MemberNodeDef is not null)
+                {
+                    lost.Add("member node def");
+                }
+                if (choice.Pipeline is not null)
+                {
+                    lost.Add("pipeline");
+                }
+                if (choice.ValueProcessors.Count > 0)
+                {
+                    lost.Add("value processors");
+                }
+                break;
+        }
+        return lost;
+    }
+
+    /// <summary>
+    /// Replaces <paramref name="node"/> (a group, repeat or choice) by a node of <paramref name="kind"/> at the same place.
+    /// The new node keeps the name, node def, byte size, properties, processors and members; the values only the old kind has
+    /// are dropped (see <see cref="GetLostByKindChange"/>) and the new kind gets the defaults of a new node.
+    /// </summary>
+    /// <returns>The new node.</returns>
+    public EditGroup ChangeNodeKind(EditGroup node, SchemaNodeKind kind)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        if (node is EditDocument || kind is not (SchemaNodeKind.Group or SchemaNodeKind.Repeat or SchemaNodeKind.Choice))
+        {
+            throw new NotSupportedException($"Cannot change '{node.Name}' into a {kind}.");
+        }
+        if (node.Kind == kind)
+        {
+            return node;
+        }
+        var siblings = GetSiblings(node);
+        var changed = (EditGroup)CreateNode(kind, node.Parent, node.Name);
+        changed.NodeDef = node.NodeDef;
+        changed.ByteSize = node.ByteSize;
+        changed.Properties = node.Properties;
+        changed.Processors = node.Processors;
+        changed.Members = node.Members;
+        foreach (var member in changed.Members)
+        {
+            member.Parent = changed;
+        }
+        siblings[siblings.IndexOf(node)] = changed;
+        MarkChanged();
+        return changed;
+    }
+
+    /// <summary>
+    /// The collection that holds <paramref name="node"/>: the members of its parent group, or the node defs for a top-level node def.
+    /// Null for the document itself or a node that is not part of this document.
+    /// </summary>
+    private ObservableCollection<EditNode>? FindSiblings(EditNode node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        if (node.Parent is { } parent)
+        {
+            return parent.Members.Contains(node) ? parent.Members : null;
+        }
+        return Schema.NodeDefs.Contains(node) ? Schema.NodeDefs : null;
+    }
+
+    private ObservableCollection<EditNode> GetSiblings(EditNode node)
+        => FindSiblings(node) ?? throw new ArgumentException($"'{node.Name}' is not part of this document.", nameof(node));
 
     /// <summary>
     /// Creates a node of <paramref name="kind"/> with default values: a field is a sys.uint8,
