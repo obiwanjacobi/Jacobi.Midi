@@ -29,8 +29,8 @@ internal sealed class EnvelopeSource(AddressRange addresses, DeviceValues device
 
         long? value = role switch
         {
-            MidiProperties.RoleAddressStart => addresses.Start,
-            MidiProperties.RoleAddressSize => addresses.Size,
+            MidiProperties.RoleAddress => addresses.Start,
+            MidiProperties.RoleSize => addresses.Size,
             _ when role.StartsWith(MidiProperties.RoleDevicePrefix, StringComparison.OrdinalIgnoreCase) =>
                 device.TryGet(role[MidiProperties.RoleDevicePrefix.Length..], out var deviceValue)
                     ? deviceValue
@@ -74,7 +74,7 @@ internal sealed class EnvelopeSource(AddressRange addresses, DeviceValues device
 /// </summary>
 internal sealed class EnvelopeSink(Func<EnvelopeSink, EnvelopeBody<IValueSink>> selectBody) : IOpenChoiceSink
 {
-    /// <summary>The address read from the <c>addressStart</c> field; null before it was read.</summary>
+    /// <summary>The address read from the <c>address</c> field; null before it was read.</summary>
     public long? Address { get; private set; }
 
     /// <summary>The device values read from the <c>device.&lt;name&gt;</c> fields.</summary>
@@ -87,7 +87,7 @@ internal sealed class EnvelopeSink(Func<EnvelopeSink, EnvelopeBody<IValueSink>> 
             return;
         }
 
-        if (String.Equals(role, MidiProperties.RoleAddressStart, StringComparison.OrdinalIgnoreCase))
+        if (String.Equals(role, MidiProperties.RoleAddress, StringComparison.OrdinalIgnoreCase))
         {
             Address = Convert.ToInt64(value.Value, CultureInfo.InvariantCulture);
         }

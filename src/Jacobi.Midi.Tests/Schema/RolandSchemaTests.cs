@@ -3,6 +3,7 @@ using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.Device.Addressing;
 using Xunit;
 using static Jacobi.Midi.Tests.Schema.TestHelpers;
 
@@ -38,7 +39,7 @@ public class RolandSchemaTests
             .AddServices(CreateServices(_output))
             .Build();
 
-        var valueModel = new AddressMapReadModel();
+        var valueModel = new AddressMapReadModel(AddressMap.Create(serializer, new SchemaName("Gp8.AddressMap")));
 
         var fileBytes = File.ReadAllBytes(PathOf("Schema/gp8-sysex.syx"));
         var reader = new ReadOnlySequence<byte>(fileBytes);
@@ -60,7 +61,7 @@ public class RolandSchemaTests
     }
 }
 
-internal class AddressMapReadModel : IValueSink, IOpenChoiceSink
+internal class AddressMapReadModel(AddressMap map) : IValueSink, IOpenChoiceSink
 {
     private readonly Dictionary<string, object?> _values = new(StringComparer.CurrentCultureIgnoreCase);
     public IReadOnlyDictionary<string, object?> Values => _values;
@@ -102,6 +103,7 @@ internal class AddressMapReadModel : IValueSink, IOpenChoiceSink
     public OpenChoiceSinkResult EnterOpenChoice(OpenChoiceContext context)
     {
         // the first DT1 of the dump holds memory patch 1 (address 40 00)
-        return new(this, "Gp8.AddressMap", "AddressMap.Memory.Patch", new InstancePath([0]));
+        // the map ends its repeats after that patch
+        return new(map.WrapBody(this, "AddressMap.Memory.Patch", new InstancePath([0])), map.Root, "AddressMap.Memory.Patch", new InstancePath([0]));
     }
 }

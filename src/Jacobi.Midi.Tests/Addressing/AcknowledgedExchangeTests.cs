@@ -33,15 +33,15 @@ public class AcknowledgedExchangeTests
                   <members>
                     <field name="Id" datatype="sys.uint8" value="0x7D" />
                     <field name="Command" datatype="sys.uint8" value="0x01" />
-                    <field name="Address" datatype="sys.uint8" byteLength="1" midi.role="addressStart" />
-                    <field name="Size" datatype="sys.uint8" midi.role="addressSize" />
+                    <field name="Address" datatype="sys.uint8" byteLength="1" midi.role="address" />
+                    <field name="Size" datatype="sys.uint8" midi.role="size" />
                   </members>
                 </group>
                 <group name="Data" midi.message="data">
                   <members>
                     <field name="Id" datatype="sys.uint8" value="0x7D" />
                     <field name="Command" datatype="sys.uint8" value="0x02" />
-                    <field name="Address" datatype="sys.uint8" byteLength="1" midi.role="addressStart" />
+                    <field name="Address" datatype="sys.uint8" byteLength="1" midi.role="address" />
                     <choice name="Body" memberNodeDef="body" midi.role="data" />
                   </members>
                 </group>
@@ -59,7 +59,7 @@ public class AcknowledgedExchangeTests
                 </group>
               </members>
             </group>
-            <group name="Map" nodeDef="body" midi.addressStart="0x10">
+            <group name="Map" nodeDef="body" midi.address="0x10">
               <members>
                 <field name="A" datatype="sys.uint8" />
                 <field name="B" datatype="sys.uint8" />

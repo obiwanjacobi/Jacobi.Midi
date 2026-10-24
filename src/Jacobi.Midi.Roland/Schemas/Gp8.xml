@@ -19,8 +19,9 @@
   from 20 00 with a stride of 00 40 (64 addresses, of which 0x32 are used).
 
   The midi.* properties describe the address map (see src/Jacobi.Midi.Device/Addressing/readme.md):
-    midi.addressStart  absolute start address (wire form, as in the manual)
-    midi.addressSize   number of addresses of a node; on a repeat the size of one item (the stride)
+    midi.address       absolute start address (wire form, as in the manual)
+    midi.stride        number of addresses of a node; on a repeat the size of one item (the distance between items)
+    midi.repeat        number of items of a repeat in the address space (a dump may hold fewer)
     midi.atomic        the group is always transferred as a whole
     midi.device.*      device values fixed for the GP-8 (used by the message envelope)
 -->
@@ -234,8 +235,8 @@
   <members>
     <group name="AddressMap" nodeDef="roland.messageBody16" midi.device.modelId="0x13">
       <members>
-        <group name="Temporary" nodeDef="patch" midi.addressStart="0x00-00"/>
-        <repeat name="Memory" count="128" midi.addressStart="0x40-00" midi.addressSize="0x00-40">
+        <group name="Temporary" nodeDef="patch" midi.address="0x00-00"/>
+        <repeat name="Memory" midi.address="0x40-00" midi.stride="0x00-40" midi.repeat="128">
           <members>
             <group name="Patch" nodeDef="patch"/>
           </members>

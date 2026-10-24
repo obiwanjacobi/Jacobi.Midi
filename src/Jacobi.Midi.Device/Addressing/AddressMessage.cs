@@ -44,7 +44,7 @@ public sealed record AddressMessage
     public TimeSpan Interval { get; init; }
     /// <summary>The range over the envelope plan that writes or reads this message.</summary>
     public required PlanRange Range { get; init; }
-    /// <summary>The envelope nodes by role (<c>addressStart</c>, <c>addressSize</c>, <c>device.modelId</c>, <c>data</c>, ...).</summary>
+    /// <summary>The envelope nodes by role (<c>address</c>, <c>size</c>, <c>device.modelId</c>, <c>data</c>, ...).</summary>
     public required IReadOnlyDictionary<string, NodeInfo> Roles { get; init; }
 
     /// <summary>The names of the device values the message needs (the <c>device.&lt;name&gt;</c> roles).</summary>

@@ -3,6 +3,7 @@ using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.Device.Addressing;
 using Xunit;
 
 namespace Jacobi.Midi.Tests.Schema;
@@ -52,7 +53,7 @@ public class Gx700SchemaTests
         {
             var original = messages[section];
 
-            var store = new Gx700SectionStore();
+            var store = new Gx700SectionStore(AddressMap.Create(serializer, new SchemaName("Gx700.AddressMap")));
             var written = RoundTrip(serializer, original, store);
 
             Assert.Equal(PatchArea, store.AreaIndex);
@@ -73,7 +74,7 @@ public class Gx700SchemaTests
         {
             var original = messages[section];
 
-            var store = new Gx700SectionStore();
+            var store = new Gx700SectionStore(AddressMap.Create(serializer, new SchemaName("Gx700.AddressMap")));
             var written = RoundTrip(serializer, original, store);
 
             Assert.Equal(SystemArea, store.AreaIndex);
@@ -120,9 +121,9 @@ public class Gx700SchemaTests
     /// <summary>
     /// A flat value model for one GX-700 DT1 message: keeps the field values read by path and instance and provides
     /// them again for writing. The data open choice selects the patch or system section of the GX-700 address map
-    /// at the address read.
+    /// at the address read; the map ends its repeats after that section.
     /// </summary>
-    private sealed class Gx700SectionStore : IOpenChoiceSink, IOpenChoiceSource
+    private sealed class Gx700SectionStore(AddressMap map) : IOpenChoiceSink, IOpenChoiceSource
     {
         private readonly Dictionary<(string Path, InstancePath Instance), LogicalField> _values = [];
 
@@ -154,10 +155,10 @@ public class Gx700SchemaTests
                 : SourceResult.NoValue();
 
         public OpenChoiceSinkResult EnterOpenChoice(OpenChoiceContext context)
-            => new(this, new SchemaName("Gx700.AddressMap"), SectionPath, SectionInstance);
+            => new(map.WrapBody((IValueSink)this, SectionPath, SectionInstance), map.Root, SectionPath, SectionInstance);
 
         OpenChoiceSourceResult IOpenChoiceSource.EnterOpenChoice(OpenChoiceContext context)
-            => new(this, new SchemaName("Gx700.AddressMap"), SectionPath, SectionInstance);
+            => new(map.WrapBody((IValueSource)this, SectionPath, SectionInstance), map.Root, SectionPath, SectionInstance);
 
         private string SectionPath => AreaIndex switch
         {

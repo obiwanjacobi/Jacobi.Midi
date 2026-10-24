@@ -316,7 +316,7 @@ internal sealed class AddressProtocol
         if (IsReply(message.Kind))
         {
             // a reply only identifies itself (and the device): no address, size or data
-            foreach (var role in new[] { MidiProperties.RoleAddressStart, MidiProperties.RoleAddressSize, MidiProperties.RoleData })
+            foreach (var role in new[] { MidiProperties.RoleAddress, MidiProperties.RoleSize, MidiProperties.RoleData })
             {
                 if (message.Roles.ContainsKey(role))
                 {
@@ -326,19 +326,19 @@ internal sealed class AddressProtocol
             return;
         }
 
-        if (!message.Roles.TryGetValue(MidiProperties.RoleAddressStart, out var address) || address is not FieldInfo)
+        if (!message.Roles.TryGetValue(MidiProperties.RoleAddress, out var address) || address is not FieldInfo)
         {
-            errors.Add($"{message.Name}: the message has no field with the role '{MidiProperties.RoleAddressStart}'.");
+            errors.Add($"{message.Name}: the message has no field with the role '{MidiProperties.RoleAddress}'.");
         }
 
-        var hasSize = message.Roles.ContainsKey(MidiProperties.RoleAddressSize);
+        var hasSize = message.Roles.ContainsKey(MidiProperties.RoleSize);
         if (message.Kind == AddressMessageKind.Request && message.Unit == AddressUnit.Range && !hasSize)
         {
-            errors.Add($"{message.Name}: a request for a range needs a field with the role '{MidiProperties.RoleAddressSize}' (or a '{MidiProperties.Unit}').");
+            errors.Add($"{message.Name}: a request for a range needs a field with the role '{MidiProperties.RoleSize}' (or a '{MidiProperties.Unit}').");
         }
         if (hasSize && (message.Kind == AddressMessageKind.Data || message.Unit != AddressUnit.Range))
         {
-            errors.Add($"{message.Name}: the role '{MidiProperties.RoleAddressSize}' is only used on a request for a range.");
+            errors.Add($"{message.Name}: the role '{MidiProperties.RoleSize}' is only used on a request for a range.");
         }
         if (message.Kind == AddressMessageKind.Request && message.Roles.ContainsKey(MidiProperties.RoleData))
         {
@@ -351,7 +351,7 @@ internal sealed class AddressProtocol
         AddressSpace? space = null;
         foreach (var message in messages)
         {
-            if (!message.Roles.TryGetValue(MidiProperties.RoleAddressStart, out var node) || node is not FieldInfo field)
+            if (!message.Roles.TryGetValue(MidiProperties.RoleAddress, out var node) || node is not FieldInfo field)
             {
                 continue;
             }

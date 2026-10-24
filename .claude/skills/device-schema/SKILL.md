@@ -102,11 +102,11 @@ Put the comment on its own line **above** the member (GP-8 style), not trailing 
 Full rules: `src/Jacobi.Midi.Device/Addressing/readme.md`. In short:
 
 - The root `AddressMap` declares the envelope's open choice body nodeDef for its address size (`roland.messageBody16` for 2 address bytes, `messageBody32` for 4) and the fixed device values (`midi.device.modelId="0x13"`).
-- `midi.addressStart` / `midi.addressSize` are in the **wire form** as written in the manual: hex, bytes separated by `-` (`0x40-00`, `0x00-01-00-00`). `40 00` on the wire is linear 0x2000. Do not write linear addresses.
-- `midi.addressStart` is absolute. Leave it out where the node follows its previous sibling. Never put it inside a repeat item.
-- `midi.addressSize` on a repeat is the size of one item: the stride. It may be larger than the content (reserved addresses).
+- `midi.address` / `midi.stride` are in the **wire form** as written in the manual: hex, bytes separated by `-` (`0x40-00`, `0x00-01-00-00`). `40 00` on the wire is linear 0x2000. Do not write linear addresses.
+- `midi.address` is absolute. Leave it out where the node follows its previous sibling. Never put it inside a repeat item.
+- `midi.stride` is the number of addresses of a node; on a repeat the size of one item (the distance between items). It may be larger than the content (reserved addresses).
 - `midi.atomic="true"` on every group the device always transfers as a whole (one DT1 per patch or section). Do not nest atomic groups.
-- Repeats need a constant `count`. No choices and no virtual fields (`byteOffset`) inside the map.
+- A repeat of the map's own items (`Memory`) has `midi.repeat` with the number of items in the address space and no `count`: a dump may hold fewer items. A fixed list inside a patch keeps its constant `count`. No choices and no virtual fields (`byteOffset`) inside the map.
 - `midi.access="read"` / `"write"` for read-only and trigger addresses.
 
 ## Non-address devices and envelopes

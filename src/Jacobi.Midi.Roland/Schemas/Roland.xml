@@ -16,7 +16,7 @@
 
   The midi.* properties tag the messages for the address map mechanism (see src/Jacobi.Midi.Device/Addressing/readme.md):
     midi.message  request (RQ1) or data (DT1)
-    midi.role     the value a node holds: addressStart, addressSize, device.<name> or data
+    midi.role     the value a node holds: address, size, device.<name> or data
 -->
 <schema name="Roland">
   <includes>
@@ -61,8 +61,8 @@
                 <processor name="roland.checksum"/>
               </processors>
               <members>
-                <field name="Address" nodeDef="sysex16" midi.role="addressStart"/>
-                <field name="Size" nodeDef="sysex16" midi.role="addressSize"/>
+                <field name="Address" nodeDef="sysex16" midi.role="address"/>
+                <field name="Size" nodeDef="sysex16" midi.role="size"/>
               </members>
             </group>
           </members>
@@ -78,7 +78,7 @@
                 <processor name="roland.checksum"/>
               </processors>
               <members>
-                <field name="Address" nodeDef="sysex16" midi.role="addressStart"/>
+                <field name="Address" nodeDef="sysex16" midi.role="address"/>
                 <choice name="Data" memberNodeDef="messageBody16" midi.role="data"/>
               </members>
             </group>
@@ -104,8 +104,8 @@
                 <processor name="roland.checksum"/>
               </processors>
               <members>
-                <field name="Address" nodeDef="sysex24" midi.role="addressStart"/>
-                <field name="Size" nodeDef="sysex24" midi.role="addressSize"/>
+                <field name="Address" nodeDef="sysex24" midi.role="address"/>
+                <field name="Size" nodeDef="sysex24" midi.role="size"/>
               </members>
             </group>
           </members>
@@ -121,7 +121,7 @@
                 <processor name="roland.checksum"/>
               </processors>
               <members>
-                <field name="Address" nodeDef="sysex24" midi.role="addressStart"/>
+                <field name="Address" nodeDef="sysex24" midi.role="address"/>
                 <choice name="Data" memberNodeDef="messageBody24" midi.role="data"/>
               </members>
             </group>
@@ -147,8 +147,8 @@
                 <processor name="roland.checksum"/>
               </processors>
               <members>
-                <field name="Address" nodeDef="sysex32" midi.role="addressStart"/>
-                <field name="Size" nodeDef="sysex32" midi.role="addressSize"/>
+                <field name="Address" nodeDef="sysex32" midi.role="address"/>
+                <field name="Size" nodeDef="sysex32" midi.role="size"/>
               </members>
             </group>
           </members>
@@ -164,7 +164,7 @@
                 <processor name="roland.checksum"/>
               </processors>
               <members>
-                <field name="Address" nodeDef="sysex32" midi.role="addressStart"/>
+                <field name="Address" nodeDef="sysex32" midi.role="address"/>
                 <choice name="Data" memberNodeDef="messageBody32" midi.role="data"/>
               </members>
             </group>

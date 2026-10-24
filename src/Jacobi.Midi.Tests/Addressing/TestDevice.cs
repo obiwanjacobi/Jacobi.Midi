@@ -56,8 +56,8 @@ internal static class TestDevice
                         <processor name="sys.crc" width="7" poly="0x09" init="0" refin="false" refout="false" xorout="0" />
                       </processors>
                       <members>
-                        <field name="Address" nodeDef="address" midi.role="addressStart" />
-                        <field name="Size" nodeDef="address" midi.role="addressSize" />
+                        <field name="Address" nodeDef="address" midi.role="address" />
+                        <field name="Size" nodeDef="address" midi.role="size" />
                       </members>
                     </group>
                   </members>
@@ -73,7 +73,7 @@ internal static class TestDevice
                         <processor name="sys.crc" width="7" poly="0x09" init="0" refin="false" refout="false" xorout="0" />
                       </processors>
                       <members>
-                        <field name="Address" nodeDef="address" midi.role="addressStart" />
+                        <field name="Address" nodeDef="address" midi.role="address" />
                         <choice name="Body" memberNodeDef="body" midi.role="data" />
                       </members>
                     </group>
@@ -125,8 +125,8 @@ internal static class TestDevice
           <members>
             <group name="AddressMap" nodeDef="TestEnvelope.body" midi.device.modelId="0x42">
               <members>
-                <group name="Edit" nodeDef="patch" midi.addressSize="0x00-20" />
-                <group name="Global" midi.addressStart="0x00-40">
+                <group name="Edit" nodeDef="patch" midi.stride="0x00-20" />
+                <group name="Global" midi.address="0x00-40">
                   <members>
                     <field name="Channel" datatype="sys.uint8" />
                     <field name="Text" datatype="sys.string" byteLength="8">
@@ -135,7 +135,7 @@ internal static class TestDevice
                     <field name="Volume" datatype="sys.uint8" />
                   </members>
                 </group>
-                <repeat name="Memory" count="8" midi.addressStart="0x01-00" midi.addressSize="0x00-20">
+                <repeat name="Memory" midi.address="0x01-00" midi.stride="0x00-20" midi.repeat="8">
                   <members>
                     <group name="Patch" nodeDef="patch" />
                   </members>

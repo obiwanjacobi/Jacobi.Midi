@@ -9,8 +9,9 @@ namespace Jacobi.Midi.Device.Addressing;
 /// </summary>
 internal static class MidiProperties
 {
-    public const string AddressStart = "midi.addressStart";
-    public const string AddressSize = "midi.addressSize";
+    public const string Address = "midi.address";
+    public const string Stride = "midi.stride";
+    public const string Repeat = "midi.repeat";
     public const string Atomic = "midi.atomic";
     public const string Access = "midi.access";
     public const string DevicePrefix = "midi.device.";
@@ -23,8 +24,8 @@ internal static class MidiProperties
     public const string Exchange = "midi.exchange";
 
     // values of midi.role
-    public const string RoleAddressStart = "addressStart";
-    public const string RoleAddressSize = "addressSize";
+    public const string RoleAddress = "address";
+    public const string RoleSize = "size";
     public const string RoleData = "data";
     public const string RoleDevicePrefix = "device.";
 

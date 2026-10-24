@@ -6,7 +6,7 @@ namespace Jacobi.Midi.Device.Addressing;
 /// <summary>
 /// How an address is encoded on the wire: <see cref="ByteCount"/> bytes of <see cref="BitsPerByte"/> bits each
 /// (GP-8: 2 x 7, most Roland devices: 4 x 7, Yamaha: 3 x 7). Converts between the wire form and linear addresses.
-/// Taken from the envelope's <c>addressStart</c> field.
+/// Taken from the envelope's <c>address</c> field.
 /// </summary>
 public readonly record struct AddressSpace(int ByteCount, int BitsPerByte = 7)
 {

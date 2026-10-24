@@ -183,8 +183,8 @@ public class MessageExchangeTests
               <members>
                 <group name="AddressMap" nodeDef="TestEnvelope.body" midi.device.modelId="0x7E">
                   <members>
-                    <field name="A" datatype="sys.uint8" midi.addressStart="0x10" />
-                    <field name="B" datatype="sys.uint8" midi.addressStart="0x05" />
+                    <field name="A" datatype="sys.uint8" midi.address="0x10" />
+                    <field name="B" datatype="sys.uint8" midi.address="0x05" />
                   </members>
                 </group>
               </members>
@@ -196,6 +196,42 @@ public class MessageExchangeTests
         var exception = Assert.Throws<AddressMapException>(maps.PrepareAll);
         Assert.Equal("Invalid.AddressMap", exception.Root);
         Assert.Contains(exception.Errors, e => e.StartsWith("AddressMap.B:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void PrepareAll_ReportsInvalidRepeatCounts()
+    {
+        // a repeat without midi.repeat or count, an invalid midi.repeat, and midi.repeat on a field
+        var invalid = Parse("""
+            <schema name="Invalid">
+              <includes>
+                <include schema="TestEnvelope" />
+              </includes>
+              <members>
+                <group name="AddressMap" nodeDef="TestEnvelope.body" midi.device.modelId="0x7E">
+                  <members>
+                    <field name="A" datatype="sys.uint8" midi.repeat="2" />
+                    <repeat name="B" count="2" midi.repeat="0">
+                      <members>
+                        <field name="Value" datatype="sys.uint8" />
+                      </members>
+                    </repeat>
+                    <repeat name="C">
+                      <members>
+                        <field name="Value" datatype="sys.uint8" />
+                      </members>
+                    </repeat>
+                  </members>
+                </group>
+              </members>
+            </schema>
+            """);
+        var maps = new AddressMaps(CreateSerializer(invalid));
+
+        var exception = Assert.Throws<AddressMapException>(maps.PrepareAll);
+        Assert.Contains(exception.Errors, e => e.StartsWith("AddressMap.A:", StringComparison.Ordinal));
+        Assert.Contains(exception.Errors, e => e.StartsWith("AddressMap.B:", StringComparison.Ordinal));
+        Assert.Contains(exception.Errors, e => e.StartsWith("AddressMap.C:", StringComparison.Ordinal));
     }
 
     private static async Task WaitFor(Func<bool> condition)

@@ -3,6 +3,7 @@ using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.Device.Addressing;
 using Xunit;
 
 namespace Jacobi.Midi.Tests.Schema;
@@ -48,7 +49,7 @@ public class Gp8SchemaTests
         {
             var message = file.AsSpan(index * MessageSize, MessageSize).ToArray();
 
-            var store = new Gp8PatchStore();
+            var store = new Gp8PatchStore(AddressMap.Create(serializer, new SchemaName("Gp8.AddressMap")));
             var read = serializer.Deserialize(plan.CreateRange("Message16.DT1"), new ReadOnlySequence<byte>(message), store);
             Assert.Equal(message.Length, read);
             Assert.Equal(index, store.PatchIndex);
@@ -106,7 +107,7 @@ public class Gp8SchemaTests
     {
         var plan = serializer.GetPlan(new SchemaName("Roland.Message16"));
 
-        var store = new Gp8PatchStore();
+        var store = new Gp8PatchStore(AddressMap.Create(serializer, new SchemaName("Gp8.AddressMap")));
         var read = serializer.Deserialize(plan.CreateRange("Message16.DT1"), new ReadOnlySequence<byte>(message), store);
         Assert.Equal(message.Length, read);
 
@@ -132,9 +133,10 @@ public class Gp8SchemaTests
 
     /// <summary>
     /// A flat value model for one GP-8 DT1 message: keeps the field values read by path and instance and provides
-    /// them again for writing. The data open choice selects the memory patch of the GP-8 address map at the address read.
+    /// them again for writing. The data open choice selects the memory patch of the GP-8 address map at the address read;
+    /// the map ends its repeats after that patch.
     /// </summary>
-    private sealed class Gp8PatchStore : IOpenChoiceSink, IOpenChoiceSource
+    private sealed class Gp8PatchStore(AddressMap map) : IOpenChoiceSink, IOpenChoiceSource
     {
         private readonly Dictionary<(string Path, InstancePath Instance), LogicalField> _values = [];
 
@@ -156,10 +158,13 @@ public class Gp8SchemaTests
                 : SourceResult.NoValue();
 
         public OpenChoiceSinkResult EnterOpenChoice(OpenChoiceContext context)
-            => new(this, new SchemaName("Gp8.AddressMap"), "AddressMap.Memory.Patch", new InstancePath([PatchIndex]));
+            => new(map.WrapBody((IValueSink)this, PatchPath, PatchInstance), map.Root, PatchPath, PatchInstance);
 
         OpenChoiceSourceResult IOpenChoiceSource.EnterOpenChoice(OpenChoiceContext context)
-            => new(this, new SchemaName("Gp8.AddressMap"), "AddressMap.Memory.Patch", new InstancePath([PatchIndex]));
+            => new(map.WrapBody((IValueSource)this, PatchPath, PatchInstance), map.Root, PatchPath, PatchInstance);
+
+        private const string PatchPath = "AddressMap.Memory.Patch";
+        private InstancePath PatchInstance => new([PatchIndex]);
 
         // the store is flat: every scope is the store itself
         public IValueSink EnterGroup(GroupContext context) => this;

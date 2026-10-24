@@ -270,7 +270,7 @@ internal sealed class AddressMap
             ?? throw new NotSupportedException(
                 $"The block {block.Addresses} ({block.Nodes.First.Path} to {block.Nodes.Last.Path}) is not one group of the map '{Root}'; a data message can only carry a group.");
 
-        var body = new EnvelopeBody<IValueSource>(Root, target.Target, target.Instance, source);
+        var body = new EnvelopeBody<IValueSource>(Root, target.Target, target.Instance, Wrap(source, target));
         var writer = new ArrayBufferWriter<byte>();
         _serializer.Serialize(message.Range, new EnvelopeSource(block.Addresses, device, body), writer);
         return writer.WrittenSpan.ToArray();
@@ -302,15 +302,30 @@ internal sealed class AddressMap
     /// </summary>
     internal void CopyValues(PlanRange range, IValueSource source, IValueSink sink)
     {
+        var items = MapRepeatItems.Of(_layout, range);
         var writer = new ArrayBufferWriter<byte>();
-        _serializer.Serialize(range, source, writer);
-        _serializer.Deserialize(range, new ReadOnlySequence<byte>(writer.WrittenMemory), sink);
+        _serializer.Serialize(range, new MapRepeatSource(source, items), writer);
+        _serializer.Deserialize(range, new ReadOnlySequence<byte>(writer.WrittenMemory), new MapRepeatSink(sink, items));
     }
+
+    /// <summary>
+    /// Wraps the scope of a data message body (the map) that is narrowed to a target group occurrence, so the repeats
+    /// of the map, which have no count, end after the target (see <see cref="MapRepeatItems"/>).
+    /// </summary>
+    internal IValueSource WrapBody(IValueSource source, SchemaPath target, InstancePath instance)
+        => new MapRepeatSource(source, MapRepeatItems.Of(_layout, target, instance));
+
+    /// <inheritdoc cref="WrapBody(IValueSource, SchemaPath, InstancePath)"/>
+    internal IValueSink WrapBody(IValueSink sink, SchemaPath target, InstancePath instance)
+        => new MapRepeatSink(sink, MapRepeatItems.Of(_layout, target, instance));
+
+    private IValueSource Wrap(IValueSource source, GroupTarget target) => WrapBody(source, target.Target, target.Instance);
+    private IValueSink Wrap(IValueSink sink, GroupTarget target) => WrapBody(sink, target.Target, target.Instance);
 
     internal long Decode(ReceivedData data, IValueSink sink)
     {
         var target = data.Target;
-        var envelope = new EnvelopeSink(_ => new EnvelopeBody<IValueSink>(Root, target.Target, target.Instance, sink));
+        var envelope = new EnvelopeSink(_ => new EnvelopeBody<IValueSink>(Root, target.Target, target.Instance, Wrap(sink, target)));
         return _serializer.Deserialize(data.Message.Range, new ReadOnlySequence<byte>(data.SysEx), envelope);
     }
 
@@ -345,7 +360,7 @@ internal sealed class AddressMap
                     throw new InvalidOperationException("No group of the map fits the data.");
                 }
                 tried = candidates[attempt];
-                return new EnvelopeBody<IValueSink>(Root, tried.Target, tried.Instance, NullSink.Instance);
+                return new EnvelopeBody<IValueSink>(Root, tried.Target, tried.Instance, Wrap(NullSink.Instance, tried));
             }
 
             try

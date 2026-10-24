@@ -47,7 +47,7 @@
     <group name="patch">
       <members>
         <!-- Section 00: 66 bytes. -->
-        <group name="Common" midi.atomic="true" midi.addressSize="0x01-00">
+        <group name="Common" midi.atomic="true" midi.stride="0x01-00">
           <members>
             <!-- 0x00: [TODO] 0x4E in the dump (patch level?) -->
             <field name="Unknown00" datatype="sys.uint8" />
@@ -67,7 +67,7 @@
         </group>
 
         <!-- Section 01: 8 bytes. -->
-        <group name="Compressor" midi.atomic="true" midi.addressSize="0x01-00">
+        <group name="Compressor" midi.atomic="true" midi.stride="0x01-00">
           <members>
             <!-- 0x00: 0 = off, 1 = on -->
             <field name="On" datatype="roland.switch" />
@@ -89,7 +89,7 @@
         </group>
 
         <!-- Section 02: 13 bytes. -->
-        <group name="Wah" midi.atomic="true" midi.addressSize="0x01-00">
+        <group name="Wah" midi.atomic="true" midi.stride="0x01-00">
           <members>
             <!-- 0x00: 0 = off, 1 = on -->
             <field name="On" datatype="roland.switch" />
@@ -121,7 +121,7 @@
         </group>
 
         <!-- Section 03: 6 bytes. -->
-        <group name="OverdriveDistortion" midi.atomic="true" midi.addressSize="0x01-00">
+        <group name="OverdriveDistortion" midi.atomic="true" midi.stride="0x01-00">
           <members>
             <!-- 0x00: 0 = off, 1 = on -->
             <field name="On" datatype="roland.switch" />
@@ -139,7 +139,7 @@
         </group>
 
         <!-- Section 04: 10 bytes. -->
-        <group name="Preamp" midi.atomic="true" midi.addressSize="0x01-00">
+        <group name="Preamp" midi.atomic="true" midi.stride="0x01-00">
           <members>
             <!-- 0x00: 0 = off, 1 = on -->
             <field name="On" datatype="roland.switch" />
@@ -166,7 +166,7 @@
         </group>
 
         <!-- Section 05: 4 bytes. -->
-        <group name="Loop" midi.atomic="true" midi.addressSize="0x01-00">
+        <group name="Loop" midi.atomic="true" midi.stride="0x01-00">
           <members>
             <!-- 0x00: 0 = off, 1 = on -->
             <field name="On" datatype="roland.switch" />
@@ -180,7 +180,7 @@
         </group>
 
         <!-- Section 06: 7 bytes. -->
-        <group name="Equalizer" midi.atomic="true" midi.addressSize="0x01-00">
+        <group name="Equalizer" midi.atomic="true" midi.stride="0x01-00">
           <members>
             <!-- 0x00: 0 = off, 1 = on -->
             <field name="On" datatype="roland.switch" />
@@ -201,7 +201,7 @@
         </group>
 
         <!-- Section 07: 5 bytes. -->
-        <group name="SpeakerSimulator" midi.atomic="true" midi.addressSize="0x01-00">
+        <group name="SpeakerSimulator" midi.atomic="true" midi.stride="0x01-00">
           <members>
             <!-- 0x00: 0 = off, 1 = on -->
             <field name="On" datatype="roland.switch" />
@@ -218,7 +218,7 @@
         </group>
 
         <!-- Section 08: 5 bytes. -->
-        <group name="NoiseSuppressor" midi.atomic="true" midi.addressSize="0x01-00">
+        <group name="NoiseSuppressor" midi.atomic="true" midi.stride="0x01-00">
           <members>
             <!-- 0x00: 0 = off, 1 = on -->
             <field name="On" datatype="roland.switch" />
@@ -234,7 +234,7 @@
         </group>
 
         <!-- Section 09: 77 bytes. Which parameters apply depends on the mode (in parentheses). -->
-        <group name="Modulation" midi.atomic="true" midi.addressSize="0x01-00">
+        <group name="Modulation" midi.atomic="true" midi.stride="0x01-00">
           <members>
             <!-- 0x00: 0 = off, 1 = on -->
             <field name="On" datatype="roland.switch" />
@@ -322,7 +322,7 @@
         </group>
 
         <!-- Section 0A: 21 bytes. -->
-        <group name="Delay" midi.atomic="true" midi.addressSize="0x01-00">
+        <group name="Delay" midi.atomic="true" midi.stride="0x01-00">
           <members>
             <!-- 0x00: 0 = off, 1 = on -->
             <field name="On" datatype="roland.switch" />
@@ -363,7 +363,7 @@
         </group>
 
         <!-- Section 0B: 9 bytes. -->
-        <group name="Chorus" midi.atomic="true" midi.addressSize="0x01-00">
+        <group name="Chorus" midi.atomic="true" midi.stride="0x01-00">
           <members>
             <!-- 0x00: 0 = off, 1 = on -->
             <field name="On" datatype="roland.switch" />
@@ -387,7 +387,7 @@
         </group>
 
         <!-- Section 0C: 5 bytes. -->
-        <group name="TremoloPan" midi.atomic="true" midi.addressSize="0x01-00">
+        <group name="TremoloPan" midi.atomic="true" midi.stride="0x01-00">
           <members>
             <!-- 0x00: 0 = off, 1 = on -->
             <field name="On" datatype="roland.switch" />
@@ -403,7 +403,7 @@
         </group>
 
         <!-- Section 0D: 9 bytes. -->
-        <group name="Reverb" midi.atomic="true" midi.addressSize="0x01-00">
+        <group name="Reverb" midi.atomic="true" midi.stride="0x01-00">
           <members>
             <!-- 0x00: 0 = off, 1 = on -->
             <field name="On" datatype="roland.switch" />
@@ -435,7 +435,7 @@
     <group name="system">
       <members>
         <!-- Section 00: 19 bytes. -->
-        <group name="Common" midi.atomic="true" midi.addressSize="0x01-00">
+        <group name="Common" midi.atomic="true" midi.stride="0x01-00">
           <members>
             <!-- 0x00-0x12: [TODO] e.g. 05 01 00 00 00 14 06 04 04 04 00 01 0C 08 00 00 0F 00 01 in the dump. -->
             <field name="Unknown00" datatype="sys.bytes" byteLength="19" />
@@ -445,7 +445,7 @@
           Sections 01 and 02: 128 bytes each, 64 values of nibble8, 1-128 in order in the dump.
           [TODO] verify: most likely the Program Change map (program 1-64 and 65-128 to a patch).
         -->
-        <group name="ProgramChangeMap1" midi.atomic="true" midi.addressSize="0x01-00">
+        <group name="ProgramChangeMap1" midi.atomic="true" midi.stride="0x01-00">
           <members>
             <repeat name="Program" count="64">
               <members>
@@ -454,7 +454,7 @@
             </repeat>
           </members>
         </group>
-        <group name="ProgramChangeMap2" midi.atomic="true" midi.addressSize="0x01-00">
+        <group name="ProgramChangeMap2" midi.atomic="true" midi.stride="0x01-00">
           <members>
             <repeat name="Program" count="64">
               <members>
@@ -1271,13 +1271,13 @@
     <group name="AddressMap" nodeDef="roland.messageBody32" midi.device.modelId="0x79">
       <members>
         <!-- [TODO] the temporary (edit) patch address is unknown. -->
-        <!-- <group name="Temporary" nodeDef="patch" midi.addressStart="0x00-00-00-00" /> -->
-        <repeat name="Memory" count="100" midi.addressStart="0x00-00-00-00" midi.addressSize="0x00-01-00-00">
+        <!-- <group name="Temporary" nodeDef="patch" midi.address="0x00-00-00-00" /> -->
+        <repeat name="Memory" midi.address="0x00-00-00-00" midi.stride="0x00-01-00-00" midi.repeat="100">
           <members>
             <group name="Patch" nodeDef="patch" />
           </members>
         </repeat>
-        <group name="System" nodeDef="system" midi.addressStart="0x02-00-00-00" />
+        <group name="System" nodeDef="system" midi.address="0x02-00-00-00" />
       </members>
     </group>
   </members>

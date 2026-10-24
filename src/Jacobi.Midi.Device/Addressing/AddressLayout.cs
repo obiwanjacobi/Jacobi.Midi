@@ -1,4 +1,5 @@
 using Jacobi.BinarySerializer.Execution;
+using Jacobi.BinarySerializer.Schema;
 
 namespace Jacobi.Midi.Device.Addressing;
 
@@ -52,13 +53,14 @@ internal readonly record struct AddressOccurrence(AddressLayoutNode Layout, Inst
 }
 
 /// <summary>
-/// Builds the address layout of a map plan from the <c>midi.addressStart</c>, <c>midi.addressSize</c>,
+/// Builds the address layout of a map plan from the <c>midi.address</c>, <c>midi.stride</c>, <c>midi.repeat</c>,
 /// <c>midi.atomic</c> and <c>midi.access</c> properties, and finds the occurrences of fields and atomic groups in an
 /// address range. Addresses only increase in plan order, so a plan range covers one ascending address span.
 /// </summary>
 internal sealed class AddressLayout
 {
     private readonly Dictionary<NodeInfo, AddressLayoutNode> _byNode = [];
+    private readonly Dictionary<SchemaPath, AddressLayoutNode> _byPath = [];
 
     private AddressLayout(AddressLayoutNode root) => Root = root;
 
@@ -66,6 +68,10 @@ internal sealed class AddressLayout
 
     public AddressLayoutNode? Find(NodeInfo node)
         => _byNode.GetValueOrDefault(node);
+
+    // by path: the body of an open choice is a plan of its own, with other node instances
+    public AddressLayoutNode? Find(SchemaPath path)
+        => _byPath.GetValueOrDefault(path);
 
     public static AddressLayout Build(GroupInfo root, int bitsPerByte, List<string> errors)
     {
@@ -79,6 +85,7 @@ internal sealed class AddressLayout
     private void Index(AddressLayoutNode node)
     {
         _byNode[node.Node] = node;
+        _byPath[node.Node.Path] = node;
         foreach (var member in node.Members)
         {
             Index(member);
@@ -213,11 +220,11 @@ internal sealed class AddressLayout
         public AddressLayoutNode? Node(NodeInfo node, AddressLayoutNode? parent, long cursor, bool inRepeat, bool inAtomic, AddressAccess inheritedAccess)
         {
             var start = cursor;
-            if (Address(node, MidiProperties.AddressStart) is { } explicitStart)
+            if (Address(node, MidiProperties.Address) is { } explicitStart)
             {
                 if (inRepeat)
                 {
-                    Error(node, $"'{MidiProperties.AddressStart}' is not allowed inside a repeat item (all items would get the same address).");
+                    Error(node, $"'{MidiProperties.Address}' is not allowed inside a repeat item (all items would get the same address).");
                 }
                 else if (explicitStart < cursor)
                 {
@@ -247,7 +254,11 @@ internal sealed class AddressLayout
                 IsAtomic = atomic && node is GroupInfo,
                 Access = Access(node, inheritedAccess),
             };
-            var explicitSize = Address(node, MidiProperties.AddressSize);
+            var explicitSize = Address(node, MidiProperties.Stride);
+            if (node is not RepeatInfo && MidiProperties.Find(node, MidiProperties.Repeat) is not null)
+            {
+                Error(node, $"'{MidiProperties.Repeat}' only applies to repeats.");
+            }
 
             switch (node)
             {
@@ -281,9 +292,8 @@ internal sealed class AddressLayout
 
         private void Repeat(RepeatInfo repeat, AddressLayoutNode layout, long? explicitSize, bool inAtomic)
         {
-            if (repeat.Count is not int count)
+            if (RepeatCount(repeat) is not int count)
             {
-                Error(repeat, "a repeat in an address map needs a constant count.");
                 return;
             }
 
@@ -305,6 +315,27 @@ internal sealed class AddressLayout
             {
                 Error(repeat, "a repeat item occupies no addresses.");
             }
+        }
+
+        // the number of items in the address space: 'midi.repeat', else the constant count of the repeat.
+        // The count is what a dump holds; 'midi.repeat' is what the device has, also when a dump holds fewer items.
+        private int? RepeatCount(RepeatInfo repeat)
+        {
+            if (MidiProperties.Find(repeat, MidiProperties.Repeat) is { } text)
+            {
+                if (Int32.TryParse(text, out var repeatCount) && repeatCount > 0)
+                {
+                    return repeatCount;
+                }
+                Error(repeat, $"'{MidiProperties.Repeat}' must be a positive number, not '{text}'.");
+                return null;
+            }
+            if (repeat.Count is int count)
+            {
+                return count;
+            }
+            Error(repeat, $"a repeat in an address map needs a '{MidiProperties.Repeat}' or a constant count.");
+            return null;
         }
 
         private void BitPacked(GroupInfo group, AddressLayoutNode layout, long? explicitSize)
@@ -348,7 +379,7 @@ internal sealed class AddressLayout
             long? size = field.ByteLength is int length ? length : field.DataType.FixedSize;
             if (size is null && explicitSize is null)
             {
-                Error(field, $"the field has no constant size; give it a '{MidiProperties.AddressSize}'.");
+                Error(field, $"the field has no constant size; give it a '{MidiProperties.Stride}'.");
                 return 0;
             }
             return Size(field, size ?? 0, explicitSize);
@@ -370,7 +401,7 @@ internal sealed class AddressLayout
             }
             if (size < computed)
             {
-                Error(node, $"'{MidiProperties.AddressSize}' 0x{size:X} is smaller than the content (0x{computed:X} addresses).");
+                Error(node, $"'{MidiProperties.Stride}' 0x{size:X} is smaller than the content (0x{computed:X} addresses).");
                 return computed;
             }
             return size;
