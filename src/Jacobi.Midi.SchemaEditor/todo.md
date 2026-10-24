@@ -14,6 +14,10 @@ Known gaps and loose ends, collected while building the editor.
 - [x] *Delete* has no confirmation. Fixed: *Delete* asks for confirmation (`ConfirmViewModel`).
 - [ ] There is no undo.
 - [ ] The Add menu has no keyboard shortcuts (e.g. Ctrl+S for Save in the ☰ menu).
+- [ ] Moving a node (Arrange: up/down, into/out of a group) or changing its type does not update the `ref:` paths that point at it or at its members (count, byte length/size, selected index, field values); they may no longer resolve.
+- [ ] A node that is moved to another parent or whose type is changed is written as a new element in an XML source (`XmlSchemaSource` matches nodes by identity within their parent): the comments inside and before it are lost. Reordering within the same parent keeps them.
+- [ ] Change type only covers group, repeat and choice; a field cannot be changed into a group-like node (or back).
+- [ ] A node cannot be moved between the document members and the node defs (e.g. turn a member into a node def), nor to another document.
 
 ## Effective processors and properties
 
@@ -31,6 +35,8 @@ Known gaps and loose ends, collected while building the editor.
 ## Schema tree
 
 - [ ] The Document view categories hold the document collection instances from when the document was loaded; replacing a collection (instead of changing its contents) is not reflected.
+- [ ] Nodes can only be arranged with commands (Arrange menu, context menu, Alt+arrow keys); drag & drop in the schema tree is not supported.
+- [ ] The groups of node defs (below the fixed Node Defs item) offer *Instantiate…* and *Match…* like the members; whether a node def instantiates and serializes on its own is not verified.
 
 ## Reverse-engineering workbench
 
