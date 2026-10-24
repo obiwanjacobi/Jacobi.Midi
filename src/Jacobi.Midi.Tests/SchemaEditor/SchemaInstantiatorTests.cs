@@ -641,6 +641,61 @@ public class SchemaInstantiatorTests
         Assert.All(memory.Items, patch => Assert.False(patch.IsExpanded));
     }
 
+    // a GP-8 DT1 message of the bulk dump (one memory patch each) and the size of one message
+    private const string Gp8BulkDumpFile = "Schema/gp8-sysex.syx";
+    private const int Gp8MessageSize = 59;
+
+    // the GP-8 DT1 message (Roland.Message16) in the match dialog with the GP-8 address map selected as its body
+    private static (InstantiateSchemaViewModel Dialog, InstanceRepeat Memory) MatchGp8DataMessage()
+    {
+        var viewModel = new MainViewModel();
+        var loaded = viewModel.OpenedAssemblies.Load(
+            Assembly.LoadFrom(TestHelpers.AssemblyPathOf("Jacobi.Midi.Roland")), "Jacobi.Midi.Roland.dll");
+        var roland = loaded.Schemas.Single(schema => schema.Name == "Roland");
+        var message = (EditGroup)roland.Document.Schema.Members.Single(member => member.Name == "Message16");
+        viewModel.SelectedLeftTab = MainViewModel.AssembliesLeftTab;
+        viewModel.MatchSchemaCommand.Execute(message.Members.Single(member => member.Name == "DT1"));
+        var dialog = viewModel.InstantiateDialog!;
+        var data = FindChoice(Assert.IsType<InstanceGroup>(dialog.Root), "Data")!;
+        data.SelectedOption = data.Options.Single(option => option.Name == "Gp8.AddressMap");
+        var body = Assert.IsType<InstanceBody>(data.Selected);
+        return (dialog, Assert.IsType<InstanceRepeat>(body.Members.Single(member => member.Name == "Memory")));
+    }
+
+    [Fact]
+    public void Match_ADataMessageOfAnAddressMap_ReadsThePatchAtItsAddress()
+    {
+        var (dialog, memory) = MatchGp8DataMessage();
+        var bytes = File.ReadAllBytes(TestHelpers.PathOf(Gp8BulkDumpFile)).AsSpan(5 * Gp8MessageSize, Gp8MessageSize).ToArray();
+
+        dialog.Match!.SelectedBuffer = new SysExBuffer("patch 5", bytes);
+
+        Assert.False(dialog.Match.HasError, dialog.Match.Error);
+        Assert.False(dialog.Match.HasWarning, dialog.Match.Warning);
+        // the items up to the patch at the address; only that patch received values
+        Assert.Equal(6, memory.Items.Count);
+        Assert.Contains(memory.Items[5].Fields(), field => !field.IsConstant && field.Value.Length > 0);
+        Assert.All(memory.Items.Take(5).SelectMany(item => item.Fields()), field => Assert.True(field.IsConstant || field.Value.Length == 0));
+    }
+
+    [Fact]
+    public void Match_AnIncompleteDataMessageOfAnAddressMap_ReadsAsMuchAsPossibleAndWarns()
+    {
+        var (dialog, memory) = MatchGp8DataMessage();
+        var complete = File.ReadAllBytes(TestHelpers.PathOf(Gp8BulkDumpFile)).AsSpan(5 * Gp8MessageSize, Gp8MessageSize).ToArray();
+        // half of the patch data, then a checksum and the end of exclusive
+        byte[] bytes = [.. complete.AsSpan(0, 7 + 20), 0x00, 0xF7];
+
+        dialog.Match!.SelectedBuffer = new SysExBuffer("partial", bytes);
+
+        Assert.True(dialog.Match.HasWarning);
+        Assert.Contains("not recognised", dialog.Match.Warning);
+        Assert.Contains("Gp8.AddressMap", dialog.Match.Warning);
+        Assert.True(dialog.Match.HasError);
+        Assert.Equal(6, memory.Items.Count);
+        Assert.Contains(memory.Items[5].Fields(), field => !field.IsConstant && field.Value.Length > 0);
+    }
+
     [Fact]
     public void Deserialize_ExpandsThePartThatWasRead()
     {
@@ -650,7 +705,7 @@ public class SchemaInstantiatorTests
         instance.IsExpanded = false;
 
         // a nested group is read as a range of its root: only its own bytes
-        instantiator.Deserialize(instantiator.FindRootName(head)!.Value, instance, [0x05], TestHelpers.CreateProcessors());
+        instantiator.Deserialize(instantiator.FindRootName(head)!.Value, instance, [0x05], TestHelpers.CreateProcessors(), []);
 
         Assert.Equal("5", ((InstanceField)instance.Members[0]).Value);
         Assert.True(instance.IsExpanded);
@@ -663,7 +718,7 @@ public class SchemaInstantiatorTests
         var msg = (EditGroup)document.Members.Single(member => member.Name == "Msg");
         var root = Assert.IsType<InstanceGroup>(instantiator.Create(msg));
 
-        var read = instantiator.Deserialize(instantiator.FindRootName(msg)!.Value, root, [0xF0, 0x01, 0x02, 0x03, 0xF7], TestHelpers.CreateProcessors());
+        var read = instantiator.Deserialize(instantiator.FindRootName(msg)!.Value, root, [0xF0, 0x01, 0x02, 0x03, 0xF7], TestHelpers.CreateProcessors(), []);
 
         Assert.Equal(5, read);
         Assert.Equal("1", Field(root, "Head", "A").Value);
@@ -679,7 +734,7 @@ public class SchemaInstantiatorTests
         var head = (EditGroup)msg.Members.Single(member => member.Name == "Head");
         var instance = Assert.IsType<InstanceGroup>(instantiator.Create(head));
 
-        instantiator.Deserialize(instantiator.FindRootName(head)!.Value, instance, [0x05], TestHelpers.CreateProcessors());
+        instantiator.Deserialize(instantiator.FindRootName(head)!.Value, instance, [0x05], TestHelpers.CreateProcessors(), []);
 
         Assert.Equal("5", ((InstanceField)instance.Members[0]).Value);
     }
@@ -693,10 +748,10 @@ public class SchemaInstantiatorTests
         var choice = Assert.IsType<InstanceChoice>(root.Members[0]);
 
         Assert.Throws<InvalidOperationException>(
-            () => instantiator.Deserialize(instantiator.FindRootName(env)!.Value, root, [0x07], TestHelpers.CreateProcessors()));
+            () => instantiator.Deserialize(instantiator.FindRootName(env)!.Value, root, [0x07], TestHelpers.CreateProcessors(), []));
 
         choice.SelectedOption = choice.Options.Single(option => option.Name == "Ser.BodyB");
-        instantiator.Deserialize(instantiator.FindRootName(env)!.Value, root, [0x07], TestHelpers.CreateProcessors());
+        instantiator.Deserialize(instantiator.FindRootName(env)!.Value, root, [0x07], TestHelpers.CreateProcessors(), []);
 
         Assert.Equal("7", ((InstanceField)((InstanceGroup)choice.Selected!).Members[0]).Value);
     }
@@ -724,12 +779,12 @@ public class SchemaInstantiatorTests
         var mode = Assert.IsType<InstanceChoice>(root.Members[2]);
         var rootName = instantiator.FindRootName(msg)!.Value;
 
-        instantiator.Deserialize(rootName, root, [0x02, 0x0A, 0x0B, 0x0C], TestHelpers.CreateProcessors());
+        instantiator.Deserialize(rootName, root, [0x02, 0x0A, 0x0B, 0x0C], TestHelpers.CreateProcessors(), []);
         Assert.Equal(["10", "11"], data.Items.Select(item => ((InstanceField)item.Members[0]).Value));
         Assert.Equal("Two", mode.SelectedOption!.Name);
         Assert.Equal("12", ((InstanceField)((InstanceGroup)mode.Selected!).Members[0]).Value);
 
-        instantiator.Deserialize(rootName, root, [0x01, 0x0D, 0x0E], TestHelpers.CreateProcessors());
+        instantiator.Deserialize(rootName, root, [0x01, 0x0D, 0x0E], TestHelpers.CreateProcessors(), []);
         Assert.Equal(["13"], data.Items.Select(item => ((InstanceField)item.Members[0]).Value));
         Assert.Equal("One", mode.SelectedOption!.Name);
     }
@@ -743,7 +798,7 @@ public class SchemaInstantiatorTests
 
         // the End field expects F7
         Assert.Throws<InvalidOperationException>(
-            () => instantiator.Deserialize(instantiator.FindRootName(msg)!.Value, root, [0xF0, 0x01, 0x02, 0x03, 0x00], TestHelpers.CreateProcessors()));
+            () => instantiator.Deserialize(instantiator.FindRootName(msg)!.Value, root, [0xF0, 0x01, 0x02, 0x03, 0x00], TestHelpers.CreateProcessors(), []));
 
         Assert.Equal("1", Field(root, "Head", "A").Value);
     }
@@ -756,7 +811,7 @@ public class SchemaInstantiatorTests
         var root = instantiator.Create(msg);
         var rootName = instantiator.FindRootName(msg)!.Value;
         (string, byte[])? file = ("dump.syx", [0xF0, 0x01, 0x02, 0x03, 0xF7, 0xF0, 0x01, 0xF7]);
-        var match = new SysExMatchViewModel(bytes => instantiator.Deserialize(rootName, root, bytes, TestHelpers.CreateProcessors()),
+        var match = new SysExMatchViewModel((bytes, warnings) => instantiator.Deserialize(rootName, root, bytes, TestHelpers.CreateProcessors(), warnings),
             () => Task.FromResult(file), new Jacobi.Midi.SchemaEditor.Midi.MidiBarViewModel(null));
 
         match.LoadFileCommand.Execute(null);

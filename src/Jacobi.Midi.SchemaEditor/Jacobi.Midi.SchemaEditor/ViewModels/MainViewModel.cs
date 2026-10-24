@@ -995,8 +995,8 @@ internal sealed partial class MainViewModel : ViewModelBase
             SysExMatchViewModel? match = null;
             if (isMatch)
             {
-                Func<byte[], long>? deserialize = rootName is { } readRoot
-                    ? bytes => instantiator.Deserialize(readRoot, instance, bytes, OpenedAssemblies.Processors)
+                Func<byte[], ICollection<string>, long>? deserialize = rootName is { } readRoot
+                    ? (bytes, warnings) => instantiator.Deserialize(readRoot, instance, bytes, OpenedAssemblies.Processors, warnings)
                     : null;
                 match = new SysExMatchViewModel(deserialize, OpenSysExFile, MidiBar);
             }

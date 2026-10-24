@@ -11,7 +11,7 @@ namespace Jacobi.Midi.SchemaEditor.Workbench;
 /// <param name="Capture">The capture that was read.</param>
 /// <param name="Values">The value text of each field, by its path (e.g. 'Message1.Level').</param>
 /// <param name="Error">Why reading failed; null when it succeeded.</param>
-/// <param name="Remark">A note on a successful read, e.g. trailing bytes that were not read; null when there is none.</param>
+/// <param name="Remark">A note on the read (one per line), e.g. trailing bytes that were not read or a message that is read only partly into an address map; null when there is none.</param>
 internal sealed record CaptureRead(Capture Capture, IReadOnlyDictionary<string, string> Values, string? Error, string? Remark);
 
 /// <summary>
@@ -48,13 +48,13 @@ internal static class WorkbenchReader
         var bytes = capture.Messages[slot];
         var instance = instantiator.CreateRoot(root);
         string? error = null;
-        string? remark = null;
+        var remarks = new List<string>();
         try
         {
-            var read = instantiator.Deserialize(rootName, instance, bytes, processors);
+            var read = instantiator.Deserialize(rootName, instance, bytes, processors, remarks);
             if (read < bytes.Length)
             {
-                remark = $"{bytes.Length - read} trailing byte(s) were not read.";
+                remarks.Add($"{bytes.Length - read} trailing byte(s) were not read.");
             }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -68,6 +68,6 @@ internal static class WorkbenchReader
         {
             values[field.Path.Value] = field.Value;
         }
-        return new CaptureRead(capture, values, error, remark);
+        return new CaptureRead(capture, values, error, remarks.Count > 0 ? String.Join(Environment.NewLine, remarks) : null);
     }
 }

@@ -213,6 +213,7 @@ message selects the device map as its body and narrows it to one group occurrenc
 - **Which body.** The groups that conform to the open choice's `memberNodeDef` are filtered on the `device.*` values read from the envelope (against their `midi.device.*`); exactly one must remain, otherwise the message is not for this map.
 - **Which group (reading).** The length of the data is only known from the message as a whole, not when the open choice is entered. The map tries the group occurrences that start at the address, largest first, with a sink that discards the values: a group that is too large runs out of data, one that is too small does not end at the checksum. The group whose read consumes the whole message is the one; the client's sink only gets that final read (`ReceivedData.Decode`).
 - **Ending the repeats.** The repeats of a map have no `count` (a dump may hold fewer items), so the value model ends them (`IOpenRepeatSink`/`IOpenRepeatSource` of the BinarySerializer). The map wraps the client's scope for the body (`AddressMap.WrapBody`): a repeat ends after the item that holds the target group (or the last node of a range), after its `midi.repeat` items, or at the end of the data. A client that reads or writes a map body with its own open choice model must wrap its scope the same way.
+- **Reading any message (tools).** `AddressMapReader` reads with any plan into the client's own value model, e.g. the Schema Editor's match and workbench. Without address maps in the schemas it is a plain serializer read. A read with a map root plan (a dump of the map) ends the repeats after `midi.repeat` items or at the end of the data. When the client selects a map root as the body of an open choice, the reader narrows the body to the group occurrence the message carries, recognised as `TryReadData` does (any device id for now). When the message is not recognised, the largest group at the address is read as far as the data goes, with a warning.
 - **Writing.** A data message carries a block that is exactly one group occurrence (with the GP-8 every transfer is a whole, atomic patch).
 - **Replies** (`ack`, `nak`, `error`) are recognised by their constants and device values alone.
 
@@ -241,6 +242,7 @@ Namespace `Jacobi.Midi.Device.Addressing`.
 | `DeviceValues` | The device values by name (`deviceId`, `modelId`, ...): those of the map root plus those of the client. |
 | `ReceivedData` | A recognised data message: its address, device values and block; `Decode` reads its values into a value model. |
 | `AddressMapException` | All problems found in a map and its envelopes. |
+| `AddressMapReader` | Reads any message into the client's value model and lets the address maps in the schemas end their repeats and place the data of a message (for tools such as the Schema Editor). |
 
 ## Limitations
 

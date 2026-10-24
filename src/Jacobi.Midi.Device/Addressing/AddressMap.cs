@@ -319,6 +319,20 @@ internal sealed class AddressMap
     internal IValueSink WrapBody(IValueSink sink, SchemaPath target, InstancePath instance)
         => new MapRepeatSink(sink, MapRepeatItems.Of(_layout, target, instance));
 
+    /// <summary>
+    /// Wraps the scope of a read with the map plan itself (not through a data message, e.g. a dump of the map), so the
+    /// repeats of the map end after <paramref name="range"/> (null: the whole map) or at the end of the data.
+    /// </summary>
+    internal IValueSink WrapMap(IValueSink sink, PlanRange? range)
+        => new MapRepeatSink(sink, range is null ? MapRepeatItems.All(_layout) : MapRepeatItems.Of(_layout, range));
+
+    /// <summary>
+    /// The group occurrence the data of a message at the address is read into when the message is not recognised
+    /// (<see cref="TryReadData"/>): the largest group that starts at the address; null when no group starts there.
+    /// </summary>
+    internal GroupTarget? LargestTargetAt(long address)
+        => GroupTargets(address, Int64.MaxValue) is [.., var largest] ? largest : null;
+
     private IValueSource Wrap(IValueSource source, GroupTarget target) => WrapBody(source, target.Target, target.Instance);
     private IValueSink Wrap(IValueSink sink, GroupTarget target) => WrapBody(sink, target.Target, target.Instance);
 

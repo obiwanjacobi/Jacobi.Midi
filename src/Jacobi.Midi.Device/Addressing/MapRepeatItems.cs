@@ -29,6 +29,9 @@ internal sealed class MapRepeatItems
     /// <summary>The items up to a group occurrence (the target of a data message body).</summary>
     public static MapRepeatItems Of(AddressLayout layout, SchemaPath target, InstancePath instance) => new(layout, target, instance);
 
+    /// <summary>All the items of the address space (the whole map, e.g. a dump of it).</summary>
+    public static MapRepeatItems All(AddressLayout layout) => new(layout, default, default);
+
     public OpenRepeatAction NextItem(OpenRepeatContext context)
     {
         if (_layout.Find(context.Repeat.Path) is not { IsRepeat: true } repeat)
@@ -63,11 +66,19 @@ internal sealed class MapRepeatItems
 /// <summary>
 /// Wraps the client's value sink for reading the map: forwards all values and ends the repeats of the map
 /// (see <see cref="MapRepeatItems"/>), also when a dump holds fewer items than the address space.
+/// The other open repeats are left to the client's sink when it ends them (<see cref="IOpenRepeatSink"/>).
 /// </summary>
 internal sealed class MapRepeatSink(IValueSink inner, MapRepeatItems items) : IOpenRepeatSink
 {
     public OpenRepeatAction NextItem(OpenRepeatReadContext context)
-        => context.AtDefaultEnd ? OpenRepeatAction.End : items.NextItem(context);
+    {
+        if (context.AtDefaultEnd)
+        {
+            return OpenRepeatAction.End;
+        }
+        var action = items.NextItem(context);
+        return action == OpenRepeatAction.Default && inner is IOpenRepeatSink openSink ? openSink.NextItem(context) : action;
+    }
 
     public void SetField(FieldContext context, LogicalField value) => inner.SetField(context, value);
     public IValueSink EnterGroup(GroupContext context) => new MapRepeatSink(inner.EnterGroup(context), items);
@@ -80,11 +91,16 @@ internal sealed class MapRepeatSink(IValueSink inner, MapRepeatItems items) : IO
 
 /// <summary>
 /// Wraps the client's value source for writing the map: forwards all values and ends the repeats of the map
-/// (see <see cref="MapRepeatItems"/>).
+/// (see <see cref="MapRepeatItems"/>). The other open repeats are left to the client's source when it ends them
+/// (<see cref="IOpenRepeatSource"/>).
 /// </summary>
 internal sealed class MapRepeatSource(IValueSource inner, MapRepeatItems items) : IOpenRepeatSource
 {
-    public OpenRepeatAction NextItem(OpenRepeatContext context) => items.NextItem(context);
+    public OpenRepeatAction NextItem(OpenRepeatContext context)
+    {
+        var action = items.NextItem(context);
+        return action == OpenRepeatAction.Default && inner is IOpenRepeatSource openSource ? openSource.NextItem(context) : action;
+    }
 
     public SourceResult GetField(FieldContext context) => inner.GetField(context);
     public IValueSource EnterGroup(GroupContext context) => new MapRepeatSource(inner.EnterGroup(context), items);

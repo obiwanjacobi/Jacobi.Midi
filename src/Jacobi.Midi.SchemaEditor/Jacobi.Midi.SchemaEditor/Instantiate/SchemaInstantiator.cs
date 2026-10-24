@@ -3,6 +3,7 @@ using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.SchemaEditor.Models;
 
 namespace Jacobi.Midi.SchemaEditor.Instantiate;
@@ -136,20 +137,25 @@ internal sealed class SchemaInstantiator
     /// the reverse of <see cref="Serialize"/>. An instance of a nested node is read as a range of that plan.
     /// The fields are filled out, the items of the repeats added and the alternatives of the choices selected as they are read;
     /// the body of an open choice must be selected beforehand. When the read fails, the values read up to the failure remain.
+    /// When the schemas hold an address map, the reading is left to <see cref="AddressMapReader"/>: it ends the repeats of
+    /// the map and reads a data message into the group of the map it carries; otherwise the serializer reads as is.
     /// </summary>
     /// <param name="processors">The processors the schemas use (those of the opened assemblies).</param>
+    /// <param name="warnings">Receives the situations the user may not expect (e.g. a message that is read only partly into a map), also when the read fails.</param>
     /// <returns>The number of bytes that were read (the bytes after them are not part of the instance).</returns>
     /// <exception cref="ExecutionPlanException">The plan cannot be built.</exception>
     /// <exception cref="InvalidOperationException">The bytes do not match the schema; the message describes the problem.</exception>
-    public long Deserialize(SchemaName root, InstanceNode instance, byte[] bytes, IProcessorProvider processors)
+    public long Deserialize(SchemaName root, InstanceNode instance, byte[] bytes, IProcessorProvider processors, ICollection<string> warnings)
     {
         ArgumentNullException.ThrowIfNull(instance);
         ArgumentNullException.ThrowIfNull(bytes);
         ArgumentNullException.ThrowIfNull(processors);
+        ArgumentNullException.ThrowIfNull(warnings);
         var serializer = new SerializerBuilder()
             .AddSchemas(_schemas)
             .AddProcessors(processors)
             .Build();
+        var reader = new AddressMapReader(serializer);
         var plan = serializer.GetPlan(root);
         var input = new ReadOnlySequence<byte>(bytes);
         var isRoot = String.Equals(plan.Root.Path.Value, instance.Path.Value, StringComparison.OrdinalIgnoreCase);
@@ -160,8 +166,8 @@ internal sealed class SchemaInstantiator
         try
         {
             var read = isRoot
-                ? serializer.Deserialize(plan, input, sink)
-                : serializer.Deserialize(plan.CreateRange(instance.Path), input, sink);
+                ? reader.Deserialize(plan, input, sink, warnings)
+                : reader.Deserialize(plan.CreateRange(instance.Path), input, sink, warnings);
             completed = true;
             return read;
         }

@@ -460,7 +460,8 @@ internal sealed partial class WorkbenchFieldViewModel : ObservableObject
             var shownName = Name.Trim().Length > 0 ? Name.Trim() : "(new field)";
             Values = reads.Select((read, index) => new FieldValue(context.Captures[index].Column,
                 read.Values.TryGetValue(path, out var value) && value.Length > 0 ? value : ByteInterpretations.NoValue,
-                (read.Error ?? read.Remark ?? String.Empty).Replace(PreviewName, shownName, StringComparison.Ordinal))).ToList();
+                String.Join(Environment.NewLine, new[] { read.Error, read.Remark }.OfType<string>())
+                    .Replace(PreviewName, shownName, StringComparison.Ordinal))).ToList();
         }
         catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or NotSupportedException)
         {

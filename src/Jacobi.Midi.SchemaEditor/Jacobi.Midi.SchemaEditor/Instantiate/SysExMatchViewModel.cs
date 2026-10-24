@@ -46,18 +46,19 @@ internal sealed record SysExBuffer(string Source, byte[] Bytes)
 /// </summary>
 internal sealed partial class SysExMatchViewModel : ObservableObject
 {
-    private readonly Func<byte[], long>? _deserialize;
+    private readonly Func<byte[], ICollection<string>, long>? _deserialize;
     private readonly Func<Task<(string Name, byte[] Bytes)?>> _openFile;
     private readonly MidiBarViewModel _midi;
     // only used on the thread that raises the received packets
     private SysEx7Assembler? _assembler;
 
     /// <param name="deserialize">
-    /// Reads the bytes into the instance tree and returns the number of bytes read; null when the instance has no plan (a node def).
+    /// Reads the bytes into the instance tree, adds the situations the user may not expect to the warnings (also when it fails)
+    /// and returns the number of bytes read; null when the instance has no plan (a node def).
     /// </param>
     /// <param name="openFile">Lets the user pick a SysEx file and returns its name and contents; null when the user cancelled.</param>
     /// <param name="midi">The MIDI connection the messages are received from.</param>
-    public SysExMatchViewModel(Func<byte[], long>? deserialize, Func<Task<(string Name, byte[] Bytes)?>> openFile, MidiBarViewModel midi)
+    public SysExMatchViewModel(Func<byte[], ICollection<string>, long>? deserialize, Func<Task<(string Name, byte[] Bytes)?>> openFile, MidiBarViewModel midi)
     {
         _deserialize = deserialize;
         _openFile = openFile;
@@ -85,7 +86,7 @@ internal sealed partial class SysExMatchViewModel : ObservableObject
     [ObservableProperty]
     public partial string Status { get; private set; } = String.Empty;
 
-    /// <summary>A warning of the last match, e.g. trailing bytes that were not read; empty when there is none.</summary>
+    /// <summary>The warnings of the last match (one per line), e.g. trailing bytes that were not read; empty when there are none.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasWarning))]
     public partial string Warning { get; private set; } = String.Empty;
@@ -130,14 +131,15 @@ internal sealed partial class SysExMatchViewModel : ObservableObject
 
         Warning = String.Empty;
         Error = String.Empty;
+        var warnings = new List<string>();
         try
         {
-            var read = _deserialize(buffer.Bytes);
+            var read = _deserialize(buffer.Bytes, warnings);
             Status = $"Matched {buffer.Source}: read {read} of {buffer.Bytes.Length} byte(s).";
             if (read < buffer.Bytes.Length)
             {
                 var trailing = buffer.Bytes.AsSpan((int)read);
-                Warning = $"{trailing.Length} trailing byte(s) were not read: {Convert.ToHexString(trailing.Length <= 32 ? trailing : trailing[..32])}{(trailing.Length > 32 ? "…" : String.Empty)}";
+                warnings.Add($"{trailing.Length} trailing byte(s) were not read: {Convert.ToHexString(trailing.Length <= 32 ? trailing : trailing[..32])}{(trailing.Length > 32 ? "…" : String.Empty)}");
             }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -146,6 +148,7 @@ internal sealed partial class SysExMatchViewModel : ObservableObject
             Status = $"{buffer.Source} does not match the schema; the values read up to the problem are shown.";
             Error = exception.Message;
         }
+        Warning = String.Join(Environment.NewLine, warnings);
     }
 
     /// <summary>Loads a SysEx file; each message in it becomes a buffer and the first one is matched.</summary>
