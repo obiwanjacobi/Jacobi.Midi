@@ -637,8 +637,9 @@ public class SchemaInstantiatorTests
         Assert.True(body.IsExpanded);
         var memory = Assert.IsType<InstanceRepeat>(body.Members.Single(member => member.Name == "Memory"));
         Assert.False(memory.IsExpanded);
-        // the repeats of an address map have the item count of the address space (midi.repeat)
-        Assert.Equal(100, memory.Items.Count);
+        // a repeat of an address map shows one of the items of the address space (midi.repeat)
+        Assert.Single(memory.Items);
+        Assert.Equal(100, memory.AddressItemCount);
         Assert.False(memory.IsOpen);
         Assert.All(memory.Items, patch => Assert.False(patch.IsExpanded));
     }
@@ -674,12 +675,12 @@ public class SchemaInstantiatorTests
 
         Assert.False(dialog.Match.HasError, dialog.Match.Error);
         Assert.False(dialog.Match.HasWarning, dialog.Match.Warning);
-        // all items of the address space; only the patch at the address received values and is included
-        Assert.Equal(128, memory.Items.Count);
-        Assert.Contains(memory.Items[5].Fields(), field => !field.IsConstant && field.Value.Length > 0);
-        Assert.All(memory.Items.Where(item => item.Index != 5).SelectMany(item => item.Fields()), field => Assert.True(field.IsConstant || field.Value.Length == 0));
-        Assert.True(memory.Items[5].IsIncluded);
-        Assert.Null(memory.IsIncluded);
+        // the address of the message selects the item of the repeat; it received the values and is included
+        var item = Assert.Single(memory.Items);
+        Assert.Equal(5, memory.ItemIndex);
+        Assert.Equal(5, item.Index);
+        Assert.Contains(item.Fields(), field => !field.IsConstant && field.Value.Length > 0);
+        Assert.True(item.IsIncluded);
         Assert.Contains("0x42-40", dialog.Transfer);
     }
 
@@ -697,8 +698,8 @@ public class SchemaInstantiatorTests
         Assert.Contains("not recognised", dialog.Match.Warning);
         Assert.Contains("Gp8.AddressMap", dialog.Match.Warning);
         Assert.True(dialog.Match.HasError);
-        Assert.Equal(128, memory.Items.Count);
-        Assert.Contains(memory.Items[5].Fields(), field => !field.IsConstant && field.Value.Length > 0);
+        Assert.Equal(5, memory.ItemIndex);
+        Assert.Contains(Assert.Single(memory.Items).Fields(), field => !field.IsConstant && field.Value.Length > 0);
     }
 
     /// <summary>A GP-8 DT1 message (Roland.Message16) instantiated with the GP-8 address map selected as its body.</summary>
@@ -730,16 +731,24 @@ public class SchemaInstantiatorTests
     private static byte[] Gp8Patch(int index)
         => File.ReadAllBytes(TestHelpers.PathOf(Gp8BulkDumpFile)).AsSpan(index * Gp8MessageSize, Gp8MessageSize).ToArray();
 
+    // the groups of the temporary patch that can be included, in address order
+    private static List<InstanceNode> TemporaryGroups(Gp8DataMessage gp8)
+        => [.. gp8.Temporary.Members.Where(member => member.CanInclude)];
+
     [Fact]
-    public void AddressMapBody_HasTheItemsOfTheAddressSpaceAndIncludesNothing()
+    public void AddressMapBody_ShowsOneItemOfARepeatAndIncludesNothing()
     {
         var gp8 = InstantiateGp8DataMessage();
 
         Assert.True(gp8.Body.IsAddressMap);
         Assert.Null(gp8.Body.Note);
-        Assert.Equal(128, gp8.Memory.Items.Count);
+        var item = Assert.Single(gp8.Memory.Items);
+        Assert.True(gp8.Memory.IsAddressed);
         Assert.False(gp8.Memory.IsOpen);
-        Assert.Equal("128 items in the address map", gp8.Memory.CountText);
+        Assert.Equal(128, gp8.Memory.AddressItemCount);
+        Assert.Equal(128, gp8.Memory.ItemIndexes.Count);
+        Assert.Equal(0, gp8.Memory.ItemIndex);
+        Assert.Equal(0, item.Index);
         Assert.True(gp8.Body.CanInclude);
         Assert.False(gp8.Body.IsIncluded);
         // the envelope is not part of the map
@@ -749,64 +758,69 @@ public class SchemaInstantiatorTests
         gp8.Temporary.IsIncluded = true;
 
         Assert.Null(gp8.Body.IsIncluded);
-        Assert.Contains("Sends 1 Message16.DT1 message(s) at 0x00-00", gp8.Transfer);
+        Assert.Contains("Sends 1 Message16.DT1 message(s) at 0x00-00 (50 bytes)", gp8.Transfer);
     }
 
     [Fact]
-    public void AddressMapBody_TheAddressesFollowTheIncludedItems()
+    public void AddressMapBody_TheAddressFollowsTheItemIndex()
     {
         var gp8 = InstantiateGp8DataMessage();
-
-        gp8.Memory.Items[5].IsIncluded = true;
-        gp8.Memory.Items[6].IsIncluded = true;
+        gp8.Memory.IsIncluded = true;
 
         // the memory patches from 0x40-00 (linear 0x2000), 0x40 addresses each
-        Assert.Contains("Sends 2 Message16.DT1 message(s) at 0x42-40 (50 bytes), 0x43-00 (50 bytes)", gp8.Transfer);
-        Assert.Null(gp8.Memory.IsIncluded);
+        Assert.Contains("Sends 1 Message16.DT1 message(s) at 0x40-00 (50 bytes)", gp8.Transfer);
 
-        // including the repeat includes all its items: one message per (atomic) patch
-        gp8.Memory.IsIncluded = true;
-        Assert.All(gp8.Memory.Items, item => Assert.True(item.IsIncluded));
-        Assert.Contains("Sends 128 Message16.DT1 message(s)", gp8.Transfer);
+        gp8.Memory.ItemIndex = 5;
+
+        var item = Assert.Single(gp8.Memory.Items);
+        Assert.Equal(5, item.Index);
+        Assert.EndsWith("Memory[5]", item.DisplayPath);
+        Assert.Contains("Sends 1 Message16.DT1 message(s) at 0x42-40 (50 bytes)", gp8.Transfer);
+    }
+
+    [Fact]
+    public void AddressMapBody_IncludingTheWholeMap_SendsTheShownItemsOnly()
+    {
+        var gp8 = InstantiateGp8DataMessage();
+        gp8.Memory.ItemIndex = 6;
+
+        gp8.Body.IsIncluded = true;
+
+        Assert.Contains("Sends 2 Message16.DT1 message(s) at 0x00-00 (50 bytes), 0x43-00 (50 bytes)", gp8.Transfer);
     }
 
     [Fact]
     public void AddressMapBody_IncludingANodeAfterAGap_IncludesTheNodesInBetween()
     {
         var gp8 = InstantiateGp8DataMessage();
+        var groups = TemporaryGroups(gp8);
 
-        gp8.Memory.Items[5].IsIncluded = true;
-        gp8.Memory.Items[8].IsIncluded = true;
+        groups[0].IsIncluded = true;
+        groups[2].IsIncluded = true;
 
-        Assert.Equal([5, 6, 7, 8], gp8.Memory.Items.Where(item => item.IsIncluded == true).Select(item => item.Index));
+        Assert.Equal([true, true, true], groups.Take(3).Select(group => group.IsIncluded));
+        Assert.All(groups.Skip(3), group => Assert.False(group.IsIncluded));
 
-        // also before the included part
-        gp8.Temporary.IsIncluded = true;
+        // the memory patch is after the temporary patch: the rest of the temporary patch is included too
+        gp8.Memory.IsIncluded = true;
 
-        Assert.All(gp8.Memory.Items.Take(9), item => Assert.True(item.IsIncluded));
-        Assert.All(gp8.Memory.Items.Skip(9), item => Assert.False(item.IsIncluded));
+        Assert.All(groups, group => Assert.True(group.IsIncluded));
+        Assert.True(gp8.Body.IsIncluded);
     }
 
     [Fact]
     public void AddressMapBody_LeavingOutANode_LeavesOutEverythingAfterIt()
     {
         var gp8 = InstantiateGp8DataMessage();
-        gp8.Memory.Items[5].IsIncluded = true;
-        gp8.Memory.Items[8].IsIncluded = true;
+        var groups = TemporaryGroups(gp8);
+        gp8.Body.IsIncluded = true;
 
-        gp8.Memory.Items[7].IsIncluded = false;
+        groups[1].IsIncluded = false;
 
-        Assert.Equal([5, 6], gp8.Memory.Items.Where(item => item.IsIncluded == true).Select(item => item.Index));
-
-        // a group inside a patch: the rest of the patch and the patches after it
-        var patch5 = Assert.IsType<InstanceGroup>(gp8.Memory.Items[5].Members.Single());
-        var second = Assert.IsType<InstanceGroup>(patch5.Members.Where(member => member.CanInclude).ElementAt(1));
-        second.IsIncluded = false;
-
-        Assert.Null(gp8.Memory.Items[5].IsIncluded);
-        Assert.Equal([true, false], patch5.Members.Where(member => member.CanInclude).Take(2).Select(member => member.IsIncluded));
-        Assert.All(patch5.Members.Where(member => member.CanInclude).Skip(1), member => Assert.False(member.IsIncluded));
-        Assert.False(gp8.Memory.Items[6].IsIncluded);
+        Assert.True(groups[0].IsIncluded);
+        Assert.All(groups.Skip(1), group => Assert.False(group.IsIncluded));
+        Assert.Null(gp8.Temporary.IsIncluded);
+        Assert.False(gp8.Memory.IsIncluded);
     }
 
     [Fact]
@@ -836,6 +850,23 @@ public class SchemaInstantiatorTests
     }
 
     [Fact]
+    public void AddressMapBody_MatchThenAnotherItemIndex_SendsTheSameDataAsThatItem()
+    {
+        var gp8 = InstantiateGp8DataMessage();
+        var original = Gp8Patch(5);
+        gp8.Instantiator.Deserialize(gp8.RootName, gp8.Root, original, gp8.Processors, []);
+
+        gp8.Memory.ItemIndex = 7;
+        var bytes = Assert.Single(gp8.Instantiator.Serialize(gp8.RootName, gp8.Root, gp8.Processors, [])).Bytes;
+
+        // patch 7 is at 0x43-40; the data is the same, the checksum follows the address
+        Assert.Equal(original.Length, bytes.Length);
+        Assert.Equal([0x43, 0x40], bytes[5..7]);
+        Assert.Equal(Convert.ToHexString(original[7..^2]), Convert.ToHexString(bytes[7..^2]));
+        Assert.Equal(0, bytes[5..^1].Sum(value => value) % 0x80);
+    }
+
+    [Fact]
     public void AddressMapBody_TheAddressFieldIsCalculated()
     {
         var gp8 = InstantiateGp8DataMessage();
@@ -855,8 +886,10 @@ public class SchemaInstantiatorTests
         var (dialog, memory) = MatchGp8DataMessage();
         Assert.Contains("Nothing of the address map", dialog.Transfer);
 
-        memory.Items[5].IsIncluded = true;
+        memory.IsIncluded = true;
+        Assert.Contains("Sends 1 Message16.DT1 message(s) at 0x40-00 (50 bytes)", dialog.Transfer);
 
+        memory.ItemIndex = 5;
         Assert.Contains("Sends 1 Message16.DT1 message(s) at 0x42-40 (50 bytes)", dialog.Transfer);
     }
 

@@ -144,6 +144,9 @@
                         <TextBlock Text="{Binding Name}" Classes="caption" />
                         <TextBlock Text="repeat" Classes="path" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding CountText}" Classes="path" VerticalAlignment="Center" />
+                        <!-- a repeat of an address map: the item of the address space that is shown (and sent) -->
+                        <ComboBox ItemsSource="{Binding ItemIndexes}" SelectedItem="{Binding ItemIndex}" IsVisible="{Binding IsAddressed}"
+                                  MinWidth="70" ToolTip.Tip="The item of the address space: its index decides the address the data is sent to" />
                         <TextBlock Text="{Binding FieldCountText}" Classes="path" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
                     </StackPanel>
                     <Button Grid.Column="2" Content="Add" Command="{Binding AddItemCommand}" IsVisible="{Binding IsOpen}" />

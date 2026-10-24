@@ -72,8 +72,9 @@ internal sealed class InstanceValueSource : IOpenChoiceSource
         _ => throw new NotSupportedException($"The instance has no items for '{context.Path}'.")
     };
 
+    // the item by its index: the one item of an address map repeat is any item of the address space
     public IValueSource EnterItem(RepeatContext context, int index)
-        => new InstanceValueSource(Find(context) is InstanceRepeat repeat && index < repeat.Items.Count ? repeat.Items[index] : null, _target);
+        => new InstanceValueSource(Find(context) is InstanceRepeat repeat ? repeat.Items.FirstOrDefault(item => item.Index == index) : null, _target);
 
     public int GetSelectedIndex(ChoiceContext context)
         => Find(context) is InstanceChoice { SelectedOption: { } option } choice

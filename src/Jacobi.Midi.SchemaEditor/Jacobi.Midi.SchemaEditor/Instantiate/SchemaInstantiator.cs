@@ -253,6 +253,20 @@ internal sealed class SchemaInstantiator
         }
     }
 
+    // An included node as map occurrences: the node itself, or, when a repeat of the map (which shows one item) is in it,
+    // its parts: the repeat stands for its one item, not for all the items of the address space.
+    private static IEnumerable<MapOccurrence> Occurrences(InstanceNode node)
+    {
+        if (!HasAddressedRepeat(node))
+        {
+            return [new MapOccurrence(node.Path, node.Instance)];
+        }
+        return node.Children().Where(child => child.CanInclude).SelectMany(Occurrences);
+    }
+
+    private static bool HasAddressedRepeat(InstanceNode node)
+        => node is InstanceRepeat { IsAddressed: true } || node.Children().Any(HasAddressedRepeat);
+
     private Serializer CreateSerializer(IProcessorProvider processors)
         => new SerializerBuilder()
             .AddSchemas(_schemas)
@@ -279,7 +293,7 @@ internal sealed class SchemaInstantiator
     // the nodes of the map that are included as a whole
     private static List<MapOccurrence> Selection(InstanceBody body, bool throwWhenEmpty = true)
     {
-        var selection = body.IncludedNodes().Select(node => new MapOccurrence(node.Path, node.Instance)).ToList();
+        var selection = body.IncludedNodes().SelectMany(Occurrences).ToList();
         if (selection.Count == 0 && throwWhenEmpty)
         {
             throw new InvalidOperationException($"Nothing of the address map '{body.Root}' is included: include the groups to send.");
@@ -337,7 +351,7 @@ internal sealed class SchemaInstantiator
         }
     }
 
-    /// <param name="mapItems">In the body of an address map: the item count of a repeat (by its path) in the address space.</param>
+    /// <param name="mapItems">In the body of an address map: the item count of a repeat (by its path) in the address space; the repeat gets one item.</param>
     private InstanceNode Build(SchemaNode node, string ns, SchemaPath path, Func<SchemaPath, int?>? mapItems = null)
     {
         switch (node)
@@ -369,10 +383,11 @@ internal sealed class SchemaInstantiator
 
     private InstanceRepeat BuildRepeat(SchemaRepeat schema, string ns, SchemaPath path, Func<SchemaPath, int?>? mapItems)
     {
-        // a repeat of an address map has no count in the schema: the address space has the items
-        int? constantCount = schema.Count is int count ? count : mapItems?.Invoke(path);
+        int? constantCount = schema.Count is int count ? count : null;
+        // a repeat of an address map has no count in the schema: it shows one item of the address space
+        var addressItemCount = constantCount is null ? mapItems?.Invoke(path) : null;
         var repeat = new InstanceRepeat(schema, path, constantCount,
-            (owner, index) => BuildGroup(new InstanceRepeatItem(schema, path, owner, index), schema, ns, mapItems));
+            (owner, index) => BuildGroup(new InstanceRepeatItem(schema, path, owner, index), schema, ns, mapItems), addressItemCount);
         // an open repeat starts with one copy, so the user sees which fields it holds
         for (var index = 0; index < (constantCount ?? 1); index++)
         {
@@ -419,9 +434,9 @@ internal sealed class SchemaInstantiator
     }
 
     /// <summary>
-    /// The body of an open choice. When it is an address map, its repeats get the item count of the address space,
-    /// its groups and repeats can be included (or left out); nothing is included yet (including one group is quicker than
-    /// leaving out many).
+    /// The body of an open choice. When it is an address map, its repeats show one item of the address space (selected
+    /// by its index), its groups and repeats can be included (or left out); nothing is included yet (including one group is
+    /// quicker than leaving out many).
     /// </summary>
     private InstanceBody BuildBody(SchemaGroup compiled, string ns, SchemaName root)
     {

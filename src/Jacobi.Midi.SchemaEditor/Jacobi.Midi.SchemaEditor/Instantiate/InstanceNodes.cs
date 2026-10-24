@@ -405,7 +405,10 @@ internal sealed partial class InstanceRepeatItem : InstanceGroup
 
     public InstanceRepeat Repeat { get; }
 
-    /// <summary>The zero-based position of the item in its repeat.</summary>
+    /// <summary>
+    /// The zero-based position of the item in its repeat; for the one item of an address map repeat, the item of the
+    /// address space it is (<see cref="InstanceRepeat.ItemIndex"/>).
+    /// </summary>
     public int Index { get; internal set; }
 
     public override InstancePath Instance => Repeat.Instance.Append(Index);
@@ -420,16 +423,21 @@ internal sealed partial class InstanceRepeatItem : InstanceGroup
 /// <summary>
 /// A repeat. A repeat with a constant count has that many items; any other (open) repeat starts with one item
 /// and the user can add and remove copies of the group.
+/// A repeat of an address map (<see cref="IsAddressed"/>) has one item: the item of the address space that is selected
+/// with <see cref="ItemIndex"/> (or that a matched message addressed).
 /// </summary>
 internal sealed partial class InstanceRepeat : InstanceNode
 {
     private readonly Func<InstanceRepeat, int, InstanceRepeatItem> _createItem;
 
-    public InstanceRepeat(SchemaRepeat schema, SchemaPath path, int? constantCount, Func<InstanceRepeat, int, InstanceRepeatItem> createItem)
+    /// <param name="addressItemCount">For a repeat of an address map: the number of items in the address space.</param>
+    public InstanceRepeat(SchemaRepeat schema, SchemaPath path, int? constantCount, Func<InstanceRepeat, int, InstanceRepeatItem> createItem,
+        int? addressItemCount = null)
         : base(schema, path)
     {
         _createItem = createItem;
         ConstantCount = constantCount;
+        AddressItemCount = addressItemCount;
     }
 
     public SchemaRepeat Repeat => (SchemaRepeat)Schema;
@@ -437,19 +445,47 @@ internal sealed partial class InstanceRepeat : InstanceNode
     /// <summary>The count of the schema when it is a constant.</summary>
     public int? ConstantCount { get; }
 
+    /// <summary>For a repeat of an address map: the number of items in the address space (<c>midi.repeat</c>); otherwise null.</summary>
+    public int? AddressItemCount { get; }
+
+    /// <summary>True for a repeat of an address map: it has one item, the item of the address space at <see cref="ItemIndex"/>.</summary>
+    public bool IsAddressed => AddressItemCount is not null;
+
     /// <summary>True when the user decides how many items there are.</summary>
-    public bool IsOpen => ConstantCount is null;
+    public bool IsOpen => ConstantCount is null && !IsAddressed;
+
+    /// <summary>The indices of the items of the address space the one item can be (empty when not <see cref="IsAddressed"/>).</summary>
+    public IReadOnlyList<int> ItemIndexes => AddressItemCount is { } count ? Enumerable.Range(0, count).ToList() : [];
+
+    /// <summary>
+    /// For a repeat of an address map: the item of the address space the one item is. Changing it keeps the values, so the
+    /// same data can be sent as another item (at another address).
+    /// </summary>
+    [ObservableProperty]
+    public partial int ItemIndex { get; set; }
+
+    partial void OnItemIndexChanged(int value)
+    {
+        if (!IsAddressed || Items is not [var item])
+        {
+            return;
+        }
+        item.Index = value;
+        item.RefreshPaths();
+        // the address of what is sent changed
+        RaiseInclusionChanged();
+    }
 
     /// <summary>
     /// Describes how the count is determined: its constant, its reference, the number of items of an address map
-    /// (a constant count that is not in the schema) or 'until the end'.
+    /// or 'until the end'.
     /// </summary>
     public string CountText => Repeat.Count switch
     {
         int constant => $"count {constant}",
         SchemaNodeRef reference => $"count {reference}",
         SchemaPubRef reference => $"count {reference}",
-        _ when ConstantCount is { } items => $"{items} items in the address map",
+        _ when AddressItemCount is { } items => $"{items} items in the address map, item",
         _ => "until the end of the data"
     };
 
@@ -491,10 +527,16 @@ internal sealed partial class InstanceRepeat : InstanceNode
 
     /// <summary>
     /// Ensures the repeat has an item at <paramref name="index"/> (adding copies of the group when needed) and returns it.
-    /// Used when the values are read: the data decides how many items there are.
+    /// Used when the values are read: the data decides how many items there are. A repeat of an address map has one item:
+    /// it becomes the item at <paramref name="index"/>.
     /// </summary>
     internal InstanceRepeatItem GetOrAddItem(int index)
     {
+        if (IsAddressed && Items is [var item])
+        {
+            ItemIndex = index;
+            return item;
+        }
         while (Items.Count <= index)
         {
             AddNewItem();
