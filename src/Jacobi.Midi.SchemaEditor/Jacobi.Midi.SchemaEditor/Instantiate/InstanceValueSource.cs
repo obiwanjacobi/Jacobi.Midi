@@ -34,7 +34,9 @@ internal sealed class InstanceValueSource : IOpenChoiceSource
             return SourceResult.NoValue();
         }
 
-        var text = field.Value?.Trim() ?? String.Empty;
+        var dataType = context.Field.DataType;
+        // the spaces of a text are part of its value (e.g. a patch name that starts with a space); other values are trimmed
+        var text = dataType.ClrType == typeof(string) ? field.Value ?? String.Empty : field.Value?.Trim() ?? String.Empty;
         // an empty value or a reference is derived by the engine (or fails there)
         if (text.Length == 0 ||
             text.StartsWith(SchemaNodeRef.Prefix, StringComparison.Ordinal) ||
@@ -43,13 +45,17 @@ internal sealed class InstanceValueSource : IOpenChoiceSource
             return SourceResult.NoValue();
         }
 
-        var dataType = context.Field.DataType;
         if (dataType.Options?.FirstOrDefault(option => String.Equals(option.Value, text, StringComparison.OrdinalIgnoreCase)) is { Value: not null } label)
         {
             text = label.Key.ToString(CultureInfo.InvariantCulture);
         }
         if (!dataType.Parse(text, out var value))
         {
+            // value processors (e.g. sys.map) make the logical value another type than the data type: they convert the text themselves
+            if (context.Field.Pipeline.ValueProcessors.Count > 0)
+            {
+                return SourceResult.Provided(new LogicalField(context.Field.Name, typeof(string), text));
+            }
             throw new InvalidOperationException($"'{text}' is not a valid value for {field.DisplayPath} ({dataType.Name}).");
         }
         return SourceResult.Provided(new LogicalField(context.Field.Name, dataType.ClrType, value));

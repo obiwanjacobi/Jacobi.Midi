@@ -79,14 +79,21 @@ internal sealed class InstanceValueSink : IOpenChoiceSink
     /// Expands the nearest node that holds all the fields that received a value, and the nodes above it,
     /// e.g. the patch a DT1 message addressed; the large parts below it keep their expansion.
     /// </summary>
-    private void RevealRead()
+    private void RevealRead() => ReadNodeIn(_target)?.Reveal();
+
+    /// <summary>
+    /// After <see cref="End"/>: the nearest node at or below <paramref name="scope"/> that holds all the fields below it that
+    /// received a value (a group when only one field was read), e.g. the patch of an address map a DT1 message addressed;
+    /// null when no field below it received a value.
+    /// </summary>
+    public InstanceNode? ReadNodeIn(InstanceNode scope)
     {
-        // the nodes from the read instance down to each read field that is still in the tree (not removed with its repeat item)
-        var fields = _target.Fields().ToHashSet();
-        var paths = _read.Where(fields.Contains).Select(Ancestors).ToList();
+        // the nodes from the scope down to each read field that is still in the tree (not removed with its repeat item)
+        var fields = scope.Fields().ToHashSet();
+        var paths = _read.Where(fields.Contains).Select(field => Ancestors(field, scope)).ToList();
         if (paths.Count == 0)
         {
-            return;
+            return null;
         }
         var common = paths[0];
         foreach (var path in paths.Skip(1))
@@ -98,21 +105,22 @@ internal sealed class InstanceValueSink : IOpenChoiceSink
             }
             common = common[..length];
         }
-        if (common.Count > 0)
+        if (common.Count == 0)
         {
-            // the field itself has nothing to expand: reveal its group when only one field was read
-            (common[^1] is InstanceField && common.Count > 1 ? common[^2] : common[^1]).Reveal();
+            return null;
         }
+        // the field itself has nothing to expand: its group when only one field was read
+        return common[^1] is InstanceField && common.Count > 1 ? common[^2] : common[^1];
     }
 
-    // the nodes from the read instance down to the node
-    private List<InstanceNode> Ancestors(InstanceNode node)
+    // the nodes from the top node down to the node
+    private static List<InstanceNode> Ancestors(InstanceNode node, InstanceNode top)
     {
         var path = new List<InstanceNode>();
         for (InstanceNode? current = node; current is not null; current = current.Parent)
         {
             path.Insert(0, current);
-            if (ReferenceEquals(current, _target))
+            if (ReferenceEquals(current, top))
             {
                 break;
             }

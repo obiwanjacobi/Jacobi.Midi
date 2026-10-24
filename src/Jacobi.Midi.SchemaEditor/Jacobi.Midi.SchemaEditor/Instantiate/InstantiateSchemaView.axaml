@@ -34,6 +34,13 @@
         <Style Selector="ToggleButton.expand:checked /template/ ContentPresenter">
             <Setter Property="Background" Value="Transparent" />
         </Style>
+        <!-- includes a part of an address map in what is sent, or leaves it out -->
+        <Style Selector="CheckBox.include">
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="ToolTip.Tip" Value="Include in what is sent (Save As, Send)" />
+        </Style>
     </UserControl.Styles>
 
     <UserControl.DataTemplates>
@@ -66,6 +73,7 @@
                             </Panel>
                         </ToggleButton>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                            <CheckBox Classes="include" IsChecked="{Binding IsIncluded}" IsVisible="{Binding CanInclude}" />
                             <TextBlock Text="{Binding DisplayPath}" Classes="caption" />
                             <TextBlock Text="{Binding InstanceText, StringFormat='instance {0}'}" Classes="path" VerticalAlignment="Center" />
                             <TextBlock Text="{Binding FieldCountText}" Classes="path" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
@@ -89,9 +97,12 @@
                                 <TextBlock Text="▸" IsVisible="{Binding !IsExpanded}" />
                             </Panel>
                         </ToggleButton>
+                        <CheckBox Classes="include" IsChecked="{Binding IsIncluded}" IsVisible="{Binding CanInclude}" />
                         <TextBlock Text="{Binding DisplayPath}" Classes="path" VerticalAlignment="Center" />
+                        <TextBlock Text="address map" Classes="path" VerticalAlignment="Center" IsVisible="{Binding IsAddressMap}" />
                         <TextBlock Text="{Binding FieldCountText}" Classes="path" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
                     </StackPanel>
+                    <TextBlock Text="{Binding Note}" Foreground="Orange" FontSize="11" TextWrapping="Wrap" IsVisible="{Binding HasNote}" />
                     <ItemsControl ItemsSource="{Binding ShownMembers}" />
                 </StackPanel>
             </Border>
@@ -109,6 +120,7 @@
                                 <TextBlock Text="▸" IsVisible="{Binding !IsExpanded}" />
                             </Panel>
                         </ToggleButton>
+                        <CheckBox Classes="include" IsChecked="{Binding IsIncluded}" IsVisible="{Binding CanInclude}" />
                         <TextBlock Text="{Binding DisplayPath}" Classes="caption" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding FieldCountText}" Classes="path" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
                     </StackPanel>
@@ -128,6 +140,7 @@
                         </Panel>
                     </ToggleButton>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <CheckBox Classes="include" IsChecked="{Binding IsIncluded}" IsVisible="{Binding CanInclude}" />
                         <TextBlock Text="{Binding Name}" Classes="caption" />
                         <TextBlock Text="repeat" Classes="path" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding CountText}" Classes="path" VerticalAlignment="Center" />
@@ -202,9 +215,16 @@
                     </StackPanel>
                 </Border>
                 <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="0,14,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <!-- address map: the messages the included groups are sent in -->
+                    <TextBlock Grid.ColumnSpan="2" Text="{Binding Transfer}" Classes="note" TextWrapping="Wrap" Margin="0,0,0,8"
+                               IsVisible="{Binding HasTransfer}" />
                     <!-- the outcome of the last Save As or Send -->
-                    <TextBlock Text="{Binding StatusMessage}" Classes="note" TextWrapping="Wrap" VerticalAlignment="Center" />
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <TextBlock Grid.Row="1" Text="{Binding StatusMessage}" Classes="note" TextWrapping="Wrap" VerticalAlignment="Center" />
+                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="8">
                         <Button Content="Save As…" Command="{Binding SaveAsCommand}" IsVisible="{Binding HasRoot}"
                                 ToolTip.Tip="Serialize the values and save them to a SysEx (.syx) file" />
                         <Button Content="Send" Command="{Binding SendCommand}" IsVisible="{Binding HasRoot}"

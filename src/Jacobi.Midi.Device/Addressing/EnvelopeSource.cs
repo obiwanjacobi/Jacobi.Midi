@@ -16,15 +16,21 @@ internal readonly record struct EnvelopeBody<TScope>(SchemaName Group, SchemaPat
 /// The value source for writing an envelope message: answers the fields by their <c>midi.role</c>
 /// (address start and size of the transfer, device values), leaves the rest to the schema
 /// (constants, derived sizes, checksums) and selects the body for the data open choice.
+/// With a client source (the client's value model of the whole message, scope by scope), the device values the
+/// <paramref name="device"/> values do not hold and the fields without a role are taken from it, and the body scope
+/// is the client's scope for the open choice.
 /// </summary>
-internal sealed class EnvelopeSource(AddressRange addresses, DeviceValues device, EnvelopeBody<IValueSource>? body = null)
+/// <param name="body">Selects the body for the data open choice; gets the client's scope for it (null without a client source).</param>
+/// <param name="client">The client's value source at the same scope; null when the client only supplies the body values.</param>
+internal sealed class EnvelopeSource(AddressRange addresses, DeviceValues device,
+    Func<IValueSource?, EnvelopeBody<IValueSource>>? body = null, IValueSource? client = null)
     : IOpenChoiceSource
 {
     public SourceResult GetField(FieldContext context)
     {
         if (MidiProperties.Find(context.Field, MidiProperties.Role) is not { } role)
         {
-            return SourceResult.NoValue();
+            return client?.GetField(context) ?? SourceResult.NoValue();
         }
 
         long? value = role switch
@@ -32,14 +38,18 @@ internal sealed class EnvelopeSource(AddressRange addresses, DeviceValues device
             MidiProperties.RoleAddress => addresses.Start,
             MidiProperties.RoleSize => addresses.Size,
             _ when role.StartsWith(MidiProperties.RoleDevicePrefix, StringComparison.OrdinalIgnoreCase) =>
-                device.TryGet(role[MidiProperties.RoleDevicePrefix.Length..], out var deviceValue)
-                    ? deviceValue
-                    : throw new InvalidOperationException($"'{context.Path}': there is no value for the device value '{role}'."),
+                device.TryGet(role[MidiProperties.RoleDevicePrefix.Length..], out var deviceValue) ? deviceValue : null,
             _ => null,
         };
         if (value is null)
         {
-            return SourceResult.NoValue();
+            if (role.StartsWith(MidiProperties.RoleDevicePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return client?.GetField(context) is { Status: SourceStatus.Value } provided
+                    ? provided
+                    : throw new InvalidOperationException($"'{context.Path}': there is no value for the device value '{role}'.");
+            }
+            return client?.GetField(context) ?? SourceResult.NoValue();
         }
 
         var type = context.Field.DataType.ClrType;
@@ -48,24 +58,29 @@ internal sealed class EnvelopeSource(AddressRange addresses, DeviceValues device
 
     public OpenChoiceSourceResult EnterOpenChoice(OpenChoiceContext context)
     {
-        if (body is not { } selected)
+        if (body is null)
         {
             throw new InvalidOperationException($"'{context.Path}': the message has no body to write.");
         }
+        var clientBody = client is IOpenChoiceSource openChoice ? openChoice.EnterOpenChoice(context).Scope : null;
+        var selected = body(clientBody);
         return new OpenChoiceSourceResult(selected.Scope, selected.Group, selected.Target, selected.TargetInstance);
     }
 
-    public IValueSource EnterGroup(GroupContext context) => this;
+    public IValueSource EnterGroup(GroupContext context) => Scope(client?.EnterGroup(context));
 
     public int GetCount(RepeatContext context)
-        => throw new NotSupportedException($"'{context.Path}': repeats are not supported in an envelope message.");
+        => client?.GetCount(context) ?? throw new NotSupportedException($"'{context.Path}': repeats are not supported in an envelope message.");
 
-    public IValueSource EnterItem(RepeatContext context, int index) => this;
+    public IValueSource EnterItem(RepeatContext context, int index) => Scope(client?.EnterItem(context, index));
 
     public int GetSelectedIndex(ChoiceContext context)
-        => throw new NotSupportedException($"'{context.Path}': choices are not supported in an envelope message.");
+        => client?.GetSelectedIndex(context) ?? throw new NotSupportedException($"'{context.Path}': choices are not supported in an envelope message.");
 
-    public IValueSource EnterChoice(ChoiceContext context) => this;
+    public IValueSource EnterChoice(ChoiceContext context) => Scope(client?.EnterChoice(context));
+
+    private EnvelopeSource Scope(IValueSource? clientScope)
+        => client is null ? this : new EnvelopeSource(addresses, device, body, clientScope);
 }
 
 /// <summary>

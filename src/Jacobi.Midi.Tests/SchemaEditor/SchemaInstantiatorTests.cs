@@ -1,4 +1,5 @@
 using System.Reflection;
+using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.SchemaEditor.Instantiate;
 using Jacobi.Midi.SchemaEditor.Models;
@@ -525,7 +526,7 @@ public class SchemaInstantiatorTests
         ((InstanceField)data.Items[0].Members[0]).Value = "2";
         ((InstanceField)data.Items[1].Members[0]).Value = "3";
 
-        var bytes = instantiator.Serialize(instantiator.FindRootName(msg)!.Value, root, TestHelpers.CreateProcessors());
+        var bytes = instantiator.Serialize(instantiator.FindRootName(msg)!.Value, root, TestHelpers.CreateProcessors(), []).Single().Bytes;
 
         Assert.Equal([0xF0, 0x01, 0x02, 0x03, 0xF7], bytes);
     }
@@ -540,7 +541,7 @@ public class SchemaInstantiatorTests
         ((InstanceField)instance.Members[0]).Value = "5";
 
         Assert.Equal("Ser.Msg", instantiator.FindRootName(head)!.Value.ToString());
-        var bytes = instantiator.Serialize(instantiator.FindRootName(head)!.Value, instance, TestHelpers.CreateProcessors());
+        var bytes = instantiator.Serialize(instantiator.FindRootName(head)!.Value, instance, TestHelpers.CreateProcessors(), []).Single().Bytes;
 
         Assert.Equal([0x05], bytes);
     }
@@ -555,7 +556,7 @@ public class SchemaInstantiatorTests
         choice.SelectedOption = choice.Options.Single(option => option.Name == "Ser.BodyB");
         ((InstanceField)((InstanceGroup)choice.Selected!).Members[0]).Value = "7";
 
-        var bytes = instantiator.Serialize(instantiator.FindRootName(env)!.Value, root, TestHelpers.CreateProcessors());
+        var bytes = instantiator.Serialize(instantiator.FindRootName(env)!.Value, root, TestHelpers.CreateProcessors(), []).Single().Bytes;
 
         Assert.Equal([0x07], bytes);
     }
@@ -569,7 +570,7 @@ public class SchemaInstantiatorTests
         Field(root, "Head", "A").Value = "abc";
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => instantiator.Serialize(instantiator.FindRootName(msg)!.Value, root, TestHelpers.CreateProcessors()));
+            () => instantiator.Serialize(instantiator.FindRootName(msg)!.Value, root, TestHelpers.CreateProcessors(), []));
         Assert.Contains("'abc'", exception.Message);
     }
 
@@ -580,7 +581,7 @@ public class SchemaInstantiatorTests
         var msg = (EditGroup)document.Members.Single(member => member.Name == "Msg");
         var saved = false;
         var dialog = new InstantiateSchemaViewModel(instantiator.Create(msg),
-            () => throw new Jacobi.BinarySerializer.Execution.ExecutionPlanException("Msg", ["Msg: Unknown processor 'sys.bytepacker'."]),
+            _ => throw new Jacobi.BinarySerializer.Execution.ExecutionPlanException("Msg", ["Msg: Unknown processor 'sys.bytepacker'."]),
             (_, _) => { saved = true; return Task.FromResult<string?>("file.syx"); },
             new Jacobi.Midi.SchemaEditor.Midi.MidiBarViewModel(null), _ => { });
 
@@ -636,8 +637,9 @@ public class SchemaInstantiatorTests
         Assert.True(body.IsExpanded);
         var memory = Assert.IsType<InstanceRepeat>(body.Members.Single(member => member.Name == "Memory"));
         Assert.False(memory.IsExpanded);
-        // [TODO] the repeats of an address map have no count (midi.repeat); take the item count from the addressing code
-        Assert.Single(memory.Items);
+        // the repeats of an address map have the item count of the address space (midi.repeat)
+        Assert.Equal(100, memory.Items.Count);
+        Assert.False(memory.IsOpen);
         Assert.All(memory.Items, patch => Assert.False(patch.IsExpanded));
     }
 
@@ -672,10 +674,13 @@ public class SchemaInstantiatorTests
 
         Assert.False(dialog.Match.HasError, dialog.Match.Error);
         Assert.False(dialog.Match.HasWarning, dialog.Match.Warning);
-        // the items up to the patch at the address; only that patch received values
-        Assert.Equal(6, memory.Items.Count);
+        // all items of the address space; only the patch at the address received values and is included
+        Assert.Equal(128, memory.Items.Count);
         Assert.Contains(memory.Items[5].Fields(), field => !field.IsConstant && field.Value.Length > 0);
-        Assert.All(memory.Items.Take(5).SelectMany(item => item.Fields()), field => Assert.True(field.IsConstant || field.Value.Length == 0));
+        Assert.All(memory.Items.Where(item => item.Index != 5).SelectMany(item => item.Fields()), field => Assert.True(field.IsConstant || field.Value.Length == 0));
+        Assert.True(memory.Items[5].IsIncluded);
+        Assert.Null(memory.IsIncluded);
+        Assert.Contains("0x42-40", dialog.Transfer);
     }
 
     [Fact]
@@ -692,8 +697,167 @@ public class SchemaInstantiatorTests
         Assert.Contains("not recognised", dialog.Match.Warning);
         Assert.Contains("Gp8.AddressMap", dialog.Match.Warning);
         Assert.True(dialog.Match.HasError);
-        Assert.Equal(6, memory.Items.Count);
+        Assert.Equal(128, memory.Items.Count);
         Assert.Contains(memory.Items[5].Fields(), field => !field.IsConstant && field.Value.Length > 0);
+    }
+
+    /// <summary>A GP-8 DT1 message (Roland.Message16) instantiated with the GP-8 address map selected as its body.</summary>
+    private sealed record Gp8DataMessage(SchemaInstantiator Instantiator, SchemaName RootName, InstanceGroup Root, InstanceBody Body,
+        InstanceRepeat Memory, IProcessorProvider Processors)
+    {
+        public InstanceGroup Temporary => Assert.IsType<InstanceGroup>(Body.Members.Single(member => member.Name == "Temporary"));
+        public string? Transfer => Instantiator.DescribeTransfer(RootName, Root, Processors);
+    }
+
+    private static Gp8DataMessage InstantiateGp8DataMessage()
+    {
+        var viewModel = new MainViewModel();
+        var loaded = viewModel.OpenedAssemblies.Load(
+            Assembly.LoadFrom(TestHelpers.AssemblyPathOf("Jacobi.Midi.Roland")), "Jacobi.Midi.Roland.dll");
+        var roland = loaded.Schemas.Single(schema => schema.Name == "Roland");
+        var message = (EditGroup)roland.Document.Schema.Members.Single(member => member.Name == "Message16");
+        var dt1 = (EditGroup)message.Members.Single(member => member.Name == "DT1");
+        var processors = viewModel.OpenedAssemblies.Processors;
+        var instantiator = new SchemaInstantiator(viewModel.LoadedSchemas.Compile(roland.Document.Schema), processors);
+        var root = Assert.IsType<InstanceGroup>(instantiator.Create(dt1));
+        var data = FindChoice(root, "Data")!;
+        data.SelectedOption = data.Options.Single(option => option.Name == "Gp8.AddressMap");
+        var body = Assert.IsType<InstanceBody>(data.Selected);
+        var memory = Assert.IsType<InstanceRepeat>(body.Members.Single(member => member.Name == "Memory"));
+        return new Gp8DataMessage(instantiator, instantiator.FindRootName(dt1)!.Value, root, body, memory, processors);
+    }
+
+    private static byte[] Gp8Patch(int index)
+        => File.ReadAllBytes(TestHelpers.PathOf(Gp8BulkDumpFile)).AsSpan(index * Gp8MessageSize, Gp8MessageSize).ToArray();
+
+    [Fact]
+    public void AddressMapBody_HasTheItemsOfTheAddressSpaceAndIncludesNothing()
+    {
+        var gp8 = InstantiateGp8DataMessage();
+
+        Assert.True(gp8.Body.IsAddressMap);
+        Assert.Null(gp8.Body.Note);
+        Assert.Equal(128, gp8.Memory.Items.Count);
+        Assert.False(gp8.Memory.IsOpen);
+        Assert.Equal("128 items in the address map", gp8.Memory.CountText);
+        Assert.True(gp8.Body.CanInclude);
+        Assert.False(gp8.Body.IsIncluded);
+        // the envelope is not part of the map
+        Assert.False(gp8.Root.CanInclude);
+        Assert.Contains("Nothing of the address map 'Gp8.AddressMap' is included", gp8.Transfer);
+
+        gp8.Temporary.IsIncluded = true;
+
+        Assert.Null(gp8.Body.IsIncluded);
+        Assert.Contains("Sends 1 Message16.DT1 message(s) at 0x00-00", gp8.Transfer);
+    }
+
+    [Fact]
+    public void AddressMapBody_TheAddressesFollowTheIncludedItems()
+    {
+        var gp8 = InstantiateGp8DataMessage();
+
+        gp8.Memory.Items[5].IsIncluded = true;
+        gp8.Memory.Items[6].IsIncluded = true;
+
+        // the memory patches from 0x40-00 (linear 0x2000), 0x40 addresses each
+        Assert.Contains("Sends 2 Message16.DT1 message(s) at 0x42-40 (50 bytes), 0x43-00 (50 bytes)", gp8.Transfer);
+        Assert.Null(gp8.Memory.IsIncluded);
+
+        // including the repeat includes all its items: one message per (atomic) patch
+        gp8.Memory.IsIncluded = true;
+        Assert.All(gp8.Memory.Items, item => Assert.True(item.IsIncluded));
+        Assert.Contains("Sends 128 Message16.DT1 message(s)", gp8.Transfer);
+    }
+
+    [Fact]
+    public void AddressMapBody_IncludingANodeAfterAGap_IncludesTheNodesInBetween()
+    {
+        var gp8 = InstantiateGp8DataMessage();
+
+        gp8.Memory.Items[5].IsIncluded = true;
+        gp8.Memory.Items[8].IsIncluded = true;
+
+        Assert.Equal([5, 6, 7, 8], gp8.Memory.Items.Where(item => item.IsIncluded == true).Select(item => item.Index));
+
+        // also before the included part
+        gp8.Temporary.IsIncluded = true;
+
+        Assert.All(gp8.Memory.Items.Take(9), item => Assert.True(item.IsIncluded));
+        Assert.All(gp8.Memory.Items.Skip(9), item => Assert.False(item.IsIncluded));
+    }
+
+    [Fact]
+    public void AddressMapBody_LeavingOutANode_LeavesOutEverythingAfterIt()
+    {
+        var gp8 = InstantiateGp8DataMessage();
+        gp8.Memory.Items[5].IsIncluded = true;
+        gp8.Memory.Items[8].IsIncluded = true;
+
+        gp8.Memory.Items[7].IsIncluded = false;
+
+        Assert.Equal([5, 6], gp8.Memory.Items.Where(item => item.IsIncluded == true).Select(item => item.Index));
+
+        // a group inside a patch: the rest of the patch and the patches after it
+        var patch5 = Assert.IsType<InstanceGroup>(gp8.Memory.Items[5].Members.Single());
+        var second = Assert.IsType<InstanceGroup>(patch5.Members.Where(member => member.CanInclude).ElementAt(1));
+        second.IsIncluded = false;
+
+        Assert.Null(gp8.Memory.Items[5].IsIncluded);
+        Assert.Equal([true, false], patch5.Members.Where(member => member.CanInclude).Take(2).Select(member => member.IsIncluded));
+        Assert.All(patch5.Members.Where(member => member.CanInclude).Skip(1), member => Assert.False(member.IsIncluded));
+        Assert.False(gp8.Memory.Items[6].IsIncluded);
+    }
+
+    [Fact]
+    public void AddressMapBody_NothingIncluded_CannotBeSent()
+    {
+        var gp8 = InstantiateGp8DataMessage();
+
+        Assert.Contains("Nothing of the address map 'Gp8.AddressMap' is included", gp8.Transfer);
+        var exception = Assert.Throws<InvalidOperationException>(() => gp8.Instantiator.Serialize(gp8.RootName, gp8.Root, gp8.Processors, []));
+        Assert.Contains("Nothing of the address map", exception.Message);
+    }
+
+    [Fact]
+    public void AddressMapBody_MatchThenSerialize_WritesTheSameMessage()
+    {
+        var gp8 = InstantiateGp8DataMessage();
+        var original = Gp8Patch(5);
+        gp8.Instantiator.Deserialize(gp8.RootName, gp8.Root, original, gp8.Processors, []);
+
+        var warnings = new List<string>();
+        var message = Assert.Single(gp8.Instantiator.Serialize(gp8.RootName, gp8.Root, gp8.Processors, warnings));
+
+        // the patch that was read is the one that is sent, at its own address
+        Assert.Empty(warnings);
+        Assert.Equal(Convert.ToHexString(original), Convert.ToHexString(message.Bytes));
+        Assert.Equal(TimeSpan.FromMilliseconds(20), message.Interval);
+    }
+
+    [Fact]
+    public void AddressMapBody_TheAddressFieldIsCalculated()
+    {
+        var gp8 = InstantiateGp8DataMessage();
+        gp8.Instantiator.Deserialize(gp8.RootName, gp8.Root, Gp8Patch(5), gp8.Processors, []);
+        // a wrong address typed by the user is not used
+        Assert.IsType<InstanceField>(Assert.IsType<InstanceGroup>(gp8.Root.Members.Single(member => member.Name == "ChecksumScope"))
+            .Members.Single(member => member.Name == "Address")).Value = "0";
+
+        var message = Assert.Single(gp8.Instantiator.Serialize(gp8.RootName, gp8.Root, gp8.Processors, []));
+
+        Assert.Equal(Convert.ToHexString(Gp8Patch(5)), Convert.ToHexString(message.Bytes));
+    }
+
+    [Fact]
+    public void AddressMapBody_TheDialogShowsTheTransferOfTheIncludedGroups()
+    {
+        var (dialog, memory) = MatchGp8DataMessage();
+        Assert.Contains("Nothing of the address map", dialog.Transfer);
+
+        memory.Items[5].IsIncluded = true;
+
+        Assert.Contains("Sends 1 Message16.DT1 message(s) at 0x42-40 (50 bytes)", dialog.Transfer);
     }
 
     [Fact]

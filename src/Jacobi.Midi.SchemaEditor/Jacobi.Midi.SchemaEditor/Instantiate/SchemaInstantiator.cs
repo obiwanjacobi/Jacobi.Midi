@@ -9,20 +9,35 @@ using Jacobi.Midi.SchemaEditor.Models;
 namespace Jacobi.Midi.SchemaEditor.Instantiate;
 
 /// <summary>
+/// One SysEx message written from an instance: its bytes and the time to wait after sending it (<c>midi.messageInterval</c>
+/// of the data message of an address map; zero otherwise).
+/// </summary>
+internal sealed record SerializedMessage(byte[] Bytes, TimeSpan Interval);
+
+/// <summary>
 /// Creates the <see cref="InstanceNode"/> trees ("instances") of the roots of a compiled document
 /// (a <see cref="SchemaSetCompilation"/>, see <see cref="SchemaSetWorkspace"/>) and serializes or deserializes their values.
 /// It walks the compiled schema, so node defs are expanded and open choices can look up their bodies in the whole set.
+/// A body that is an address map is detected and handled by the Device addressing code (<see cref="AddressMapAdapter"/>):
+/// its repeats get the item count of the address space, and the groups the user includes are sent at their addresses.
 /// </summary>
 internal sealed class SchemaInstantiator
 {
     private readonly SchemaSet _schemas;
     private readonly IReadOnlyList<EditDocument> _edits;
     private readonly List<string> _warnings;
+    private readonly IProcessorProvider? _processors;
+    private AddressMapAdapter? _adapter;
 
     /// <param name="compilation">The compiled document with the schemas it was compiled with.</param>
-    public SchemaInstantiator(SchemaSetCompilation compilation)
+    /// <param name="processors">
+    /// The processors the schemas use (those of the opened assemblies); needed to detect the address maps when a body is
+    /// selected. Without them a body is always a plain group.
+    /// </param>
+    public SchemaInstantiator(SchemaSetCompilation compilation, IProcessorProvider? processors = null)
     {
         ArgumentNullException.ThrowIfNull(compilation);
+        _processors = processors;
         _schemas = compilation.Schemas;
         _edits = compilation.Documents;
         _warnings = [.. compilation.Warnings];
@@ -46,8 +61,8 @@ internal sealed class SchemaInstantiator
     /// (see <see cref="SchemaSetWorkspace.Compile(EditDocument, IEnumerable{EditDocument})"/>).
     /// </summary>
     /// <exception cref="InvalidOperationException">An include of the document is not loaded or the document does not compile.</exception>
-    public static SchemaInstantiator Create(EditDocument document, IEnumerable<EditDocument> workspace)
-        => new(SchemaSetWorkspace.Compile(document, workspace));
+    public static SchemaInstantiator Create(EditDocument document, IEnumerable<EditDocument> workspace, IProcessorProvider? processors = null)
+        => new(SchemaSetWorkspace.Compile(document, workspace), processors);
 
     /// <summary>
     /// Creates the instance of a root of the instantiated document (by its name).
@@ -106,30 +121,75 @@ internal sealed class SchemaInstantiator
     /// Writes the values of <paramref name="instance"/> with the plan of <paramref name="root"/> (see <see cref="FindRootName"/>).
     /// An instance of a nested node is written as a range of that plan: only its fields are written,
     /// but the logic of the groups that lead to it (e.g. SysEx framing, checksums) still applies.
+    /// When the body of an open choice is an address map, the included groups of the map are written as the data messages
+    /// that carry them (one or more), with the address and size of each message calculated from the map.
     /// </summary>
     /// <param name="processors">The processors the schemas use (those of the opened assemblies).</param>
-    /// <returns>The serialized bytes.</returns>
+    /// <param name="warnings">Receives the situations the user may not expect, e.g. a group that is sent as part of an atomic group.</param>
+    /// <returns>The serialized messages: one, or one per block of an address map.</returns>
     /// <exception cref="InvalidOperationException">The plan cannot be built or a value cannot be written; the message describes the problem.</exception>
-    public byte[] Serialize(SchemaName root, InstanceNode instance, IProcessorProvider processors)
+    public IReadOnlyList<SerializedMessage> Serialize(SchemaName root, InstanceNode instance, IProcessorProvider processors, ICollection<string> warnings)
     {
         ArgumentNullException.ThrowIfNull(instance);
         ArgumentNullException.ThrowIfNull(processors);
-        var serializer = new SerializerBuilder()
-            .AddSchemas(_schemas)
-            .AddProcessors(processors)
-            .Build();
+        ArgumentNullException.ThrowIfNull(warnings);
+        var serializer = CreateSerializer(processors);
         var plan = serializer.GetPlan(root);
-        var output = new ArrayBufferWriter<byte>();
-        if (String.Equals(plan.Root.Path.Value, instance.Path.Value, StringComparison.OrdinalIgnoreCase))
+        var isRoot = String.Equals(plan.Root.Path.Value, instance.Path.Value, StringComparison.OrdinalIgnoreCase);
+        // the engine enters the root with the source itself; the items of a root repeat are found by its path
+        var source = new InstanceValueSource(isRoot && instance is not InstanceRepeat ? instance : null, instance);
+        if (FindAddressMap(instance) is { } map)
         {
-            // the engine enters the root with the source itself; the items of a root repeat are found by its path
-            serializer.Serialize(plan, new InstanceValueSource(instance is InstanceRepeat ? null : instance, instance), output);
+            var messages = new AddressMapAdapter(serializer)
+                .WriteData(root, map.Choice.Path, map.Body.Root, Selection(map.Body), source, warnings);
+            return [.. messages.Select(message => new SerializedMessage(message.SysEx, message.Message.Interval))];
+        }
+
+        var output = new ArrayBufferWriter<byte>();
+        if (isRoot)
+        {
+            serializer.Serialize(plan, source, output);
         }
         else
         {
-            serializer.Serialize(plan.CreateRange(instance.Path), new InstanceValueSource(null, instance), output);
+            serializer.Serialize(plan.CreateRange(instance.Path), source, output);
         }
-        return output.WrittenSpan.ToArray();
+        return [new SerializedMessage(output.WrittenSpan.ToArray(), TimeSpan.Zero)];
+    }
+
+    /// <summary>
+    /// Describes how the included groups of an address map body are sent: the data messages with their address and size,
+    /// or why they cannot be sent. Null when the instance has no address map body.
+    /// </summary>
+    /// <param name="processors">The processors the schemas use (those of the opened assemblies).</param>
+    public string? DescribeTransfer(SchemaName root, InstanceNode instance, IProcessorProvider processors)
+    {
+        ArgumentNullException.ThrowIfNull(instance);
+        ArgumentNullException.ThrowIfNull(processors);
+        if (FindAddressMap(instance) is not { } map)
+        {
+            return null;
+        }
+        var selection = Selection(map.Body, throwWhenEmpty: false);
+        if (selection.Count == 0)
+        {
+            return $"Nothing of the address map '{map.Body.Root}' is included: include the groups to send.";
+        }
+
+        try
+        {
+            var warnings = new List<string>();
+            var plan = new AddressMapAdapter(CreateSerializer(processors)).PlanData(root, map.Choice.Path, map.Body.Root, selection, warnings);
+            const int shown = 8;
+            var blocks = plan.Blocks.Take(shown).Select(block => $"{plan.AddressSpace.Format(block.Addresses.Start)} ({block.Addresses.Size} bytes)");
+            var text = $"Sends {plan.Blocks.Count} {plan.Message.Name} message(s) at {String.Join(", ", blocks)}{(plan.Blocks.Count > shown ? ", …" : String.Empty)}.";
+            return String.Join(Environment.NewLine, [text, .. warnings]);
+        }
+        catch (Exception exception) when (exception is AddressMapException or ExecutionPlanException
+            or InvalidOperationException or ArgumentException or NotSupportedException)
+        {
+            return $"Cannot send the included groups: {exception.Message}";
+        }
     }
 
     /// <summary>
@@ -137,8 +197,9 @@ internal sealed class SchemaInstantiator
     /// the reverse of <see cref="Serialize"/>. An instance of a nested node is read as a range of that plan.
     /// The fields are filled out, the items of the repeats added and the alternatives of the choices selected as they are read;
     /// the body of an open choice must be selected beforehand. When the read fails, the values read up to the failure remain.
-    /// When the schemas hold an address map, the reading is left to <see cref="AddressMapReader"/>: it ends the repeats of
+    /// When the schemas hold an address map, the reading is left to <see cref="AddressMapAdapter"/>: it ends the repeats of
     /// the map and reads a data message into the group of the map it carries; otherwise the serializer reads as is.
+    /// In an address map body, the part that was read is included (and the rest left out), so it can be sent back.
     /// </summary>
     /// <param name="processors">The processors the schemas use (those of the opened assemblies).</param>
     /// <param name="warnings">Receives the situations the user may not expect (e.g. a message that is read only partly into a map), also when the read fails.</param>
@@ -151,11 +212,8 @@ internal sealed class SchemaInstantiator
         ArgumentNullException.ThrowIfNull(bytes);
         ArgumentNullException.ThrowIfNull(processors);
         ArgumentNullException.ThrowIfNull(warnings);
-        var serializer = new SerializerBuilder()
-            .AddSchemas(_schemas)
-            .AddProcessors(processors)
-            .Build();
-        var reader = new AddressMapReader(serializer);
+        var serializer = CreateSerializer(processors);
+        var reader = new AddressMapAdapter(serializer);
         var plan = serializer.GetPlan(root);
         var input = new ReadOnlySequence<byte>(bytes);
         var isRoot = String.Equals(plan.Root.Path.Value, instance.Path.Value, StringComparison.OrdinalIgnoreCase);
@@ -174,7 +232,59 @@ internal sealed class SchemaInstantiator
         finally
         {
             sink.End(completed);
+            IncludeRead(instance, sink);
         }
+    }
+
+    // in an address map body: include the part of the map that was read (the nearest node that can be included), leave out the rest
+    private static void IncludeRead(InstanceNode instance, InstanceValueSink sink)
+    {
+        if (FindAddressMap(instance) is not { } map)
+        {
+            return;
+        }
+        for (var node = sink.ReadNodeIn(map.Body); node is not null; node = node.Parent)
+        {
+            if (node.CanInclude)
+            {
+                map.Body.IncludeOnly(node);
+                return;
+            }
+        }
+    }
+
+    private Serializer CreateSerializer(IProcessorProvider processors)
+        => new SerializerBuilder()
+            .AddSchemas(_schemas)
+            .AddProcessors(processors)
+            .Build();
+
+    /// <summary>The open choice (of the instance) whose selected body is an address map; null when there is none.</summary>
+    private static (InstanceChoice Choice, InstanceBody Body)? FindAddressMap(InstanceNode node)
+    {
+        if (node is InstanceChoice { Selected: InstanceBody { IsAddressMap: true } body } choice)
+        {
+            return (choice, body);
+        }
+        foreach (var child in node.Children())
+        {
+            if (FindAddressMap(child) is { } found)
+            {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    // the nodes of the map that are included as a whole
+    private static List<MapOccurrence> Selection(InstanceBody body, bool throwWhenEmpty = true)
+    {
+        var selection = body.IncludedNodes().Select(node => new MapOccurrence(node.Path, node.Instance)).ToList();
+        if (selection.Count == 0 && throwWhenEmpty)
+        {
+            throw new InvalidOperationException($"Nothing of the address map '{body.Root}' is included: include the groups to send.");
+        }
+        return selection;
     }
 
     /// <summary>
@@ -227,7 +337,8 @@ internal sealed class SchemaInstantiator
         }
     }
 
-    private InstanceNode Build(SchemaNode node, string ns, SchemaPath path)
+    /// <param name="mapItems">In the body of an address map: the item count of a repeat (by its path) in the address space.</param>
+    private InstanceNode Build(SchemaNode node, string ns, SchemaPath path, Func<SchemaPath, int?>? mapItems = null)
     {
         switch (node)
         {
@@ -236,31 +347,32 @@ internal sealed class SchemaInstantiator
                 return new InstanceField(field, path, field.Value is string constant ? constant : null,
                     value => DataTypeValueValidator.Validate(_edits, ns, dataType, value));
             case SchemaRepeat repeat:
-                return BuildRepeat(repeat, ns, path);
+                return BuildRepeat(repeat, ns, path, mapItems);
             case SchemaChoice choice:
                 return BuildChoice(choice, ns, path);
             case SchemaGroup group:
-                return BuildGroup(new InstanceGroup(group, path), group, ns);
+                return BuildGroup(new InstanceGroup(group, path), group, ns, mapItems);
             default:
                 throw new NotSupportedException($"Unsupported schema node type: {node.GetType().Name}.");
         }
     }
 
-    private T BuildGroup<T>(T instance, SchemaGroup group, string ns)
+    private T BuildGroup<T>(T instance, SchemaGroup group, string ns, Func<SchemaPath, int?>? mapItems = null)
         where T : InstanceGroup
     {
         foreach (var member in group.Members)
         {
-            instance.AddMember(Build(member, ns, instance.Path.Append(member.Name)));
+            instance.AddMember(Build(member, ns, instance.Path.Append(member.Name), mapItems));
         }
         return instance;
     }
 
-    private InstanceRepeat BuildRepeat(SchemaRepeat schema, string ns, SchemaPath path)
+    private InstanceRepeat BuildRepeat(SchemaRepeat schema, string ns, SchemaPath path, Func<SchemaPath, int?>? mapItems)
     {
-        int? constantCount = schema.Count is int count ? count : null;
+        // a repeat of an address map has no count in the schema: the address space has the items
+        int? constantCount = schema.Count is int count ? count : mapItems?.Invoke(path);
         var repeat = new InstanceRepeat(schema, path, constantCount,
-            (owner, index) => BuildGroup(new InstanceRepeatItem(schema, path, owner, index), schema, ns));
+            (owner, index) => BuildGroup(new InstanceRepeatItem(schema, path, owner, index), schema, ns, mapItems));
         // an open repeat starts with one copy, so the user sees which fields it holds
         for (var index = 0; index < (constantCount ?? 1); index++)
         {
@@ -290,8 +402,8 @@ internal sealed class SchemaInstantiator
             {
                 continue;
             }
-            bodies.Add(new ChoiceOption($"{documentName}{SchemaName.Separator}{group.Name}", _ => BuildGroup(
-                new InstanceBody(compiled, new SchemaPath(compiled.Name)), compiled, documentName)));
+            var name = new SchemaName($"{documentName}{SchemaName.Separator}{group.Name}");
+            bodies.Add(new ChoiceOption(name.FullName, _ => BuildBody(compiled, documentName, name)));
         }
         if (bodies.Count == 0)
         {
@@ -304,6 +416,59 @@ internal sealed class SchemaInstantiator
         bodies.Sort((left, right) => String.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase));
         // the selected index is not used by an open choice
         return new InstanceChoice(schema, path, bodies, constantIndex: null);
+    }
+
+    /// <summary>
+    /// The body of an open choice. When it is an address map, its repeats get the item count of the address space,
+    /// its groups and repeats can be included (or left out); nothing is included yet (including one group is quicker than
+    /// leaving out many).
+    /// </summary>
+    private InstanceBody BuildBody(SchemaGroup compiled, string ns, SchemaName root)
+    {
+        var (isMap, note) = DetectAddressMap(root);
+        var body = new InstanceBody(compiled, new SchemaPath(compiled.Name)) { Root = root, IsAddressMap = isMap, Note = note };
+        BuildGroup(body, compiled, ns, isMap ? path => _adapter!.ItemCount(root, path) : null);
+        if (isMap)
+        {
+            AllowInclusion(body);
+        }
+        return body;
+    }
+
+    // whether the root is an address map, and why it cannot be used as one (it is then a plain group)
+    private (bool IsMap, string? Note) DetectAddressMap(SchemaName root)
+    {
+        if (_processors is null)
+        {
+            return (false, null);
+        }
+        try
+        {
+            _adapter ??= new AddressMapAdapter(CreateSerializer(_processors));
+            if (!_adapter.IsMap(root))
+            {
+                return (false, null);
+            }
+            // builds and validates the map
+            _adapter.ItemCount(root, new SchemaPath(root.Name));
+            return (true, null);
+        }
+        catch (Exception exception) when (exception is AddressMapException or ExecutionPlanException or InvalidOperationException or ArgumentException)
+        {
+            return (false, $"'{root}' is an address map, but it cannot be used as one (it is a plain group here): {exception.Message}");
+        }
+    }
+
+    private static void AllowInclusion(InstanceNode node)
+    {
+        if (node is InstanceGroup or InstanceRepeat)
+        {
+            node.CanInclude = true;
+            foreach (var child in node.Children())
+            {
+                AllowInclusion(child);
+            }
+        }
     }
 
     private static SchemaName Qualify(SchemaName name, string ns)

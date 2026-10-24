@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.Midi.Core;
+using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Messages.V2;
 using Jacobi.Midi.SchemaEditor.Midi;
 using Jacobi.Midi.SchemaEditor.ViewModels;
@@ -13,17 +14,22 @@ namespace Jacobi.Midi.SchemaEditor.Instantiate;
 /// The view model of the instantiate dialog: lets the user provide the values of a group (the <see cref="Root"/> instance tree),
 /// serialize them to a SysEx file (Save As) or send them to the active MIDI connection (Send),
 /// or shows the <see cref="Error"/> that prevented the instantiation.
+/// With an address map body, the included groups are serialized as one or more data messages (see <see cref="Transfer"/>).
 /// In match mode (<see cref="Match"/>) the values are read from a SysEx file or a received message first.
 /// </summary>
 internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
 {
     private readonly Action<InstantiateSchemaViewModel> _close;
-    private readonly Func<byte[]>? _serialize;
+    private readonly Func<ICollection<string>, IReadOnlyList<SerializedMessage>>? _serialize;
+    private readonly Func<string?>? _describeTransfer;
     private readonly Func<string, byte[], Task<string?>>? _saveFile;
     private readonly MidiBarViewModel? _midi;
 
     /// <param name="root">The instance tree to fill out.</param>
-    /// <param name="serialize">Writes the values of <paramref name="root"/> with the serializer; null when the instance has no plan (a node def).</param>
+    /// <param name="serialize">
+    /// Writes the values of <paramref name="root"/> with the serializer as one or more messages, adding the situations the user
+    /// may not expect to the warnings; null when the instance has no plan (a node def).
+    /// </param>
     /// <param name="saveFile">
     /// Lets the user pick a file (the suggested name is passed) and saves the bytes to it;
     /// returns the name of the saved file or null when the user cancelled.
@@ -32,9 +38,13 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
     /// <param name="close">Called with this view model when the dialog closes.</param>
     /// <param name="match">The match part (match mode): reads the values from a SysEx buffer; null to instantiate.</param>
     /// <param name="warnings">The situations of the compilation the user may not expect (see <see cref="SchemaInstantiator.Warnings"/>).</param>
-    public InstantiateSchemaViewModel(InstanceNode root, Func<byte[]>? serialize, Func<string, byte[], Task<string?>> saveFile,
-        MidiBarViewModel midi, Action<InstantiateSchemaViewModel> close, SysExMatchViewModel? match = null,
-        IReadOnlyList<string>? warnings = null)
+    /// <param name="describeTransfer">
+    /// Describes the messages the included groups of an address map body are sent in (see <see cref="SchemaInstantiator.DescribeTransfer"/>);
+    /// null, or returning null, when there is no address map.
+    /// </param>
+    public InstantiateSchemaViewModel(InstanceNode root, Func<ICollection<string>, IReadOnlyList<SerializedMessage>>? serialize,
+        Func<string, byte[], Task<string?>> saveFile, MidiBarViewModel midi, Action<InstantiateSchemaViewModel> close,
+        SysExMatchViewModel? match = null, IReadOnlyList<string>? warnings = null, Func<string?>? describeTransfer = null)
     {
         Root = root;
         Match = match;
@@ -45,7 +55,10 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
         _saveFile = saveFile;
         _midi = midi;
         _close = close;
+        _describeTransfer = describeTransfer;
         _midi.PropertyChanged += OnMidiPropertyChanged;
+        root.InclusionChanged += OnInclusionChanged;
+        RefreshTransfer();
         if (serialize is null)
         {
             StatusMessage = "A node def cannot be serialized: instantiate a group of a root to save or send it.";
@@ -97,6 +110,20 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
     /// <summary>True when the values can be serialized (saved or sent).</summary>
     public bool CanSerialize => _serialize is not null;
 
+    /// <summary>
+    /// How the included groups of an address map body are sent: the data messages with their address and size, or why they
+    /// cannot be sent; empty when there is no address map. Follows the inclusion.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTransfer))]
+    public partial string Transfer { get; private set; } = String.Empty;
+
+    public bool HasTransfer => Transfer.Length > 0;
+
+    private void OnInclusionChanged(object? sender, EventArgs e) => RefreshTransfer();
+
+    private void RefreshTransfer() => Transfer = _describeTransfer?.Invoke() ?? String.Empty;
+
     /// <summary>The outcome of the last Save As or Send, or why it failed.</summary>
     [ObservableProperty]
     public partial string StatusMessage { get; private set; } = String.Empty;
@@ -123,6 +150,10 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
         {
             _midi.PropertyChanged -= OnMidiPropertyChanged;
         }
+        if (Root is not null)
+        {
+            Root.InclusionChanged -= OnInclusionChanged;
+        }
         Match?.Detach();
         _close(this);
     }
@@ -134,14 +165,15 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
     /// <summary>
     /// Serializes the values; a problem (the plan cannot be built or a value cannot be written) is shown in the popup.
     /// </summary>
-    /// <returns>The bytes; null when serializing failed.</returns>
-    private byte[]? Serialize(string action)
+    /// <param name="warnings">Receives the situations the user may not expect.</param>
+    /// <returns>The messages; null when serializing failed.</returns>
+    private IReadOnlyList<SerializedMessage>? Serialize(string action, List<string> warnings)
     {
         try
         {
-            return _serialize!();
+            return _serialize!(warnings);
         }
-        catch (Exception exception) when (exception is ExecutionPlanException
+        catch (Exception exception) when (exception is ExecutionPlanException or AddressMapException
             or InvalidOperationException or ArgumentException or NotSupportedException)
         {
             StatusMessage = $"Could not {action}: the values could not be serialized.";
@@ -161,14 +193,18 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
         IsBusy = true;
         try
         {
-            if (Serialize("save") is not { } bytes)
+            var warnings = new List<string>();
+            if (Serialize("save", warnings) is not { } messages)
             {
                 return;
             }
+            // the messages one after the other, as in a bulk dump
+            var bytes = messages.SelectMany(message => message.Bytes).ToArray();
             var fileName = await _saveFile!($"{Root!.Name}.syx", bytes);
             if (fileName is not null)
             {
-                StatusMessage = $"Saved {bytes.Length} byte(s) to {fileName}.";
+                StatusMessage = String.Join(Environment.NewLine,
+                    [$"Saved {Count(messages)} ({bytes.Length} byte(s)) to {fileName}.", .. warnings]);
             }
         }
         catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or NotSupportedException
@@ -198,15 +234,30 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
         IsBusy = true;
         try
         {
-            if (Serialize("send") is not { } bytes)
+            var warnings = new List<string>();
+            if (Serialize("send", warnings) is not { } messages)
             {
                 return;
             }
-            var packets = SysEx7Message.FromSystemExclusive(_midi.Group.Value, bytes)
-                .Select(packet => new UniversalPacket([packet[0], packet[1]]))
-                .ToArray();
-            await connection.Send(packets, CancellationToken.None);
-            StatusMessage = $"Sent {bytes.Length} byte(s) in {packets.Length} packet(s) to {connection.EndpointInfo.Name}.";
+            var byteCount = 0;
+            var packetCount = 0;
+            for (var index = 0; index < messages.Count; index++)
+            {
+                var message = messages[index];
+                var packets = SysEx7Message.FromSystemExclusive(_midi.Group.Value, message.Bytes)
+                    .Select(packet => new UniversalPacket([packet[0], packet[1]]))
+                    .ToArray();
+                await connection.Send(packets, CancellationToken.None);
+                byteCount += message.Bytes.Length;
+                packetCount += packets.Length;
+                // the device needs time to process a message (midi.messageInterval)
+                if (index < messages.Count - 1 && message.Interval > TimeSpan.Zero)
+                {
+                    await Task.Delay(message.Interval);
+                }
+            }
+            StatusMessage = String.Join(Environment.NewLine,
+                [$"Sent {Count(messages)} ({byteCount} byte(s) in {packetCount} packet(s)) to {connection.EndpointInfo.Name}.", .. warnings]);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -218,6 +269,9 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
             IsBusy = false;
         }
     }
+
+    private static string Count(IReadOnlyList<SerializedMessage> messages)
+        => messages.Count == 1 ? "1 message" : $"{messages.Count} messages";
 
     private void OnMidiPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {

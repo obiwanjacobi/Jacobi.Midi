@@ -128,6 +128,23 @@ internal sealed class AddressMap
     public PlanRange CreateRange(SchemaPath fromPath, InstancePath fromInstance, SchemaPath toPath, InstancePath toInstance)
         => Plan.CreateRange(fromPath, fromInstance, toPath, toInstance);
 
+    /// <summary>
+    /// A range over one node occurrence (see <see cref="MapOccurrence"/>): a group or field, all items of a repeat, or one
+    /// item of a repeat when the instance has an index for the repeat itself.
+    /// </summary>
+    internal PlanRange CreateOccurrenceRange(SchemaPath path, InstancePath instance)
+    {
+        var layout = _layout.Find(path) ?? throw new ArgumentException($"'{path}' is not a node of the map '{Root}'.", nameof(path));
+        if (layout.IsRepeat && instance.Length > AddressLayout.RepeatDepth(layout))
+        {
+            // one item: from its first to its last member
+            return layout.Members is [var first, ..]
+                ? CreateRange(first.Node.Path, instance, layout.Members[^1].Node.Path, instance)
+                : throw new ArgumentException($"The repeat '{path}' has no members.", nameof(path));
+        }
+        return CreateRange(path, instance);
+    }
+
     /// <summary>The addresses a node range occupies (widened to whole addresses, gaps included).</summary>
     public AddressRange GetAddressRange(PlanRange range)
     {
@@ -256,7 +273,27 @@ internal sealed class AddressMap
     /// A data message with the values of the block, as a complete SysEx message. The block must be one group
     /// occurrence of the map (e.g. a patch): the message body is written for that group.
     /// </summary>
+    /// <param name="source">The values of the map (paths and instances of the map plan).</param>
     public byte[] CreateData(AddressMessage message, AddressBlock block, IValueSource source, DeviceValues device)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        return CreateData(message, block, device, client: null, _ => source);
+    }
+
+    /// <summary>
+    /// A data message with the values of the block, written from the client's value model of the whole message
+    /// (envelope and body, e.g. the instance of an editor): the address and size are those of the block, the device
+    /// values come from <paramref name="device"/> or else from the client, and the body is the client's scope for the
+    /// data open choice. The block must be one group occurrence of the map.
+    /// </summary>
+    internal byte[] CreateMessage(AddressMessage message, AddressBlock block, IValueSource source, DeviceValues device)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        return CreateData(message, block, device, source, body => body
+            ?? throw new InvalidOperationException($"'{message.Name}': the value model has no body for the data of the message."));
+    }
+
+    private byte[] CreateData(AddressMessage message, AddressBlock block, DeviceValues device, IValueSource? client, Func<IValueSource?, IValueSource> bodySource)
     {
         ArgumentNullException.ThrowIfNull(message);
         ArgumentNullException.ThrowIfNull(block);
@@ -270,11 +307,53 @@ internal sealed class AddressMap
             ?? throw new NotSupportedException(
                 $"The block {block.Addresses} ({block.Nodes.First.Path} to {block.Nodes.Last.Path}) is not one group of the map '{Root}'; a data message can only carry a group.");
 
-        var body = new EnvelopeBody<IValueSource>(Root, target.Target, target.Instance, Wrap(source, target));
+        var envelope = new EnvelopeSource(block.Addresses, device,
+            clientBody => new EnvelopeBody<IValueSource>(Root, target.Target, target.Instance, Wrap(bodySource(clientBody), target)), client);
         var writer = new ArrayBufferWriter<byte>();
-        _serializer.Serialize(message.Range, new EnvelopeSource(block.Addresses, device, body), writer);
+        _serializer.Serialize(message.Range, envelope, writer);
         return writer.WrittenSpan.ToArray();
     }
+
+    /// <summary>
+    /// The blocks to transfer a node range with, and the message for each: a range message where one is given, else
+    /// the atomic message for the atomic groups and the field message for the remaining fields (see <see cref="Split"/>).
+    /// In address order.
+    /// </summary>
+    internal List<(AddressMessage Message, AddressBlock Block)> PlanBlocks(PlanRange range, IReadOnlyList<AddressMessage> messages)
+    {
+        if (messages.FirstOrDefault(m => m.Unit == AddressUnit.Range) is { } rangeMessage)
+        {
+            return [.. Split(range, rangeMessage).Select(b => (rangeMessage, b))];
+        }
+
+        var blocks = new List<(AddressMessage Message, AddressBlock Block)>();
+        if (messages.FirstOrDefault(m => m.Unit == AddressUnit.Atomic) is { } atomicMessage)
+        {
+            blocks.AddRange(Split(range, atomicMessage).Select(b => (atomicMessage, b)));
+        }
+        if (messages.FirstOrDefault(m => m.Unit == AddressUnit.Field) is { } fieldMessage)
+        {
+            var covered = blocks.Select(t => t.Block.Addresses).ToList();
+            blocks.AddRange(Split(range, fieldMessage)
+                .Where(b => !covered.Any(c => c.Contains(b.Addresses)))
+                .Select(b => (fieldMessage, b)));
+        }
+        return [.. blocks.OrderBy(t => t.Block.Addresses.Start)];
+    }
+
+    /// <summary>The number of items of a repeat of the map in the address space (<c>midi.repeat</c>, or its constant count); null for any other node.</summary>
+    internal int? ItemCount(SchemaPath repeat) => _layout.Find(repeat) is { IsRepeat: true } layout ? layout.Count : null;
+
+    /// <summary>
+    /// The data message (of the messages that can carry this map) whose data is the open choice at
+    /// <paramref name="dataChoice"/> in the plan of <paramref name="envelope"/>; null when there is none.
+    /// </summary>
+    internal AddressMessage? FindDataMessage(SchemaName envelope, SchemaPath dataChoice)
+        => Protocol.DataMessages.FirstOrDefault(message =>
+            message.Range.ExecutionPlan.Name is { } name
+            && String.Equals(name.FullName, envelope.FullName, StringComparison.OrdinalIgnoreCase)
+            && message.Roles.TryGetValue(MidiProperties.RoleData, out var data)
+            && String.Equals(data.Path.Value, dataChoice.Value, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Recognises a data message for this map and device: the constants and checksum match, the device values read

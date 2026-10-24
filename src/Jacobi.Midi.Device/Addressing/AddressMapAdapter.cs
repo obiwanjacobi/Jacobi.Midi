@@ -7,9 +7,27 @@ using Jacobi.BinarySerializer.Schema;
 namespace Jacobi.Midi.Device.Addressing;
 
 /// <summary>
-/// Reads data with any plan of a serializer into the client's value model and lets the address maps in the schemas
-/// end their repeats, which have no count (see <see cref="MapRepeatItems"/>). For tools that read arbitrary messages
-/// into their own value model, e.g. the Schema Editor. Without address maps in the schemas it reads like the serializer.
+/// A node occurrence in an address map: the path of a group, repeat or field of the map plan and the item indices of
+/// the repeats around it (outermost first). For a repeat, one index more than the repeats around it selects one item.
+/// </summary>
+public readonly record struct MapOccurrence(SchemaPath Path, InstancePath Instance);
+
+/// <summary>
+/// How a selection of map nodes is transferred: the data message that carries them, the address space of the map
+/// (to format the addresses) and the blocks, one message each, in address order.
+/// </summary>
+public sealed record DataPlan(AddressMessage Message, AddressSpace AddressSpace, IReadOnlyList<AddressBlock> Blocks);
+
+/// <summary>One data message that was written: the message, the block of the map it carries and its SysEx bytes.</summary>
+public sealed record EncodedDataMessage(AddressMessage Message, AddressBlock Block, byte[] SysEx);
+
+/// <summary>
+/// Lets a client that reads and writes arbitrary messages with its own value model (e.g. the Schema Editor) work with
+/// the address maps in the schemas of a serializer: the repeats of a map, which have no count (see
+/// <see cref="MapRepeatItems"/>), get their item count from the address space and end there, the data of a message is
+/// placed in the map by its address, and a selection of map nodes is written as the data messages that carry it,
+/// with the address and size calculated from the map. Without address maps in the schemas the reads are plain
+/// serializer reads.
 /// </summary>
 /// <remarks>
 /// <list type="bullet">
@@ -19,15 +37,18 @@ namespace Jacobi.Midi.Device.Addressing;
 /// group occurrence the message carries, recognised as <see cref="AddressMap.TryReadData"/> does (with any device id).
 /// When the message is not recognised, the largest group that starts at the address is read as far as the data goes,
 /// with a warning.</item>
+/// <item>A write of a selection (<see cref="WriteData"/>) is split into blocks as the message exchange does
+/// (<c>midi.unit</c>, maximum data size, atomic groups); each block is one message. The client's value model supplies
+/// the whole message: the envelope (device values the map root does not fix) and the body.</item>
 /// </list>
 /// </remarks>
-public sealed class AddressMapReader
+public sealed class AddressMapAdapter
 {
     private readonly Serializer _serializer;
     private readonly AddressMaps _maps;
     private readonly IReadOnlyList<SchemaName> _mapRoots;
 
-    public AddressMapReader(Serializer serializer)
+    public AddressMapAdapter(Serializer serializer)
     {
         ArgumentNullException.ThrowIfNull(serializer);
         _serializer = serializer;
@@ -72,6 +93,82 @@ public sealed class AddressMapReader
         return new MapBodySink(sink, body, new EnvelopeSink(_ => throw new InvalidOperationException("The envelope values are only kept here.")));
     }
 
+    /// <summary>True when the group is an address map root: a group a data message can carry.</summary>
+    public bool IsMap(SchemaName group) => IsMapRoot(group);
+
+    /// <summary>
+    /// The number of items of a repeat of a map in the address space (<c>midi.repeat</c>, or its constant count);
+    /// null for a node that is not a repeat of the map.
+    /// </summary>
+    /// <param name="map">The map root (see <see cref="IsMap"/>).</param>
+    /// <param name="repeat">The path of the repeat in the map plan.</param>
+    /// <exception cref="AddressMapException">The map is not valid.</exception>
+    public int? ItemCount(SchemaName map, SchemaPath repeat) => MapOf(map).ItemCount(repeat);
+
+    /// <summary>
+    /// How the selected nodes of a map are transferred with the data message whose data is the open choice
+    /// <paramref name="dataChoice"/> in the plan of <paramref name="envelope"/>: the blocks (one message each) with their
+    /// addresses. A selection inside an atomic group is widened to the whole group (with a warning).
+    /// </summary>
+    /// <param name="warnings">Receives the situations the user may not expect.</param>
+    /// <exception cref="AddressMapException">The map is not valid.</exception>
+    /// <exception cref="InvalidOperationException">The open choice is not the data of a message that can carry the map.</exception>
+    public DataPlan PlanData(SchemaName envelope, SchemaPath dataChoice, SchemaName map, IEnumerable<MapOccurrence> selection, ICollection<string> warnings)
+        => Plan(envelope, dataChoice, map, selection, warnings).Plan;
+
+    /// <summary>
+    /// Writes the selected nodes of a map as the data messages of <see cref="PlanData"/>. The <paramref name="source"/> is
+    /// the client's value model of the whole message (the plan of <paramref name="envelope"/>): the address and size come
+    /// from the block, the device values from the map root or else from the source, and the body values from the source's
+    /// scope for the data open choice (paths of the map plan).
+    /// </summary>
+    /// <param name="warnings">Receives the situations the user may not expect.</param>
+    /// <exception cref="AddressMapException">The map is not valid.</exception>
+    /// <exception cref="InvalidOperationException">The open choice is not the data of a message that can carry the map, or a value is missing.</exception>
+    /// <exception cref="NotSupportedException">A block is not one group of the map (a data message can only carry a group).</exception>
+    public IReadOnlyList<EncodedDataMessage> WriteData(SchemaName envelope, SchemaPath dataChoice, SchemaName map,
+        IEnumerable<MapOccurrence> selection, IValueSource source, ICollection<string> warnings)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var (addressMap, plan) = Plan(envelope, dataChoice, map, selection, warnings);
+        return [.. plan.Blocks.Select(block => new EncodedDataMessage(plan.Message, block,
+            addressMap.CreateMessage(plan.Message, block, source, addressMap.Device)))];
+    }
+
+    private (AddressMap Map, DataPlan Plan) Plan(SchemaName envelope, SchemaPath dataChoice, SchemaName map,
+        IEnumerable<MapOccurrence> selection, ICollection<string> warnings)
+    {
+        ArgumentNullException.ThrowIfNull(selection);
+        ArgumentNullException.ThrowIfNull(warnings);
+        var addressMap = MapOf(map);
+        var message = addressMap.FindDataMessage(envelope, dataChoice) ?? throw new InvalidOperationException(
+            $"'{dataChoice}' of '{envelope}' is not the data of a data message that can carry the map '{addressMap.Root}'.");
+
+        var blocks = new List<AddressBlock>();
+        foreach (var occurrence in selection)
+        {
+            var range = addressMap.CreateOccurrenceRange(occurrence.Path, occurrence.Instance);
+            var widened = addressMap.WidenToAtomic(range);
+            if (addressMap.GetAddressRange(widened) != addressMap.GetAddressRange(range))
+            {
+                warnings.Add($"'{occurrence.Path}' {occurrence.Instance.ToLogString()} is part of an atomic group of '{addressMap.Root}': the whole group is sent.");
+            }
+            foreach (var (_, block) in addressMap.PlanBlocks(widened, [message]))
+            {
+                if (!blocks.Any(existing => existing.Addresses.Contains(block.Addresses)))
+                {
+                    blocks.Add(block);
+                }
+            }
+        }
+        return (addressMap, new DataPlan(message, addressMap.Protocol.AddressSpace, [.. blocks.OrderBy(block => block.Addresses.Start)]));
+    }
+
+    private AddressMap MapOf(SchemaName map)
+        => IsMapRoot(map)
+            ? _maps.Get(_serializer.GetPlan(map))
+            : throw new ArgumentException($"'{map}' is not an address map: no data message can carry it.", nameof(map));
+
     private bool IsMapRoot(SchemaName name)
         => _mapRoots.Any(root => String.Equals(root.FullName, name.FullName, StringComparison.OrdinalIgnoreCase));
 
@@ -79,7 +176,7 @@ public sealed class AddressMapReader
     /// Narrows the body of an open choice that the client selected to the group occurrence of the map the message carries,
     /// and wraps its scope so the repeats of the map end after it.
     /// </summary>
-    private sealed class BodySelector(AddressMapReader reader, byte[] message, ICollection<string> warnings)
+    private sealed class BodySelector(AddressMapAdapter reader, byte[] message, ICollection<string> warnings)
     {
         public OpenChoiceSinkResult Select(OpenChoiceContext context, OpenChoiceSinkResult selected, EnvelopeSink envelope)
         {

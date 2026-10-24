@@ -120,6 +120,141 @@ internal abstract partial class InstanceNode : ObservableObject
             node.IsExpanded = true;
         }
     }
+
+    // set while the inclusion is changed by a node above or below, so the change is not passed on again
+    private bool _isUpdatingInclusion;
+
+    /// <summary>
+    /// True when the node can be included in what is sent, or left out: a group, repeat or repeat item of the body of an
+    /// address map (see <see cref="InstanceBody.IsAddressMap"/>).
+    /// </summary>
+    public bool CanInclude { get; internal set; }
+
+    /// <summary>
+    /// True when the node is included in what is sent, false when it is left out and null when only part of the nodes
+    /// below it is included. Including or leaving out a node does the same with the nodes below it.
+    /// In an address map the included part stays contiguous (see <see cref="InstanceBody.KeepContiguous"/>).
+    /// Only used when <see cref="CanInclude"/>.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool? IsIncluded { get; set; } = false;
+
+    /// <summary>
+    /// Raised on the top node of the tree (the instance) when the inclusion of a node in it changed,
+    /// or another body of an open choice was selected.
+    /// </summary>
+    public event EventHandler? InclusionChanged;
+
+    partial void OnIsIncludedChanged(bool? value)
+    {
+        if (_isUpdatingInclusion)
+        {
+            return;
+        }
+        if (value is { } included)
+        {
+            IncludeBelow(included);
+            AddressMapBody()?.KeepContiguous(this, included);
+        }
+        Parent?.RefreshInclusion();
+        RaiseInclusionChanged();
+    }
+
+    // the address map body this node is in (or is); null outside an address map
+    private InstanceBody? AddressMapBody()
+    {
+        for (var node = this; node is not null; node = node.Parent)
+        {
+            if (node is InstanceBody { IsAddressMap: true } body)
+            {
+                return body;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>The nodes at or below this one that can be included and have no such nodes below them, in tree order.</summary>
+    internal IEnumerable<InstanceNode> InclusionLeaves()
+    {
+        var children = Children().Where(child => child.CanInclude).ToList();
+        if (children.Count == 0)
+        {
+            return CanInclude ? [this] : [];
+        }
+        return children.SelectMany(child => child.InclusionLeaves());
+    }
+
+    /// <summary>
+    /// Sets <see cref="IsIncluded"/> of a node without passing it on to the nodes below it; the nodes above it follow.
+    /// For a node without nodes below it that can be included (see <see cref="InclusionLeaves"/>).
+    /// </summary>
+    internal void SetIncluded(bool included)
+    {
+        if (IsIncluded == included)
+        {
+            return;
+        }
+        _isUpdatingInclusion = true;
+        IsIncluded = included;
+        _isUpdatingInclusion = false;
+        Parent?.RefreshInclusion();
+    }
+
+    /// <summary>The nodes that are included as a whole (<see cref="IsIncluded"/> true), not the nodes below them, in tree order.</summary>
+    public IEnumerable<InstanceNode> IncludedNodes() => IsIncluded switch
+    {
+        true when CanInclude => [this],
+        null when CanInclude => Children().SelectMany(child => child.IncludedNodes()),
+        _ => []
+    };
+
+    /// <summary>Includes only <paramref name="node"/> (a node at or below this one) and leaves out the other nodes.</summary>
+    public void IncludeOnly(InstanceNode node)
+    {
+        IsIncluded = false;
+        node.IsIncluded = true;
+    }
+
+    /// <summary>Raises <see cref="InclusionChanged"/> on the top node of the tree.</summary>
+    protected void RaiseInclusionChanged()
+    {
+        var top = this;
+        while (top.Parent is { } parent)
+        {
+            top = parent;
+        }
+        top.InclusionChanged?.Invoke(top, EventArgs.Empty);
+    }
+
+    private void IncludeBelow(bool included)
+    {
+        foreach (var child in Children().Where(child => child.CanInclude))
+        {
+            child._isUpdatingInclusion = true;
+            child.IsIncluded = included;
+            child._isUpdatingInclusion = false;
+            child.IncludeBelow(included);
+        }
+    }
+
+    // the inclusion follows the nodes below: all, none or part of them
+    private void RefreshInclusion()
+    {
+        if (!CanInclude)
+        {
+            return;
+        }
+        var states = Children().Where(child => child.CanInclude).Select(child => child.IsIncluded).Distinct().ToList();
+        _isUpdatingInclusion = true;
+        IsIncluded = states switch
+        {
+            [] => IsIncluded,
+            [var all] => all,
+            _ => null
+        };
+        _isUpdatingInclusion = false;
+        Parent?.RefreshInclusion();
+    }
 }
 
 /// <summary>
@@ -206,6 +341,53 @@ internal partial class InstanceGroup : InstanceNode
 internal sealed class InstanceBody(SchemaGroup schema, SchemaPath path) : InstanceGroup(schema, path)
 {
     public override InstancePath Instance => InstancePath.Empty;
+
+    /// <summary>The name of the selected root (the option of the open choice), e.g. <c>Gp8.AddressMap</c>.</summary>
+    public required SchemaName Root { get; init; }
+
+    /// <summary>
+    /// True when the body is an address map: its repeats have the item count of the address space, and the groups that are
+    /// included (<see cref="InstanceNode.IsIncluded"/>) are sent, at the addresses the map gives them.
+    /// </summary>
+    public bool IsAddressMap { get; init; }
+
+    /// <summary>Why the body could not be used as an address map (it is used as a plain group); null when there is no problem.</summary>
+    public string? Note { get; init; }
+
+    public bool HasNote => Note is not null;
+
+    /// <summary>
+    /// Keeps the included part of the map one contiguous run (the data of a message is contiguous), in tree order (the
+    /// order of the addresses): leaving out <paramref name="changed"/> also leaves out everything after it; including it also
+    /// includes everything between it and the part that was already included.
+    /// </summary>
+    internal void KeepContiguous(InstanceNode changed, bool included)
+    {
+        var leaves = InclusionLeaves().ToList();
+        var own = changed.InclusionLeaves().ToHashSet();
+        var first = leaves.FindIndex(own.Contains);
+        var last = leaves.FindLastIndex(own.Contains);
+        if (first < 0)
+        {
+            return;
+        }
+
+        if (!included)
+        {
+            foreach (var leaf in leaves.Skip(last + 1))
+            {
+                leaf.SetIncluded(false);
+            }
+            return;
+        }
+
+        var start = leaves.FindIndex(leaf => leaf.IsIncluded == true);
+        var end = leaves.FindLastIndex(leaf => leaf.IsIncluded == true);
+        foreach (var leaf in leaves.Skip(Math.Min(start, first)).Take(Math.Max(end, last) - Math.Min(start, first) + 1))
+        {
+            leaf.SetIncluded(true);
+        }
+    }
 }
 
 /// <summary>
@@ -258,12 +440,16 @@ internal sealed partial class InstanceRepeat : InstanceNode
     /// <summary>True when the user decides how many items there are.</summary>
     public bool IsOpen => ConstantCount is null;
 
-    /// <summary>Describes how the count is determined: its constant, its reference or 'until the end'.</summary>
+    /// <summary>
+    /// Describes how the count is determined: its constant, its reference, the number of items of an address map
+    /// (a constant count that is not in the schema) or 'until the end'.
+    /// </summary>
     public string CountText => Repeat.Count switch
     {
         int constant => $"count {constant}",
         SchemaNodeRef reference => $"count {reference}",
         SchemaPubRef reference => $"count {reference}",
+        _ when ConstantCount is { } items => $"{items} items in the address map",
         _ => "until the end of the data"
     };
 
@@ -407,6 +593,8 @@ internal sealed partial class InstanceChoice : InstanceNode
             selected.IsExpanded = true;
         }
         Selected = selected;
+        // another body may include other nodes (or none)
+        RaiseInclusionChanged();
     }
 
     internal override void RefreshPaths()

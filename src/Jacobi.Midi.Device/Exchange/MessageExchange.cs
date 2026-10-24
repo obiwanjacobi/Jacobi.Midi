@@ -320,30 +320,11 @@ public sealed class MessageExchange : IAsyncDisposable
         return device;
     }
 
-    // Picks the messages for a range: a range message where one exists, else the atomic message for the atomic
-    // groups and the field message for the remaining fields. Only messages whose device values are known are used.
+    // Picks the messages for a range (see AddressMap.PlanBlocks). Only messages whose device values are known are used.
     private static List<Transfer> SelectBlocks(AddressMap map, PlanRange range, IReadOnlyList<AddressMessage> messages, DeviceValues device)
     {
         var usable = messages.Where(m => m.DeviceValueNames.All(name => device.TryGet(name, out _))).ToList();
-
-        if (usable.FirstOrDefault(m => m.Unit == AddressUnit.Range) is { } rangeMessage)
-        {
-            return [.. map.Split(range, rangeMessage).Select(b => new Transfer(rangeMessage, b))];
-        }
-
-        var transfers = new List<Transfer>();
-        if (usable.FirstOrDefault(m => m.Unit == AddressUnit.Atomic) is { } atomicMessage)
-        {
-            transfers.AddRange(map.Split(range, atomicMessage).Select(b => new Transfer(atomicMessage, b)));
-        }
-        if (usable.FirstOrDefault(m => m.Unit == AddressUnit.Field) is { } fieldMessage)
-        {
-            var covered = transfers.Select(t => t.Block.Addresses).ToList();
-            transfers.AddRange(map.Split(range, fieldMessage)
-                .Where(b => !covered.Any(c => c.Contains(b.Addresses)))
-                .Select(b => new Transfer(fieldMessage, b)));
-        }
-        return [.. transfers.OrderBy(t => t.Block.Addresses.Start)];
+        return [.. map.PlanBlocks(range, usable).Select(planned => new Transfer(planned.Message, planned.Block))];
     }
 
     // raised by the port, possibly on a background thread

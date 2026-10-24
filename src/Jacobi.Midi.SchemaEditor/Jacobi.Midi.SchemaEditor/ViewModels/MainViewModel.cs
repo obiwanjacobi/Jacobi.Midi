@@ -985,12 +985,15 @@ internal sealed partial class MainViewModel : ViewModelBase
         try
         {
             // compiled with all loaded schemas (open documents and embedded schemas)
-            var instantiator = new SchemaInstantiator(LoadedSchemas.Compile(active.Schema));
+            // the processors of the opened assemblies are used to detect address maps and when the values are serialized (or deserialized)
+            var instantiator = new SchemaInstantiator(LoadedSchemas.Compile(active.Schema), OpenedAssemblies.Processors);
             var instance = instantiator.Create(root);
-            // the processors of the opened assemblies are used when the values are serialized (or deserialized)
             var rootName = instantiator.FindRootName(root);
-            Func<byte[]>? serialize = rootName is { } writeRoot
-                ? () => instantiator.Serialize(writeRoot, instance, OpenedAssemblies.Processors)
+            Func<ICollection<string>, IReadOnlyList<SerializedMessage>>? serialize = rootName is { } writeRoot
+                ? warnings => instantiator.Serialize(writeRoot, instance, OpenedAssemblies.Processors, warnings)
+                : null;
+            Func<string?>? describeTransfer = rootName is { } transferRoot
+                ? () => instantiator.DescribeTransfer(transferRoot, instance, OpenedAssemblies.Processors)
                 : null;
             SysExMatchViewModel? match = null;
             if (isMatch)
@@ -1001,7 +1004,7 @@ internal sealed partial class MainViewModel : ViewModelBase
                 match = new SysExMatchViewModel(deserialize, OpenSysExFile, MidiBar);
             }
             InstantiateDialog = new InstantiateSchemaViewModel(instance, serialize, SaveSysExFile, MidiBar, CloseInstantiateDialog, match,
-                instantiator.Warnings);
+                instantiator.Warnings, describeTransfer);
         }
         catch (Exception exception) when (IsSchemaError(exception))
         {
