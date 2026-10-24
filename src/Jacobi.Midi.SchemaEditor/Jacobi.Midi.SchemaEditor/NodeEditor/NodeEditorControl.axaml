@@ -225,6 +225,8 @@
                         <TextBlock Text="Selected document properties" Classes="caption" />
                         <TextBlock Text="A changed name is confirmed when you leave the box: other documents may include this one by name." Classes="kind" />
                         <TextBox PlaceholderText="Document name" Text="{Binding DocumentName, UpdateSourceTrigger=LostFocus}" />
+                        <!-- an open document replaces the embedded schema with the same name when schemas are compiled -->
+                        <TextBlock Text="{Binding DocumentSourceNote}" Classes="warning" IsVisible="{Binding HasDocumentSourceNote}" />
                         <ContentControl Content="{Binding ItemDetails}" ContentTemplate="{StaticResource DetailsSectionsTemplate}" />
                     </StackPanel>
                 </DataTemplate>

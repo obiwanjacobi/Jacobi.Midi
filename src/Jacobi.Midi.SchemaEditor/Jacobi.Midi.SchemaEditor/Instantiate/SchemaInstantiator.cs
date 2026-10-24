@@ -8,130 +8,60 @@ using Jacobi.Midi.SchemaEditor.Models;
 namespace Jacobi.Midi.SchemaEditor.Instantiate;
 
 /// <summary>
-/// Compiles an edited document together with the documents it includes (taken from the open documents of the workspace)
-/// and creates the <see cref="InstanceNode"/> trees ("instances") of its roots.
+/// Creates the <see cref="InstanceNode"/> trees ("instances") of the roots of a compiled document
+/// (a <see cref="SchemaSetCompilation"/>, see <see cref="SchemaSetWorkspace"/>) and serializes or deserializes their values.
 /// It walks the compiled schema, so node defs are expanded and open choices can look up their bodies in the whole set.
 /// </summary>
 internal sealed class SchemaInstantiator
 {
     private readonly SchemaSet _schemas;
     private readonly IReadOnlyList<EditDocument> _edits;
+    private readonly List<string> _warnings;
 
-    private SchemaInstantiator(SchemaSet schemas, IReadOnlyList<EditDocument> edits, string documentName)
+    /// <param name="compilation">The compiled document with the schemas it was compiled with.</param>
+    public SchemaInstantiator(SchemaSetCompilation compilation)
     {
-        _schemas = schemas;
-        _edits = edits;
-        DocumentName = documentName;
+        ArgumentNullException.ThrowIfNull(compilation);
+        _schemas = compilation.Schemas;
+        _edits = compilation.Documents;
+        _warnings = [.. compilation.Warnings];
+        DocumentName = compilation.Document.Name;
     }
 
     /// <summary>The name of the document that was instantiated.</summary>
     public string DocumentName { get; }
 
+    /// <summary>The documents that were compiled: the instantiated document, its includes and the other documents that compile with them.</summary>
+    public IReadOnlyList<EditDocument> Documents => _edits;
+
     /// <summary>
-    /// Compiles <paramref name="document"/> and (transitively) the included documents found in <paramref name="workspace"/>.
-    /// Other documents of the workspace that include (a document of) that set are added when they can be compiled with it:
-    /// they can hold the bodies of its open choices (a device schema defines the bodies for the open choice of a vendor schema).
+    /// The situations the user may not expect: those of the compilation (a schema that is used instead of another one or is left out)
+    /// and an open choice without bodies. Empty when there are none.
     /// </summary>
-    /// <exception cref="InvalidOperationException">
-    /// An included document is not loaded or the schema does not compile; the message describes the problem.
-    /// </exception>
+    public IReadOnlyList<string> Warnings => _warnings;
+
+    /// <summary>
+    /// Compiles <paramref name="document"/> with the documents of <paramref name="workspace"/>
+    /// (see <see cref="SchemaSetWorkspace.Compile(EditDocument, IEnumerable{EditDocument})"/>).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">An include of the document is not loaded or the document does not compile.</exception>
     public static SchemaInstantiator Create(EditDocument document, IEnumerable<EditDocument> workspace)
-    {
-        ArgumentNullException.ThrowIfNull(document);
-        ArgumentNullException.ThrowIfNull(workspace);
-        var candidates = workspace.ToList();
-        var documents = GetClosure(document, candidates, out var missing);
-        if (missing.Count > 0)
-        {
-            throw new InvalidOperationException(
-                $"The schema '{document.Name}' cannot be instantiated: the included schema(s) {String.Join(", ", missing.Select(name => $"'{name}'"))} are not loaded.");
-        }
-
-        var dependents = new List<EditDocument>(documents);
-        foreach (var candidate in candidates.Where(candidate => !documents.Contains(candidate)))
-        {
-            var closure = GetClosure(candidate, candidates, out var candidateMissing);
-            if (candidateMissing.Count == 0 && closure.Any(documents.Contains))
-            {
-                dependents.AddRange(closure.Where(item => !dependents.Contains(item)));
-            }
-        }
-
-        try
-        {
-            // a dependent that does not compile must not prevent instantiating the document itself
-            return Compile(document, dependents, documents.Count == dependents.Count ? null : documents);
-        }
-        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException)
-        {
-            throw new InvalidOperationException($"The schema '{document.Name}' does not compile: {exception.Message}", exception);
-        }
-    }
-
-    private static SchemaInstantiator Compile(EditDocument document, List<EditDocument> documents, List<EditDocument>? fallback)
-    {
-        try
-        {
-            var builder = new SchemaSetBuilder();
-            foreach (var item in documents)
-            {
-                builder.AddDocument(EditNodeMapper.ToSchemaDocument(item));
-            }
-            return new SchemaInstantiator(builder.Compile(), documents, document.Name);
-        }
-        catch (Exception exception) when (fallback is not null
-            && exception is ArgumentException or InvalidOperationException or NotSupportedException)
-        {
-            return Compile(document, fallback, null);
-        }
-    }
-
-    /// <summary>
-    /// The document and (transitively) its included documents that are in <paramref name="candidates"/>;
-    /// <paramref name="missing"/> receives the names of the included schemas that are not.
-    /// </summary>
-    private static List<EditDocument> GetClosure(EditDocument document, List<EditDocument> candidates, out List<string> missing)
-    {
-        var documents = new List<EditDocument>();
-        missing = [];
-        var queue = new Queue<EditDocument>();
-        queue.Enqueue(document);
-        while (queue.TryDequeue(out var current))
-        {
-            if (documents.Contains(current))
-            {
-                continue;
-            }
-            documents.Add(current);
-            foreach (var include in current.Includes)
-            {
-                var included = candidates.Find(other => !ReferenceEquals(other, current)
-                    && String.Equals(other.Name, include.Schema, StringComparison.OrdinalIgnoreCase));
-                if (included is not null)
-                {
-                    queue.Enqueue(included);
-                }
-                else if (!missing.Contains(include.Schema, StringComparer.OrdinalIgnoreCase))
-                {
-                    missing.Add(include.Schema);
-                }
-            }
-        }
-        return documents;
-    }
+        => new(SchemaSetWorkspace.Compile(document, workspace));
 
     /// <summary>
     /// Creates the instance of a root of the instantiated document (by its name).
+    /// The root is expanded; the large parts below it start collapsed (see <see cref="InstanceNode.ApplyDefaultExpansion"/>).
     /// </summary>
     /// <exception cref="InvalidOperationException">The document has no such root.</exception>
     public InstanceGroup CreateRoot(string rootName)
     {
         var root = _schemas.FindRoot(new SchemaName($"{DocumentName}{SchemaName.Separator}{rootName}"));
-        return BuildGroup(new InstanceGroup(root, new SchemaPath(root.Name)), root, DocumentName);
+        return Expanded(BuildGroup(new InstanceGroup(root, new SchemaPath(root.Name)), root, DocumentName));
     }
 
     /// <summary>
     /// Creates the instance of any group (a root, a nested group, repeat or choice, or a node def) of the instantiated document.
+    /// The instance is expanded; the large parts below it start collapsed (see <see cref="InstanceNode.ApplyDefaultExpansion"/>).
     /// </summary>
     /// <exception cref="InvalidOperationException">The compiled document has no such node.</exception>
     public InstanceNode Create(EditGroup group)
@@ -141,7 +71,15 @@ internal sealed class SchemaInstantiator
         var path = String.Join(SchemaPath.Separator, names);
         return current is null
             ? throw new InvalidOperationException($"The compiled schema has no node '{path}'.")
-            : Build(current, documentName, new SchemaPath(path));
+            : Expanded(Build(current, documentName, new SchemaPath(path)));
+    }
+
+    private static T Expanded<T>(T instance)
+        where T : InstanceNode
+    {
+        instance.ApplyDefaultExpansion();
+        instance.IsExpanded = true;
+        return instance;
     }
 
     /// <summary>
@@ -348,6 +286,14 @@ internal sealed class SchemaInstantiator
             }
             bodies.Add(new ChoiceOption($"{documentName}{SchemaName.Separator}{group.Name}", _ => BuildGroup(
                 new InstanceBody(compiled, new SchemaPath(compiled.Name)), compiled, documentName)));
+        }
+        if (bodies.Count == 0)
+        {
+            var warning = $"The open choice '{path}' has no bodies: none of the compiled schemas has a group with the nodeDef '{qualified}'.";
+            if (!_warnings.Contains(warning))
+            {
+                _warnings.Add(warning);
+            }
         }
         bodies.Sort((left, right) => String.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase));
         // the selected index is not used by an open choice

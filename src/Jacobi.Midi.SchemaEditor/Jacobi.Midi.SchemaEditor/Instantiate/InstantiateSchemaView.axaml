@@ -22,6 +22,18 @@
             <Setter Property="FontSize" Value="11" />
             <Setter Property="Foreground" Value="{DynamicResource AppTextLabelBrush}" />
         </Style>
+        <!-- the toggle that expands or collapses a group, repeat or repeat item -->
+        <Style Selector="ToggleButton.expand">
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="MinWidth" Value="22" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="ToolTip.Tip" Value="Expand or collapse" />
+        </Style>
+        <Style Selector="ToggleButton.expand:checked /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
     </UserControl.Styles>
 
     <UserControl.DataTemplates>
@@ -40,19 +52,27 @@
             </Grid>
         </DataTemplate>
 
-        <!-- an item of a repeat: shows the path with its instance index and can be removed from an open repeat -->
+        <!-- an item of a repeat: shows the path with its instance index and can be removed from an open repeat;
+             the members only get controls while the item is expanded -->
         <DataTemplate x:DataType="inst:InstanceRepeatItem">
             <Border Margin="0,4" Padding="10" CornerRadius="6" Background="{DynamicResource AppBackgroundCardBrush}"
                     BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="1">
                 <StackPanel Spacing="6">
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                        <ToggleButton Classes="expand" IsChecked="{Binding IsExpanded}">
+                            <Panel>
+                                <TextBlock Text="▾" IsVisible="{Binding IsExpanded}" />
+                                <TextBlock Text="▸" IsVisible="{Binding !IsExpanded}" />
+                            </Panel>
+                        </ToggleButton>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                             <TextBlock Text="{Binding DisplayPath}" Classes="caption" />
                             <TextBlock Text="{Binding InstanceText, StringFormat='instance {0}'}" Classes="path" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding FieldCountText}" Classes="path" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
                         </StackPanel>
-                        <Button Grid.Column="1" Content="Remove" Command="{Binding RemoveCommand}" IsVisible="{Binding Repeat.IsOpen}" />
+                        <Button Grid.Column="2" Content="Remove" Command="{Binding RemoveCommand}" IsVisible="{Binding Repeat.IsOpen}" />
                     </Grid>
-                    <ItemsControl ItemsSource="{Binding Members}" />
+                    <ItemsControl ItemsSource="{Binding ShownMembers}" />
                 </StackPanel>
             </Border>
         </DataTemplate>
@@ -62,8 +82,17 @@
             <Border Margin="0,4" Padding="10" CornerRadius="6" Background="{DynamicResource AppBackgroundCardBrush}"
                     BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="1">
                 <StackPanel Spacing="6">
-                    <TextBlock Text="{Binding DisplayPath}" Classes="path" />
-                    <ItemsControl ItemsSource="{Binding Members}" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <ToggleButton Classes="expand" IsChecked="{Binding IsExpanded}">
+                            <Panel>
+                                <TextBlock Text="▾" IsVisible="{Binding IsExpanded}" />
+                                <TextBlock Text="▸" IsVisible="{Binding !IsExpanded}" />
+                            </Panel>
+                        </ToggleButton>
+                        <TextBlock Text="{Binding DisplayPath}" Classes="path" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding FieldCountText}" Classes="path" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
+                    </StackPanel>
+                    <ItemsControl ItemsSource="{Binding ShownMembers}" />
                 </StackPanel>
             </Border>
         </DataTemplate>
@@ -73,8 +102,17 @@
             <Border Margin="0,4" Padding="10" CornerRadius="6" Background="{DynamicResource AppBackgroundCardBrush}"
                     BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="1">
                 <StackPanel Spacing="6">
-                    <TextBlock Text="{Binding DisplayPath}" Classes="caption" />
-                    <ItemsControl ItemsSource="{Binding Members}" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <ToggleButton Classes="expand" IsChecked="{Binding IsExpanded}">
+                            <Panel>
+                                <TextBlock Text="▾" IsVisible="{Binding IsExpanded}" />
+                                <TextBlock Text="▸" IsVisible="{Binding !IsExpanded}" />
+                            </Panel>
+                        </ToggleButton>
+                        <TextBlock Text="{Binding DisplayPath}" Classes="caption" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding FieldCountText}" Classes="path" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
+                    </StackPanel>
+                    <ItemsControl ItemsSource="{Binding ShownMembers}" />
                 </StackPanel>
             </Border>
         </DataTemplate>
@@ -82,15 +120,22 @@
         <!-- a repeat: its items and, when open, a button to add a copy of the group -->
         <DataTemplate x:DataType="inst:InstanceRepeat">
             <StackPanel Margin="0,4" Spacing="4">
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                    <ToggleButton Classes="expand" IsChecked="{Binding IsExpanded}">
+                        <Panel>
+                            <TextBlock Text="▾" IsVisible="{Binding IsExpanded}" />
+                            <TextBlock Text="▸" IsVisible="{Binding !IsExpanded}" />
+                        </Panel>
+                    </ToggleButton>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                         <TextBlock Text="{Binding Name}" Classes="caption" />
                         <TextBlock Text="repeat" Classes="path" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding CountText}" Classes="path" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding FieldCountText}" Classes="path" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
                     </StackPanel>
-                    <Button Grid.Column="1" Content="Add" Command="{Binding AddItemCommand}" IsVisible="{Binding IsOpen}" />
+                    <Button Grid.Column="2" Content="Add" Command="{Binding AddItemCommand}" IsVisible="{Binding IsOpen}" />
                 </Grid>
-                <ItemsControl ItemsSource="{Binding Items}" Margin="12,0,0,0" />
+                <ItemsControl ItemsSource="{Binding ShownItems}" Margin="12,0,0,0" />
             </StackPanel>
         </DataTemplate>
 
@@ -122,6 +167,13 @@
                     <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource AppTextHeadingBrush}" />
                     <TextBlock Text="{Binding Instruction}" Classes="note" TextWrapping="Wrap" IsVisible="{Binding HasRoot}" />
                 </StackPanel>
+                <!-- what the compilation did that may not be expected (e.g. a schema that was left out) -->
+                <Border DockPanel.Dock="Top" IsVisible="{Binding HasWarnings}" Margin="0,0,0,12" Padding="8" CornerRadius="4"
+                        BorderBrush="Orange" BorderThickness="1">
+                    <ScrollViewer MaxHeight="120">
+                        <SelectableTextBlock Text="{Binding Warnings}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextBodyBrush}" />
+                    </ScrollViewer>
+                </Border>
                 <!-- match mode: the buffer to read and the outcome of reading it -->
                 <Border DockPanel.Dock="Top" IsVisible="{Binding IsMatch}" Margin="0,0,0,12" Padding="10" CornerRadius="6"
                         Background="{DynamicResource AppBackgroundCardBrush}" BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="1">

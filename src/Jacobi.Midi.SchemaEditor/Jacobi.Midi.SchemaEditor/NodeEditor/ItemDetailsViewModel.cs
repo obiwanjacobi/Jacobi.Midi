@@ -31,15 +31,19 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
     private readonly EditProcessorDef? _definition;
     private readonly bool _isDocument;
     private readonly ProcessorCatalog? _catalog;
+    // the loaded schema with a name: resolves the definitions of other schemas; null to resolve within the document only
+    private readonly Func<string, EditDocument?>? _findSchema;
     // the pipeline stage the processors must have (Semantic for value processors); null for any stage
     private readonly PipelineStage? _processorStage;
 
     private ItemDetailsViewModel(SchemaWorkspaceDocument document, INotifyPropertyChanged item,
         IList<EditProperty> properties, IList<EditProcessorRef>? processors, Func<EffectiveItem> resolve,
-        ProcessorCatalog? catalog, EditProcessorDef? definition = null, bool isDocument = false, PipelineStage? processorStage = null)
+        ProcessorCatalog? catalog, Func<string, EditDocument?>? findSchema, EditProcessorDef? definition = null, bool isDocument = false,
+        PipelineStage? processorStage = null)
     {
         _isDocument = isDocument;
         _catalog = catalog;
+        _findSchema = findSchema;
         _processorStage = processorStage;
         _document = document;
         _item = item;
@@ -55,21 +59,24 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
     /// Creates the details of <paramref name="item"/>, or returns null when the item has no processors or properties.
     /// </summary>
     /// <param name="catalog">The processors to check the processor properties against; null to not check them.</param>
-    public static ItemDetailsViewModel? Create(SchemaWorkspaceDocument document, object? item, ProcessorCatalog? catalog = null)
+    /// <param name="schemas">The loaded schemas the definitions of other schemas are resolved in; null to resolve within the document only.</param>
+    public static ItemDetailsViewModel? Create(SchemaWorkspaceDocument document, object? item, ProcessorCatalog? catalog = null,
+        SchemaSetWorkspace? schemas = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         var schema = document.Schema;
         Func<string, bool>? isProcessorKey = catalog is null ? null : catalog.IsProcessorKey;
+        var findSchema = FindSchema(schemas);
         return item switch
         {
             EditNode node => new(document, node, node.Properties, EffectiveNodeResolver.GetProcessors(node),
-                () => EffectiveNodeResolver.Resolve(schema, node, isProcessorKey), catalog, isDocument: node is EditDocument),
+                () => EffectiveNodeResolver.Resolve(schema, node, isProcessorKey, findSchema), catalog, findSchema, isDocument: node is EditDocument),
             EditDataTypeDef definition => new(document, definition, definition.Properties, definition.Processors,
-                () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, definition.Processors, isProcessorKey), catalog),
+                () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, definition.Processors, isProcessorKey, findSchema), catalog, findSchema),
             EditProcessorDef definition => new(document, definition, definition.Properties, null,
-                () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, null), catalog, definition),
+                () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, null, findSchema: findSchema), catalog, findSchema, definition),
             EditProcessorRef processor => new(document, processor, processor.Properties, null,
-                () => EffectiveNodeResolver.ResolveProcessorRef(schema, processor, isProcessorKey), catalog),
+                () => EffectiveNodeResolver.ResolveProcessorRef(schema, processor, isProcessorKey, findSchema), catalog, findSchema),
             _ => null
         };
     }
@@ -79,7 +86,9 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
     /// null for other nodes. Only <see cref="Processors"/> applies: value processors are not properties of the node.
     /// </summary>
     /// <param name="catalog">The processors to check the processor properties against; null to not check them.</param>
-    public static ItemDetailsViewModel? CreateValueProcessors(SchemaWorkspaceDocument document, EditNode? node, ProcessorCatalog? catalog = null)
+    /// <param name="schemas">The loaded schemas the definitions of other schemas are resolved in; null to resolve within the document only.</param>
+    public static ItemDetailsViewModel? CreateValueProcessors(SchemaWorkspaceDocument document, EditNode? node, ProcessorCatalog? catalog = null,
+        SchemaSetWorkspace? schemas = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         if (node is null || EffectiveNodeResolver.GetValueProcessors(node) is not { } valueProcessors)
@@ -88,10 +97,16 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
         }
         var schema = document.Schema;
         Func<string, bool>? isProcessorKey = catalog is null ? null : catalog.IsProcessorKey;
+        var findSchema = FindSchema(schemas);
         // value processors convert the count or index value: only semantic processors can
         return new(document, node, new List<EditProperty>(), valueProcessors,
-            () => EffectiveNodeResolver.ResolveValueProcessors(schema, node, isProcessorKey), catalog, processorStage: PipelineStage.Semantic);
+            () => EffectiveNodeResolver.ResolveValueProcessors(schema, node, isProcessorKey, findSchema), catalog, findSchema,
+            processorStage: PipelineStage.Semantic);
     }
+
+    // the schema that answers to a name in the loaded schemas
+    private static Func<string, EditDocument?>? FindSchema(SchemaSetWorkspace? schemas)
+        => schemas is null ? null : name => schemas.Find(name)?.Schema;
 
     /// <summary>
     /// The processors to choose from for an own processor: all processors and processor defs of the document,
@@ -145,7 +160,7 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
     };
 
     /// <summary>
-    /// The definitions that could not be resolved within the document, so the effective values may be incomplete.
+    /// The definitions that could not be resolved (e.g. their schema is not loaded), so the effective values may be incomplete.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasUnresolved))]
@@ -308,11 +323,12 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
     }
 
     /// <summary>
-    /// The processor key of a processor ref: the key of the local processor def it names, otherwise its name as key.
-    /// The name of a processor def of another schema is then not a known processor key (see <see cref="ProcessorCatalog"/>).
+    /// The processor key of a processor ref: the key of the processor def it names (of this or another loaded schema),
+    /// otherwise its name as key. The name of a processor def of a schema that is not loaded is then not a known processor key
+    /// (see <see cref="ProcessorCatalog"/>).
     /// </summary>
     private string GetProcessorKey(EditProcessorRef processor)
-        => EffectiveNodeResolver.FindProcessorDef(_document.Schema, processor.Processor)?.Processor
+        => EffectiveNodeResolver.FindProcessorDef(_document.Schema, processor.Processor, _findSchema)?.Processor
             ?? processor.Processor.FullName;
 
     /// <summary>

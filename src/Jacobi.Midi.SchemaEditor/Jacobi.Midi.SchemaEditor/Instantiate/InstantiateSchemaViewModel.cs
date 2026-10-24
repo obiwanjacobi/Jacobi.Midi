@@ -31,11 +31,14 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
     /// <param name="midi">The MIDI connection the values are sent to.</param>
     /// <param name="close">Called with this view model when the dialog closes.</param>
     /// <param name="match">The match part (match mode): reads the values from a SysEx buffer; null to instantiate.</param>
+    /// <param name="warnings">The situations of the compilation the user may not expect (see <see cref="SchemaInstantiator.Warnings"/>).</param>
     public InstantiateSchemaViewModel(InstanceNode root, Func<byte[]>? serialize, Func<string, byte[], Task<string?>> saveFile,
-        MidiBarViewModel midi, Action<InstantiateSchemaViewModel> close, SysExMatchViewModel? match = null)
+        MidiBarViewModel midi, Action<InstantiateSchemaViewModel> close, SysExMatchViewModel? match = null,
+        IReadOnlyList<string>? warnings = null)
     {
         Root = root;
         Match = match;
+        Warnings = String.Join(Environment.NewLine, warnings ?? []);
         Title = match is null ? $"Instantiate {root.Name}" : $"Match {root.Name}";
         Heading = match is null ? "INSTANTIATE" : "MATCH";
         _serialize = serialize;
@@ -80,6 +83,14 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
     public string Error { get; } = String.Empty;
 
     public bool HasError => Error.Length > 0;
+
+    /// <summary>
+    /// The situations of the compilation the user may not expect (one per line), e.g. a schema that was left out;
+    /// empty when there are none.
+    /// </summary>
+    public string Warnings { get; } = String.Empty;
+
+    public bool HasWarnings => Warnings.Length > 0;
 
     public bool HasRoot => Root is not null;
 

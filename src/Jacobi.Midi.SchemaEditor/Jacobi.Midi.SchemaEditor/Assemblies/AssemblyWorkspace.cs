@@ -15,17 +15,12 @@ namespace Jacobi.Midi.SchemaEditor.Assemblies;
 
 /// <summary>
 /// The assemblies (.dll files) that were opened in the editor, with the embedded schemas and the processors they provide.
-/// The embedded schemas are managed by one shared <see cref="SchemaSetBuilder"/> and the processors by one shared
-/// <see cref="ProcessorManager"/>, so references can be looked up and validated across all opened assemblies.
+/// The processors are managed by one shared <see cref="ProcessorManager"/>, so references can be looked up and validated
+/// across all opened assemblies. The embedded schemas are compiled with the open documents by the <see cref="SchemaSetWorkspace"/>.
 /// Embedded schemas are not editable and are not part of the open schema documents.
 /// </summary>
 internal sealed class AssemblyWorkspace : ObservableObject
 {
-    /// <summary>
-    /// The embedded schemas of all opened assemblies. Not compiled: compile it when the references must be resolved.
-    /// </summary>
-    public SchemaSetBuilder SchemaSet { get; } = new();
-
     /// <summary>
     /// The processor factories of all opened assemblies, by namespace.
     /// </summary>
@@ -59,7 +54,7 @@ internal sealed class AssemblyWorkspace : ObservableObject
     }
 
     /// <summary>
-    /// Adds the embedded schemas of <paramref name="assembly"/> to the <see cref="SchemaSet"/> and passes the same assembly
+    /// Reads the embedded schemas of <paramref name="assembly"/> and passes the same assembly
     /// to the <see cref="Processors"/>. A resource or processor that cannot be loaded is reported in
     /// <see cref="LoadedAssembly.Problems"/> and does not prevent the rest from loading.
     /// Returns the already opened entry when the assembly was opened before.
@@ -91,23 +86,23 @@ internal sealed class AssemblyWorkspace : ObservableObject
         return loaded;
     }
 
-    // SchemaSetBuilder.LoadFromAssembly adds the schemas to the set. It throws on a resource it cannot read (e.g. YAML);
-    // the schemas added before that stay in the set but are not shown, and the exception is reported as a problem.
-    private List<LoadedSchema> LoadSchemas(Assembly assembly, List<string> problems)
+    // SchemaSetBuilder.LoadFromAssembly reads the schemas (into a builder of its own: the set is not compiled).
+    // It throws on a resource it cannot read (e.g. YAML); the exception is reported as a problem.
+    private static List<LoadedSchema> LoadSchemas(Assembly assembly, List<string> problems)
     {
         var schemas = new List<LoadedSchema>();
         // LoadFromAssembly reads the resources in this order
         var resources = assembly.GetManifestResourceNames();
         try
         {
-            var documents = SchemaSet.LoadFromAssembly(assembly, String.Empty).ToList();
+            var documents = new SchemaSetBuilder().LoadFromAssembly(assembly, String.Empty).ToList();
             for (var index = 0; index < documents.Count && index < resources.Length; index++)
             {
                 var document = documents[index];
                 var resource = resources[index];
                 try
                 {
-                    // a read-only copy of the authored schema to show; taken before the set is compiled
+                    // a read-only copy of the authored schema to show (and to compile with the open documents)
                     var format = Path.GetExtension(resource).ToLowerInvariant() switch
                     {
                         ".json" => SchemaFormat.Json,

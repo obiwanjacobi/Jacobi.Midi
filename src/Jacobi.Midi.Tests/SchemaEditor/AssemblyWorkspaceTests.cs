@@ -89,7 +89,7 @@ public class AssemblyWorkspaceTests
     private static EditGroup NewGroup(string name) => new(null) { Name = name, Members = [], Processors = [], Properties = [] };
 
     [Fact]
-    public void Load_AddsEmbeddedSchemasToTheSchemaSet()
+    public void Load_ReadsTheEmbeddedSchemas()
     {
         var workspace = new AssemblyWorkspace();
 
@@ -98,8 +98,9 @@ public class AssemblyWorkspaceTests
         Assert.NotEmpty(loaded.SchemaNames);
         Assert.False(loaded.HasProblems);
         Assert.Same(loaded, Assert.Single(workspace.Assemblies));
-        // the schemas are part of the shared set: compiling resolves them
-        Assert.NotNull(workspace.SchemaSet.Compile());
+        // the schemas are loaded schemas: they compile
+        var schemas = new SchemaSetWorkspace([], workspace);
+        Assert.All(loaded.Schemas, schema => Assert.Empty(schemas.Compile(schema.Document.Schema).Warnings));
     }
 
     [Fact]
@@ -115,7 +116,7 @@ public class AssemblyWorkspaceTests
     }
 
     [Fact]
-    public void Load_SharesOneSchemaSetAcrossAssembliesAndIgnoresAReopenedAssembly()
+    public void Load_CompilesTheSchemasAcrossAssembliesAndIgnoresAReopenedAssembly()
     {
         var workspace = new AssemblyWorkspace();
         var device = workspace.Load(Assembly.LoadFrom(TestHelpers.AssemblyPathOf("Jacobi.Midi.Device")), "Jacobi.Midi.Device.dll");
@@ -125,7 +126,8 @@ public class AssemblyWorkspaceTests
         Assert.Same(device, workspace.Load(Assembly.LoadFrom(TestHelpers.AssemblyPathOf("Jacobi.Midi.Device")), "again.dll"));
         Assert.Equal(2, workspace.Assemblies.Count);
         // the roland schemas include the base midi schema of the other assembly
-        Assert.NotNull(workspace.SchemaSet.Compile());
+        var schemas = new SchemaSetWorkspace([], workspace);
+        Assert.All(roland.Schemas, schema => Assert.Empty(schemas.Compile(schema.Document.Schema).Warnings));
         Assert.NotEqual(device.FullName, roland.FullName);
     }
 

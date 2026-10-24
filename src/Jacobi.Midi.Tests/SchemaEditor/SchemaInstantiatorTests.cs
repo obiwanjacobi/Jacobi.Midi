@@ -34,6 +34,11 @@ public class SchemaInstantiatorTests
         }
         """;
 
+    private const string Vendor = """
+        { "name": "Vendor", "nodeDefs": [{ "name": "messageBody", "kind": "group" }],
+          "members": [{ "name": "Message", "kind": "group", "members": [{ "name": "Data", "kind": "choice", "memberNodeDef": "messageBody" }] }] }
+        """;
+
     [Fact]
     public void CreateRoot_ConstantsAreFixedAndRepeatsAreOpenOrFixed()
     {
@@ -176,6 +181,183 @@ public class SchemaInstantiatorTests
         var root = SchemaInstantiator.Create(vendor, [vendor, device, unrelated]).CreateRoot("Message");
 
         Assert.Equal(["Dev.AddressMap"], Assert.IsType<InstanceChoice>(root.Members[0]).Options.Select(option => option.Name));
+    }
+
+    [Fact]
+    public void OpenChoice_FindsBodiesInDocumentsThatDoNotIncludeTheSchema()
+    {
+        var vendor = EditNodeMapper.ToEditDocument(JsonSerializer.Deserialize(Vendor));
+        // the contract is referenced by its qualified name only
+        var device = EditNodeMapper.ToEditDocument(JsonSerializer.Deserialize("""
+            { "name": "Dev",
+              "members": [{ "name": "AddressMap", "kind": "group", "nodeDef": "vendor.messageBody", "members": [{ "name": "Y", "kind": "field", "datatype": "sys.uint8" }] }] }
+            """));
+        var unrelated = EditNodeMapper.ToEditDocument(JsonSerializer.Deserialize("""
+            { "name": "Other", "members": [{ "name": "Root", "kind": "group", "members": [{ "name": "A", "kind": "field", "datatype": "sys.uint8" }] }] }
+            """));
+
+        var instantiator = SchemaInstantiator.Create(vendor, [vendor, device, unrelated]);
+        var root = instantiator.CreateRoot("Message");
+
+        Assert.Equal(["Dev.AddressMap"], Assert.IsType<InstanceChoice>(root.Members[0]).Options.Select(option => option.Name));
+        Assert.Equal(["Vendor", "Dev", "Other"], instantiator.Documents.Select(document => document.Name));
+        Assert.Empty(instantiator.Warnings);
+    }
+
+    [Fact]
+    public void Create_ReportsAnUnrelatedDocumentThatDoesNotCompileAsLeftOut()
+    {
+        var vendor = EditNodeMapper.ToEditDocument(JsonSerializer.Deserialize(Vendor));
+        var broken = EditNodeMapper.ToEditDocument(JsonSerializer.Deserialize("""
+            { "name": "Broken", "members": [{ "name": "Map", "kind": "group", "nodeDef": "unknownBody", "members": [] }] }
+            """));
+
+        var instantiator = SchemaInstantiator.Create(vendor, [vendor, broken]);
+
+        Assert.Equal(["Vendor"], instantiator.Documents.Select(document => document.Name));
+        var warning = Assert.Single(instantiator.Warnings);
+        Assert.Contains("'Broken' is left out", warning);
+        Assert.Contains("unknownBody", warning);
+    }
+
+    [Fact]
+    public void Create_ReportsADependentWithAnUnloadedIncludeAsLeftOut()
+    {
+        var vendor = EditNodeMapper.ToEditDocument(JsonSerializer.Deserialize(Vendor));
+        var unloaded = EditNodeMapper.ToEditDocument(JsonSerializer.Deserialize("""
+            { "name": "Partial", "includes": [{ "schema": "Vendor" }, { "schema": "NotLoaded" }], "members": [] }
+            """));
+
+        var instantiator = SchemaInstantiator.Create(vendor, [vendor, unloaded]);
+
+        var warning = Assert.Single(instantiator.Warnings);
+        Assert.Contains("'Partial' is left out", warning);
+        Assert.Contains("'NotLoaded'", warning);
+    }
+
+    [Fact]
+    public void Create_LeavesOutOnlyTheDependentThatDoesNotCompileAndReportsIt()
+    {
+        var vendor = EditNodeMapper.ToEditDocument(JsonSerializer.Deserialize(Vendor));
+        var device = EditNodeMapper.ToEditDocument(JsonSerializer.Deserialize("""
+            { "name": "Dev", "includes": [{ "schema": "Vendor" }],
+              "members": [{ "name": "AddressMap", "kind": "group", "nodeDef": "vendor.messageBody", "members": [{ "name": "Y", "kind": "field", "datatype": "sys.uint8" }] }] }
+            """));
+        var broken = EditNodeMapper.ToEditDocument(JsonSerializer.Deserialize("""
+            { "name": "Broken", "includes": [{ "schema": "Vendor" }],
+              "members": [{ "name": "Map", "kind": "group", "nodeDef": "vendor.unknownBody", "members": [] }] }
+            """));
+
+        var instantiator = SchemaInstantiator.Create(vendor, [vendor, broken, device]);
+        var root = instantiator.CreateRoot("Message");
+
+        Assert.Equal(["Dev.AddressMap"], Assert.IsType<InstanceChoice>(root.Members[0]).Options.Select(option => option.Name));
+        var warning = Assert.Single(instantiator.Warnings);
+        Assert.Contains("'Broken' is left out", warning);
+        Assert.Contains("unknownBody", warning);
+    }
+
+    [Fact]
+    public void OpenChoice_WithoutBodies_IsReported()
+    {
+        var vendor = EditNodeMapper.ToEditDocument(JsonSerializer.Deserialize(Vendor));
+        var instantiator = SchemaInstantiator.Create(vendor, [vendor]);
+
+        instantiator.CreateRoot("Message");
+
+        var warning = Assert.Single(instantiator.Warnings);
+        Assert.Contains("'Message.Data' has no bodies", warning);
+        Assert.Contains("'Vendor.messageBody'", warning);
+    }
+
+    [Fact]
+    public void InstantiateCommand_ShowsTheWarningsInTheDialog()
+    {
+        var viewModel = new MainViewModel();
+        var loaded = viewModel.OpenedAssemblies.Load(
+            Assembly.LoadFrom(TestHelpers.AssemblyPathOf("Jacobi.Midi.Device")), "Jacobi.Midi.Device.dll");
+        var embedded = Assert.Single(loaded.Schemas);
+        // an open document with the name of the embedded schema is used instead of it
+        viewModel.NewDocumentCommand.Execute(null);
+        var replacing = viewModel.SelectedDocument!;
+        replacing.Schema.Name = embedded.Name;
+        replacing.MarkChanged();
+        Assert.True(embedded.IsReplaced);
+        Assert.Equal($"the open document '{embedded.Name}'", embedded.ReplacedBy);
+        viewModel.SelectedItem = replacing.Schema;
+        Assert.True(viewModel.HasDocumentSourceNote);
+        Assert.Contains($"This schema is used instead of the embedded schema '{embedded.Name}' of Jacobi.Midi.Device", viewModel.DocumentSourceNote);
+        viewModel.NewDocumentCommand.Execute(null);
+        viewModel.SelectedDocument!.AddInclude(embedded.Name);
+        viewModel.SelectedItem = viewModel.SelectedDocument!.Schema.Members.Single();
+
+        viewModel.InstantiateSchemaCommand.Execute(null);
+
+        var dialog = Assert.IsType<InstantiateSchemaViewModel>(viewModel.InstantiateDialog);
+        Assert.False(dialog.HasError, dialog.Error);
+        Assert.True(dialog.HasWarnings);
+        Assert.Contains($"'{embedded.Name}' is used instead of the embedded schema", dialog.Warnings);
+        dialog.CloseCommand.Execute(null);
+
+        // renaming the replacing document restores the embedded schema
+        replacing.Schema.Name = "Other";
+        replacing.MarkChanged();
+        Assert.False(embedded.IsReplaced);
+    }
+
+    [Fact]
+    public void MatchCommand_OnAnEmbeddedSchema_FindsTheBodiesInTheSchemasOfItsAssembly()
+    {
+        var viewModel = new MainViewModel();
+        var loaded = viewModel.OpenedAssemblies.Load(
+            Assembly.LoadFrom(TestHelpers.AssemblyPathOf("Jacobi.Midi.Roland")), "Jacobi.Midi.Roland.dll");
+        var roland = loaded.Schemas.Single(schema => schema.Name == "Roland");
+        var message = (EditGroup)roland.Document.Schema.Members.Single(member => member.Name == "Message32");
+        viewModel.SelectedLeftTab = MainViewModel.AssembliesLeftTab;
+
+        viewModel.MatchSchemaCommand.Execute(message.Members.Single(member => member.Name == "DT1"));
+
+        var dialog = Assert.IsType<InstantiateSchemaViewModel>(viewModel.InstantiateDialog);
+        Assert.False(dialog.HasError, dialog.Error);
+        Assert.DoesNotContain("left out", dialog.Warnings);
+        var data = FindChoice(Assert.IsType<InstanceGroup>(dialog.Root), "Data");
+        Assert.NotNull(data);
+        Assert.Contains(data.Options, option => option.Name == "Gx700.AddressMap");
+    }
+
+    // the first choice named name in the (nested) groups
+    private static InstanceChoice? FindChoice(InstanceGroup group, string name)
+    {
+        foreach (var member in group.Members)
+        {
+            if (member is InstanceChoice choice && choice.Name == name)
+            {
+                return choice;
+            }
+            if (member is InstanceGroup nested && FindChoice(nested, name) is { } found)
+            {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    [Fact]
+    public void EmbeddedSchemaReplacedByAnOpenDocument_ShowsANote()
+    {
+        var viewModel = new MainViewModel();
+        var loaded = viewModel.OpenedAssemblies.Load(
+            Assembly.LoadFrom(TestHelpers.AssemblyPathOf("Jacobi.Midi.Device")), "Jacobi.Midi.Device.dll");
+        var embedded = Assert.Single(loaded.Schemas);
+        viewModel.NewDocumentCommand.Execute(null);
+        viewModel.SelectedDocument!.Schema.Name = embedded.Name;
+        viewModel.SelectedDocument!.MarkChanged();
+
+        viewModel.SelectedLeftTab = MainViewModel.AssembliesLeftTab;
+        viewModel.SelectedAssemblyItem = embedded;
+
+        Assert.True(viewModel.HasDocumentSourceNote);
+        Assert.Contains($"The open document '{embedded.Name}' is used instead of this schema", viewModel.DocumentSourceNote);
     }
 
     [Fact]
@@ -409,6 +591,68 @@ public class SchemaInstantiatorTests
         Assert.Contains("sys.bytepacker", dialog.Problem);
         dialog.DismissProblemCommand.Execute(null);
         Assert.False(dialog.HasProblem);
+    }
+
+    [Fact]
+    public void CreateRoot_ExpandsSmallNodesAndCollapsesLargeOnes()
+    {
+        var document = EditNodeMapper.ToEditDocument(JsonSerializer.Deserialize("""
+            { "name": "Big", "members": [{ "name": "Root", "kind": "group", "members": [
+                { "name": "Small", "kind": "group", "members": [{ "name": "A", "kind": "field", "datatype": "sys.uint8" }] },
+                { "name": "Many", "kind": "repeat", "count": 60, "members": [{ "name": "V", "kind": "field", "datatype": "sys.uint8" }] }] }] }
+            """));
+
+        var root = SchemaInstantiator.Create(document, [document]).CreateRoot("Root");
+
+        Assert.True(root.IsExpanded);
+        Assert.True(Assert.IsType<InstanceGroup>(root.Members[0]).IsExpanded);
+        var many = Assert.IsType<InstanceRepeat>(root.Members[1]);
+        Assert.False(many.IsExpanded);
+        // a collapsed node shows no items (so the dialog creates no controls for them) but keeps them
+        Assert.Null(many.ShownItems);
+        Assert.Equal(60, many.Items.Count);
+        Assert.Equal("60 fields", many.FieldCountText);
+        Assert.All(many.Items, item => Assert.True(item.IsExpanded));
+
+        many.IsExpanded = true;
+        Assert.Same(many.Items, many.ShownItems);
+    }
+
+    [Fact]
+    public void SelectingTheBodyOfTheDeviceAddressMap_KeepsItsLargePartsCollapsed()
+    {
+        var viewModel = new MainViewModel();
+        var loaded = viewModel.OpenedAssemblies.Load(
+            Assembly.LoadFrom(TestHelpers.AssemblyPathOf("Jacobi.Midi.Roland")), "Jacobi.Midi.Roland.dll");
+        var roland = loaded.Schemas.Single(schema => schema.Name == "Roland");
+        var message = (EditGroup)roland.Document.Schema.Members.Single(member => member.Name == "Message32");
+        viewModel.SelectedLeftTab = MainViewModel.AssembliesLeftTab;
+        viewModel.MatchSchemaCommand.Execute(message.Members.Single(member => member.Name == "DT1"));
+        var data = FindChoice(Assert.IsType<InstanceGroup>(viewModel.InstantiateDialog!.Root), "Data")!;
+
+        data.SelectedOption = data.Options.Single(option => option.Name == "Gx700.AddressMap");
+
+        var body = Assert.IsType<InstanceBody>(data.Selected);
+        Assert.True(body.IsExpanded);
+        var memory = Assert.IsType<InstanceRepeat>(body.Members.Single(member => member.Name == "Memory"));
+        Assert.False(memory.IsExpanded);
+        Assert.Equal(100, memory.Items.Count);
+        Assert.All(memory.Items, patch => Assert.False(patch.IsExpanded));
+    }
+
+    [Fact]
+    public void Deserialize_ExpandsThePartThatWasRead()
+    {
+        var (instantiator, document) = CreateInstantiator(Serializable);
+        var head = (EditGroup)((EditGroup)document.Members.Single(member => member.Name == "Msg")).Members.Single(member => member.Name == "Head");
+        var instance = Assert.IsType<InstanceGroup>(instantiator.Create(head));
+        instance.IsExpanded = false;
+
+        // a nested group is read as a range of its root: only its own bytes
+        instantiator.Deserialize(instantiator.FindRootName(head)!.Value, instance, [0x05], TestHelpers.CreateProcessors());
+
+        Assert.Equal("5", ((InstanceField)instance.Members[0]).Value);
+        Assert.True(instance.IsExpanded);
     }
 
     [Fact]

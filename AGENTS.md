@@ -15,6 +15,7 @@
 - Use the jargon of the project, how things are called in the code and documentation. When referencing code, use the exact terms used there, in the code itself or its comments.
 - When an item on the todo list is done, mark it of - do not delete it. Marked items are read-only and will never change, even if the item they describe is no longer valid or accurate.
 - Don't copy-paste code or data from project files to document a concept or mechanism. Reference to the files as examples or create stand-alone examples that don't go out of sync when the code evolves.
+- Always look for or think in generic solutions. This project is a data-driven mechanism. When solving bugs/problems do not just look at where the specific problem exists. Look with a wider view to see if there are other places that should behave the same. Perhaps a specific piece of code needs to be extracted, made more generic and reused. Aim for a single place of truth.
 
 ## Project Overview
 

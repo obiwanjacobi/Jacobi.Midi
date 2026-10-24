@@ -17,6 +17,7 @@ internal sealed partial class CollectionTabViewModel : ObservableObject, IDispos
     private readonly Func<object> _add;
     private readonly Action<string> _report;
     private readonly ProcessorCatalog? _catalog;
+    private readonly SchemaSetWorkspace? _schemas;
 
     /// <param name="document">The document the collection belongs to.</param>
     /// <param name="items">The (observable) collection of the document.</param>
@@ -24,8 +25,9 @@ internal sealed partial class CollectionTabViewModel : ObservableObject, IDispos
     /// <param name="add">Adds a new item to the document and returns it.</param>
     /// <param name="report">Called with a status message after an add or remove, or when it failed.</param>
     /// <param name="catalog">The processors to check the processor properties of the items against; null to not check them.</param>
+    /// <param name="schemas">The loaded schemas the definitions of other schemas are resolved in; null to resolve within the document only.</param>
     public CollectionTabViewModel(SchemaWorkspaceDocument document, IList items, string what, Func<object> add, Action<string> report,
-        ProcessorCatalog? catalog = null)
+        ProcessorCatalog? catalog = null, SchemaSetWorkspace? schemas = null)
     {
         _document = document;
         Items = items;
@@ -33,6 +35,7 @@ internal sealed partial class CollectionTabViewModel : ObservableObject, IDispos
         _add = add;
         _report = report;
         _catalog = catalog;
+        _schemas = schemas;
     }
 
     public IList Items { get; }
@@ -58,7 +61,7 @@ internal sealed partial class CollectionTabViewModel : ObservableObject, IDispos
     partial void OnSelectedEntryChanged(object? value)
     {
         Editor?.Dispose();
-        Editor = ItemEditor.Create(_document, value, _catalog);
+        Editor = ItemEditor.Create(_document, value, _catalog, _schemas);
     }
 
     /// <summary>

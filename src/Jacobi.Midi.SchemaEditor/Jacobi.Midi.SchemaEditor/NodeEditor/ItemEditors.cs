@@ -26,7 +26,8 @@ internal abstract class ItemEditor(SchemaWorkspaceDocument document) : Observabl
     /// Creates the editor for <paramref name="item"/>, or returns null when the item has no item editor (nodes have their own).
     /// </summary>
     /// <param name="catalog">The processors to check the processor properties against; null to not check them.</param>
-    public static ItemEditor? Create(SchemaWorkspaceDocument document, object? item, ProcessorCatalog? catalog = null)
+    /// <param name="schemas">The loaded schemas the definitions of other schemas are resolved in; null to resolve within the document only.</param>
+    public static ItemEditor? Create(SchemaWorkspaceDocument document, object? item, ProcessorCatalog? catalog = null, SchemaSetWorkspace? schemas = null)
     {
         ItemEditor? editor = item switch
         {
@@ -37,7 +38,7 @@ internal abstract class ItemEditor(SchemaWorkspaceDocument document) : Observabl
             EditProperty property => new PropertyEditor(document, property),
             _ => null
         };
-        editor?.Details = ItemDetailsViewModel.Create(document, item, catalog);
+        editor?.Details = ItemDetailsViewModel.Create(document, item, catalog, schemas);
         return editor;
     }
 

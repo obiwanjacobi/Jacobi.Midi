@@ -27,6 +27,9 @@
                     <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,5">
                         <TextBlock Text="{Binding Name}" Foreground="{DynamicResource AppTextBodyBrush}" />
                         <TextBlock Text="schema" Foreground="{DynamicResource AppTextMutedBrush}" />
+                        <!-- another schema with the same name (an open file) is compiled instead of this schema -->
+                        <TextBlock Text="replaced" Foreground="Orange" IsVisible="{Binding IsReplaced}"
+                                   ToolTip.Tip="{Binding ReplacedBy, StringFormat='{}{0} is used instead of this embedded schema when schemas are compiled (Instantiate, Match, Workbench).'}" />
                     </StackPanel>
                 </TreeDataTemplate>
                 <!-- the fixed first child of an embedded schema: its node defs -->

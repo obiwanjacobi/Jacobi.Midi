@@ -1,3 +1,4 @@
+using CommunityToolkit.Mvvm.ComponentModel;
 using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.SchemaEditor.SchemaTree;
 
@@ -6,7 +7,7 @@ namespace Jacobi.Midi.SchemaEditor.Assemblies;
 /// <summary>
 /// An assembly that was opened in the editor: what it provides (embedded schemas and processor factories)
 /// and what could not be loaded. Read-only; shown as a node of the assembly tree.
-/// The schemas are also in the <see cref="AssemblyWorkspace.SchemaSet"/>.
+/// The schemas are compiled with the open documents by the <see cref="SchemaSetWorkspace"/>.
 /// </summary>
 internal sealed class LoadedAssembly
 {
@@ -92,9 +93,19 @@ internal sealed class LoadedAssembly
 /// <param name="name">The name of the schema.</param>
 /// <param name="resource">The name of the embedded resource the schema was read from.</param>
 /// <param name="document">The read-only document with the contents of the schema.</param>
-internal sealed class LoadedSchema(string name, string resource, SchemaWorkspaceDocument document)
+internal sealed partial class LoadedSchema(string name, string resource, SchemaWorkspaceDocument document) : ObservableObject
 {
     public string Name { get; } = name;
+
+    /// <summary>
+    /// The schema with the same name that is used instead of this one when schemas are compiled (Instantiate, Match, Workbench),
+    /// as described in messages (e.g. "the open document 'Roland'"); null when this schema is used. Kept by the <see cref="SchemaSetWorkspace"/>.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsReplaced))]
+    public partial string? ReplacedBy { get; internal set; }
+
+    public bool IsReplaced => ReplacedBy is not null;
     public string Resource { get; } = resource;
     public SchemaWorkspaceDocument Document { get; } = document;
 

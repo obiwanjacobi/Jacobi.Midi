@@ -23,19 +23,22 @@ internal sealed class InstanceValueSink : IOpenChoiceSink
     private readonly InstanceNode? _node;
     private readonly InstanceNode _target;
     private readonly Dictionary<InstanceRepeat, int> _itemCounts;
+    // the fields that received a value (shared by all scopes)
+    private readonly List<InstanceField> _read;
 
     /// <param name="node">The node the scope represents; null for a scope above <paramref name="target"/>.</param>
     /// <param name="target">The instance that is read: the root of the instance tree.</param>
     public InstanceValueSink(InstanceNode? node, InstanceNode target)
-        : this(node, target, [])
+        : this(node, target, [], [])
     {
     }
 
-    private InstanceValueSink(InstanceNode? node, InstanceNode target, Dictionary<InstanceRepeat, int> itemCounts)
+    private InstanceValueSink(InstanceNode? node, InstanceNode target, Dictionary<InstanceRepeat, int> itemCounts, List<InstanceField> read)
     {
         _node = node;
         _target = target;
         _itemCounts = itemCounts;
+        _read = read;
     }
 
     /// <summary>
@@ -48,11 +51,13 @@ internal sealed class InstanceValueSink : IOpenChoiceSink
             field.Value = String.Empty;
         }
         _itemCounts.Clear();
+        _read.Clear();
     }
 
     /// <summary>
     /// Removes the items of the open repeats that were not read. After a failed read (<paramref name="completed"/> false)
     /// only the repeats that were reached are trimmed: the ones after the failure keep their items.
+    /// Then the part that received values is expanded (see <see cref="RevealRead"/>).
     /// </summary>
     public void End(bool completed)
     {
@@ -67,6 +72,52 @@ internal sealed class InstanceValueSink : IOpenChoiceSink
                 repeat.Truncate(0);
             }
         }
+        RevealRead();
+    }
+
+    /// <summary>
+    /// Expands the nearest node that holds all the fields that received a value, and the nodes above it,
+    /// e.g. the patch a DT1 message addressed; the large parts below it keep their expansion.
+    /// </summary>
+    private void RevealRead()
+    {
+        // the nodes from the read instance down to each read field that is still in the tree (not removed with its repeat item)
+        var fields = _target.Fields().ToHashSet();
+        var paths = _read.Where(fields.Contains).Select(Ancestors).ToList();
+        if (paths.Count == 0)
+        {
+            return;
+        }
+        var common = paths[0];
+        foreach (var path in paths.Skip(1))
+        {
+            var length = 0;
+            while (length < common.Count && length < path.Count && ReferenceEquals(common[length], path[length]))
+            {
+                length++;
+            }
+            common = common[..length];
+        }
+        if (common.Count > 0)
+        {
+            // the field itself has nothing to expand: reveal its group when only one field was read
+            (common[^1] is InstanceField && common.Count > 1 ? common[^2] : common[^1]).Reveal();
+        }
+    }
+
+    // the nodes from the read instance down to the node
+    private List<InstanceNode> Ancestors(InstanceNode node)
+    {
+        var path = new List<InstanceNode>();
+        for (InstanceNode? current = node; current is not null; current = current.Parent)
+        {
+            path.Insert(0, current);
+            if (ReferenceEquals(current, _target))
+            {
+                break;
+            }
+        }
+        return path;
     }
 
     public void SetField(FieldContext context, LogicalField value)
@@ -74,6 +125,7 @@ internal sealed class InstanceValueSink : IOpenChoiceSink
         if (Find(context) is InstanceField { IsConstant: false } field)
         {
             field.Value = Format(context.Field.DataType, value.Value);
+            _read.Add(field);
         }
     }
 
@@ -116,7 +168,7 @@ internal sealed class InstanceValueSink : IOpenChoiceSink
     {
     }
 
-    private InstanceValueSink Scope(InstanceNode? node) => new(node, _target, _itemCounts);
+    private InstanceValueSink Scope(InstanceNode? node) => new(node, _target, _itemCounts, _read);
 
     /// <summary>
     /// The instance node of the plan node in <paramref name="context"/>: a member of this scope (by name) or, above the

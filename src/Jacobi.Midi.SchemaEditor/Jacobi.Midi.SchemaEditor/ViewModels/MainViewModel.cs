@@ -83,11 +83,22 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// </summary>
     private ProcessorCatalog ProcessorCatalog { get; }
 
+    /// <summary>
+    /// All loaded schemas: the <see cref="Documents"/> and the embedded schemas of the <see cref="OpenedAssemblies"/>.
+    /// Resolves the schema names (includes, node defs) and compiles the schemas for Instantiate, Match and the workbench.
+    /// </summary>
+    public SchemaSetWorkspace LoadedSchemas { get; }
+
     public MainViewModel()
     {
         ProcessorCatalog = new ProcessorCatalog(OpenedAssemblies.Processors);
-        // an opened assembly may embed the schema an include refers to
-        OpenedAssemblies.Assemblies.CollectionChanged += (_, _) => RefreshIncludeStatus();
+        LoadedSchemas = new SchemaSetWorkspace(Documents, OpenedAssemblies);
+        // a schema that was opened, closed or renamed may replace (or no longer replace) another one with its name
+        LoadedSchemas.Changed += (_, _) =>
+        {
+            OnPropertyChanged(nameof(DocumentSourceNote));
+            OnPropertyChanged(nameof(HasDocumentSourceNote));
+        };
         // pre-loaded: the 'sys' processors of the serializer, and the base 'midi' schema and 'midi' processors
         // that the vendor and device schemas build on
         foreach (var assembly in (Assembly[])[typeof(Jacobi.BinarySerializer.Processors.ProcessorFactory).Assembly,
@@ -177,10 +188,10 @@ internal sealed partial class MainViewModel : ViewModelBase
         SaveSession = SaveSessionFile
     }, MidiBar, new WorkbenchSchemaHost
     {
-        FindDocument = name => Documents.FirstOrDefault(document => !document.IsReadOnly
-            && String.Equals(document.Schema.Name, name, StringComparison.OrdinalIgnoreCase)),
+        // the target schema must be an open document: an embedded schema cannot be changed
+        FindDocument = name => LoadedSchemas.Find(name) is { IsEmbedded: false } entry ? entry.Document : null,
         CreateDocument = CreateWorkbenchDocument,
-        Compile = CreateInstantiator,
+        Compile = (copy, copyOf) => new SchemaInstantiator(LoadedSchemas.Compile(copy, copyOf)),
         Processors = OpenedAssemblies.Processors
     });
 
@@ -200,26 +211,6 @@ internal sealed partial class MainViewModel : ViewModelBase
             // the target schema may have been edited (or opened, closed) in Schema mode
             Workbench.RefreshSchema();
         }
-    }
-
-    /// <summary>
-    /// Compiles <paramref name="document"/> with the documents it includes: the open documents and the embedded schemas
-    /// of the opened assemblies (an open document takes precedence by name). Other documents with the name of
-    /// <paramref name="document"/> are left out, so a copy of an open document can be compiled.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">An include is not loaded or the schema does not compile.</exception>
-    private SchemaInstantiator CreateInstantiator(EditDocument document)
-    {
-        var workspace = Documents.Select(item => item.Schema)
-            .Where(schema => ReferenceEquals(schema, document) || !String.Equals(schema.Name, document.Name, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        var embedded = OpenedAssemblies.Assemblies
-            .SelectMany(assembly => assembly.Schemas)
-            .Select(schema => schema.Document.Schema)
-            .Where(schema => !String.Equals(schema.Name, document.Name, StringComparison.OrdinalIgnoreCase)
-                && !workspace.Any(open => String.Equals(open.Name, schema.Name, StringComparison.OrdinalIgnoreCase)))
-            .ToList();
-        return SchemaInstantiator.Create(document, [.. workspace, .. embedded]);
     }
 
     /// <summary>
@@ -260,7 +251,7 @@ internal sealed partial class MainViewModel : ViewModelBase
             .ToList();
         foreach (var include in document.Includes)
         {
-            if (FindIncludedSchema(document, include.Schema) is { } included)
+            if (LoadedSchemas.Find(include.Schema, document)?.Schema is { } included)
             {
                 names.AddRange(included.NodeDefs
                     .Where(def => def.Kind == kind)
@@ -270,15 +261,6 @@ internal sealed partial class MainViewModel : ViewModelBase
         }
         return names;
     }
-
-    /// <summary>
-    /// The schema named <paramref name="name"/> as another open document or an embedded schema of an opened assembly;
-    /// null when it is not loaded.
-    /// </summary>
-    private EditDocument? FindIncludedSchema(EditDocument document, string name)
-        => Documents.Select(other => other.Schema)
-            .Concat(OpenedAssemblies.Assemblies.SelectMany(assembly => assembly.Schemas).Select(schema => schema.Document.Schema))
-            .FirstOrDefault(schema => !ReferenceEquals(schema, document) && String.Equals(schema.Name, name, StringComparison.OrdinalIgnoreCase));
 
     public bool HasSelectedDocument => SelectedDocument is not null;
 
@@ -295,6 +277,15 @@ internal sealed partial class MainViewModel : ViewModelBase
     /// True when the document root is selected: the editor then shows the document tabs.
     /// </summary>
     public bool IsDocumentSelected => SelectedItem is EditDocument;
+
+    /// <summary>
+    /// For the selected document: which schema with the same name is used instead of it, or which schemas it is used instead of,
+    /// when schemas are compiled (see <see cref="SchemaSetWorkspace.GetSourceNote"/>); null when no other schema has its name.
+    /// </summary>
+    public string? DocumentSourceNote
+        => SelectedItem is EditDocument && ActiveDocument is { } active ? LoadedSchemas.GetSourceNote(active) : null;
+
+    public bool HasDocumentSourceNote => DocumentSourceNote is not null;
 
     /// <summary>
     /// The includes, data type defs and processor defs tabs of the document; null unless the document root is selected.
@@ -354,6 +345,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(SelectedNode))]
     [NotifyPropertyChangedFor(nameof(SelectedItemPath))]
     [NotifyPropertyChangedFor(nameof(IsDocumentSelected))]
+    [NotifyPropertyChangedFor(nameof(DocumentSourceNote), nameof(HasDocumentSourceNote))]
     [NotifyPropertyChangedFor(nameof(CanArrange), nameof(CanChangeNodeType))]
     [NotifyCanExecuteChangedFor(nameof(DeleteItemCommand))]
     [NotifyCanExecuteChangedFor(nameof(InstantiateSchemaCommand), nameof(MatchSchemaCommand))]
@@ -650,10 +642,8 @@ internal sealed partial class MainViewModel : ViewModelBase
 
         var wasSelected = ReferenceEquals(SelectedDocument, document);
         _treeDocuments.Remove(document);
-        document.PropertyChanged -= OnDocumentPropertyChanged;
         _storageFiles.Remove(document);
         Documents.RemoveAt(index);
-        RefreshIncludeStatus();
         if (wasSelected)
         {
             SelectedDocument = Documents.Count == 0 ? null : Documents[Math.Min(index, Documents.Count - 1)];
@@ -742,9 +732,9 @@ internal sealed partial class MainViewModel : ViewModelBase
             new CollectionTabViewModel(document, schema.Includes, "include",
                 () => document.AddInclude(GetUniqueName(schema.Includes.Select(include => include.Schema), "schema")), Report),
             new CollectionTabViewModel(document, schema.DataTypeDefs, "data type def",
-                () => document.AddDataTypeDef(GetUniqueName(schema.DataTypeDefs.Select(definition => definition.Name), "NewDataType"), "sys.uint8"), Report, ProcessorCatalog),
+                () => document.AddDataTypeDef(GetUniqueName(schema.DataTypeDefs.Select(definition => definition.Name), "NewDataType"), "sys.uint8"), Report, ProcessorCatalog, LoadedSchemas),
             new CollectionTabViewModel(document, schema.ProcessorDefs, "processor def",
-                () => document.AddProcessorDef(GetUniqueName(schema.ProcessorDefs.Select(definition => definition.Name), "NewProcessor"), "namespace.id"), Report, ProcessorCatalog));
+                () => document.AddProcessorDef(GetUniqueName(schema.ProcessorDefs.Select(definition => definition.Name), "NewProcessor"), "namespace.id"), Report, ProcessorCatalog, LoadedSchemas));
     }
 
     /// <summary>
@@ -953,8 +943,10 @@ internal sealed partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// Opens the instantiate dialog for the selected group of the <see cref="ActiveDocument"/> (an open document or,
-    /// read-only, an embedded schema selected in the assembly tree). The document and the documents it includes
-    /// (taken from the open documents and the embedded schemas of the opened assemblies) are compiled first; when that fails the problem is reported and no dialog opens.
+    /// read-only, an embedded schema selected in the assembly tree). The document is compiled first with all the open documents
+    /// and the embedded schemas of the opened assemblies (see <see cref="SchemaSetWorkspace.Compile(EditDocument, SchemaWorkspaceDocument?)"/>);
+    /// when that fails the problem is shown in the dialog.
+    /// The schemas that were left out or replaced are shown as warnings in the dialog.
     /// </summary>
     /// <param name="group">
     /// The group to instantiate (from the context menu of a tree); it is selected in the tree of the active left tab first.
@@ -992,8 +984,8 @@ internal sealed partial class MainViewModel : ViewModelBase
 
         try
         {
-            // the embedded schemas of the opened assemblies can be included too; an open document takes precedence by name
-            var instantiator = CreateInstantiator(active.Schema);
+            // compiled with all loaded schemas (open documents and embedded schemas)
+            var instantiator = new SchemaInstantiator(LoadedSchemas.Compile(active.Schema));
             var instance = instantiator.Create(root);
             // the processors of the opened assemblies are used when the values are serialized (or deserialized)
             var rootName = instantiator.FindRootName(root);
@@ -1008,7 +1000,8 @@ internal sealed partial class MainViewModel : ViewModelBase
                     : null;
                 match = new SysExMatchViewModel(deserialize, OpenSysExFile, MidiBar);
             }
-            InstantiateDialog = new InstantiateSchemaViewModel(instance, serialize, SaveSysExFile, MidiBar, CloseInstantiateDialog, match);
+            InstantiateDialog = new InstantiateSchemaViewModel(instance, serialize, SaveSysExFile, MidiBar, CloseInstantiateDialog, match,
+                instantiator.Warnings);
         }
         catch (Exception exception) when (IsSchemaError(exception))
         {
@@ -1366,7 +1359,7 @@ internal sealed partial class MainViewModel : ViewModelBase
 
         var node = value as EditNode;
         ItemDetails?.Dispose();
-        ItemDetails = ActiveDocument is null ? null : ItemDetailsViewModel.Create(ActiveDocument, value, ProcessorCatalog);
+        ItemDetails = ActiveDocument is null ? null : ItemDetailsViewModel.Create(ActiveDocument, value, ProcessorCatalog, LoadedSchemas);
         // the node defs item shows a hint
         GeneralEditor = value is NodeDefsItem ? value : node;
         DocumentTabs?.Dispose();
@@ -1388,7 +1381,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     {
         var node = EditedNode;
         ValueProcessorDetails?.Dispose();
-        ValueProcessorDetails = ActiveDocument is null ? null : ItemDetailsViewModel.CreateValueProcessors(ActiveDocument, node, ProcessorCatalog);
+        ValueProcessorDetails = ActiveDocument is null ? null : ItemDetailsViewModel.CreateValueProcessors(ActiveDocument, node, ProcessorCatalog, LoadedSchemas);
         // the data type defs, processor defs and opened assemblies may have changed since the last selection
         OnPropertyChanged(nameof(DataTypeOptions));
         OnPropertyChanged(nameof(ProcessorKeyOptions));
@@ -1408,45 +1401,13 @@ internal sealed partial class MainViewModel : ViewModelBase
     private void AddDocument(EditDocument schema, SchemaFormat format, string? fileName, IStorageFile? storageFile)
     {
         var document = new SchemaWorkspaceDocument(schema, format, fileName);
+        // the LoadedSchemas follow the open documents
         Documents.Add(document);
-        // MarkChanged raises DisplayName; includes or names may have changed
-        document.PropertyChanged += OnDocumentPropertyChanged;
-        RefreshIncludeStatus();
         if (storageFile is not null)
         {
             _storageFiles[document] = storageFile;
         }
         SelectedDocument = document;
-    }
-
-    private void OnDocumentPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        // the pin state only matters when another document is selected
-        if (e.PropertyName != nameof(SchemaWorkspaceDocument.IsPinned))
-        {
-            RefreshIncludeStatus();
-        }
-    }
-
-    /// <summary>
-    /// Flags the includes of all open documents whose included schema is neither loaded as another open document
-    /// nor embedded in one of the <see cref="OpenedAssemblies"/>.
-    /// </summary>
-    private void RefreshIncludeStatus()
-    {
-        var embedded = OpenedAssemblies.Assemblies
-            .SelectMany(assembly => assembly.Schemas)
-            .Select(schema => schema.Name)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var document in Documents)
-        {
-            foreach (var include in document.Schema.Includes)
-            {
-                include.IsLoaded = embedded.Contains(include.Schema)
-                    || Documents.Any(other => !ReferenceEquals(other, document)
-                        && String.Equals(other.Schema.Name, include.Schema, StringComparison.OrdinalIgnoreCase));
-            }
-        }
     }
 
     private async Task SaveSelectedDocument(bool saveAs)

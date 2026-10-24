@@ -103,6 +103,62 @@ public class ItemDetailsTests
     }
 
     [Fact]
+    public void Resolve_WithLoadedSchemas_ResolvesTheDefinitionsOfOtherSchemasInTheirOwnSchema()
+    {
+        // the library: a node def with a processor def and a data type def based on another local data type def
+        var library = SchemaFileService.CreateDocument("Lib");
+        library.ProcessorDefs.Add(new EditProcessorDef { Name = "pack", Processor = "sys.align", Properties = [Property("bytes", "2")] });
+        library.DataTypeDefs.Add(new EditDataTypeDef { Name = "base", BasedOn = new SchemaName("sys.uint8"), Properties = [Property("a", "base")] });
+        library.DataTypeDefs.Add(new EditDataTypeDef { Name = "derived", BasedOn = new SchemaName("base"), Properties = [Property("b", "derived")] });
+        var definition = Field(null, "def", dataType: "derived");
+        // a local name of the library: resolved in the library, not in the document that uses the node def
+        definition.Processors.Add(new EditProcessorRef { Processor = new SchemaName("pack") });
+        library.NodeDefs.Add(definition);
+        var document = CreateDocument();
+        document.Includes.Add(new EditDocumentRef { Schema = "lib" });
+        var field = Field(Root(document), "field", dataType: null);
+        field.NodeDef = new SchemaName("lib.def");
+
+        var effective = EffectiveNodeResolver.Resolve(document, field, key => key == "sys.align",
+            name => String.Equals(name, "lib", StringComparison.OrdinalIgnoreCase) ? library : null);
+
+        Assert.Empty(effective.Unresolved);
+        Assert.Equal([("a", "base", "dataType Lib.base"), ("b", "derived", "dataType Lib.derived")],
+            effective.Properties.Select(p => (p.Name, p.Value, p.Source)));
+        var pack = Assert.Single(effective.Processors);
+        Assert.Equal("nodeDef Lib.def", pack.Source);
+        Assert.Equal([("bytes", "2", "processorDef Lib.pack")], pack.Properties.Select(p => (p.Name, p.Value, p.Source)));
+    }
+
+    [Fact]
+    public void Resolve_WithLoadedSchemas_ReportsASchemaThatIsNotLoaded()
+    {
+        var document = CreateDocument();
+        document.Includes.Add(new EditDocumentRef { Schema = "midi" });
+        var field = Field(Root(document), "field", dataType: "midi.sysexbyte");
+        field.NodeDef = new SchemaName("midi.byte");
+
+        var effective = EffectiveNodeResolver.Resolve(document, field, findSchema: _ => null);
+
+        Assert.Contains(effective.Unresolved, message => message.Contains("nodeDef 'midi.byte': the schema 'midi' is not loaded"));
+        Assert.Contains(effective.Unresolved, message => message.Contains("dataType 'midi.sysexbyte': the included schema 'midi' is not loaded"));
+    }
+
+    [Fact]
+    public void Details_OfAnEmbeddedDeviceSchema_ResolveTheNodeDefOfTheVendorSchema()
+    {
+        var viewModel = new Jacobi.Midi.SchemaEditor.ViewModels.MainViewModel();
+        var loaded = viewModel.OpenedAssemblies.Load(
+            System.Reflection.Assembly.LoadFrom(Jacobi.Midi.Tests.Schema.TestHelpers.AssemblyPathOf("Jacobi.Midi.Roland")), "Jacobi.Midi.Roland.dll");
+        var gx700 = loaded.Schemas.Single(schema => schema.Name == "Gx700");
+        var addressMap = gx700.Document.Schema.Members.Single(member => member.Name == "AddressMap");
+
+        using var details = ItemDetailsViewModel.Create(gx700.Document, addressMap, schemas: viewModel.LoadedSchemas)!;
+
+        Assert.False(details.HasUnresolved, String.Join("; ", details.Unresolved));
+    }
+
+    [Fact]
     public void Details_EditOwnEntriesAndMarkDocumentChanged()
     {
         var schema = CreateDocument();

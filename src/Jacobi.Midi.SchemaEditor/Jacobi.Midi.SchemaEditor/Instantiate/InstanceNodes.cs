@@ -63,6 +63,63 @@ internal abstract partial class InstanceNode : ObservableObject
         InstanceChoice { Selected: { } selected } => selected.Fields(),
         _ => []
     };
+
+    /// <summary>The nodes directly below this node: the members of a group, the items of a repeat, the selected alternative of a choice.</summary>
+    public IEnumerable<InstanceNode> Children() => this switch
+    {
+        InstanceGroup group => group.Members,
+        InstanceRepeat repeat => repeat.Items,
+        InstanceChoice { Selected: { } selected } => [selected],
+        _ => []
+    };
+
+    /// <summary>
+    /// The largest number of fields below a node that is expanded when it is created (see <see cref="ApplyDefaultExpansion"/>).
+    /// </summary>
+    public const int ExpandFieldLimit = 50;
+
+    /// <summary>
+    /// True when the members (or items) of a group (or repeat) are shown. Only the members of an expanded node get controls,
+    /// so a large instance tree (e.g. the 100 patches of a device address map) is shown quickly.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsExpanded { get; set; }
+
+    /// <summary>The number of fields below the node, shown while it is collapsed.</summary>
+    public string FieldCountText => Fields().Count() is var count && count == 1 ? "1 field" : $"{count:N0} fields";
+
+    partial void OnIsExpandedChanged(bool value)
+    {
+        // the count is shown while collapsed: items may have been added or removed since it was shown
+        OnPropertyChanged(nameof(FieldCountText));
+        OnExpandedChanged();
+    }
+
+    /// <summary>Called when <see cref="IsExpanded"/> changed: a container raises the change of the members it shows.</summary>
+    protected virtual void OnExpandedChanged()
+    {
+    }
+
+    /// <summary>
+    /// Expands this node and the nodes below it that have at most <see cref="ExpandFieldLimit"/> fields; collapses the others.
+    /// </summary>
+    internal void ApplyDefaultExpansion()
+    {
+        IsExpanded = Fields().Take(ExpandFieldLimit + 1).Count() <= ExpandFieldLimit;
+        foreach (var child in Children())
+        {
+            child.ApplyDefaultExpansion();
+        }
+    }
+
+    /// <summary>Expands this node and the nodes above it, so it is shown.</summary>
+    public void Reveal()
+    {
+        for (InstanceNode? node = this; node is not null; node = node.Parent)
+        {
+            node.IsExpanded = true;
+        }
+    }
 }
 
 /// <summary>
@@ -120,6 +177,11 @@ internal partial class InstanceGroup : InstanceNode
     }
 
     public ObservableCollection<InstanceNode> Members { get; } = [];
+
+    /// <summary>The members shown in the dialog: the <see cref="Members"/> while expanded, otherwise none (no controls are created).</summary>
+    public IEnumerable<InstanceNode>? ShownMembers => IsExpanded ? Members : null;
+
+    protected override void OnExpandedChanged() => OnPropertyChanged(nameof(ShownMembers));
 
     internal void AddMember(InstanceNode member)
     {
@@ -207,10 +269,16 @@ internal sealed partial class InstanceRepeat : InstanceNode
 
     public ObservableCollection<InstanceRepeatItem> Items { get; } = [];
 
-    /// <summary>Adds a copy of the repeat group at the end and returns it.</summary>
+    /// <summary>The items shown in the dialog: the <see cref="Items"/> while expanded, otherwise none (no controls are created).</summary>
+    public IEnumerable<InstanceRepeatItem>? ShownItems => IsExpanded ? Items : null;
+
+    protected override void OnExpandedChanged() => OnPropertyChanged(nameof(ShownItems));
+
+    /// <summary>Adds a copy of the repeat group at the end and returns it; it is expanded when it is small.</summary>
     public InstanceRepeatItem AddNewItem()
     {
         var item = _createItem(this, Items.Count);
+        item.ApplyDefaultExpansion();
         Items.Add(item);
         return item;
     }
@@ -330,11 +398,15 @@ internal sealed partial class InstanceChoice : InstanceNode
 
     partial void OnSelectedOptionChanged(ChoiceOption? value)
     {
-        Selected = value?.Create(this);
-        if (Selected is not null)
+        var selected = value?.Create(this);
+        if (selected is not null)
         {
-            Selected.Parent = this;
+            selected.Parent = this;
+            // the selected alternative is shown; the large parts below it start collapsed
+            selected.ApplyDefaultExpansion();
+            selected.IsExpanded = true;
         }
+        Selected = selected;
     }
 
     internal override void RefreshPaths()
