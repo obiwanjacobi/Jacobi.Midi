@@ -19,6 +19,12 @@
         <Setter Property="FontSize" Value="11" />
     </Style>
 
+    <!-- drop-down lists of choices (data types, processors, options of a data type) can be long: they scroll -->
+    <Style Selector="ComboBox.options">
+        <Setter Property="MaxDropDownHeight" Value="240" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+
     <!--
         Short menus (the context menus of the trees) never scroll. With the default (Auto) scrolling, a rounding difference
         between the extent and the viewport shows the scroll down arrow, which then takes the room of the item.

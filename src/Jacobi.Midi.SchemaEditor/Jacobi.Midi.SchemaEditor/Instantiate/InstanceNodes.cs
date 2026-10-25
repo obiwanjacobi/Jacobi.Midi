@@ -266,12 +266,15 @@ internal sealed partial class InstanceField : InstanceNode
     private readonly Func<string, string?>? _validate;
 
     /// <param name="validate">Returns a warning for a value that does not fit the data type of the field, else null.</param>
-    public InstanceField(SchemaField schema, SchemaPath path, string? constant, Func<string, string?>? validate = null)
+    /// <param name="options">The option values of the data type of the field (as text); null or empty when it has none.</param>
+    public InstanceField(SchemaField schema, SchemaPath path, string? constant, Func<string, string?>? validate = null,
+        IReadOnlyList<string>? options = null)
         : base(schema, path)
     {
         _validate = validate;
         Value = constant ?? String.Empty;
         IsConstant = constant is not null;
+        Options = options ?? [];
     }
 
     public SchemaField Field => (SchemaField)Schema;
@@ -288,6 +291,12 @@ internal sealed partial class InstanceField : InstanceNode
     public bool IsConstant { get; }
 
     public bool IsEditable => !IsConstant;
+
+    /// <summary>The option values of the data type of the field (as text), in the order of the data type; empty when it has none.</summary>
+    public IReadOnlyList<string> Options { get; }
+
+    /// <summary>True when the value is chosen from the <see cref="Options"/> (other text can still be typed, e.g. a reference).</summary>
+    public bool ShowsOptions => IsEditable && Options.Count > 0;
 
     [ObservableProperty]
     public partial string Value { get; set; }

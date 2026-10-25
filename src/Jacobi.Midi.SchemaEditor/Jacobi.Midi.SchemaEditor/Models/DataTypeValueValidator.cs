@@ -47,10 +47,7 @@ internal static class DataTypeValueValidator
         DataTypeRegistry? registry = null)
     {
         value = value?.Trim() ?? String.Empty;
-        if (value.Length == 0 ||
-            value.StartsWith(SchemaNodeRef.Prefix, StringComparison.Ordinal) ||
-            value.StartsWith(SchemaPubRef.Prefix, StringComparison.Ordinal) ||
-            Resolve(documents, ownerName, dataType, registry ?? Registry) is not { } resolved)
+        if (IsDerived(value) || Resolve(documents, ownerName, dataType, registry ?? Registry) is not { } resolved)
         {
             return null;
         }
@@ -60,25 +57,46 @@ internal static class DataTypeValueValidator
         }
 
         var type = resolved.Descriptor!;
-        // an option value is matched case-insensitive (as the value of an instance field)
-        var parsed = type.Options?.Values.FirstOrDefault(option => String.Equals(Format(option), value, StringComparison.OrdinalIgnoreCase));
-        if (parsed is null && (!type.ValueType.Parse(value, out parsed) || parsed is null))
+        return Validate(type.ValueType, type, dataType.Trim(), value, out _);
+    }
+
+    /// <summary>True when <paramref name="value"/> is empty or a reference ('ref:', 'pub:'): not a literal, the engine derives the value.</summary>
+    public static bool IsDerived(string value)
+        => value.Length == 0 ||
+            value.StartsWith(SchemaNodeRef.Prefix, StringComparison.Ordinal) ||
+            value.StartsWith(SchemaPubRef.Prefix, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Returns a warning when <paramref name="value"/> is not a valid logical value; otherwise null.
+    /// The value is one of the options (matched case-insensitive) or a literal of <paramref name="valueType"/>,
+    /// and must respect the Options, Min and Max of <paramref name="facets"/>.
+    /// </summary>
+    /// <param name="valueType">The data type of the logical value: parses the literal.</param>
+    /// <param name="facets">The data type with the facets that apply to the value; null when none apply.</param>
+    /// <param name="typeName">The name of the data type in the warning.</param>
+    /// <param name="value">The literal; it is not trimmed (a text value may start or end with spaces).</param>
+    /// <param name="parsed">The logical value; null when there is a warning.</param>
+    public static string? Validate(DataTypeDescriptor valueType, DataTypeDescriptor? facets, string typeName, string value, out object? parsed)
+    {
+        // an option value is matched case-insensitive
+        parsed = facets?.Options?.Values.FirstOrDefault(option => String.Equals(Format(option), value, StringComparison.OrdinalIgnoreCase));
+        if (parsed is null && (!valueType.Parse(value, out parsed) || parsed is null))
         {
-            return $"'{value}' is not a valid value for {dataType.Trim()}.";
+            parsed = null;
+            return $"'{value}' is not a valid value for {typeName}.";
         }
-        if (type.Options is { } options && !options.Values.Contains(parsed))
+        var warning = facets switch
         {
-            return $"'{value}' is not one of the options of {dataType.Trim()}.";
-        }
-        if (type.Min is { } min && DataTypeDescriptor.Compare(parsed, min) < 0)
+            { Options: { } options } when !options.Values.Contains(parsed) => $"'{value}' is not one of the options of {typeName}.",
+            { Min: { } min } when DataTypeDescriptor.Compare(parsed, min) < 0 => $"{value} is less than the minimum {Format(min)} of {typeName}.",
+            { Max: { } max } when DataTypeDescriptor.Compare(parsed, max) > 0 => $"{value} is greater than the maximum {Format(max)} of {typeName}.",
+            _ => null
+        };
+        if (warning is not null)
         {
-            return $"{value} is less than the minimum {Format(min)} of {dataType.Trim()}.";
+            parsed = null;
         }
-        if (type.Max is { } max && DataTypeDescriptor.Compare(parsed, max) > 0)
-        {
-            return $"{value} is greater than the maximum {Format(max)} of {dataType.Trim()}.";
-        }
-        return null;
+        return warning;
     }
 
     /// <summary>
@@ -180,5 +198,17 @@ internal static class DataTypeValueValidator
             .SelectMany(d => d.DataTypeDefs)
             .FirstOrDefault(d => String.Equals(d.Name, name.Name, StringComparison.OrdinalIgnoreCase));
 
-    private static string Format(object value) => Convert.ToString(value, CultureInfo.InvariantCulture) ?? String.Empty;
+    /// <summary>
+    /// Formats a (logical) value as the text its value type parses again (see <see cref="Validate(DataTypeDescriptor, DataTypeDescriptor?, string, string, out object?)"/>):
+    /// hex bytes, or the invariant text of the value.
+    /// </summary>
+    public static string Format(object? value) => value switch
+    {
+        null => String.Empty,
+        byte[] bytes => Convert.ToHexString(bytes),
+        ReadOnlyMemory<byte> memory => Convert.ToHexString(memory.Span),
+        DateTime date => date.ToString("O", CultureInfo.InvariantCulture),
+        IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
+        _ => value.ToString() ?? String.Empty
+    };
 }

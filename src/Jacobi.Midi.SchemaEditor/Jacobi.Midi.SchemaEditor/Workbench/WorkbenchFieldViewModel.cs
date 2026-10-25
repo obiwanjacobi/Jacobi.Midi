@@ -21,12 +21,9 @@ internal sealed class WorkbenchSchemaHost
     /// <summary>
     /// Compiles an edited copy of a schema with all loaded schemas (the open documents and the embedded schemas):
     /// the copy and the open document it is a copy of (null for a new schema; it is left out).
-    /// Throws <see cref="InvalidOperationException"/> when it does not compile.
+    /// The instantiator uses the processors the schemas use. Throws <see cref="InvalidOperationException"/> when it does not compile.
     /// </summary>
     public required Func<EditDocument, SchemaWorkspaceDocument?, SchemaInstantiator> Compile { get; init; }
-
-    /// <summary>The processors the schemas use.</summary>
-    public required IProcessorProvider Processors { get; init; }
 }
 
 /// <summary>The value of the field in one capture, as shown in the field panel.</summary>
@@ -453,7 +450,7 @@ internal sealed partial class WorkbenchFieldViewModel : ObservableObject
             var path = WorkbenchSchema.GetPath(field);
             var instantiator = _host.Compile(copy.Schema, target);
             var reads = WorkbenchReader.Read(instantiator, root, context.Selection.Slot,
-                context.Captures.Select(item => item.Capture).ToList(), _host.Processors);
+                context.Captures.Select(item => item.Capture).ToList());
             // e.g. a schema that was left out: the values may differ from what the user expects
             Error = String.Join(" ", instantiator.Warnings);
             // the reader checks a fixed value; its messages name the preview field by the name the user typed

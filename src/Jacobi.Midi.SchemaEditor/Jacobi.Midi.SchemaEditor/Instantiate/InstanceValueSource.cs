@@ -1,6 +1,9 @@
 using Jacobi.BinarySerializer;
+using Jacobi.BinarySerializer.Descriptors;
+using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.SchemaEditor.Models;
 
 namespace Jacobi.Midi.SchemaEditor.Instantiate;
 
@@ -33,35 +36,48 @@ internal sealed class InstanceValueSource : IOpenChoiceSource
             return SourceResult.NoValue();
         }
 
-        // the value is the logical value: of the value type of the data type (e.g. the option value with options)
-        var valueType = context.Field.ValueType ?? context.Field.DataType;
-        // the spaces of a text are part of its value (e.g. a patch name that starts with a space); other values are trimmed
-        var text = valueType.ClrType == typeof(string) ? field.Value ?? String.Empty : field.Value?.Trim() ?? String.Empty;
-        // an empty value or a reference is derived by the engine (or fails there)
-        if (text.Length == 0 ||
-            text.StartsWith(SchemaNodeRef.Prefix, StringComparison.Ordinal) ||
-            text.StartsWith(SchemaPubRef.Prefix, StringComparison.Ordinal))
+        if (ToLogical(context.Field, field.Value, out var value) is { } warning)
         {
-            return SourceResult.NoValue();
+            throw new InvalidOperationException($"{field.DisplayPath}: {warning}");
+        }
+        return value is null
+            ? SourceResult.NoValue()
+            : SourceResult.Provided(new LogicalField(context.Field.Name, value.GetType(), value));
+    }
+
+    /// <summary>
+    /// Converts the text of an instance field to the logical value of the compiled <paramref name="field"/>: a value of its
+    /// <see cref="FieldInfo.ValueType"/> (see <see cref="DataTypeValueValidator"/>).
+    /// The facets of the data type apply when the engine converts the value; a field that declares its own semantic
+    /// processors (e.g. sys.map) gets the text as is when it does not parse: the processors convert it themselves.
+    /// </summary>
+    /// <param name="value">The logical value; null when the text is empty or a reference: the engine derives the value (or fails there).</param>
+    /// <returns>A warning when the text is not a valid value of the field; otherwise null.</returns>
+    public static string? ToLogical(FieldInfo field, string? text, out object? value)
+    {
+        value = null;
+        // the spaces of a text are part of its value (e.g. a patch name that starts with a space); other values are trimmed
+        text = field.ValueType.ClrType == typeof(string) ? text ?? String.Empty : text?.Trim() ?? String.Empty;
+        if (DataTypeValueValidator.IsDerived(text))
+        {
+            return null;
         }
 
-        // an option value is matched case-insensitive
-        if (context.Field.ValueType is not null && context.Field.DataType.Options?.Values
-            .FirstOrDefault(option => String.Equals(InstanceValueSink.Format(option), text, StringComparison.OrdinalIgnoreCase)) is { } option)
+        var warning = DataTypeValueValidator.Validate(field.ValueType, Facets(field), field.DataType.Name.FullName, text, out value);
+        if (warning is not null && !field.ConvertsToValueType)
         {
-            return SourceResult.Provided(new LogicalField(context.Field.Name, valueType.ClrType, option));
+            value = text;
+            return null;
         }
-        if (!valueType.Parse(text, out var value))
-        {
-            // the field declares its own semantic processors (e.g. sys.map): they convert the text themselves
-            if (context.Field.ValueType is null && context.Field.Pipeline.ValueProcessors.Count > 0)
-            {
-                return SourceResult.Provided(new LogicalField(context.Field.Name, typeof(string), text));
-            }
-            throw new InvalidOperationException($"'{text}' is not a valid value for {field.DisplayPath} ({valueType.Name}).");
-        }
-        return SourceResult.Provided(new LogicalField(context.Field.Name, valueType.ClrType, value));
+        return warning;
     }
+
+    /// <summary>The option values of the compiled <paramref name="field"/> as text (see <see cref="ToLogical"/>); empty when its data type has no options.</summary>
+    public static IReadOnlyList<string> OptionsOf(FieldInfo field)
+        => Facets(field)?.Options?.Values.Select(DataTypeValueValidator.Format).Distinct().ToList() ?? [];
+
+    // the facets of the data type apply when the engine converts the value; not to a field with its own semantic processors
+    private static DataTypeDescriptor? Facets(FieldInfo field) => field.ConvertsToValueType ? field.DataType : null;
 
     public IValueSource EnterGroup(GroupContext context) => new InstanceValueSource(Find(context), _target);
 

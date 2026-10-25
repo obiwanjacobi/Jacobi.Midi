@@ -44,7 +44,7 @@
     </UserControl.Styles>
 
     <UserControl.DataTemplates>
-        <!-- a field: the value as text -->
+        <!-- a field: the value as text; chosen from the options of its data type when it has them (other text can still be typed) -->
         <DataTemplate x:DataType="inst:InstanceField">
             <Grid ColumnDefinitions="220,*" ColumnSpacing="12" Margin="0,3" ToolTip.Tip="{Binding Description}">
                 <StackPanel VerticalAlignment="Center">
@@ -52,7 +52,10 @@
                     <TextBlock Text="{Binding DataType}" Classes="path" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Spacing="2">
-                    <TextBox Text="{Binding Value}" IsReadOnly="{Binding IsConstant}" PlaceholderText="{Binding Sample}" />
+                    <TextBox Text="{Binding Value}" IsReadOnly="{Binding IsConstant}" PlaceholderText="{Binding Sample}"
+                             IsVisible="{Binding !ShowsOptions}" />
+                    <ComboBox Classes="options" IsEditable="True" Text="{Binding Value}" ItemsSource="{Binding Options}"
+                              PlaceholderText="{Binding Sample}" IsVisible="{Binding ShowsOptions}" />
                     <TextBlock Text="{Binding ValueWarning}" Foreground="Orange" FontSize="11" TextWrapping="Wrap"
                                IsVisible="{Binding ValueWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                 </StackPanel>

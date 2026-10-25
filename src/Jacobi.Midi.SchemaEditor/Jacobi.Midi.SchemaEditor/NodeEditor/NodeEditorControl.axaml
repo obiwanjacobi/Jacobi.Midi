@@ -40,11 +40,6 @@
             <Setter Property="FontSize" Value="11" />
             <Setter Property="Foreground" Value="{DynamicResource AppTextLabelBrush}" />
         </Style>
-        <!-- the drop-down lists of data types and processors can be long: they scroll -->
-        <Style Selector="ComboBox.options">
-            <Setter Property="MaxDropDownHeight" Value="240" />
-            <Setter Property="HorizontalAlignment" Value="Stretch" />
-        </Style>
         <!-- the section headers of the processor drop-down list cannot be selected -->
         <Style Selector="ComboBox.processors ComboBoxItem" x:DataType="ne:ProcessorOption">
             <Setter Property="IsEnabled" Value="{Binding IsSelectable}" />

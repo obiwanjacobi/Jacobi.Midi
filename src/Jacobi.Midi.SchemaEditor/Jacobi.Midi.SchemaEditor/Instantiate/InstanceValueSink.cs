@@ -1,8 +1,7 @@
-using System.Globalization;
 using Jacobi.BinarySerializer;
-using Jacobi.BinarySerializer.Descriptors;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.SchemaEditor.Models;
 
 namespace Jacobi.Midi.SchemaEditor.Instantiate;
 
@@ -132,7 +131,7 @@ internal sealed class InstanceValueSink : IOpenChoiceSink
     {
         if (Find(context) is InstanceField { IsConstant: false } field)
         {
-            field.Value = Format(value.Value);
+            field.Value = DataTypeValueValidator.Format(value.Value);
             _read.Add(field);
         }
     }
@@ -219,18 +218,4 @@ internal sealed class InstanceValueSink : IOpenChoiceSink
                 break;
         }
     }
-
-    /// <summary>
-    /// Formats a (logical) value that was read as text the value type parses again (see <see cref="InstanceValueSource"/>):
-    /// hex bytes, or the invariant text of the value (an option value is already its logical value).
-    /// </summary>
-    internal static string Format(object? value) => value switch
-    {
-        null => String.Empty,
-        byte[] bytes => Convert.ToHexString(bytes),
-        ReadOnlyMemory<byte> memory => Convert.ToHexString(memory.Span),
-        DateTime date => date.ToString("O", CultureInfo.InvariantCulture),
-        IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
-        _ => value.ToString() ?? String.Empty
-    };
 }

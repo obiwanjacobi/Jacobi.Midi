@@ -1,4 +1,3 @@
-using Jacobi.BinarySerializer.Processor;
 using Jacobi.Midi.SchemaEditor.Instantiate;
 using Jacobi.Midi.SchemaEditor.Models;
 
@@ -25,20 +24,18 @@ internal static class WorkbenchReader
     /// </summary>
     /// <param name="instantiator">The compiled target schema.</param>
     /// <param name="root">The root group of the slot.</param>
-    /// <param name="processors">The processors the schema uses.</param>
     public static IReadOnlyList<CaptureRead> Read(SchemaInstantiator instantiator, EditGroup root, int slot,
-        IReadOnlyList<Capture> captures, IProcessorProvider processors)
+        IReadOnlyList<Capture> captures)
     {
         ArgumentNullException.ThrowIfNull(instantiator);
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(captures);
-        ArgumentNullException.ThrowIfNull(processors);
         var rootName = instantiator.FindRootName(root) ?? throw new InvalidOperationException($"'{root.Name}' is not a root of the schema.");
-        return captures.Select(capture => Read(instantiator, rootName, root.Name, slot, capture, processors)).ToList();
+        return captures.Select(capture => Read(instantiator, rootName, root.Name, slot, capture)).ToList();
     }
 
     private static CaptureRead Read(SchemaInstantiator instantiator, Jacobi.BinarySerializer.Schema.SchemaName rootName, string root,
-        int slot, Capture capture, IProcessorProvider processors)
+        int slot, Capture capture)
     {
         if (slot >= capture.Messages.Count)
         {
@@ -51,7 +48,7 @@ internal static class WorkbenchReader
         var remarks = new List<string>();
         try
         {
-            var read = instantiator.Deserialize(rootName, instance, bytes, processors, remarks);
+            var read = instantiator.Deserialize(rootName, instance, bytes, remarks);
             if (read < bytes.Length)
             {
                 remarks.Add($"{bytes.Length - read} trailing byte(s) were not read.");

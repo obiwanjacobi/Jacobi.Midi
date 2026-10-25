@@ -112,12 +112,12 @@ public class WorkbenchSchemaTests
         var root = WorkbenchSchema.CreateRoot(document, 0, Baseline);
         var level = WorkbenchSchema.DefineField(document, WorkbenchSchema.GetLayout(root, Baseline), new ByteRange(0, 6, 1), "Level", "sys.uint8", null);
         var processors = CreateProcessors();
-        var instantiator = SchemaInstantiator.Create(document.Schema, processors.Assemblies.SelectMany(assembly => assembly.Schemas).Select(schema => schema.Document.Schema));
+        var instantiator = SchemaInstantiator.Create(document.Schema, processors.Assemblies.SelectMany(assembly => assembly.Schemas).Select(schema => schema.Document.Schema), processors.Processors);
         byte[] variant = [.. Baseline];
         variant[6] = 0x28;
         var captures = new[] { new Capture("base", [Baseline]), new Capture("variant", [variant]), new Capture("short", [new byte[] { 0xF0, 0x41, 0xF7 }]) };
 
-        var reads = WorkbenchReader.Read(instantiator, root, 0, captures, processors.Processors);
+        var reads = WorkbenchReader.Read(instantiator, root, 0, captures);
 
         var path = WorkbenchSchema.GetPath(level);
         Assert.Equal("Message1.Level", path);

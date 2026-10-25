@@ -386,8 +386,7 @@ public class WorkbenchTests
                 return document;
             },
             Compile = (copy, _) => SchemaInstantiator.Create(copy, Documents.Select(open => open.Schema)
-                .Concat(Assemblies.Assemblies.SelectMany(assembly => assembly.Schemas).Select(schema => schema.Document.Schema))),
-            Processors = Assemblies.Processors
+                .Concat(Assemblies.Assemblies.SelectMany(assembly => assembly.Schemas).Select(schema => schema.Document.Schema)), Assemblies.Processors)
         };
     }
 

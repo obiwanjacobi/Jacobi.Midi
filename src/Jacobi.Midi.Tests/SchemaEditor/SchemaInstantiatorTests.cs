@@ -155,11 +155,11 @@ public class SchemaInstantiatorTests
                 { "name": "Other", "kind": "group", "members": [{ "name": "Z", "kind": "field", "datatype": "sys.uint8" }] }] }
             """));
 
-        var root = SchemaInstantiator.Create(lib, [lib, device]).CreateRoot("Envelope");
+        var root = SchemaInstantiator.Create(lib, [lib, device], TestHelpers.CreateProcessors()).CreateRoot("Envelope");
 
         // 'Body' in Lib is Lib.Body; the nodeDef of Dev.Qualified names the document explicitly; Dev includes Lib so it is part of the set
         Assert.Equal(["Dev.Qualified", "Lib.Own"], Assert.IsType<InstanceChoice>(root.Members[0]).Options.Select(option => option.Name));
-        var withDevice = SchemaInstantiator.Create(device, [lib, device]);
+        var withDevice = SchemaInstantiator.Create(device, [lib, device], TestHelpers.CreateProcessors());
         var envelope = Assert.IsType<InstanceGroup>(withDevice.Create((EditGroup)lib.Members[1]));
         Assert.Equal(["Dev.Qualified", "Lib.Own"], Assert.IsType<InstanceChoice>(envelope.Members[0]).Options.Select(option => option.Name));
     }
@@ -179,7 +179,7 @@ public class SchemaInstantiatorTests
             { "name": "Broken", "includes": [{ "schema": "Vendor" }, { "schema": "NotLoaded" }], "members": [] }
             """));
 
-        var root = SchemaInstantiator.Create(vendor, [vendor, device, unrelated]).CreateRoot("Message");
+        var root = SchemaInstantiator.Create(vendor, [vendor, device, unrelated], TestHelpers.CreateProcessors()).CreateRoot("Message");
 
         Assert.Equal(["Dev.AddressMap"], Assert.IsType<InstanceChoice>(root.Members[0]).Options.Select(option => option.Name));
     }
@@ -197,7 +197,7 @@ public class SchemaInstantiatorTests
             { "name": "Other", "members": [{ "name": "Root", "kind": "group", "members": [{ "name": "A", "kind": "field", "datatype": "sys.uint8" }] }] }
             """));
 
-        var instantiator = SchemaInstantiator.Create(vendor, [vendor, device, unrelated]);
+        var instantiator = SchemaInstantiator.Create(vendor, [vendor, device, unrelated], TestHelpers.CreateProcessors());
         var root = instantiator.CreateRoot("Message");
 
         Assert.Equal(["Dev.AddressMap"], Assert.IsType<InstanceChoice>(root.Members[0]).Options.Select(option => option.Name));
@@ -213,7 +213,7 @@ public class SchemaInstantiatorTests
             { "name": "Broken", "members": [{ "name": "Map", "kind": "group", "nodeDef": "unknownBody", "members": [] }] }
             """));
 
-        var instantiator = SchemaInstantiator.Create(vendor, [vendor, broken]);
+        var instantiator = SchemaInstantiator.Create(vendor, [vendor, broken], TestHelpers.CreateProcessors());
 
         Assert.Equal(["Vendor"], instantiator.Documents.Select(document => document.Name));
         var warning = Assert.Single(instantiator.Warnings);
@@ -229,7 +229,7 @@ public class SchemaInstantiatorTests
             { "name": "Partial", "includes": [{ "schema": "Vendor" }, { "schema": "NotLoaded" }], "members": [] }
             """));
 
-        var instantiator = SchemaInstantiator.Create(vendor, [vendor, unloaded]);
+        var instantiator = SchemaInstantiator.Create(vendor, [vendor, unloaded], TestHelpers.CreateProcessors());
 
         var warning = Assert.Single(instantiator.Warnings);
         Assert.Contains("'Partial' is left out", warning);
@@ -249,7 +249,7 @@ public class SchemaInstantiatorTests
               "members": [{ "name": "Map", "kind": "group", "nodeDef": "vendor.unknownBody", "members": [] }] }
             """));
 
-        var instantiator = SchemaInstantiator.Create(vendor, [vendor, broken, device]);
+        var instantiator = SchemaInstantiator.Create(vendor, [vendor, broken, device], TestHelpers.CreateProcessors());
         var root = instantiator.CreateRoot("Message");
 
         Assert.Equal(["Dev.AddressMap"], Assert.IsType<InstanceChoice>(root.Members[0]).Options.Select(option => option.Name));
@@ -262,7 +262,7 @@ public class SchemaInstantiatorTests
     public void OpenChoice_WithoutBodies_IsReported()
     {
         var vendor = EditNodeMapper.ToEditDocument(JsonSerializer.Deserialize(Vendor));
-        var instantiator = SchemaInstantiator.Create(vendor, [vendor]);
+        var instantiator = SchemaInstantiator.Create(vendor, [vendor], TestHelpers.CreateProcessors());
 
         instantiator.CreateRoot("Message");
 
@@ -382,7 +382,7 @@ public class SchemaInstantiatorTests
               "members": [{ "name": "Root", "kind": "group", "members": [{ "name": "A", "kind": "field", "datatype": "sys.uint8" }] }] }
             """));
 
-        var exception = Assert.Throws<InvalidOperationException>(() => SchemaInstantiator.Create(document, [document]));
+        var exception = Assert.Throws<InvalidOperationException>(() => SchemaInstantiator.Create(document, [document], TestHelpers.CreateProcessors()));
 
         Assert.Contains("'Missing'", exception.Message);
     }
@@ -399,7 +399,7 @@ public class SchemaInstantiatorTests
               "members": [{ "name": "Root", "kind": "group", "members": [{ "name": "Msg", "kind": "choice", "memberNodeDef": "Lib.Body" }] }] }
             """));
 
-        var root = SchemaInstantiator.Create(document, [document, other]).CreateRoot("Root");
+        var root = SchemaInstantiator.Create(document, [document, other], TestHelpers.CreateProcessors()).CreateRoot("Root");
 
         Assert.Equal(["Lib.Extra"], Assert.IsType<InstanceChoice>(root.Members[0]).Options.Select(option => option.Name));
     }
@@ -526,7 +526,7 @@ public class SchemaInstantiatorTests
         ((InstanceField)data.Items[0].Members[0]).Value = "2";
         ((InstanceField)data.Items[1].Members[0]).Value = "3";
 
-        var bytes = instantiator.Serialize(instantiator.FindRootName(msg)!.Value, root, TestHelpers.CreateProcessors(), []).Single().Bytes;
+        var bytes = instantiator.Serialize(instantiator.FindRootName(msg)!.Value, root, []).Single().Bytes;
 
         Assert.Equal([0xF0, 0x01, 0x02, 0x03, 0xF7], bytes);
     }
@@ -541,7 +541,7 @@ public class SchemaInstantiatorTests
         ((InstanceField)instance.Members[0]).Value = "5";
 
         Assert.Equal("Ser.Msg", instantiator.FindRootName(head)!.Value.ToString());
-        var bytes = instantiator.Serialize(instantiator.FindRootName(head)!.Value, instance, TestHelpers.CreateProcessors(), []).Single().Bytes;
+        var bytes = instantiator.Serialize(instantiator.FindRootName(head)!.Value, instance, []).Single().Bytes;
 
         Assert.Equal([0x05], bytes);
     }
@@ -556,7 +556,7 @@ public class SchemaInstantiatorTests
         choice.SelectedOption = choice.Options.Single(option => option.Name == "Ser.BodyB");
         ((InstanceField)((InstanceGroup)choice.Selected!).Members[0]).Value = "7";
 
-        var bytes = instantiator.Serialize(instantiator.FindRootName(env)!.Value, root, TestHelpers.CreateProcessors(), []).Single().Bytes;
+        var bytes = instantiator.Serialize(instantiator.FindRootName(env)!.Value, root, []).Single().Bytes;
 
         Assert.Equal([0x07], bytes);
     }
@@ -570,8 +570,75 @@ public class SchemaInstantiatorTests
         Field(root, "Head", "A").Value = "abc";
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => instantiator.Serialize(instantiator.FindRootName(msg)!.Value, root, TestHelpers.CreateProcessors(), []));
+            () => instantiator.Serialize(instantiator.FindRootName(msg)!.Value, root, []));
         Assert.Contains("'abc'", exception.Message);
+    }
+
+    private const string Typed = """
+        {
+          "name": "Typed",
+          "dataTypeDefs": [
+            { "name": "Switch", "basedOn": "sys.uint8", "valueType": "sys.string", "options": { "0": "Off", "1": "On" } },
+            { "name": "Small", "basedOn": "sys.uint8", "max": 10 }],
+          "members": [
+            { "name": "Msg", "kind": "group", "members": [
+                { "name": "S", "kind": "field", "datatype": "Switch" },
+                { "name": "N", "kind": "field", "datatype": "Small" }] }]
+        }
+        """;
+
+    [Theory]
+    [InlineData("S", "on", null)]
+    [InlineData("S", "1", "not one of the options")]
+    [InlineData("N", "10", null)]
+    [InlineData("N", "11", "greater than the maximum")]
+    [InlineData("N", "ref:Msg.S", null)]
+    public void ValueWarning_ChecksTheLogicalValueOfTheCompiledField(string name, string value, string? expected)
+    {
+        var document = EditNodeMapper.ToEditDocument(JsonSerializer.Deserialize(Typed));
+        var instantiator = SchemaInstantiator.Create(document, [document], TestHelpers.CreateProcessors());
+        var root = instantiator.CreateRoot("Msg");
+        var field = (InstanceField)root.Members.Single(member => member.Name == name);
+
+        field.Value = value;
+
+        Assert.Empty(instantiator.Warnings);
+        if (expected is null)
+        {
+            Assert.Null(field.ValueWarning);
+        }
+        else
+        {
+            Assert.Contains(expected, field.ValueWarning);
+        }
+    }
+
+    [Fact]
+    public void Options_AreTheLogicalOptionValuesOfTheDataType()
+    {
+        var document = EditNodeMapper.ToEditDocument(JsonSerializer.Deserialize(Typed));
+        var root = SchemaInstantiator.Create(document, [document], TestHelpers.CreateProcessors()).CreateRoot("Msg");
+        var withOptions = (InstanceField)root.Members[0];
+        var withoutOptions = (InstanceField)root.Members[1];
+
+        Assert.Equal(["Off", "On"], withOptions.Options);
+        Assert.True(withOptions.ShowsOptions);
+        Assert.Empty(withoutOptions.Options);
+        Assert.False(withoutOptions.ShowsOptions);
+    }
+
+    [Fact]
+    public void Serialize_WritesTheOptionOfALogicalValue()
+    {
+        var document = EditNodeMapper.ToEditDocument(JsonSerializer.Deserialize(Typed));
+        var instantiator = SchemaInstantiator.Create(document, [document], TestHelpers.CreateProcessors());
+        var root = instantiator.CreateRoot("Msg");
+        ((InstanceField)root.Members[0]).Value = "ON";
+        ((InstanceField)root.Members[1]).Value = "7";
+
+        var bytes = instantiator.Serialize(new SchemaName("Typed.Msg"), root, []).Single().Bytes;
+
+        Assert.Equal([0x01, 0x07], bytes);
     }
 
     [Fact]
@@ -603,7 +670,7 @@ public class SchemaInstantiatorTests
                 { "name": "Many", "kind": "repeat", "count": 60, "members": [{ "name": "V", "kind": "field", "datatype": "sys.uint8" }] }] }] }
             """));
 
-        var root = SchemaInstantiator.Create(document, [document]).CreateRoot("Root");
+        var root = SchemaInstantiator.Create(document, [document], TestHelpers.CreateProcessors()).CreateRoot("Root");
 
         Assert.True(root.IsExpanded);
         Assert.True(Assert.IsType<InstanceGroup>(root.Members[0]).IsExpanded);
@@ -707,7 +774,7 @@ public class SchemaInstantiatorTests
         InstanceRepeat Memory, IProcessorProvider Processors)
     {
         public InstanceGroup Temporary => Assert.IsType<InstanceGroup>(Body.Members.Single(member => member.Name == "Temporary"));
-        public string? Transfer => Instantiator.DescribeTransfer(RootName, Root, Processors);
+        public string? Transfer => Instantiator.DescribeTransfer(RootName, Root);
     }
 
     private static Gp8DataMessage InstantiateGp8DataMessage()
@@ -829,7 +896,7 @@ public class SchemaInstantiatorTests
         var gp8 = InstantiateGp8DataMessage();
 
         Assert.Contains("Nothing of the address map 'Gp8.AddressMap' is included", gp8.Transfer);
-        var exception = Assert.Throws<InvalidOperationException>(() => gp8.Instantiator.Serialize(gp8.RootName, gp8.Root, gp8.Processors, []));
+        var exception = Assert.Throws<InvalidOperationException>(() => gp8.Instantiator.Serialize(gp8.RootName, gp8.Root, []));
         Assert.Contains("Nothing of the address map", exception.Message);
     }
 
@@ -838,10 +905,10 @@ public class SchemaInstantiatorTests
     {
         var gp8 = InstantiateGp8DataMessage();
         var original = Gp8Patch(5);
-        gp8.Instantiator.Deserialize(gp8.RootName, gp8.Root, original, gp8.Processors, []);
+        gp8.Instantiator.Deserialize(gp8.RootName, gp8.Root, original, []);
 
         var warnings = new List<string>();
-        var message = Assert.Single(gp8.Instantiator.Serialize(gp8.RootName, gp8.Root, gp8.Processors, warnings));
+        var message = Assert.Single(gp8.Instantiator.Serialize(gp8.RootName, gp8.Root, warnings));
 
         // the patch that was read is the one that is sent, at its own address
         Assert.Empty(warnings);
@@ -854,10 +921,10 @@ public class SchemaInstantiatorTests
     {
         var gp8 = InstantiateGp8DataMessage();
         var original = Gp8Patch(5);
-        gp8.Instantiator.Deserialize(gp8.RootName, gp8.Root, original, gp8.Processors, []);
+        gp8.Instantiator.Deserialize(gp8.RootName, gp8.Root, original, []);
 
         gp8.Memory.ItemIndex = 7;
-        var bytes = Assert.Single(gp8.Instantiator.Serialize(gp8.RootName, gp8.Root, gp8.Processors, [])).Bytes;
+        var bytes = Assert.Single(gp8.Instantiator.Serialize(gp8.RootName, gp8.Root, [])).Bytes;
 
         // patch 7 is at 0x43-40; the data is the same, the checksum follows the address
         Assert.Equal(original.Length, bytes.Length);
@@ -870,12 +937,12 @@ public class SchemaInstantiatorTests
     public void AddressMapBody_TheAddressFieldIsCalculated()
     {
         var gp8 = InstantiateGp8DataMessage();
-        gp8.Instantiator.Deserialize(gp8.RootName, gp8.Root, Gp8Patch(5), gp8.Processors, []);
+        gp8.Instantiator.Deserialize(gp8.RootName, gp8.Root, Gp8Patch(5), []);
         // a wrong address typed by the user is not used
         Assert.IsType<InstanceField>(Assert.IsType<InstanceGroup>(gp8.Root.Members.Single(member => member.Name == "ChecksumScope"))
             .Members.Single(member => member.Name == "Address")).Value = "0";
 
-        var message = Assert.Single(gp8.Instantiator.Serialize(gp8.RootName, gp8.Root, gp8.Processors, []));
+        var message = Assert.Single(gp8.Instantiator.Serialize(gp8.RootName, gp8.Root, []));
 
         Assert.Equal(Convert.ToHexString(Gp8Patch(5)), Convert.ToHexString(message.Bytes));
     }
@@ -902,7 +969,7 @@ public class SchemaInstantiatorTests
         instance.IsExpanded = false;
 
         // a nested group is read as a range of its root: only its own bytes
-        instantiator.Deserialize(instantiator.FindRootName(head)!.Value, instance, [0x05], TestHelpers.CreateProcessors(), []);
+        instantiator.Deserialize(instantiator.FindRootName(head)!.Value, instance, [0x05], []);
 
         Assert.Equal("5", ((InstanceField)instance.Members[0]).Value);
         Assert.True(instance.IsExpanded);
@@ -915,7 +982,7 @@ public class SchemaInstantiatorTests
         var msg = (EditGroup)document.Members.Single(member => member.Name == "Msg");
         var root = Assert.IsType<InstanceGroup>(instantiator.Create(msg));
 
-        var read = instantiator.Deserialize(instantiator.FindRootName(msg)!.Value, root, [0xF0, 0x01, 0x02, 0x03, 0xF7], TestHelpers.CreateProcessors(), []);
+        var read = instantiator.Deserialize(instantiator.FindRootName(msg)!.Value, root, [0xF0, 0x01, 0x02, 0x03, 0xF7], []);
 
         Assert.Equal(5, read);
         Assert.Equal("1", Field(root, "Head", "A").Value);
@@ -931,7 +998,7 @@ public class SchemaInstantiatorTests
         var head = (EditGroup)msg.Members.Single(member => member.Name == "Head");
         var instance = Assert.IsType<InstanceGroup>(instantiator.Create(head));
 
-        instantiator.Deserialize(instantiator.FindRootName(head)!.Value, instance, [0x05], TestHelpers.CreateProcessors(), []);
+        instantiator.Deserialize(instantiator.FindRootName(head)!.Value, instance, [0x05], []);
 
         Assert.Equal("5", ((InstanceField)instance.Members[0]).Value);
     }
@@ -945,10 +1012,10 @@ public class SchemaInstantiatorTests
         var choice = Assert.IsType<InstanceChoice>(root.Members[0]);
 
         Assert.Throws<InvalidOperationException>(
-            () => instantiator.Deserialize(instantiator.FindRootName(env)!.Value, root, [0x07], TestHelpers.CreateProcessors(), []));
+            () => instantiator.Deserialize(instantiator.FindRootName(env)!.Value, root, [0x07], []));
 
         choice.SelectedOption = choice.Options.Single(option => option.Name == "Ser.BodyB");
-        instantiator.Deserialize(instantiator.FindRootName(env)!.Value, root, [0x07], TestHelpers.CreateProcessors(), []);
+        instantiator.Deserialize(instantiator.FindRootName(env)!.Value, root, [0x07], []);
 
         Assert.Equal("7", ((InstanceField)((InstanceGroup)choice.Selected!).Members[0]).Value);
     }
@@ -976,12 +1043,12 @@ public class SchemaInstantiatorTests
         var mode = Assert.IsType<InstanceChoice>(root.Members[2]);
         var rootName = instantiator.FindRootName(msg)!.Value;
 
-        instantiator.Deserialize(rootName, root, [0x02, 0x0A, 0x0B, 0x0C], TestHelpers.CreateProcessors(), []);
+        instantiator.Deserialize(rootName, root, [0x02, 0x0A, 0x0B, 0x0C], []);
         Assert.Equal(["10", "11"], data.Items.Select(item => ((InstanceField)item.Members[0]).Value));
         Assert.Equal("Two", mode.SelectedOption!.Name);
         Assert.Equal("12", ((InstanceField)((InstanceGroup)mode.Selected!).Members[0]).Value);
 
-        instantiator.Deserialize(rootName, root, [0x01, 0x0D, 0x0E], TestHelpers.CreateProcessors(), []);
+        instantiator.Deserialize(rootName, root, [0x01, 0x0D, 0x0E], []);
         Assert.Equal(["13"], data.Items.Select(item => ((InstanceField)item.Members[0]).Value));
         Assert.Equal("One", mode.SelectedOption!.Name);
     }
@@ -995,7 +1062,7 @@ public class SchemaInstantiatorTests
 
         // the End field expects F7
         Assert.Throws<InvalidOperationException>(
-            () => instantiator.Deserialize(instantiator.FindRootName(msg)!.Value, root, [0xF0, 0x01, 0x02, 0x03, 0x00], TestHelpers.CreateProcessors(), []));
+            () => instantiator.Deserialize(instantiator.FindRootName(msg)!.Value, root, [0xF0, 0x01, 0x02, 0x03, 0x00], []));
 
         Assert.Equal("1", Field(root, "Head", "A").Value);
     }
@@ -1008,7 +1075,7 @@ public class SchemaInstantiatorTests
         var root = instantiator.Create(msg);
         var rootName = instantiator.FindRootName(msg)!.Value;
         (string, byte[])? file = ("dump.syx", [0xF0, 0x01, 0x02, 0x03, 0xF7, 0xF0, 0x01, 0xF7]);
-        var match = new SysExMatchViewModel((bytes, warnings) => instantiator.Deserialize(rootName, root, bytes, TestHelpers.CreateProcessors(), warnings),
+        var match = new SysExMatchViewModel((bytes, warnings) => instantiator.Deserialize(rootName, root, bytes, warnings),
             () => Task.FromResult(file), new Jacobi.Midi.SchemaEditor.Midi.MidiBarViewModel(null));
 
         match.LoadFileCommand.Execute(null);
@@ -1072,12 +1139,12 @@ public class SchemaInstantiatorTests
     private static (SchemaInstantiator Instantiator, EditDocument Document) CreateInstantiator(string json)
     {
         var document = EditNodeMapper.ToEditDocument(JsonSerializer.Deserialize(json));
-        return (SchemaInstantiator.Create(document, [document]), document);
+        return (SchemaInstantiator.Create(document, [document], TestHelpers.CreateProcessors()), document);
     }
 
     private static InstanceGroup CreateRoot(string json, string root)
     {
         var document = EditNodeMapper.ToEditDocument(JsonSerializer.Deserialize(json));
-        return SchemaInstantiator.Create(document, [document]).CreateRoot(root);
+        return SchemaInstantiator.Create(document, [document], TestHelpers.CreateProcessors()).CreateRoot(root);
     }
 }

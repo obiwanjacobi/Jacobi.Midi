@@ -191,8 +191,7 @@ internal sealed partial class MainViewModel : ViewModelBase
         // the target schema must be an open document: an embedded schema cannot be changed
         FindDocument = name => LoadedSchemas.Find(name) is { IsEmbedded: false } entry ? entry.Document : null,
         CreateDocument = CreateWorkbenchDocument,
-        Compile = (copy, copyOf) => new SchemaInstantiator(LoadedSchemas.Compile(copy, copyOf)),
-        Processors = OpenedAssemblies.Processors
+        Compile = (copy, copyOf) => new SchemaInstantiator(LoadedSchemas.Compile(copy, copyOf), OpenedAssemblies.Processors)
     });
 
     // the target schema of the workbench: an empty XML document (like the device schemas)
@@ -990,16 +989,16 @@ internal sealed partial class MainViewModel : ViewModelBase
             var instance = instantiator.Create(root);
             var rootName = instantiator.FindRootName(root);
             Func<ICollection<string>, IReadOnlyList<SerializedMessage>>? serialize = rootName is { } writeRoot
-                ? warnings => instantiator.Serialize(writeRoot, instance, OpenedAssemblies.Processors, warnings)
+                ? warnings => instantiator.Serialize(writeRoot, instance, warnings)
                 : null;
             Func<string?>? describeTransfer = rootName is { } transferRoot
-                ? () => instantiator.DescribeTransfer(transferRoot, instance, OpenedAssemblies.Processors)
+                ? () => instantiator.DescribeTransfer(transferRoot, instance)
                 : null;
             SysExMatchViewModel? match = null;
             if (isMatch)
             {
                 Func<byte[], ICollection<string>, long>? deserialize = rootName is { } readRoot
-                    ? (bytes, warnings) => instantiator.Deserialize(readRoot, instance, bytes, OpenedAssemblies.Processors, warnings)
+                    ? (bytes, warnings) => instantiator.Deserialize(readRoot, instance, bytes, warnings)
                     : null;
                 match = new SysExMatchViewModel(deserialize, OpenSysExFile, MidiBar);
             }

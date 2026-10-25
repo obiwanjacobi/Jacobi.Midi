@@ -26,19 +26,23 @@ internal sealed class SchemaInstantiator
     private readonly SchemaSet _schemas;
     private readonly IReadOnlyList<EditDocument> _edits;
     private readonly List<string> _warnings;
-    private readonly IProcessorProvider? _processors;
+    private readonly Serializer _serializer;
     private AddressMapAdapter? _adapter;
 
     /// <param name="compilation">The compiled document with the schemas it was compiled with.</param>
     /// <param name="processors">
-    /// The processors the schemas use (those of the opened assemblies); needed to detect the address maps when a body is
-    /// selected. Without them a body is always a plain group.
+    /// The processors the schemas use (those of the opened assemblies): the instances are created, checked, written and read
+    /// with the plans of the serializer, as the device does.
     /// </param>
-    public SchemaInstantiator(SchemaSetCompilation compilation, IProcessorProvider? processors = null)
+    public SchemaInstantiator(SchemaSetCompilation compilation, IProcessorProvider processors)
     {
         ArgumentNullException.ThrowIfNull(compilation);
-        _processors = processors;
+        ArgumentNullException.ThrowIfNull(processors);
         _schemas = compilation.Schemas;
+        _serializer = new SerializerBuilder()
+            .AddSchemas(_schemas)
+            .AddProcessors(processors)
+            .Build();
         _edits = compilation.Documents;
         _warnings = [.. compilation.Warnings];
         DocumentName = compilation.Document.Name;
@@ -61,7 +65,7 @@ internal sealed class SchemaInstantiator
     /// (see <see cref="SchemaSetWorkspace.Compile(EditDocument, IEnumerable{EditDocument})"/>).
     /// </summary>
     /// <exception cref="InvalidOperationException">An include of the document is not loaded or the document does not compile.</exception>
-    public static SchemaInstantiator Create(EditDocument document, IEnumerable<EditDocument> workspace, IProcessorProvider? processors = null)
+    public static SchemaInstantiator Create(EditDocument document, IEnumerable<EditDocument> workspace, IProcessorProvider processors)
         => new(SchemaSetWorkspace.Compile(document, workspace), processors);
 
     /// <summary>
@@ -72,7 +76,7 @@ internal sealed class SchemaInstantiator
     public InstanceGroup CreateRoot(string rootName)
     {
         var root = _schemas.FindRoot(new SchemaName($"{DocumentName}{SchemaName.Separator}{rootName}"));
-        return Expanded(BuildGroup(new InstanceGroup(root, new SchemaPath(root.Name)), root, DocumentName));
+        return Expanded(BuildGroup(new InstanceGroup(root, new SchemaPath(root.Name)), root, DocumentName, CreatePlan(root)));
     }
 
     /// <summary>
@@ -83,11 +87,11 @@ internal sealed class SchemaInstantiator
     public InstanceNode Create(EditGroup group)
     {
         ArgumentNullException.ThrowIfNull(group);
-        var (current, names, documentName) = FindCompiled(group);
+        var (current, top, names, documentName) = FindCompiled(group);
         var path = String.Join(SchemaPath.Separator, names);
         return current is null
             ? throw new InvalidOperationException($"The compiled schema has no node '{path}'.")
-            : Expanded(Build(current, documentName, new SchemaPath(path)));
+            : Expanded(Build(current, documentName, new SchemaPath(path), top is SchemaGroup outermost ? CreatePlan(outermost) : null));
     }
 
     private static T Expanded<T>(T instance)
@@ -124,35 +128,31 @@ internal sealed class SchemaInstantiator
     /// When the body of an open choice is an address map, the included groups of the map are written as the data messages
     /// that carry them (one or more), with the address and size of each message calculated from the map.
     /// </summary>
-    /// <param name="processors">The processors the schemas use (those of the opened assemblies).</param>
     /// <param name="warnings">Receives the situations the user may not expect, e.g. a group that is sent as part of an atomic group.</param>
     /// <returns>The serialized messages: one, or one per block of an address map.</returns>
     /// <exception cref="InvalidOperationException">The plan cannot be built or a value cannot be written; the message describes the problem.</exception>
-    public IReadOnlyList<SerializedMessage> Serialize(SchemaName root, InstanceNode instance, IProcessorProvider processors, ICollection<string> warnings)
+    public IReadOnlyList<SerializedMessage> Serialize(SchemaName root, InstanceNode instance, ICollection<string> warnings)
     {
         ArgumentNullException.ThrowIfNull(instance);
-        ArgumentNullException.ThrowIfNull(processors);
         ArgumentNullException.ThrowIfNull(warnings);
-        var serializer = CreateSerializer(processors);
-        var plan = serializer.GetPlan(root);
+        var plan = _serializer.GetPlan(root);
         var isRoot = String.Equals(plan.Root.Path.Value, instance.Path.Value, StringComparison.OrdinalIgnoreCase);
         // the engine enters the root with the source itself; the items of a root repeat are found by its path
         var source = new InstanceValueSource(isRoot && instance is not InstanceRepeat ? instance : null, instance);
         if (FindAddressMap(instance) is { } map)
         {
-            var messages = new AddressMapAdapter(serializer)
-                .WriteData(root, map.Choice.Path, map.Body.Root, Selection(map.Body), source, warnings);
+            var messages = Adapter.WriteData(root, map.Choice.Path, map.Body.Root, Selection(map.Body), source, warnings);
             return [.. messages.Select(message => new SerializedMessage(message.SysEx, message.Message.Interval))];
         }
 
         var output = new ArrayBufferWriter<byte>();
         if (isRoot)
         {
-            serializer.Serialize(plan, source, output);
+            _serializer.Serialize(plan, source, output);
         }
         else
         {
-            serializer.Serialize(plan.CreateRange(instance.Path), source, output);
+            _serializer.Serialize(plan.CreateRange(instance.Path), source, output);
         }
         return [new SerializedMessage(output.WrittenSpan.ToArray(), TimeSpan.Zero)];
     }
@@ -161,11 +161,9 @@ internal sealed class SchemaInstantiator
     /// Describes how the included groups of an address map body are sent: the data messages with their address and size,
     /// or why they cannot be sent. Null when the instance has no address map body.
     /// </summary>
-    /// <param name="processors">The processors the schemas use (those of the opened assemblies).</param>
-    public string? DescribeTransfer(SchemaName root, InstanceNode instance, IProcessorProvider processors)
+    public string? DescribeTransfer(SchemaName root, InstanceNode instance)
     {
         ArgumentNullException.ThrowIfNull(instance);
-        ArgumentNullException.ThrowIfNull(processors);
         if (FindAddressMap(instance) is not { } map)
         {
             return null;
@@ -179,7 +177,7 @@ internal sealed class SchemaInstantiator
         try
         {
             var warnings = new List<string>();
-            var plan = new AddressMapAdapter(CreateSerializer(processors)).PlanData(root, map.Choice.Path, map.Body.Root, selection, warnings);
+            var plan = Adapter.PlanData(root, map.Choice.Path, map.Body.Root, selection, warnings);
             const int shown = 8;
             var blocks = plan.Blocks.Take(shown).Select(block => $"{plan.AddressSpace.Format(block.Addresses.Start)} ({block.Addresses.Size} bytes)");
             var text = $"Sends {plan.Blocks.Count} {plan.Message.Name} message(s) at {String.Join(", ", blocks)}{(plan.Blocks.Count > shown ? ", …" : String.Empty)}.";
@@ -201,20 +199,16 @@ internal sealed class SchemaInstantiator
     /// the map and reads a data message into the group of the map it carries; otherwise the serializer reads as is.
     /// In an address map body, the part that was read is included (and the rest left out), so it can be sent back.
     /// </summary>
-    /// <param name="processors">The processors the schemas use (those of the opened assemblies).</param>
     /// <param name="warnings">Receives the situations the user may not expect (e.g. a message that is read only partly into a map), also when the read fails.</param>
     /// <returns>The number of bytes that were read (the bytes after them are not part of the instance).</returns>
     /// <exception cref="ExecutionPlanException">The plan cannot be built.</exception>
     /// <exception cref="InvalidOperationException">The bytes do not match the schema; the message describes the problem.</exception>
-    public long Deserialize(SchemaName root, InstanceNode instance, byte[] bytes, IProcessorProvider processors, ICollection<string> warnings)
+    public long Deserialize(SchemaName root, InstanceNode instance, byte[] bytes, ICollection<string> warnings)
     {
         ArgumentNullException.ThrowIfNull(instance);
         ArgumentNullException.ThrowIfNull(bytes);
-        ArgumentNullException.ThrowIfNull(processors);
         ArgumentNullException.ThrowIfNull(warnings);
-        var serializer = CreateSerializer(processors);
-        var reader = new AddressMapAdapter(serializer);
-        var plan = serializer.GetPlan(root);
+        var plan = _serializer.GetPlan(root);
         var input = new ReadOnlySequence<byte>(bytes);
         var isRoot = String.Equals(plan.Root.Path.Value, instance.Path.Value, StringComparison.OrdinalIgnoreCase);
         // the engine enters the root with the sink itself; the items of a root repeat are found by its path
@@ -224,8 +218,8 @@ internal sealed class SchemaInstantiator
         try
         {
             var read = isRoot
-                ? reader.Deserialize(plan, input, sink, warnings)
-                : reader.Deserialize(plan.CreateRange(instance.Path), input, sink, warnings);
+                ? Adapter.Deserialize(plan, input, sink, warnings)
+                : Adapter.Deserialize(plan.CreateRange(instance.Path), input, sink, warnings);
             completed = true;
             return read;
         }
@@ -267,11 +261,8 @@ internal sealed class SchemaInstantiator
     private static bool HasAddressedRepeat(InstanceNode node)
         => node is InstanceRepeat { IsAddressed: true } || node.Children().Any(HasAddressedRepeat);
 
-    private Serializer CreateSerializer(IProcessorProvider processors)
-        => new SerializerBuilder()
-            .AddSchemas(_schemas)
-            .AddProcessors(processors)
-            .Build();
+    // created when it is used: it collects the address maps of the schemas
+    private AddressMapAdapter Adapter => _adapter ??= new AddressMapAdapter(_serializer);
 
     /// <summary>The open choice (of the instance) whose selected body is an address map; null when there is none.</summary>
     private static (InstanceChoice Choice, InstanceBody Body)? FindAddressMap(InstanceNode node)
@@ -304,7 +295,8 @@ internal sealed class SchemaInstantiator
     /// <summary>
     /// Finds the compiled node of an edited group (in any of the documents) by its names from the root or node def down.
     /// </summary>
-    private (SchemaNode? Node, List<string> Names, string Document) FindCompiled(EditGroup group)
+    /// <returns>The compiled node, the outermost compiled node above it (a root or node def), its names and the name of its document.</returns>
+    private (SchemaNode? Node, SchemaNode? Top, List<string> Names, string Document) FindCompiled(EditGroup group)
     {
         var names = new List<string>();
         EditNode topNode = group;
@@ -317,12 +309,13 @@ internal sealed class SchemaInstantiator
         var document = _schemas.Documents.First(candidate => String.Equals(candidate.Name, owner.Name, StringComparison.OrdinalIgnoreCase));
         // the outermost node is a root of the document or a node def (which has no parent)
         var top = owner.Members.Contains(topNode) ? (IReadOnlyList<SchemaNode>)document.Roots : document.NodeDefs;
-        SchemaNode? current = top.FirstOrDefault(candidate => String.Equals(candidate.Name, names[0], StringComparison.OrdinalIgnoreCase));
+        var outermost = top.FirstOrDefault(candidate => String.Equals(candidate.Name, names[0], StringComparison.OrdinalIgnoreCase));
+        var current = outermost;
         foreach (var name in names.Skip(1))
         {
             current = (current as SchemaGroup)?.Members.FirstOrDefault(member => String.Equals(member.Name, name, StringComparison.OrdinalIgnoreCase));
         }
-        return (current, names, owner.Name);
+        return (current, outermost, names, owner.Name);
     }
 
     /// <summary>
@@ -351,43 +344,46 @@ internal sealed class SchemaInstantiator
         }
     }
 
+    /// <param name="plan">The plan of the outermost node (see <see cref="CreatePlan"/>): its fields check the values of the instance fields.</param>
     /// <param name="mapItems">In the body of an address map: the item count of a repeat (by its path) in the address space; the repeat gets one item.</param>
-    private InstanceNode Build(SchemaNode node, string ns, SchemaPath path, Func<SchemaPath, int?>? mapItems = null)
+    private InstanceNode Build(SchemaNode node, string ns, SchemaPath path, ExecutionPlan? plan, Func<SchemaPath, int?>? mapItems = null)
     {
         switch (node)
         {
             case SchemaField field:
-                var dataType = field.DataType?.ToString() ?? String.Empty;
-                return new InstanceField(field, path, field.Value is string constant ? constant : null,
-                    value => DataTypeValueValidator.Validate(_edits, ns, dataType, value));
+                var constant = field.Value is string text ? text : null;
+                return plan?.Find(path) is FieldInfo compiled
+                    ? new InstanceField(field, path, constant, value => InstanceValueSource.ToLogical(compiled, value, out _),
+                        InstanceValueSource.OptionsOf(compiled))
+                    : new InstanceField(field, path, constant);
             case SchemaRepeat repeat:
-                return BuildRepeat(repeat, ns, path, mapItems);
+                return BuildRepeat(repeat, ns, path, plan, mapItems);
             case SchemaChoice choice:
-                return BuildChoice(choice, ns, path);
+                return BuildChoice(choice, ns, path, plan);
             case SchemaGroup group:
-                return BuildGroup(new InstanceGroup(group, path), group, ns, mapItems);
+                return BuildGroup(new InstanceGroup(group, path), group, ns, plan, mapItems);
             default:
                 throw new NotSupportedException($"Unsupported schema node type: {node.GetType().Name}.");
         }
     }
 
-    private T BuildGroup<T>(T instance, SchemaGroup group, string ns, Func<SchemaPath, int?>? mapItems = null)
+    private T BuildGroup<T>(T instance, SchemaGroup group, string ns, ExecutionPlan? plan, Func<SchemaPath, int?>? mapItems = null)
         where T : InstanceGroup
     {
         foreach (var member in group.Members)
         {
-            instance.AddMember(Build(member, ns, instance.Path.Append(member.Name), mapItems));
+            instance.AddMember(Build(member, ns, instance.Path.Append(member.Name), plan, mapItems));
         }
         return instance;
     }
 
-    private InstanceRepeat BuildRepeat(SchemaRepeat schema, string ns, SchemaPath path, Func<SchemaPath, int?>? mapItems)
+    private InstanceRepeat BuildRepeat(SchemaRepeat schema, string ns, SchemaPath path, ExecutionPlan? plan, Func<SchemaPath, int?>? mapItems)
     {
         int? constantCount = schema.Count is int count ? count : null;
         // a repeat of an address map has no count in the schema: it shows one item of the address space
         var addressItemCount = constantCount is null ? mapItems?.Invoke(path) : null;
         var repeat = new InstanceRepeat(schema, path, constantCount,
-            (owner, index) => BuildGroup(new InstanceRepeatItem(schema, path, owner, index), schema, ns, mapItems), addressItemCount);
+            (owner, index) => BuildGroup(new InstanceRepeatItem(schema, path, owner, index), schema, ns, plan, mapItems), addressItemCount);
         // an open repeat starts with one copy, so the user sees which fields it holds
         for (var index = 0; index < (constantCount ?? 1); index++)
         {
@@ -396,13 +392,13 @@ internal sealed class SchemaInstantiator
         return repeat;
     }
 
-    private InstanceChoice BuildChoice(SchemaChoice schema, string ns, SchemaPath path)
+    private InstanceChoice BuildChoice(SchemaChoice schema, string ns, SchemaPath path, ExecutionPlan? plan)
     {
         int? constantIndex = schema.SelectedIndex is int index ? index : null;
         if (schema.MemberNodeDef is not { } contract)
         {
             var alternatives = schema.Members
-                .Select(member => new ChoiceOption(member.Name, _ => Build(member, ns, path.Append(member.Name))))
+                .Select(member => new ChoiceOption(member.Name, _ => Build(member, ns, path.Append(member.Name), plan)))
                 .ToList();
             return new InstanceChoice(schema, path, alternatives, constantIndex);
         }
@@ -422,11 +418,7 @@ internal sealed class SchemaInstantiator
         }
         if (bodies.Count == 0)
         {
-            var warning = $"The open choice '{path}' has no bodies: none of the compiled schemas has a group with the nodeDef '{qualified}'.";
-            if (!_warnings.Contains(warning))
-            {
-                _warnings.Add(warning);
-            }
+            AddWarning($"The open choice '{path}' has no bodies: none of the compiled schemas has a group with the nodeDef '{qualified}'.");
         }
         bodies.Sort((left, right) => String.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase));
         // the selected index is not used by an open choice
@@ -442,7 +434,7 @@ internal sealed class SchemaInstantiator
     {
         var (isMap, note) = DetectAddressMap(root);
         var body = new InstanceBody(compiled, new SchemaPath(compiled.Name)) { Root = root, IsAddressMap = isMap, Note = note };
-        BuildGroup(body, compiled, ns, isMap ? path => _adapter!.ItemCount(root, path) : null);
+        BuildGroup(body, compiled, ns, CreatePlan(compiled), isMap ? path => Adapter.ItemCount(root, path) : null);
         if (isMap)
         {
             AllowInclusion(body);
@@ -453,24 +445,44 @@ internal sealed class SchemaInstantiator
     // whether the root is an address map, and why it cannot be used as one (it is then a plain group)
     private (bool IsMap, string? Note) DetectAddressMap(SchemaName root)
     {
-        if (_processors is null)
-        {
-            return (false, null);
-        }
         try
         {
-            _adapter ??= new AddressMapAdapter(CreateSerializer(_processors));
-            if (!_adapter.IsMap(root))
+            if (!Adapter.IsMap(root))
             {
                 return (false, null);
             }
             // builds and validates the map
-            _adapter.ItemCount(root, new SchemaPath(root.Name));
+            Adapter.ItemCount(root, new SchemaPath(root.Name));
             return (true, null);
         }
         catch (Exception exception) when (exception is AddressMapException or ExecutionPlanException or InvalidOperationException or ArgumentException)
         {
             return (false, $"'{root}' is an address map, but it cannot be used as one (it is a plain group here): {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// The plan of an outermost node (a root, node def or body of an open choice): its fields check the values the user types
+    /// (see <see cref="InstanceValueSource.ToLogical"/>). Null when the plan cannot be built (a warning says why).
+    /// </summary>
+    private ExecutionPlan? CreatePlan(SchemaGroup top)
+    {
+        try
+        {
+            return _serializer.GetPlan(top);
+        }
+        catch (Exception exception) when (exception is ExecutionPlanException or InvalidOperationException or ArgumentException)
+        {
+            AddWarning($"The values of '{top.Name}' are not checked: its plan cannot be built: {exception.Message}");
+            return null;
+        }
+    }
+
+    private void AddWarning(string warning)
+    {
+        if (!_warnings.Contains(warning))
+        {
+            _warnings.Add(warning);
         }
     }
 
