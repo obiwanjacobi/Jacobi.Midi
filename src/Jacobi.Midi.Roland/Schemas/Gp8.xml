@@ -163,17 +163,11 @@
   </nodeDefs>
 
   <dataTypeDefs>
-    <dataTypeDef name="upDown" basedOn="sys.uint8" min="0" max="100">
-    <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string"/>
-            <property name="default" value="Down"/>
-            <property name="0" value="Down"/>
-            <property name="100" value="Up"/>
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="upDown" basedOn="sys.uint8" optionsDefault="Down">
+      <options>
+        <option value="0" name="Down"/>
+        <option value="100" name="Up"/>
+      </options>
     </dataTypeDef>
     <dataTypeDef name="int50" basedOn="sys.int8" min="-50" max="50" shift="-50" />
     <dataTypeDef name="delayTime" basedOn="sys.uint16" min="0" max="1000">
@@ -181,54 +175,44 @@
         <processor name="sys.bitslicer" bits="7" byteorder="big"/>
       </processors>
     </dataTypeDef>
-    <dataTypeDef name="switch100" basedOn="sys.uint8" min="0" max="100">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.bool"/>
-            <property name="default" value="False"/>
-            <property name="0" value="False"/>
-            <property name="100" value="True"/>
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="switch100" basedOn="sys.uint8" valueType="sys.bool" optionsDefault="False">
+      <options>
+        <option value="0" name="False"/>
+        <option value="100" name="True"/>
+      </options>
     </dataTypeDef>
-    <dataTypeDef name="effectParam" basedOn="sys.uint8" min="0" max="27">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="0" value="Off"/>
-            <!-- [TODO] Name the paramters -->
-            <property name="1" value="Param1"/>
-            <property name="2" value="Param2"/>
-            <property name="3" value="Param3"/>
-            <property name="4" value="Param4"/>
-            <property name="5" value="Param5"/>
-            <property name="6" value="Param6"/>
-            <property name="7" value="Param7"/>
-            <property name="8" value="Param8"/>
-            <property name="9" value="Param9"/>
-            <property name="10" value="Param10"/>
-            <property name="11" value="Param11"/>
-            <property name="12" value="Param12"/>
-            <property name="13" value="Param13"/>
-            <property name="14" value="Param14"/>
-            <property name="15" value="Param15"/>
-            <property name="16" value="Param16"/>
-            <property name="17" value="Param17"/>
-            <property name="18" value="Param18"/>
-            <property name="19" value="Param19"/>
-            <property name="20" value="Param20"/>
-            <property name="21" value="Param21"/>
-            <property name="22" value="Param22"/>
-            <property name="23" value="Param23"/>
-            <property name="24" value="Param24"/>
-            <property name="25" value="Param25"/>
-            <property name="26" value="Param26"/>
-            <property name="27" value="Param27"/>
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="effectParam" basedOn="sys.uint8">
+      <options>
+        <option value="0" name="Off"/>
+        <!-- [TODO] Name the paramters -->
+        <option value="1" name="Param1"/>
+        <option value="2" name="Param2"/>
+        <option value="3" name="Param3"/>
+        <option value="4" name="Param4"/>
+        <option value="5" name="Param5"/>
+        <option value="6" name="Param6"/>
+        <option value="7" name="Param7"/>
+        <option value="8" name="Param8"/>
+        <option value="9" name="Param9"/>
+        <option value="10" name="Param10"/>
+        <option value="11" name="Param11"/>
+        <option value="12" name="Param12"/>
+        <option value="13" name="Param13"/>
+        <option value="14" name="Param14"/>
+        <option value="15" name="Param15"/>
+        <option value="16" name="Param16"/>
+        <option value="17" name="Param17"/>
+        <option value="18" name="Param18"/>
+        <option value="19" name="Param19"/>
+        <option value="20" name="Param20"/>
+        <option value="21" name="Param21"/>
+        <option value="22" name="Param22"/>
+        <option value="23" name="Param23"/>
+        <option value="24" name="Param24"/>
+        <option value="25" name="Param25"/>
+        <option value="26" name="Param26"/>
+        <option value="27" name="Param27"/>
+      </options>
     </dataTypeDef>
   </dataTypeDefs>
 

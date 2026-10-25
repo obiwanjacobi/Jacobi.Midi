@@ -46,16 +46,16 @@ public class EditNodeTests
         payload.Name = "Changed";
         payload.Processors.Single().Properties.Single().Value = "changed";
         root.Properties.Single().Value = "changed";
-        edit.DataTypeDefs.Single().Options![1] = "Changed";
+        edit.DataTypeDefs.Single().Options!["1"] = "Changed";
         edit.Includes.Single().Path = "changed.json";
         root.Members.RemoveAt(0);
 
         Assert.Equal(JsonSerializer.Serialize(original), JsonSerializer.Serialize(before));
         var after = EditNodeMapper.ToSchemaDocument(edit);
         Assert.Equal("Changed", after.Fields.First().Name);
-        Assert.Equal("Changed", after.DataTypeDefs.Single().Options![1]);
+        Assert.Equal("Changed", after.DataTypeDefs.Single().Options!["1"]);
         Assert.Equal("changed.json", after.Includes.Single().Path);
-        Assert.Equal("One", original.DataTypeDefs.Single().Options![1]);
+        Assert.Equal("One", original.DataTypeDefs.Single().Options!["1"]);
         Assert.NotSame(before.Members.Single(), after.Members.Single());
         Assert.NotSame(before.NodeDefs.Single(), after.NodeDefs.Single());
         Assert.NotSame(before.Includes.Single(), after.Includes.Single());

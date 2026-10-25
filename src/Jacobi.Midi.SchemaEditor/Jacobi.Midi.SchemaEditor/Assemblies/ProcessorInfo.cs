@@ -81,7 +81,7 @@ internal sealed record ProcessorPropertyInfo(string Name, string DataType, strin
         {
             if (dataType.Options is { Count: > 0 } options)
             {
-                values = "Options: " + String.Join(", ", options.OrderBy(option => option.Key).Select(option => $"{option.Value} ({option.Key})"));
+                values = "Options: " + String.Join(", ", options.OrderBy(option => option.Key).Select(option => $"{Format(option.Value)} ({Format(option.Key)})"));
             }
             else if (dataType.ClrType.IsEnum)
             {
@@ -96,5 +96,5 @@ internal sealed record ProcessorPropertyInfo(string Name, string DataType, strin
         return new(descriptor.Name, descriptor.DataType.FullName, String.Join(", ", flags), descriptor.Description, values);
     }
 
-    private static string Format(decimal? value) => value?.ToString(CultureInfo.InvariantCulture) ?? "…";
+    private static string Format(object? value) => value is null ? "…" : Convert.ToString(value, CultureInfo.InvariantCulture) ?? String.Empty;
 }

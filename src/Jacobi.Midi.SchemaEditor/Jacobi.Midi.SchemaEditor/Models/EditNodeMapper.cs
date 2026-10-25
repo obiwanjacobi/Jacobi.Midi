@@ -107,7 +107,9 @@ internal static class EditNodeMapper
                 Max = definition.Max,
                 Scale = definition.Scale,
                 Shift = definition.Shift,
-                Options = definition.Options?.ToDictionary(pair => pair.Key, pair => pair.Value)
+                Options = definition.Options?.ToDictionary(pair => pair.Key, pair => pair.Value),
+                ValueType = definition.ValueType,
+                OptionsDefault = definition.OptionsDefault
             };
             CopyProperties(definition.Properties, target.Properties);
             CopyProcessors(definition.Processors, target.Processors);
@@ -147,10 +149,7 @@ internal static class EditNodeMapper
         builder.NodeDefs(nodes => WriteNodes(edit.NodeDefs, nodes));
         foreach (var definition in edit.DataTypeDefs)
         {
-            builder.DataTypeDef(definition.Name, definition.BasedOn.ToString(),
-                definition.Min, definition.Max, definition.Scale, definition.Shift,
-                definition.Options?.ToDictionary(pair => pair.Key, pair => pair.Value),
-                processors => WriteProcessors(definition.Processors, processors), WriteProperties(definition.Properties));
+            WriteDataTypeDef(definition, builder);
         }
         foreach (var definition in edit.ProcessorDefs)
         {
@@ -163,6 +162,14 @@ internal static class EditNodeMapper
         }
         return builder.Build();
     }
+
+    /// <summary>Adds the data type def to the document that <paramref name="builder"/> builds.</summary>
+    internal static void WriteDataTypeDef(EditDataTypeDef definition, SchemaDocumentBuilder builder)
+        => builder.DataTypeDef(definition.Name, definition.BasedOn.ToString(),
+            definition.Min, definition.Max, definition.Scale, definition.Shift,
+            definition.Options?.ToDictionary(pair => pair.Key, pair => pair.Value),
+            processors => WriteProcessors(definition.Processors, processors), WriteProperties(definition.Properties),
+            definition.ValueType?.ToString(), definition.OptionsDefault);
 
     private static void ReadGroup(SchemaGroup source, EditGroup target)
     {

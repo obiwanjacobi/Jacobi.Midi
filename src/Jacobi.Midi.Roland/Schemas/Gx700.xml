@@ -21,7 +21,7 @@
   and (=) the displayed value. Two kinds of 2 byte values are used:
     nibble8  4 + 4 bits (MSB first): 0F 0F = 0xFF. Tempo, Resonance, Separation; the Program Change map.
     sysex14  7 + 7 bits (MSB first): Delay Time.
-  Enumerations are dataTypeDefs with a sys.map to the names used by the parser. Lists that recur:
+  Enumerations are dataTypeDefs with options that map the stored values to the names used by the parser. Lists that recur:
     hiCut     0-15: 500 Hz, 630, 800, 1.00 kHz, 1.25k, 1.60k, 2.00k, 2.50k, 3.15k, 4.00k, 5.00k, 6.30k, 8.00k, 10.0k, 12.5k, Flat
     lowCut    0-10: Flat, 55 Hz, 110, 165, 220, 280, 340, 400, 500, 630, 800
     midiCc    MIDI CC#1-31, then CC#64-95 (63 entries), at the end of wahPedal, pedal and tempoIn
@@ -469,25 +469,15 @@
 
   <dataTypeDefs>
     <!-- -20 - +20 -->
-    <dataTypeDef name="int20" basedOn="sys.uint8" min="-20" max="20" shift="-20">
-      <processors><processor name="sys.scale"/></processors>
-    </dataTypeDef>
+    <dataTypeDef name="int20" basedOn="sys.uint8" min="-20" max="20" shift="-20" />
     <!-- -24 - +24 -->
-    <dataTypeDef name="int24" basedOn="sys.uint8" min="-24" max="24" shift="-24">
-      <processors><processor name="sys.scale"/></processors>
-    </dataTypeDef>
+    <dataTypeDef name="int24" basedOn="sys.uint8" min="-24" max="24" shift="-24" />
     <!-- -50 - +50 -->
-    <dataTypeDef name="int50" basedOn="sys.uint8" min="-50" max="50" shift="-50">
-      <processors><processor name="sys.scale"/></processors>
-    </dataTypeDef>
+    <dataTypeDef name="int50" basedOn="sys.uint8" min="-50" max="50" shift="-50" />
     <!-- -100 - +100 -->
-    <dataTypeDef name="int100" basedOn="sys.uint8" min="-100" max="100" shift="-100">
-      <processors><processor name="sys.scale" /></processors>
-    </dataTypeDef>
+    <dataTypeDef name="int100" basedOn="sys.uint8" min="-100" max="100" shift="-100" />
     <!-- +50 - +300 -->
-    <dataTypeDef name="uint50_300" basedOn="sys.uint16" min="50" max="300" shift="50">
-      <processors><processor name="sys.scale"/></processors>
-    </dataTypeDef>
+    <dataTypeDef name="uint50_300" basedOn="sys.uint16" min="50" max="300" shift="50" />
     <!-- +1 - +400 -->
     <dataTypeDef name="uint1_400" basedOn="sys.uint16" min="1" max="400"/>
     <!-- 0 - +2000 -->
@@ -495,775 +485,589 @@
     <!-- 0 - +10 -->
     <dataTypeDef name="uint10" basedOn="sys.uint8" min="0" max="10"/>
     <!-- -50 - 0 -->
-    <dataTypeDef name="shiftDown50" basedOn="sys.uint8" min="-50" max="0" shift="-50">
-      <processors><processor name="sys.scale"/></processors>
-    </dataTypeDef>
+    <dataTypeDef name="shiftDown50" basedOn="sys.uint8" min="-50" max="0" shift="-50" />
 
     <!-- 0 - 50 : 0.5 -->
-    <dataTypeDef name="halves0_50" basedOn="sys.uint8" min="0" max="50" scale="0.5">
-      <processors><processor name="sys.scale"/></processors>
-    </dataTypeDef>
+    <dataTypeDef name="halves0_50" basedOn="sys.uint8" min="0" max="50" scale="0.5" />
     <!-- 0.1 - 10 : 0.1 -->
-    <dataTypeDef name="tenths01_100" basedOn="sys.uint8" min="0.1" max="10" scale="0.1">
-      <processors><processor name="sys.scale"/></processors>
-    </dataTypeDef>
+    <dataTypeDef name="tenths01_100" basedOn="sys.uint8" min="0.1" max="10" scale="0.1" />
     
     <!-- Compressor.Type. -->
-    <dataTypeDef name="compressorType" basedOn="sys.uint8" min="0" max="1">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="Compressor" />
-            <property name="0" value="Compressor" />
-            <property name="1" value="Limiter" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="compressorType" basedOn="sys.uint8" optionsDefault="Compressor">
+      <options>
+        <option value="0" name="Compressor" />
+        <option value="1" name="Limiter" />
+      </options>
     </dataTypeDef>
 
     <!-- Wah.Mode. -->
-    <dataTypeDef name="wahMode" basedOn="sys.uint8" min="0" max="2">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="Pedal Wah" />
-            <property name="0" value="Pedal Wah" />
-            <property name="1" value="Sw-Pedal Wah" />
-            <property name="2" value="Auto Wah" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="wahMode" basedOn="sys.uint8" optionsDefault="Pedal Wah">
+      <options>
+        <option value="0" name="Pedal Wah" />
+        <option value="1" name="Sw-Pedal Wah" />
+        <option value="2" name="Auto Wah" />
+      </options>
     </dataTypeDef>
 
     <!-- Wah.Polarity. -->
-    <dataTypeDef name="polarity" basedOn="sys.uint8" min="0" max="1">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="Down" />
-            <property name="0" value="Down" />
-            <property name="1" value="Up" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="polarity" basedOn="sys.uint8" optionsDefault="Down">
+      <options>
+        <option value="0" name="Down" />
+        <option value="1" name="Up" />
+      </options>
     </dataTypeDef>
 
     <!-- Wah.Pedal: fixed, a pedal or a MIDI CC. -->
-    <dataTypeDef name="wahPedal" basedOn="sys.uint8" min="0" max="65">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="Fixed" />
-            <property name="0" value="Fixed" />
-            <property name="1" value="EXP Pedal" />
-            <property name="2" value="FC-200EXP" />
-            <property name="3" value="MIDI CC#1" />
-            <property name="4" value="MIDI CC#2" />
-            <property name="5" value="MIDI CC#3" />
-            <property name="6" value="MIDI CC#4" />
-            <property name="7" value="MIDI CC#5" />
-            <property name="8" value="MIDI CC#6" />
-            <property name="9" value="MIDI CC#7" />
-            <property name="10" value="MIDI CC#8" />
-            <property name="11" value="MIDI CC#9" />
-            <property name="12" value="MIDI CC#10" />
-            <property name="13" value="MIDI CC#11" />
-            <property name="14" value="MIDI CC#12" />
-            <property name="15" value="MIDI CC#13" />
-            <property name="16" value="MIDI CC#14" />
-            <property name="17" value="MIDI CC#15" />
-            <property name="18" value="MIDI CC#16" />
-            <property name="19" value="MIDI CC#17" />
-            <property name="20" value="MIDI CC#18" />
-            <property name="21" value="MIDI CC#19" />
-            <property name="22" value="MIDI CC#20" />
-            <property name="23" value="MIDI CC#21" />
-            <property name="24" value="MIDI CC#22" />
-            <property name="25" value="MIDI CC#23" />
-            <property name="26" value="MIDI CC#24" />
-            <property name="27" value="MIDI CC#25" />
-            <property name="28" value="MIDI CC#26" />
-            <property name="29" value="MIDI CC#27" />
-            <property name="30" value="MIDI CC#28" />
-            <property name="31" value="MIDI CC#29" />
-            <property name="32" value="MIDI CC#30" />
-            <property name="33" value="MIDI CC#31" />
-            <property name="34" value="MIDI CC#64" />
-            <property name="35" value="MIDI CC#65" />
-            <property name="36" value="MIDI CC#66" />
-            <property name="37" value="MIDI CC#67" />
-            <property name="38" value="MIDI CC#68" />
-            <property name="39" value="MIDI CC#69" />
-            <property name="40" value="MIDI CC#70" />
-            <property name="41" value="MIDI CC#71" />
-            <property name="42" value="MIDI CC#72" />
-            <property name="43" value="MIDI CC#73" />
-            <property name="44" value="MIDI CC#74" />
-            <property name="45" value="MIDI CC#75" />
-            <property name="46" value="MIDI CC#76" />
-            <property name="47" value="MIDI CC#77" />
-            <property name="48" value="MIDI CC#78" />
-            <property name="49" value="MIDI CC#79" />
-            <property name="50" value="MIDI CC#80" />
-            <property name="51" value="MIDI CC#81" />
-            <property name="52" value="MIDI CC#82" />
-            <property name="53" value="MIDI CC#83" />
-            <property name="54" value="MIDI CC#84" />
-            <property name="55" value="MIDI CC#85" />
-            <property name="56" value="MIDI CC#86" />
-            <property name="57" value="MIDI CC#87" />
-            <property name="58" value="MIDI CC#88" />
-            <property name="59" value="MIDI CC#89" />
-            <property name="60" value="MIDI CC#90" />
-            <property name="61" value="MIDI CC#91" />
-            <property name="62" value="MIDI CC#92" />
-            <property name="63" value="MIDI CC#93" />
-            <property name="64" value="MIDI CC#94" />
-            <property name="65" value="MIDI CC#95" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="wahPedal" basedOn="sys.uint8" optionsDefault="Fixed">
+      <options>
+        <option value="0" name="Fixed" />
+        <option value="1" name="EXP Pedal" />
+        <option value="2" name="FC-200EXP" />
+        <option value="3" name="MIDI CC#1" />
+        <option value="4" name="MIDI CC#2" />
+        <option value="5" name="MIDI CC#3" />
+        <option value="6" name="MIDI CC#4" />
+        <option value="7" name="MIDI CC#5" />
+        <option value="8" name="MIDI CC#6" />
+        <option value="9" name="MIDI CC#7" />
+        <option value="10" name="MIDI CC#8" />
+        <option value="11" name="MIDI CC#9" />
+        <option value="12" name="MIDI CC#10" />
+        <option value="13" name="MIDI CC#11" />
+        <option value="14" name="MIDI CC#12" />
+        <option value="15" name="MIDI CC#13" />
+        <option value="16" name="MIDI CC#14" />
+        <option value="17" name="MIDI CC#15" />
+        <option value="18" name="MIDI CC#16" />
+        <option value="19" name="MIDI CC#17" />
+        <option value="20" name="MIDI CC#18" />
+        <option value="21" name="MIDI CC#19" />
+        <option value="22" name="MIDI CC#20" />
+        <option value="23" name="MIDI CC#21" />
+        <option value="24" name="MIDI CC#22" />
+        <option value="25" name="MIDI CC#23" />
+        <option value="26" name="MIDI CC#24" />
+        <option value="27" name="MIDI CC#25" />
+        <option value="28" name="MIDI CC#26" />
+        <option value="29" name="MIDI CC#27" />
+        <option value="30" name="MIDI CC#28" />
+        <option value="31" name="MIDI CC#29" />
+        <option value="32" name="MIDI CC#30" />
+        <option value="33" name="MIDI CC#31" />
+        <option value="34" name="MIDI CC#64" />
+        <option value="35" name="MIDI CC#65" />
+        <option value="36" name="MIDI CC#66" />
+        <option value="37" name="MIDI CC#67" />
+        <option value="38" name="MIDI CC#68" />
+        <option value="39" name="MIDI CC#69" />
+        <option value="40" name="MIDI CC#70" />
+        <option value="41" name="MIDI CC#71" />
+        <option value="42" name="MIDI CC#72" />
+        <option value="43" name="MIDI CC#73" />
+        <option value="44" name="MIDI CC#74" />
+        <option value="45" name="MIDI CC#75" />
+        <option value="46" name="MIDI CC#76" />
+        <option value="47" name="MIDI CC#77" />
+        <option value="48" name="MIDI CC#78" />
+        <option value="49" name="MIDI CC#79" />
+        <option value="50" name="MIDI CC#80" />
+        <option value="51" name="MIDI CC#81" />
+        <option value="52" name="MIDI CC#82" />
+        <option value="53" name="MIDI CC#83" />
+        <option value="54" name="MIDI CC#84" />
+        <option value="55" name="MIDI CC#85" />
+        <option value="56" name="MIDI CC#86" />
+        <option value="57" name="MIDI CC#87" />
+        <option value="58" name="MIDI CC#88" />
+        <option value="59" name="MIDI CC#89" />
+        <option value="60" name="MIDI CC#90" />
+        <option value="61" name="MIDI CC#91" />
+        <option value="62" name="MIDI CC#92" />
+        <option value="63" name="MIDI CC#93" />
+        <option value="64" name="MIDI CC#94" />
+        <option value="65" name="MIDI CC#95" />
+      </options>
     </dataTypeDef>
 
     <!-- Modulation.HumanizerPedal: a pedal or a MIDI CC. -->
-    <dataTypeDef name="pedal" basedOn="sys.uint8" min="0" max="64">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="EXP Pedal" />
-            <property name="0" value="EXP Pedal" />
-            <property name="1" value="FC-200EXP" />
-            <property name="2" value="MIDI CC#1" />
-            <property name="3" value="MIDI CC#2" />
-            <property name="4" value="MIDI CC#3" />
-            <property name="5" value="MIDI CC#4" />
-            <property name="6" value="MIDI CC#5" />
-            <property name="7" value="MIDI CC#6" />
-            <property name="8" value="MIDI CC#7" />
-            <property name="9" value="MIDI CC#8" />
-            <property name="10" value="MIDI CC#9" />
-            <property name="11" value="MIDI CC#10" />
-            <property name="12" value="MIDI CC#11" />
-            <property name="13" value="MIDI CC#12" />
-            <property name="14" value="MIDI CC#13" />
-            <property name="15" value="MIDI CC#14" />
-            <property name="16" value="MIDI CC#15" />
-            <property name="17" value="MIDI CC#16" />
-            <property name="18" value="MIDI CC#17" />
-            <property name="19" value="MIDI CC#18" />
-            <property name="20" value="MIDI CC#19" />
-            <property name="21" value="MIDI CC#20" />
-            <property name="22" value="MIDI CC#21" />
-            <property name="23" value="MIDI CC#22" />
-            <property name="24" value="MIDI CC#23" />
-            <property name="25" value="MIDI CC#24" />
-            <property name="26" value="MIDI CC#25" />
-            <property name="27" value="MIDI CC#26" />
-            <property name="28" value="MIDI CC#27" />
-            <property name="29" value="MIDI CC#28" />
-            <property name="30" value="MIDI CC#29" />
-            <property name="31" value="MIDI CC#30" />
-            <property name="32" value="MIDI CC#31" />
-            <property name="33" value="MIDI CC#64" />
-            <property name="34" value="MIDI CC#65" />
-            <property name="35" value="MIDI CC#66" />
-            <property name="36" value="MIDI CC#67" />
-            <property name="37" value="MIDI CC#68" />
-            <property name="38" value="MIDI CC#69" />
-            <property name="39" value="MIDI CC#70" />
-            <property name="40" value="MIDI CC#71" />
-            <property name="41" value="MIDI CC#72" />
-            <property name="42" value="MIDI CC#73" />
-            <property name="43" value="MIDI CC#74" />
-            <property name="44" value="MIDI CC#75" />
-            <property name="45" value="MIDI CC#76" />
-            <property name="46" value="MIDI CC#77" />
-            <property name="47" value="MIDI CC#78" />
-            <property name="48" value="MIDI CC#79" />
-            <property name="49" value="MIDI CC#80" />
-            <property name="50" value="MIDI CC#81" />
-            <property name="51" value="MIDI CC#82" />
-            <property name="52" value="MIDI CC#83" />
-            <property name="53" value="MIDI CC#84" />
-            <property name="54" value="MIDI CC#85" />
-            <property name="55" value="MIDI CC#86" />
-            <property name="56" value="MIDI CC#87" />
-            <property name="57" value="MIDI CC#88" />
-            <property name="58" value="MIDI CC#89" />
-            <property name="59" value="MIDI CC#90" />
-            <property name="60" value="MIDI CC#91" />
-            <property name="61" value="MIDI CC#92" />
-            <property name="62" value="MIDI CC#93" />
-            <property name="63" value="MIDI CC#94" />
-            <property name="64" value="MIDI CC#95" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="pedal" basedOn="sys.uint8" optionsDefault="EXP Pedal">
+      <options>
+        <option value="0" name="EXP Pedal" />
+        <option value="1" name="FC-200EXP" />
+        <option value="2" name="MIDI CC#1" />
+        <option value="3" name="MIDI CC#2" />
+        <option value="4" name="MIDI CC#3" />
+        <option value="5" name="MIDI CC#4" />
+        <option value="6" name="MIDI CC#5" />
+        <option value="7" name="MIDI CC#6" />
+        <option value="8" name="MIDI CC#7" />
+        <option value="9" name="MIDI CC#8" />
+        <option value="10" name="MIDI CC#9" />
+        <option value="11" name="MIDI CC#10" />
+        <option value="12" name="MIDI CC#11" />
+        <option value="13" name="MIDI CC#12" />
+        <option value="14" name="MIDI CC#13" />
+        <option value="15" name="MIDI CC#14" />
+        <option value="16" name="MIDI CC#15" />
+        <option value="17" name="MIDI CC#16" />
+        <option value="18" name="MIDI CC#17" />
+        <option value="19" name="MIDI CC#18" />
+        <option value="20" name="MIDI CC#19" />
+        <option value="21" name="MIDI CC#20" />
+        <option value="22" name="MIDI CC#21" />
+        <option value="23" name="MIDI CC#22" />
+        <option value="24" name="MIDI CC#23" />
+        <option value="25" name="MIDI CC#24" />
+        <option value="26" name="MIDI CC#25" />
+        <option value="27" name="MIDI CC#26" />
+        <option value="28" name="MIDI CC#27" />
+        <option value="29" name="MIDI CC#28" />
+        <option value="30" name="MIDI CC#29" />
+        <option value="31" name="MIDI CC#30" />
+        <option value="32" name="MIDI CC#31" />
+        <option value="33" name="MIDI CC#64" />
+        <option value="34" name="MIDI CC#65" />
+        <option value="35" name="MIDI CC#66" />
+        <option value="36" name="MIDI CC#67" />
+        <option value="37" name="MIDI CC#68" />
+        <option value="38" name="MIDI CC#69" />
+        <option value="39" name="MIDI CC#70" />
+        <option value="40" name="MIDI CC#71" />
+        <option value="41" name="MIDI CC#72" />
+        <option value="42" name="MIDI CC#73" />
+        <option value="43" name="MIDI CC#74" />
+        <option value="44" name="MIDI CC#75" />
+        <option value="45" name="MIDI CC#76" />
+        <option value="46" name="MIDI CC#77" />
+        <option value="47" name="MIDI CC#78" />
+        <option value="48" name="MIDI CC#79" />
+        <option value="49" name="MIDI CC#80" />
+        <option value="50" name="MIDI CC#81" />
+        <option value="51" name="MIDI CC#82" />
+        <option value="52" name="MIDI CC#83" />
+        <option value="53" name="MIDI CC#84" />
+        <option value="54" name="MIDI CC#85" />
+        <option value="55" name="MIDI CC#86" />
+        <option value="56" name="MIDI CC#87" />
+        <option value="57" name="MIDI CC#88" />
+        <option value="58" name="MIDI CC#89" />
+        <option value="59" name="MIDI CC#90" />
+        <option value="60" name="MIDI CC#91" />
+        <option value="61" name="MIDI CC#92" />
+        <option value="62" name="MIDI CC#93" />
+        <option value="63" name="MIDI CC#94" />
+        <option value="64" name="MIDI CC#95" />
+      </options>
     </dataTypeDef>
 
     <!-- Delay.TempoIn: fixed, a control or a MIDI CC. -->
-    <dataTypeDef name="tempoIn" basedOn="sys.uint8" min="0" max="66">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="Fixed" />
-            <property name="0" value="Fixed" />
-            <property name="1" value="Control 1" />
-            <property name="2" value="Control 2" />
-            <property name="3" value="FC-200CTL" />
-            <property name="4" value="MIDI CC#1" />
-            <property name="5" value="MIDI CC#2" />
-            <property name="6" value="MIDI CC#3" />
-            <property name="7" value="MIDI CC#4" />
-            <property name="8" value="MIDI CC#5" />
-            <property name="9" value="MIDI CC#6" />
-            <property name="10" value="MIDI CC#7" />
-            <property name="11" value="MIDI CC#8" />
-            <property name="12" value="MIDI CC#9" />
-            <property name="13" value="MIDI CC#10" />
-            <property name="14" value="MIDI CC#11" />
-            <property name="15" value="MIDI CC#12" />
-            <property name="16" value="MIDI CC#13" />
-            <property name="17" value="MIDI CC#14" />
-            <property name="18" value="MIDI CC#15" />
-            <property name="19" value="MIDI CC#16" />
-            <property name="20" value="MIDI CC#17" />
-            <property name="21" value="MIDI CC#18" />
-            <property name="22" value="MIDI CC#19" />
-            <property name="23" value="MIDI CC#20" />
-            <property name="24" value="MIDI CC#21" />
-            <property name="25" value="MIDI CC#22" />
-            <property name="26" value="MIDI CC#23" />
-            <property name="27" value="MIDI CC#24" />
-            <property name="28" value="MIDI CC#25" />
-            <property name="29" value="MIDI CC#26" />
-            <property name="30" value="MIDI CC#27" />
-            <property name="31" value="MIDI CC#28" />
-            <property name="32" value="MIDI CC#29" />
-            <property name="33" value="MIDI CC#30" />
-            <property name="34" value="MIDI CC#31" />
-            <property name="35" value="MIDI CC#64" />
-            <property name="36" value="MIDI CC#65" />
-            <property name="37" value="MIDI CC#66" />
-            <property name="38" value="MIDI CC#67" />
-            <property name="39" value="MIDI CC#68" />
-            <property name="40" value="MIDI CC#69" />
-            <property name="41" value="MIDI CC#70" />
-            <property name="42" value="MIDI CC#71" />
-            <property name="43" value="MIDI CC#72" />
-            <property name="44" value="MIDI CC#73" />
-            <property name="45" value="MIDI CC#74" />
-            <property name="46" value="MIDI CC#75" />
-            <property name="47" value="MIDI CC#76" />
-            <property name="48" value="MIDI CC#77" />
-            <property name="49" value="MIDI CC#78" />
-            <property name="50" value="MIDI CC#79" />
-            <property name="51" value="MIDI CC#80" />
-            <property name="52" value="MIDI CC#81" />
-            <property name="53" value="MIDI CC#82" />
-            <property name="54" value="MIDI CC#83" />
-            <property name="55" value="MIDI CC#84" />
-            <property name="56" value="MIDI CC#85" />
-            <property name="57" value="MIDI CC#86" />
-            <property name="58" value="MIDI CC#87" />
-            <property name="59" value="MIDI CC#88" />
-            <property name="60" value="MIDI CC#89" />
-            <property name="61" value="MIDI CC#90" />
-            <property name="62" value="MIDI CC#91" />
-            <property name="63" value="MIDI CC#92" />
-            <property name="64" value="MIDI CC#93" />
-            <property name="65" value="MIDI CC#94" />
-            <property name="66" value="MIDI CC#95" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="tempoIn" basedOn="sys.uint8" optionsDefault="Fixed">
+      <options>
+        <option value="0" name="Fixed" />
+        <option value="1" name="Control 1" />
+        <option value="2" name="Control 2" />
+        <option value="3" name="FC-200CTL" />
+        <option value="4" name="MIDI CC#1" />
+        <option value="5" name="MIDI CC#2" />
+        <option value="6" name="MIDI CC#3" />
+        <option value="7" name="MIDI CC#4" />
+        <option value="8" name="MIDI CC#5" />
+        <option value="9" name="MIDI CC#6" />
+        <option value="10" name="MIDI CC#7" />
+        <option value="11" name="MIDI CC#8" />
+        <option value="12" name="MIDI CC#9" />
+        <option value="13" name="MIDI CC#10" />
+        <option value="14" name="MIDI CC#11" />
+        <option value="15" name="MIDI CC#12" />
+        <option value="16" name="MIDI CC#13" />
+        <option value="17" name="MIDI CC#14" />
+        <option value="18" name="MIDI CC#15" />
+        <option value="19" name="MIDI CC#16" />
+        <option value="20" name="MIDI CC#17" />
+        <option value="21" name="MIDI CC#18" />
+        <option value="22" name="MIDI CC#19" />
+        <option value="23" name="MIDI CC#20" />
+        <option value="24" name="MIDI CC#21" />
+        <option value="25" name="MIDI CC#22" />
+        <option value="26" name="MIDI CC#23" />
+        <option value="27" name="MIDI CC#24" />
+        <option value="28" name="MIDI CC#25" />
+        <option value="29" name="MIDI CC#26" />
+        <option value="30" name="MIDI CC#27" />
+        <option value="31" name="MIDI CC#28" />
+        <option value="32" name="MIDI CC#29" />
+        <option value="33" name="MIDI CC#30" />
+        <option value="34" name="MIDI CC#31" />
+        <option value="35" name="MIDI CC#64" />
+        <option value="36" name="MIDI CC#65" />
+        <option value="37" name="MIDI CC#66" />
+        <option value="38" name="MIDI CC#67" />
+        <option value="39" name="MIDI CC#68" />
+        <option value="40" name="MIDI CC#69" />
+        <option value="41" name="MIDI CC#70" />
+        <option value="42" name="MIDI CC#71" />
+        <option value="43" name="MIDI CC#72" />
+        <option value="44" name="MIDI CC#73" />
+        <option value="45" name="MIDI CC#74" />
+        <option value="46" name="MIDI CC#75" />
+        <option value="47" name="MIDI CC#76" />
+        <option value="48" name="MIDI CC#77" />
+        <option value="49" name="MIDI CC#78" />
+        <option value="50" name="MIDI CC#79" />
+        <option value="51" name="MIDI CC#80" />
+        <option value="52" name="MIDI CC#81" />
+        <option value="53" name="MIDI CC#82" />
+        <option value="54" name="MIDI CC#83" />
+        <option value="55" name="MIDI CC#84" />
+        <option value="56" name="MIDI CC#85" />
+        <option value="57" name="MIDI CC#86" />
+        <option value="58" name="MIDI CC#87" />
+        <option value="59" name="MIDI CC#88" />
+        <option value="60" name="MIDI CC#89" />
+        <option value="61" name="MIDI CC#90" />
+        <option value="62" name="MIDI CC#91" />
+        <option value="63" name="MIDI CC#92" />
+        <option value="64" name="MIDI CC#93" />
+        <option value="65" name="MIDI CC#94" />
+        <option value="66" name="MIDI CC#95" />
+      </options>
     </dataTypeDef>
 
     <!-- OverdriveDistortion.Type. -->
-    <dataTypeDef name="distortionType" basedOn="sys.uint8" min="0" max="6">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="Vintage OD" />
-            <property name="0" value="Vintage OD" />
-            <property name="1" value="Turbo OD" />
-            <property name="2" value="Blues" />
-            <property name="3" value="Distortion" />
-            <property name="4" value="Turbo DS" />
-            <property name="5" value="Metal" />
-            <property name="6" value="Fuzz" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="distortionType" basedOn="sys.uint8" optionsDefault="Vintage OD">
+      <options>
+        <option value="0" name="Vintage OD" />
+        <option value="1" name="Turbo OD" />
+        <option value="2" name="Blues" />
+        <option value="3" name="Distortion" />
+        <option value="4" name="Turbo DS" />
+        <option value="5" name="Metal" />
+        <option value="6" name="Fuzz" />
+      </options>
     </dataTypeDef>
 
     <!-- Preamp.Type. -->
-    <dataTypeDef name="preampType" basedOn="sys.uint8" min="0" max="8">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="JC-120" />
-            <property name="0" value="JC-120" />
-            <property name="1" value="Clean Twin" />
-            <property name="2" value="Match Drive" />
-            <property name="3" value="BG Lead" />
-            <property name="4" value="MS 1959 (I)" />
-            <property name="5" value="MS 1959 (II)" />
-            <property name="6" value="MS 1959 (I + II)" />
-            <property name="7" value="SLDN Lead" />
-            <property name="8" value="Metal 5150" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="preampType" basedOn="sys.uint8" optionsDefault="JC-120">
+      <options>
+        <option value="0" name="JC-120" />
+        <option value="1" name="Clean Twin" />
+        <option value="2" name="Match Drive" />
+        <option value="3" name="BG Lead" />
+        <option value="4" name="MS 1959 (I)" />
+        <option value="5" name="MS 1959 (II)" />
+        <option value="6" name="MS 1959 (I + II)" />
+        <option value="7" name="SLDN Lead" />
+        <option value="8" name="Metal 5150" />
+      </options>
     </dataTypeDef>
 
     <!-- Preamp.Gain. -->
-    <dataTypeDef name="preampGain" basedOn="sys.uint8" min="0" max="2">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="Low" />
-            <property name="0" value="Low" />
-            <property name="1" value="Middle" />
-            <property name="2" value="High" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="preampGain" basedOn="sys.uint8" optionsDefault="Low">
+      <options>
+        <option value="0" name="Low" />
+        <option value="1" name="Middle" />
+        <option value="2" name="High" />
+      </options>
     </dataTypeDef>
 
     <!-- Loop.Mode. -->
-    <dataTypeDef name="loopMode" basedOn="sys.uint8" min="0" max="1">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="Series" />
-            <property name="0" value="Series" />
-            <property name="1" value="Parallel" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="loopMode" basedOn="sys.uint8" optionsDefault="Series">
+      <options>
+        <option value="0" name="Series" />
+        <option value="1" name="Parallel" />
+      </options>
     </dataTypeDef>
 
     <!-- Equalizer.MiddleFrequency. -->
-    <dataTypeDef name="eqMiddleFrequency" basedOn="sys.uint8" min="0" max="20">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="100 Hz" />
-            <property name="0" value="100 Hz" />
-            <property name="1" value="125 Hz" />
-            <property name="2" value="160 Hz" />
-            <property name="3" value="200 Hz" />
-            <property name="4" value="250 Hz" />
-            <property name="5" value="315 Hz" />
-            <property name="6" value="400 Hz" />
-            <property name="7" value="500 Hz" />
-            <property name="8" value="630 Hz" />
-            <property name="9" value="800 Hz" />
-            <property name="10" value="1.00 kHz" />
-            <property name="11" value="1.25 kHz" />
-            <property name="12" value="1.60 kHz" />
-            <property name="13" value="2.00 kHz" />
-            <property name="14" value="2.50 kHz" />
-            <property name="15" value="3.15 kHz" />
-            <property name="16" value="4.00 kHz" />
-            <property name="17" value="5.00 kHz" />
-            <property name="18" value="6.30 kHz" />
-            <property name="19" value="8.00 kHz" />
-            <property name="20" value="10.0 kHz" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="eqMiddleFrequency" basedOn="sys.uint8" optionsDefault="100 Hz">
+      <options>
+        <option value="0" name="100 Hz" />
+        <option value="1" name="125 Hz" />
+        <option value="2" name="160 Hz" />
+        <option value="3" name="200 Hz" />
+        <option value="4" name="250 Hz" />
+        <option value="5" name="315 Hz" />
+        <option value="6" name="400 Hz" />
+        <option value="7" name="500 Hz" />
+        <option value="8" name="630 Hz" />
+        <option value="9" name="800 Hz" />
+        <option value="10" name="1.00 kHz" />
+        <option value="11" name="1.25 kHz" />
+        <option value="12" name="1.60 kHz" />
+        <option value="13" name="2.00 kHz" />
+        <option value="14" name="2.50 kHz" />
+        <option value="15" name="3.15 kHz" />
+        <option value="16" name="4.00 kHz" />
+        <option value="17" name="5.00 kHz" />
+        <option value="18" name="6.30 kHz" />
+        <option value="19" name="8.00 kHz" />
+        <option value="20" name="10.0 kHz" />
+      </options>
     </dataTypeDef>
 
     <!-- Equalizer.MiddleQ. -->
-    <dataTypeDef name="eqMiddleQ" basedOn="sys.uint8" min="0" max="5">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="0.5" />
-            <property name="0" value="0.5" />
-            <property name="1" value="1" />
-            <property name="2" value="2" />
-            <property name="3" value="4" />
-            <property name="4" value="8" />
-            <property name="5" value="16" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="eqMiddleQ" basedOn="sys.uint8" optionsDefault="0.5">
+      <options>
+        <option value="0" name="0.5" />
+        <option value="1" name="1" />
+        <option value="2" name="2" />
+        <option value="3" name="4" />
+        <option value="4" name="8" />
+        <option value="5" name="16" />
+      </options>
     </dataTypeDef>
 
     <!-- SpeakerSimulator.Type. -->
-    <dataTypeDef name="speakerType" basedOn="sys.uint8" min="0" max="11">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="Small" />
-            <property name="0" value="Small" />
-            <property name="1" value="Middle" />
-            <property name="2" value="JC-120" />
-            <property name="3" value="Built-In 1" />
-            <property name="4" value="Built-In 2" />
-            <property name="5" value="Built-In 3" />
-            <property name="6" value="Built-In 4" />
-            <property name="7" value="BG Stack 1" />
-            <property name="8" value="BG Stack 2" />
-            <property name="9" value="MS Stack 1" />
-            <property name="10" value="MS Stack 2" />
-            <property name="11" value="Metal Stack" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="speakerType" basedOn="sys.uint8" optionsDefault="Small">
+      <options>
+        <option value="0" name="Small" />
+        <option value="1" name="Middle" />
+        <option value="2" name="JC-120" />
+        <option value="3" name="Built-In 1" />
+        <option value="4" name="Built-In 2" />
+        <option value="5" name="Built-In 3" />
+        <option value="6" name="Built-In 4" />
+        <option value="7" name="BG Stack 1" />
+        <option value="8" name="BG Stack 2" />
+        <option value="9" name="MS Stack 1" />
+        <option value="10" name="MS Stack 2" />
+        <option value="11" name="Metal Stack" />
+      </options>
     </dataTypeDef>
 
     <!-- NoiseSuppressor.Detect. -->
-    <dataTypeDef name="nsDetect" basedOn="sys.uint8" min="0" max="1">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="Guitar In" />
-            <property name="0" value="Guitar In" />
-            <property name="1" value="NS In" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="nsDetect" basedOn="sys.uint8" optionsDefault="Guitar In">
+      <options>
+        <option value="0" name="Guitar In" />
+        <option value="1" name="NS In" />
+      </options>
     </dataTypeDef>
 
     <!-- Modulation.Mode. -->
-    <dataTypeDef name="modulationMode" basedOn="sys.uint8" min="0" max="6">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="Flanger" />
-            <property name="0" value="Flanger" />
-            <property name="1" value="Phaser" />
-            <property name="2" value="Pitch Shifter" />
-            <property name="3" value="Harmonist" />
-            <property name="4" value="Vibrato" />
-            <property name="5" value="Ring Modulator" />
-            <property name="6" value="Humanizer" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="modulationMode" basedOn="sys.uint8" optionsDefault="Flanger">
+      <options>
+        <option value="0" name="Flanger" />
+        <option value="1" name="Phaser" />
+        <option value="2" name="Pitch Shifter" />
+        <option value="3" name="Harmonist" />
+        <option value="4" name="Vibrato" />
+        <option value="5" name="Ring Modulator" />
+        <option value="6" name="Humanizer" />
+      </options>
     </dataTypeDef>
 
     <!-- Modulation.PhaserType. -->
-    <dataTypeDef name="phaserType" basedOn="sys.uint8" min="0" max="4">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="4 Stage" />
-            <property name="0" value="4 Stage" />
-            <property name="1" value="6 Stage" />
-            <property name="2" value="8 Stage" />
-            <property name="3" value="10 Stage" />
-            <property name="4" value="12 Stage" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="phaserType" basedOn="sys.uint8" optionsDefault="4 Stage">
+      <options>
+        <option value="0" name="4 Stage" />
+        <option value="1" name="6 Stage" />
+        <option value="2" name="8 Stage" />
+        <option value="3" name="10 Stage" />
+        <option value="4" name="12 Stage" />
+      </options>
     </dataTypeDef>
 
     <!-- Modulation.VibratoTrigger. -->
-    <dataTypeDef name="vibratoTrigger" basedOn="sys.uint8" min="0" max="2">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="Off" />
-            <property name="0" value="Off" />
-            <property name="1" value="On" />
-            <property name="2" value="Auto" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="vibratoTrigger" basedOn="sys.uint8" optionsDefault="Off">
+      <options>
+        <option value="0" name="Off" />
+        <option value="1" name="On" />
+        <option value="2" name="Auto" />
+      </options>
     </dataTypeDef>
 
     <!-- Modulation.HumanizerMode. -->
-    <dataTypeDef name="humanizerMode" basedOn="sys.uint8" min="0" max="1">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="Auto" />
-            <property name="0" value="Auto" />
-            <property name="1" value="Pedal" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="humanizerMode" basedOn="sys.uint8" optionsDefault="Auto">
+      <options>
+        <option value="0" name="Auto" />
+        <option value="1" name="Pedal" />
+      </options>
     </dataTypeDef>
 
     <!-- Modulation.HumanizerVowel1/2. -->
-    <dataTypeDef name="vowel" basedOn="sys.uint8" min="0" max="4">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="a" />
-            <property name="0" value="a" />
-            <property name="1" value="e" />
-            <property name="2" value="i" />
-            <property name="3" value="o" />
-            <property name="4" value="u" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="vowel" basedOn="sys.uint8" optionsDefault="a">
+      <options>
+        <option value="0" name="a" />
+        <option value="1" name="e" />
+        <option value="2" name="i" />
+        <option value="3" name="o" />
+        <option value="4" name="u" />
+      </options>
     </dataTypeDef>
 
     <!-- Modulation.HumanizerTrigger. -->
-    <dataTypeDef name="humanizerTrigger" basedOn="sys.uint8" min="0" max="1">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="Off" />
-            <property name="0" value="Off" />
-            <property name="1" value="Auto" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="humanizerTrigger" basedOn="sys.uint8" optionsDefault="Off">
+      <options>
+        <option value="0" name="Off" />
+        <option value="1" name="Auto" />
+      </options>
     </dataTypeDef>
 
     <!-- Modulation.PitchShifterMode. -->
-    <dataTypeDef name="pitchShifterMode" basedOn="sys.uint8" min="0" max="2">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="Slow" />
-            <property name="0" value="Slow" />
-            <property name="1" value="Fast" />
-            <property name="2" value="Mono" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="pitchShifterMode" basedOn="sys.uint8" optionsDefault="Slow">
+      <options>
+        <option value="0" name="Slow" />
+        <option value="1" name="Fast" />
+        <option value="2" name="Mono" />
+      </options>
     </dataTypeDef>
 
     <!-- Modulation.HarmonistKey. -->
-    <dataTypeDef name="harmonistKey" basedOn="sys.uint8" min="0" max="23">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="C maj" />
-            <property name="0" value="C maj" />
-            <property name="1" value="Db maj" />
-            <property name="2" value="D maj" />
-            <property name="3" value="Eb maj" />
-            <property name="4" value="E maj" />
-            <property name="5" value="F maj" />
-            <property name="6" value="F# maj" />
-            <property name="7" value="G maj" />
-            <property name="8" value="Ab maj" />
-            <property name="9" value="A maj" />
-            <property name="10" value="Bb maj" />
-            <property name="11" value="B maj" />
-            <property name="12" value="A min" />
-            <property name="13" value="Bb min" />
-            <property name="14" value="B min" />
-            <property name="15" value="C min" />
-            <property name="16" value="C# min" />
-            <property name="17" value="D min" />
-            <property name="18" value="D# min" />
-            <property name="19" value="E min" />
-            <property name="20" value="F min" />
-            <property name="21" value="F# min" />
-            <property name="22" value="G min" />
-            <property name="23" value="G# min" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="harmonistKey" basedOn="sys.uint8" optionsDefault="C maj">
+      <options>
+        <option value="0" name="C maj" />
+        <option value="1" name="Db maj" />
+        <option value="2" name="D maj" />
+        <option value="3" name="Eb maj" />
+        <option value="4" name="E maj" />
+        <option value="5" name="F maj" />
+        <option value="6" name="F# maj" />
+        <option value="7" name="G maj" />
+        <option value="8" name="Ab maj" />
+        <option value="9" name="A maj" />
+        <option value="10" name="Bb maj" />
+        <option value="11" name="B maj" />
+        <option value="12" name="A min" />
+        <option value="13" name="Bb min" />
+        <option value="14" name="B min" />
+        <option value="15" name="C min" />
+        <option value="16" name="C# min" />
+        <option value="17" name="D min" />
+        <option value="18" name="D# min" />
+        <option value="19" name="E min" />
+        <option value="20" name="F min" />
+        <option value="21" name="F# min" />
+        <option value="22" name="G min" />
+        <option value="23" name="G# min" />
+      </options>
     </dataTypeDef>
 
     <!-- Modulation.HarmonistInterval1-3: -2 octaves - +2 octaves in diatonic steps. -->
-    <dataTypeDef name="harmonistInterval" basedOn="sys.uint8" min="0" max="28">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="-2Oct" />
-            <property name="0" value="-2Oct" />
-            <property name="1" value="-Oct-7th" />
-            <property name="2" value="-Oct-6th" />
-            <property name="3" value="-Oct-5th" />
-            <property name="4" value="-Oct-4th" />
-            <property name="5" value="-Oct-3rd" />
-            <property name="6" value="-Oct-2nd" />
-            <property name="7" value="-Oct" />
-            <property name="8" value="-7th" />
-            <property name="9" value="-6th" />
-            <property name="10" value="-5th" />
-            <property name="11" value="-4th" />
-            <property name="12" value="-3rd" />
-            <property name="13" value="-2nd" />
-            <property name="14" value="Unison" />
-            <property name="15" value="+2nd" />
-            <property name="16" value="+3rd" />
-            <property name="17" value="+4th" />
-            <property name="18" value="+5th" />
-            <property name="19" value="+6th" />
-            <property name="20" value="+7th" />
-            <property name="21" value="+Oct" />
-            <property name="22" value="+Oct+2nd" />
-            <property name="23" value="+Oct+3rd" />
-            <property name="24" value="+Oct+4th" />
-            <property name="25" value="+Oct+5th" />
-            <property name="26" value="+Oct+6th" />
-            <property name="27" value="+Oct+7th" />
-            <property name="28" value="+2Oct" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="harmonistInterval" basedOn="sys.uint8" optionsDefault="-2Oct">
+      <options>
+        <option value="0" name="-2Oct" />
+        <option value="1" name="-Oct-7th" />
+        <option value="2" name="-Oct-6th" />
+        <option value="3" name="-Oct-5th" />
+        <option value="4" name="-Oct-4th" />
+        <option value="5" name="-Oct-3rd" />
+        <option value="6" name="-Oct-2nd" />
+        <option value="7" name="-Oct" />
+        <option value="8" name="-7th" />
+        <option value="9" name="-6th" />
+        <option value="10" name="-5th" />
+        <option value="11" name="-4th" />
+        <option value="12" name="-3rd" />
+        <option value="13" name="-2nd" />
+        <option value="14" name="Unison" />
+        <option value="15" name="+2nd" />
+        <option value="16" name="+3rd" />
+        <option value="17" name="+4th" />
+        <option value="18" name="+5th" />
+        <option value="19" name="+6th" />
+        <option value="20" name="+7th" />
+        <option value="21" name="+Oct" />
+        <option value="22" name="+Oct+2nd" />
+        <option value="23" name="+Oct+3rd" />
+        <option value="24" name="+Oct+4th" />
+        <option value="25" name="+Oct+5th" />
+        <option value="26" name="+Oct+6th" />
+        <option value="27" name="+Oct+7th" />
+        <option value="28" name="+2Oct" />
+      </options>
     </dataTypeDef>
 
     <!-- Delay.Mode. -->
-    <dataTypeDef name="delayMode" basedOn="sys.uint8" min="0" max="1">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="Normal" />
-            <property name="0" value="Normal" />
-            <property name="1" value="Tempo" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="delayMode" basedOn="sys.uint8" optionsDefault="Normal">
+      <options>
+        <option value="0" name="Normal" />
+        <option value="1" name="Tempo" />
+      </options>
     </dataTypeDef>
 
     <!-- Delay.IntervalCenter: note length relative to the tempo. -->
-    <dataTypeDef name="delayInterval" basedOn="sys.uint8" min="0" max="10">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="1/4" />
-            <property name="0" value="1/4" />
-            <property name="1" value="1/3" />
-            <property name="2" value="3/8" />
-            <property name="3" value="1/2" />
-            <property name="4" value="2/3" />
-            <property name="5" value="3/4" />
-            <property name="6" value="1.0" />
-            <property name="7" value="1.5" />
-            <property name="8" value="2.0" />
-            <property name="9" value="3.0" />
-            <property name="10" value="4.0" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="delayInterval" basedOn="sys.uint8" optionsDefault="1/4">
+      <options>
+        <option value="0" name="1/4" />
+        <option value="1" name="1/3" />
+        <option value="2" name="3/8" />
+        <option value="3" name="1/2" />
+        <option value="4" name="2/3" />
+        <option value="5" name="3/4" />
+        <option value="6" name="1.0" />
+        <option value="7" name="1.5" />
+        <option value="8" name="2.0" />
+        <option value="9" name="3.0" />
+        <option value="10" name="4.0" />
+      </options>
     </dataTypeDef>
 
     <!-- High cut filter (Delay, Chorus, Reverb). -->
-    <dataTypeDef name="hiCut" basedOn="sys.uint8" min="0" max="15">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="500 Hz" />
-            <property name="0" value="500 Hz" />
-            <property name="1" value="630 Hz" />
-            <property name="2" value="800 Hz" />
-            <property name="3" value="1.00 kHz" />
-            <property name="4" value="1.25 kHz" />
-            <property name="5" value="1.60 kHz" />
-            <property name="6" value="2.00 kHz" />
-            <property name="7" value="2.50 kHz" />
-            <property name="8" value="3.15 kHz" />
-            <property name="9" value="4.00 kHz" />
-            <property name="10" value="5.00 kHz" />
-            <property name="11" value="6.30 kHz" />
-            <property name="12" value="8.00 kHz" />
-            <property name="13" value="10.0 kHz" />
-            <property name="14" value="12.5 kHz" />
-            <property name="15" value="Flat" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="hiCut" basedOn="sys.uint8" optionsDefault="500 Hz">
+      <options>
+        <option value="0" name="500 Hz" />
+        <option value="1" name="630 Hz" />
+        <option value="2" name="800 Hz" />
+        <option value="3" name="1.00 kHz" />
+        <option value="4" name="1.25 kHz" />
+        <option value="5" name="1.60 kHz" />
+        <option value="6" name="2.00 kHz" />
+        <option value="7" name="2.50 kHz" />
+        <option value="8" name="3.15 kHz" />
+        <option value="9" name="4.00 kHz" />
+        <option value="10" name="5.00 kHz" />
+        <option value="11" name="6.30 kHz" />
+        <option value="12" name="8.00 kHz" />
+        <option value="13" name="10.0 kHz" />
+        <option value="14" name="12.5 kHz" />
+        <option value="15" name="Flat" />
+      </options>
     </dataTypeDef>
 
     <!-- Low cut filter (Chorus, Reverb). -->
-    <dataTypeDef name="lowCut" basedOn="sys.uint8" min="0" max="10">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="Flat" />
-            <property name="0" value="Flat" />
-            <property name="1" value="55 Hz" />
-            <property name="2" value="110 Hz" />
-            <property name="3" value="165 Hz" />
-            <property name="4" value="220 Hz" />
-            <property name="5" value="280 Hz" />
-            <property name="6" value="340 Hz" />
-            <property name="7" value="400 Hz" />
-            <property name="8" value="500 Hz" />
-            <property name="9" value="630 Hz" />
-            <property name="10" value="800 Hz" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="lowCut" basedOn="sys.uint8" optionsDefault="Flat">
+      <options>
+        <option value="0" name="Flat" />
+        <option value="1" name="55 Hz" />
+        <option value="2" name="110 Hz" />
+        <option value="3" name="165 Hz" />
+        <option value="4" name="220 Hz" />
+        <option value="5" name="280 Hz" />
+        <option value="6" name="340 Hz" />
+        <option value="7" name="400 Hz" />
+        <option value="8" name="500 Hz" />
+        <option value="9" name="630 Hz" />
+        <option value="10" name="800 Hz" />
+      </options>
     </dataTypeDef>
 
     <!-- Chorus.Mode. -->
-    <dataTypeDef name="chorusMode" basedOn="sys.uint8" min="0" max="1">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="Mono" />
-            <property name="0" value="Mono" />
-            <property name="1" value="Stereo" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="chorusMode" basedOn="sys.uint8" optionsDefault="Mono">
+      <options>
+        <option value="0" name="Mono" />
+        <option value="1" name="Stereo" />
+      </options>
     </dataTypeDef>
 
     <!-- TremoloPan.Mode. -->
-    <dataTypeDef name="tremoloPanMode" basedOn="sys.uint8" min="0" max="3">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="Tremolo Triangle" />
-            <property name="0" value="Tremolo Triangle" />
-            <property name="1" value="Tremolo Square" />
-            <property name="2" value="Pan Triangle" />
-            <property name="3" value="Pan Square" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="tremoloPanMode" basedOn="sys.uint8" optionsDefault="Tremolo Triangle">
+      <options>
+        <option value="0" name="Tremolo Triangle" />
+        <option value="1" name="Tremolo Square" />
+        <option value="2" name="Pan Triangle" />
+        <option value="3" name="Pan Square" />
+      </options>
     </dataTypeDef>
 
     <!-- Reverb.Type. -->
-    <dataTypeDef name="reverbType" basedOn="sys.uint8" min="0" max="4">
-      <processors>
-        <processor name="sys.map">
-          <properties>
-            <property name="to" value="sys.string" />
-            <property name="default" value="Room1" />
-            <property name="0" value="Room1" />
-            <property name="1" value="Room2" />
-            <property name="2" value="Hall1" />
-            <property name="3" value="Hall2" />
-            <property name="4" value="Plate" />
-          </properties>
-        </processor>
-      </processors>
+    <dataTypeDef name="reverbType" basedOn="sys.uint8" optionsDefault="Room1">
+      <options>
+        <option value="0" name="Room1" />
+        <option value="1" name="Room2" />
+        <option value="2" name="Hall1" />
+        <option value="3" name="Hall2" />
+        <option value="4" name="Plate" />
+      </options>
     </dataTypeDef>
   </dataTypeDefs>
 

@@ -1,4 +1,3 @@
-using System.Globalization;
 using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
@@ -34,9 +33,10 @@ internal sealed class InstanceValueSource : IOpenChoiceSource
             return SourceResult.NoValue();
         }
 
-        var dataType = context.Field.DataType;
+        // the value is the logical value: of the value type of the data type (e.g. the option value with options)
+        var valueType = context.Field.ValueType ?? context.Field.DataType;
         // the spaces of a text are part of its value (e.g. a patch name that starts with a space); other values are trimmed
-        var text = dataType.ClrType == typeof(string) ? field.Value ?? String.Empty : field.Value?.Trim() ?? String.Empty;
+        var text = valueType.ClrType == typeof(string) ? field.Value ?? String.Empty : field.Value?.Trim() ?? String.Empty;
         // an empty value or a reference is derived by the engine (or fails there)
         if (text.Length == 0 ||
             text.StartsWith(SchemaNodeRef.Prefix, StringComparison.Ordinal) ||
@@ -45,20 +45,22 @@ internal sealed class InstanceValueSource : IOpenChoiceSource
             return SourceResult.NoValue();
         }
 
-        if (dataType.Options?.FirstOrDefault(option => String.Equals(option.Value, text, StringComparison.OrdinalIgnoreCase)) is { Value: not null } label)
+        // an option value is matched case-insensitive
+        if (context.Field.ValueType is not null && context.Field.DataType.Options?.Values
+            .FirstOrDefault(option => String.Equals(InstanceValueSink.Format(option), text, StringComparison.OrdinalIgnoreCase)) is { } option)
         {
-            text = label.Key.ToString(CultureInfo.InvariantCulture);
+            return SourceResult.Provided(new LogicalField(context.Field.Name, valueType.ClrType, option));
         }
-        if (!dataType.Parse(text, out var value))
+        if (!valueType.Parse(text, out var value))
         {
-            // value processors (e.g. sys.map) make the logical value another type than the data type: they convert the text themselves
-            if (context.Field.Pipeline.ValueProcessors.Count > 0)
+            // the field declares its own semantic processors (e.g. sys.map): they convert the text themselves
+            if (context.Field.ValueType is null && context.Field.Pipeline.ValueProcessors.Count > 0)
             {
                 return SourceResult.Provided(new LogicalField(context.Field.Name, typeof(string), text));
             }
-            throw new InvalidOperationException($"'{text}' is not a valid value for {field.DisplayPath} ({dataType.Name}).");
+            throw new InvalidOperationException($"'{text}' is not a valid value for {field.DisplayPath} ({valueType.Name}).");
         }
-        return SourceResult.Provided(new LogicalField(context.Field.Name, dataType.ClrType, value));
+        return SourceResult.Provided(new LogicalField(context.Field.Name, valueType.ClrType, value));
     }
 
     public IValueSource EnterGroup(GroupContext context) => new InstanceValueSource(Find(context), _target);

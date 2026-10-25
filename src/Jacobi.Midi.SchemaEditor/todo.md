@@ -10,7 +10,7 @@ Known gaps and loose ends, collected while building the editor.
 - [ ] Value processors (repeat/choice) are not shown or editable; to be redesigned.
 - [ ] The data type options and the field Value validation (`DataTypeValueValidator`) only know the registered types and the data type defs of the edited document; data type defs of included schemas are not listed and their types count as custom (not validated). Resolve the includes' documents to fix this.
 - [x] The built-in data type descriptors have no `Min`/`Max`, so the Value range warning only applies to data type defs that define them. Fixed: the validation falls back to the range of the descriptor's `ClrType`.
-- [ ] The Value validation compares the typed value to the `Options` keys (physical values) and to `Min`/`Max` (logical values) without applying `Scale` and `Shift`; decide whether options should be matched on the physical value after scaling.
+- [x] The Value validation compares the typed value to the `Options` keys (physical values) and to `Min`/`Max` (logical values) without applying `Scale` and `Shift`; decide whether options should be matched on the physical value after scaling.
 - [x] *Delete* has no confirmation. Fixed: *Delete* asks for confirmation (`ConfirmViewModel`).
 - [ ] There is no undo.
 - [ ] The Add menu has no keyboard shortcuts (e.g. Ctrl+S for Save in the ☰ menu).

@@ -6,8 +6,10 @@ namespace Jacobi.Midi.SchemaEditor.Models;
 
 /// <summary>
 /// Checks the constant Value of a field against its data type: the data type is resolved from the
-/// <see cref="DataTypeRegistry"/> and the (local) data type defs of the document, the Value must parse with the
-/// descriptor and respect its Min, Max and Options facets.
+/// <see cref="DataTypeRegistry"/> and the (local) data type defs of the document. The Value is a logical value:
+/// it must parse with the value type of the descriptor, be one of its Options and respect its Min and Max facets.
+/// The data type defs are resolved by the serializer itself (<see cref="DataTypeRegistry.RegisterDataTypeDefs"/>),
+/// so facet inheritance and the implied value type are the same as when the schema is compiled.
 /// Produces warnings only; data types that cannot be resolved (custom types) are not validated.
 /// </summary>
 internal static class DataTypeValueValidator
@@ -48,117 +50,135 @@ internal static class DataTypeValueValidator
         if (value.Length == 0 ||
             value.StartsWith(SchemaNodeRef.Prefix, StringComparison.Ordinal) ||
             value.StartsWith(SchemaPubRef.Prefix, StringComparison.Ordinal) ||
-            Resolve(documents, ownerName, dataType, registry ?? Registry) is not { } type)
+            Resolve(documents, ownerName, dataType, registry ?? Registry) is not { } resolved)
         {
             return null;
+        }
+        if (resolved.Error is { } error)
+        {
+            return $"The data type {dataType.Trim()} is not valid: {error}";
         }
 
-        var label = type.Options?.Values.Any(option => String.Equals(option, value, StringComparison.OrdinalIgnoreCase)) == true;
-        if (label)
-        {
-            return null;
-        }
-        if (!type.Descriptor.Parse(value, out var parsed))
+        var type = resolved.Descriptor!;
+        // an option value is matched case-insensitive (as the value of an instance field)
+        var parsed = type.Options?.Values.FirstOrDefault(option => String.Equals(Format(option), value, StringComparison.OrdinalIgnoreCase));
+        if (parsed is null && (!type.ValueType.Parse(value, out parsed) || parsed is null))
         {
             return $"'{value}' is not a valid value for {dataType.Trim()}.";
         }
-
-        if (type.Options is { } options)
+        if (type.Options is { } options && !options.Values.Contains(parsed))
         {
-            return TryGetNumber(parsed, out var key) && key == Math.Truncate(key) && options.ContainsKey((long)key)
-                ? null
-                : $"'{value}' is not one of the options of {dataType.Trim()}.";
+            return $"'{value}' is not one of the options of {dataType.Trim()}.";
         }
-        if (TryGetNumber(parsed, out var number))
+        if (type.Min is { } min && DataTypeDescriptor.Compare(parsed, min) < 0)
         {
-            if (type.Min is { } min && number < min)
-            {
-                return $"{value} is less than the minimum {min.ToString(CultureInfo.InvariantCulture)} of {dataType.Trim()}.";
-            }
-            if (type.Max is { } max && number > max)
-            {
-                return $"{value} is greater than the maximum {max.ToString(CultureInfo.InvariantCulture)} of {dataType.Trim()}.";
-            }
+            return $"{value} is less than the minimum {Format(min)} of {dataType.Trim()}.";
+        }
+        if (type.Max is { } max && DataTypeDescriptor.Compare(parsed, max) > 0)
+        {
+            return $"{value} is greater than the maximum {Format(max)} of {dataType.Trim()}.";
         }
         return null;
     }
 
-    private sealed record ResolvedType(DataTypeDescriptor Descriptor, decimal? Min, decimal? Max, IReadOnlyDictionary<long, string>? Options);
+    /// <summary>
+    /// Returns a warning when <paramref name="value"/> is not a literal of the physical part of <paramref name="dataType"/>
+    /// (as the physical value of an option); otherwise null. Facets are not applied. Custom data types are not validated.
+    /// </summary>
+    public static string? ValidatePhysical(EditDocument? document, string dataType, string value)
+    {
+        if (Resolve(document is null ? [] : [document], document?.Name ?? String.Empty, dataType, Registry) is not { } resolved)
+        {
+            return null;
+        }
+        if (resolved.Error is { } error)
+        {
+            return $"The data type {dataType.Trim()} is not valid: {error}";
+        }
+        return resolved.Descriptor!.Parse(value, out var parsed) && parsed is not null
+            ? null
+            : $"'{value}' is not a valid value for {dataType.Trim()}.";
+    }
+
+    /// <summary>The resolved descriptor, or the error why the data type def (or one it depends on) is not valid.</summary>
+    private sealed record Resolution(DataTypeDescriptor? Descriptor, string? Error);
 
     /// <summary>
-    /// Follows the data type defs of the documents down to a registered descriptor, the facets of the most derived def win.
-    /// The base of a def without namespace is looked up in the document of that def.
-    /// Returns null when the chain does not end in a registered type.
+    /// Resolves a registered data type, or a data type def of the documents together with the defs it depends on (its base and value type)
+    /// into a copy of <paramref name="registry"/>. A reference without namespace is looked up in the document of the referring def.
+    /// Returns null when the data type is neither registered nor a data type def (a custom type).
     /// </summary>
-    private static ResolvedType? Resolve(IReadOnlyList<EditDocument> documents, string ownerName, string dataType, DataTypeRegistry registry)
+    private static Resolution? Resolve(IReadOnlyList<EditDocument> documents, string ownerName, string dataType, DataTypeRegistry registry)
     {
         if (String.IsNullOrWhiteSpace(dataType))
         {
             return null;
         }
-
-        decimal? min = null, max = null;
-        IReadOnlyDictionary<long, string>? options = null;
-        var visited = new HashSet<EditDataTypeDef>();
         var name = new SchemaName(dataType.Trim());
-        while (true)
+        if (registry.TryGet(name, out var registered))
         {
-            if (registry.TryGet(name, out var descriptor))
-            {
-                var (clrMin, clrMax) = GetClrRange(descriptor.ClrType);
-                return new(descriptor, min ?? descriptor.Min ?? clrMin, max ?? descriptor.Max ?? clrMax, options ?? descriptor.Options);
-            }
-
-            var owner = String.IsNullOrEmpty(name.Namespace) ? ownerName : name.Namespace;
-            var def = documents
-                .Where(d => String.Equals(d.Name, owner, StringComparison.OrdinalIgnoreCase))
-                .SelectMany(d => d.DataTypeDefs)
-                .FirstOrDefault(d => String.Equals(d.Name, name.Name, StringComparison.OrdinalIgnoreCase));
-            if (def is null || !visited.Add(def))
-            {
-                return null;
-            }
-            ownerName = owner;
-            min ??= def.Min;
-            max ??= def.Max;
-            options ??= def.Options;
-            name = def.BasedOn;
+            return new(registered, null);
         }
-    }
-
-    /// <summary>
-    /// The range of an integral or decimal CLR type: the fallback when neither the descriptor nor a data type def has a Min/Max.
-    /// Null bounds for other types (floating point types do not fit a decimal range).
-    /// </summary>
-    private static (decimal? Min, decimal? Max) GetClrRange(Type type) => Type.GetTypeCode(Nullable.GetUnderlyingType(type) ?? type) switch
-    {
-        TypeCode.SByte => (SByte.MinValue, SByte.MaxValue),
-        TypeCode.Byte => (Byte.MinValue, Byte.MaxValue),
-        TypeCode.Int16 => (Int16.MinValue, Int16.MaxValue),
-        TypeCode.UInt16 => (UInt16.MinValue, UInt16.MaxValue),
-        TypeCode.Int32 => (Int32.MinValue, Int32.MaxValue),
-        TypeCode.UInt32 => (UInt32.MinValue, UInt32.MaxValue),
-        TypeCode.Int64 => (Int64.MinValue, Int64.MaxValue),
-        TypeCode.UInt64 => (UInt64.MinValue, UInt64.MaxValue),
-        TypeCode.Decimal => (Decimal.MinValue, Decimal.MaxValue),
-        _ => (null, null)
-    };
-
-    private static bool TryGetNumber(object? value, out decimal number)
-    {
-        number = 0;
-        if (value is null or string or bool or char or Enum or not IConvertible)
+        var owner = String.IsNullOrEmpty(name.Namespace) ? ownerName : name.Namespace;
+        if (FindDef(documents, owner, name) is null)
         {
-            return false;
+            return null;
         }
+
+        // the def and the defs it depends on, with the name of their document
+        var defs = new List<(string Owner, EditDataTypeDef Definition)>();
+        var pending = new Stack<(string Owner, SchemaName Name)>([(owner, name)]);
+        while (pending.TryPop(out var reference))
+        {
+            var defOwner = String.IsNullOrEmpty(reference.Name.Namespace) ? reference.Owner : reference.Name.Namespace;
+            // a def that is not found is reported by the registry
+            if (registry.TryGet(reference.Name, out _) ||
+                FindDef(documents, defOwner, reference.Name) is not { } def ||
+                defs.Any(item => ReferenceEquals(item.Definition, def)))
+            {
+                continue;
+            }
+            defs.Add((defOwner, def));
+            pending.Push((defOwner, def.BasedOn));
+            if (def.ValueType is { } valueType)
+            {
+                pending.Push((defOwner, valueType));
+            }
+        }
+
         try
         {
-            number = Convert.ToDecimal(value, CultureInfo.InvariantCulture);
-            return true;
+            var schemas = defs.GroupBy(item => item.Owner, StringComparer.OrdinalIgnoreCase).Select(group =>
+            {
+                var builder = new SchemaDocumentBuilder(group.Key);
+                foreach (var (_, def) in group)
+                {
+                    EditNodeMapper.WriteDataTypeDef(def, builder);
+                }
+                return builder.Build();
+            }).ToList();
+
+            var resolver = new DataTypeRegistry();
+            foreach (var type in registry.Types)
+            {
+                resolver.Register(type);
+            }
+            resolver.RegisterDataTypeDefs(schemas);
+            return resolver.TryGet(new SchemaName($"{owner}{SchemaName.Separator}{name.Name}"), out var descriptor)
+                ? new(descriptor, null)
+                : null;
         }
-        catch (Exception ex) when (ex is FormatException or InvalidCastException or OverflowException)
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or FormatException)
         {
-            return false;
+            return new(null, ex.Message);
         }
     }
+
+    private static EditDataTypeDef? FindDef(IReadOnlyList<EditDocument> documents, string owner, SchemaName name)
+        => documents
+            .Where(d => String.Equals(d.Name, owner, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(d => d.DataTypeDefs)
+            .FirstOrDefault(d => String.Equals(d.Name, name.Name, StringComparison.OrdinalIgnoreCase));
+
+    private static string Format(object value) => Convert.ToString(value, CultureInfo.InvariantCulture) ?? String.Empty;
 }

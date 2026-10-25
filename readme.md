@@ -74,3 +74,9 @@ dotnet publish src/Jacobi.Midi.SchemaEditor/Jacobi.Midi.SchemaEditor.Desktop -f 
 This gives two builds (one per target framework) and one published output per RID.
 Only the Windows outputs contain `Jacobi.Midi.Windows.dll` and `WinRT.Runtime.dll`.
 All other assemblies (Core, Messages, the shared SchemaEditor library, ...) are the same `net11.0` binaries everywhere.
+
+## Device Support
+
+Here some 'inspiration' what devices to support from our compatition.
+
+https://squest.com/Products/MidiQuest13/Instruments.html

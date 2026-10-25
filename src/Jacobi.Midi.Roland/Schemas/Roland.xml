@@ -40,7 +40,7 @@
 
   <dataTypeDefs>
     <dataTypeDef name="level" basedOn="sys.uint8" min="0" max="100" />
-    <dataTypeDef name="switch" basedOn="sys.bool" min="0" max="1" />
+    <dataTypeDef name="switch" basedOn="sys.bool" />
   </dataTypeDefs>
   
   <members>

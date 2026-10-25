@@ -91,7 +91,7 @@ internal sealed class DocumentRefEditor(SchemaWorkspaceDocument document, EditDo
 }
 
 /// <summary>
-/// Edits a data type def: its name, base type, numeric facets and the value/label options.
+/// Edits a data type def: its name, base type, value type, facets and the options (physical value to logical value).
 /// Its processors and properties are edited in the Processors and Properties tabs.
 /// </summary>
 internal sealed partial class DataTypeDefEditor : ItemEditor
@@ -125,16 +125,25 @@ internal sealed partial class DataTypeDefEditor : ItemEditor
     /// </summary>
     public IReadOnlyList<string> BasedOnOptions => DataTypeOptions.Get(_document.Schema, _definition);
 
-    public string? Min
+    /// <summary>The data type of the logical value; empty for the implied value type.</summary>
+    public string? ValueType
     {
-        get => Format(_definition.Min);
-        set => Edit(_definition.Min, ParseDecimal(value), v => _definition.Min = v);
+        get => _definition.ValueType?.ToString();
+        set => Edit(_definition.ValueType, Optional(value) is { } name ? new SchemaName(name) : (SchemaName?)null, v => _definition.ValueType = v);
     }
 
+    /// <summary>A literal of the value type.</summary>
+    public string? Min
+    {
+        get => _definition.Min;
+        set => Edit(_definition.Min, Optional(value), v => _definition.Min = v);
+    }
+
+    /// <summary>A literal of the value type.</summary>
     public string? Max
     {
-        get => Format(_definition.Max);
-        set => Edit(_definition.Max, ParseDecimal(value), v => _definition.Max = v);
+        get => _definition.Max;
+        set => Edit(_definition.Max, Optional(value), v => _definition.Max = v);
     }
 
     public string? Scale
@@ -154,11 +163,23 @@ internal sealed partial class DataTypeDefEditor : ItemEditor
     /// </summary>
     public ObservableCollection<OptionRow> Options { get; }
 
+    /// <summary>
+    /// The logical value (a literal of the value type) read for a physical value that is not one of the options; empty for none.
+    /// The spaces are part of the value.
+    /// </summary>
+    public string? OptionsDefault
+    {
+        get => _definition.OptionsDefault;
+        set => Edit(_definition.OptionsDefault, String.IsNullOrEmpty(value) ? null : value, v => _definition.OptionsDefault = v);
+    }
+
     [RelayCommand]
     private void AddOption()
     {
-        var value = Options.Count == 0 ? 0 : Options.Max(option => option.Number) + 1;
-        Options.Add(new OptionRow(this, value, $"Option{value}"));
+        // the next number after the largest (whole number) physical value
+        var numbers = Options.Select(option => OptionRow.TryParseNumber(option.Value, out var number) ? number : (long?)null).OfType<long>().ToList();
+        var value = numbers.Count == 0 ? 0 : numbers.Max() + 1;
+        Options.Add(new OptionRow(this, value.ToString(CultureInfo.InvariantCulture), $"Option{value}"));
         WriteOptions();
     }
 
@@ -172,35 +193,43 @@ internal sealed partial class DataTypeDefEditor : ItemEditor
     }
 
     /// <summary>
+    /// A warning when <paramref name="value"/> is not a physical value of the base type (a literal of <see cref="BasedOn"/>); otherwise null.
+    /// </summary>
+    internal string? ValidatePhysical(string value)
+        => DataTypeValueValidator.ValidatePhysical(_document.Schema, _definition.BasedOn.ToString(), value);
+
+    /// <summary>
     /// Writes the rows to the def. A value used by more than one row keeps the label of the last row.
     /// </summary>
     internal void WriteOptions()
     {
         _definition.Options = Options.Count == 0 ? null
-            : Options.GroupBy(option => option.Number).ToDictionary(group => group.Key, group => group.Last().Label);
+            : Options.GroupBy(option => option.Value).ToDictionary(group => group.Key, group => group.Last().Label);
         _document.MarkChanged();
     }
 }
 
 /// <summary>
-/// One value/label option of a <see cref="DataTypeDefEditor"/>.
-/// The value accepts decimal or hexadecimal ('0x..') numbers.
+/// One option of a <see cref="DataTypeDefEditor"/>: the physical value (a literal of the data type) and its label,
+/// the logical value (a literal of the value type).
 /// </summary>
-internal sealed class OptionRow(DataTypeDefEditor owner, long number, string label) : ObservableObject
+internal sealed class OptionRow(DataTypeDefEditor owner, string physical, string label) : ObservableObject
 {
-    public long Number { get; private set; } = number;
-
     public string Value
     {
-        get => Number.ToString(CultureInfo.InvariantCulture);
+        get => physical;
         set
         {
-            var number = ParseNumber(value);
-            if (number == Number)
+            var text = value?.Trim() is { Length: > 0 } trimmed ? trimmed : throw new ArgumentException("The value is required.");
+            if (text == physical)
             {
                 return;
             }
-            Number = number;
+            if (owner.ValidatePhysical(text) is { } warning)
+            {
+                throw new FormatException(warning);
+            }
+            physical = text;
             OnPropertyChanged();
             owner.WriteOptions();
         }
@@ -222,13 +251,13 @@ internal sealed class OptionRow(DataTypeDefEditor owner, long number, string lab
         }
     }
 
-    private static long ParseNumber(string? value)
+    /// <summary>Parses a decimal or hexadecimal ('0x..') whole number.</summary>
+    internal static bool TryParseNumber(string? value, out long number)
     {
         var text = value?.Trim() ?? String.Empty;
-        var parsed = text.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
-            ? Int64.TryParse(text[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var number)
+        return text.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+            ? Int64.TryParse(text[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out number)
             : Int64.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out number);
-        return parsed ? number : throw new FormatException($"'{value}' is not a whole number.");
     }
 }
 

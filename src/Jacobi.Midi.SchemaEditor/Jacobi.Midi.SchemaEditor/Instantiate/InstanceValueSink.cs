@@ -132,7 +132,7 @@ internal sealed class InstanceValueSink : IOpenChoiceSink
     {
         if (Find(context) is InstanceField { IsConstant: false } field)
         {
-            field.Value = Format(context.Field.DataType, value.Value);
+            field.Value = Format(value.Value);
             _read.Add(field);
         }
     }
@@ -221,39 +221,16 @@ internal sealed class InstanceValueSink : IOpenChoiceSink
     }
 
     /// <summary>
-    /// Formats a value that was read as text the data type parses again (see <see cref="InstanceValueSource"/>):
-    /// the label of an option, hex bytes, or the invariant text of the value.
+    /// Formats a (logical) value that was read as text the value type parses again (see <see cref="InstanceValueSource"/>):
+    /// hex bytes, or the invariant text of the value (an option value is already its logical value).
     /// </summary>
-    internal static string Format(DataTypeDescriptor dataType, object? value)
+    internal static string Format(object? value) => value switch
     {
-        if (dataType.Options is { } options && TryGetKey(value, out var key) && options.TryGetValue(key, out var label))
-        {
-            return label;
-        }
-        return value switch
-        {
-            null => String.Empty,
-            byte[] bytes => Convert.ToHexString(bytes),
-            ReadOnlyMemory<byte> memory => Convert.ToHexString(memory.Span),
-            DateTime date => date.ToString("O", CultureInfo.InvariantCulture),
-            IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
-            _ => value.ToString() ?? String.Empty
-        };
-    }
-
-    private static bool TryGetKey(object? value, out long key)
-    {
-        switch (value)
-        {
-            case sbyte or byte or short or ushort or int or uint or long:
-                key = Convert.ToInt64(value, CultureInfo.InvariantCulture);
-                return true;
-            case ulong number when number <= Int64.MaxValue:
-                key = (long)number;
-                return true;
-            default:
-                key = 0;
-                return false;
-        }
-    }
+        null => String.Empty,
+        byte[] bytes => Convert.ToHexString(bytes),
+        ReadOnlyMemory<byte> memory => Convert.ToHexString(memory.Span),
+        DateTime date => date.ToString("O", CultureInfo.InvariantCulture),
+        IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
+        _ => value.ToString() ?? String.Empty
+    };
 }

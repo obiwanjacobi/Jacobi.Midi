@@ -328,7 +328,7 @@ public class DocumentItemTests
         editor.Min = "-1.5";
         editor.Max = " ";
         Assert.Equal(new SchemaName("sys.uint16"), definition.BasedOn);
-        Assert.Equal(-1.5m, definition.Min);
+        Assert.Equal("-1.5", definition.Min);
         Assert.Null(definition.Max);
         Assert.True(document.IsDirty);
 
@@ -342,8 +342,18 @@ public class DocumentItemTests
         editor.AddOptionCommand.Execute(null);
         editor.Options[1].Value = "0x10";
         editor.Options[1].Label = "Sixteen";
-        Assert.Equal(new Dictionary<long, string> { [0] = "Option0", [16] = "Sixteen" }, definition.Options);
+        Assert.Equal(new Dictionary<string, string> { ["0"] = "Option0", ["0x10"] = "Sixteen" }, definition.Options);
+        // a physical value must be a literal of the base type
         Assert.Throws<FormatException>(() => editor.Options[0].Value = "x");
+
+        editor.ValueType = "sys.int32";
+        editor.OptionsDefault = "-1";
+        Assert.Equal(new SchemaName("sys.int32"), definition.ValueType);
+        Assert.Equal("-1", definition.OptionsDefault);
+        editor.ValueType = " ";
+        editor.OptionsDefault = "";
+        Assert.Null(definition.ValueType);
+        Assert.Null(definition.OptionsDefault);
 
         editor.RemoveOptionCommand.Execute(editor.Options[0]);
         editor.RemoveOptionCommand.Execute(editor.Options[0]);

@@ -78,7 +78,7 @@ Put the comment on its own line **above** the member (GP-8 style), not trailing 
 ```
 
 - Format: `<offset>: <stored range or values>`. The offset is hex, relative to the start of the nodeDef or section. Add the displayed value with `(= ...)` when it differs from the stored value: `0-100 (= -50 - +50)`.
-- Enumerations: list the values (`0 = down, 100 = up`), or better, model them with a `sys.map` dataTypeDef (see `upDown` in `Gp8.xml`).
+- Enumerations: list the values (`0 = down, 100 = up`), or better, model them with a dataTypeDef with `options` (see `upDown` in `Gp8.xml`).
 - A section or group gets a comment with its number and size: `<!-- Section 01: 8 bytes. -->`.
 - Older files (`Gx700.xml`, `G50.xml`) use trailing, column-aligned comments. When editing a few lines there, keep the existing style and its alignment. Do not convert a whole file without asking.
 
@@ -86,13 +86,16 @@ Put the comment on its own line **above** the member (GP-8 style), not trailing 
 
 - Never invent offsets, ranges or names. What is not confirmed by a manual or a dump gets a `[TODO]` comment that says what is known: `<!-- [TODO] 0x4E in the dump (patch level?) -->`, `<!-- [TODO] verify ... against the manual. -->`.
 - Keep the bytes in place with an `Unknown..` field so the layout and the round trip stay correct.
-- Placeholder names (`Param1` ... in a `sys.map`) are allowed only with a `[TODO]`.
+- Placeholder names (`Param1` ... in `options`) are allowed only with a `[TODO]`.
 
 ## Data types and processors
 
 - Built-in types always need the `sys.` prefix (`sys.uint8`, `sys.uint16`, `sys.bool`, `sys.string`, `sys.bytes`).
 - Reuse before you define: vendor types (`roland.level` 0-100, `roland.switch`), base processor definitions (`midi.sysexbyte`: 7 bits per byte big endian, `midi.string`: ASCII), vendor nodeDefs (`roland.sysex16/24/32`).
-- Define a dataTypeDef in the device schema for device-specific ranges and enumerations: `basedOn`, `min`/`max`, and a `sys.map` processor (`to`, `default`, one property per value). Move a type to the vendor schema only once a second device needs it.
+- Define a dataTypeDef in the device schema for device-specific ranges and enumerations: `basedOn` and the facets, which `sys.datatype` applies without declaring a processor.
+  - Range: `min`/`max`, literals of the logical value (with `scale`/`shift` the scaled value).
+  - Enumeration: `options` with one `<option value="<stored value>" name="<logical value>"/>` per value; `optionsDefault` for the value read for a stored value that is not an option (it cannot be written); `valueType` when the names are not strings (`sys.bool` for a 0/100 switch). No `min`/`max` with options: they would apply to the names.
+  - Move a type to the vendor schema only once a second device needs it.
 - Multi-byte values: give the field a `byteLength` and a field processor: `midi.sysexbyte` (7 + 7 bits, MSB first), `sys.bitslicer bits="4" byteorder="big"` (nibbles). Make it a nodeDef when it recurs (`sysex14`, `nibble8`).
 - Bit flags in one byte: a group with `byteLength="1"` and `sys.bitpacker`, fields with `bits` (see `EffectSwiches1` in `Gp8.xml`).
 - Fixed bytes (ids, commands, terminators): a field with `value`. The reader checks it, the writer supplies it.

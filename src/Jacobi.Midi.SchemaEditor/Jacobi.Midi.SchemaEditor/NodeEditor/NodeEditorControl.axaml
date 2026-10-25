@@ -389,6 +389,12 @@
                             <ComboBox Classes="options" IsEditable="True" Text="{Binding BasedOn}" PlaceholderText="e.g. sys.uint8"
                                       ItemsSource="{Binding BasedOnOptions}" />
                         </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Value type" Classes="label" />
+                            <ComboBox Classes="options" IsEditable="True" Text="{Binding ValueType}"
+                                      PlaceholderText="implied: sys.string with options, sys.decimal with scale/shift, else of the base"
+                                      ItemsSource="{Binding BasedOnOptions}" />
+                        </StackPanel>
                         <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="8">
                             <StackPanel Grid.Column="0" Spacing="4">
                                 <TextBlock Text="Min" Classes="label" />
@@ -415,14 +421,18 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="ne:OptionRow">
                                     <Grid ColumnDefinitions="100,*,Auto" ColumnSpacing="8" Margin="0,2">
-                                        <TextBox Text="{Binding Value}" PlaceholderText="value" />
-                                        <TextBox Grid.Column="1" Text="{Binding Label}" PlaceholderText="label" />
+                                        <TextBox Text="{Binding Value}" PlaceholderText="physical value" />
+                                        <TextBox Grid.Column="1" Text="{Binding Label}" PlaceholderText="logical value" />
                                         <Button Grid.Column="2" Content="Remove" CommandParameter="{Binding}"
                                                 Command="{Binding $parent[ItemsControl].((ne:DataTypeDefEditor)DataContext).RemoveOptionCommand}" />
                                     </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Options default" Classes="label" />
+                            <TextBox Text="{Binding OptionsDefault}" PlaceholderText="optional: the logical value read for a value that is not an option" />
+                        </StackPanel>
                         <ContentControl Content="{Binding Details}" ContentTemplate="{StaticResource DetailsSectionsTemplate}" />
                     </StackPanel>
                 </DataTemplate>

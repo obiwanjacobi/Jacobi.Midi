@@ -107,16 +107,25 @@ internal partial class EditDataTypeDef : ObservableObject
     public required partial string Name { get; set; }
     [ObservableProperty]
     public required partial SchemaName BasedOn { get; set; }
+    /// <summary>A literal of the value type.</summary>
     [ObservableProperty]
-    public partial decimal? Min { get; set; }
+    public partial string? Min { get; set; }
+    /// <summary>A literal of the value type.</summary>
     [ObservableProperty]
-    public partial decimal? Max { get; set; }
+    public partial string? Max { get; set; }
     [ObservableProperty]
     public partial decimal? Scale { get; set; }
     [ObservableProperty]
     public partial decimal? Shift { get; set; }
+    /// <summary>The physical values (literals of the data type) mapped to their logical values (literals of the value type).</summary>
     [ObservableProperty]
-    public partial Dictionary<long, string>? Options { get; set; }
+    public partial Dictionary<string, string>? Options { get; set; }
+    /// <summary>The data type of the logical value; null for the implied value type.</summary>
+    [ObservableProperty]
+    public partial SchemaName? ValueType { get; set; }
+    /// <summary>The logical value read for a physical value that is not one of the options.</summary>
+    [ObservableProperty]
+    public partial string? OptionsDefault { get; set; }
     [ObservableProperty]
     public partial ObservableCollection<EditProcessorRef> Processors { get; set; } = [];
     [ObservableProperty]
