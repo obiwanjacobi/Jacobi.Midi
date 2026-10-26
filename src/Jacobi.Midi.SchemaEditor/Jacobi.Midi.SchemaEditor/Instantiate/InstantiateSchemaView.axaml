@@ -44,7 +44,8 @@
     </UserControl.Styles>
 
     <UserControl.DataTemplates>
-        <!-- a field: the value as text; chosen from the options of its data type when it has them (other text can still be typed) -->
+        <!-- a field: the value as text; chosen from the options of its data type (or true/false for a boolean) when it has them
+             (other text can still be typed) -->
         <DataTemplate x:DataType="inst:InstanceField">
             <Grid ColumnDefinitions="220,*" ColumnSpacing="12" Margin="0,3" ToolTip.Tip="{Binding Description}">
                 <StackPanel VerticalAlignment="Center">

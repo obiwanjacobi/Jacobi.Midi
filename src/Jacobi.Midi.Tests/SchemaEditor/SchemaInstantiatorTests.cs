@@ -627,6 +627,41 @@ public class SchemaInstantiatorTests
         Assert.False(withoutOptions.ShowsOptions);
     }
 
+    private const string Booleans = """
+        {
+          "name": "Booleans",
+          "dataTypeDefs": [
+            { "name": "Flag", "basedOn": "sys.uint8", "valueType": "sys.bool" }],
+          "members": [
+            { "name": "Msg", "kind": "group", "members": [
+                { "name": "B", "kind": "field", "datatype": "sys.bool" },
+                { "name": "F", "kind": "field", "datatype": "Flag" },
+                { "name": "C", "kind": "field", "datatype": "sys.bool", "value": "true" },
+                { "name": "N", "kind": "field", "datatype": "sys.uint8" }] }]
+        }
+        """;
+
+    [Fact]
+    public void Options_AreTrueAndFalseForABooleanLogicalValue()
+    {
+        var document = EditNodeMapper.ToEditDocument(JsonSerializer.Deserialize(Booleans));
+        var instantiator = SchemaInstantiator.Create(document, [document], TestHelpers.CreateProcessors());
+        var root = instantiator.CreateRoot("Msg");
+        InstanceField Field(string name) => (InstanceField)root.Members.Single(member => member.Name == name);
+
+        Assert.Empty(instantiator.Warnings);
+        Assert.Equal(["True", "False"], Field("B").Options);
+        Assert.True(Field("B").ShowsOptions);
+        Assert.Equal(["True", "False"], Field("F").Options);
+        Assert.True(Field("F").ShowsOptions);
+        // a constant is not chosen
+        Assert.False(Field("C").ShowsOptions);
+        Assert.Empty(Field("N").Options);
+
+        Field("B").Value = "True";
+        Assert.Null(Field("B").ValueWarning);
+    }
+
     [Fact]
     public void Serialize_WritesTheOptionOfALogicalValue()
     {

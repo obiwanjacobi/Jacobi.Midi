@@ -72,9 +72,16 @@ internal sealed class InstanceValueSource : IOpenChoiceSource
         return warning;
     }
 
-    /// <summary>The option values of the compiled <paramref name="field"/> as text (see <see cref="ToLogical"/>); empty when its data type has no options.</summary>
+    /// <summary>
+    /// The option values of the compiled <paramref name="field"/> as text (see <see cref="ToLogical"/>): those of its data type,
+    /// or true and false for a boolean logical value (e.g. sys.bool); empty otherwise.
+    /// </summary>
     public static IReadOnlyList<string> OptionsOf(FieldInfo field)
-        => Facets(field)?.Options?.Values.Select(DataTypeValueValidator.Format).Distinct().ToList() ?? [];
+        => Facets(field)?.Options?.Values.Select(DataTypeValueValidator.Format).Distinct().ToList() is { Count: > 0 } options
+            ? options
+            : field.ValueType.ClrType == typeof(bool)
+                ? [DataTypeValueValidator.Format(true), DataTypeValueValidator.Format(false)]
+                : [];
 
     // the facets of the data type apply when the engine converts the value; not to a field with its own semantic processors
     private static DataTypeDescriptor? Facets(FieldInfo field) => field.ConvertsToValueType ? field.DataType : null;
