@@ -8,6 +8,7 @@ Known gaps and loose ends of the address map and the message exchange (see [Addr
 
 ## Message exchange
 
+- [ ] **The message interval should be the pause on the wire.** `midi.messageInterval` is waited after the connection accepted the message, but a MIDI 1.0 (DIN) port takes about 0.32 ms per byte (31250 baud) to transmit it: the 77 byte Common section of the GX-700 takes ~25 ms, so the next message may follow without the 20 ms pause the device needs. Add the transmission time of the message to the pause (or make it configurable per connection), in one place for `MessageExchange` and the Schema Editor's *Send*.
 - [ ] **Message exchange patterns** beyond the built-in `oneWay` and `acknowledged` protocols (`ExchangeProtocols`), as state machines (`ITransferMachine`) and later configurable.
   - [ ] Roland handshake protocol: WSD/RQD → ACK → DAT → ACK … EOD, ERR → resend, RJC → abort, with retries and timeouts.
   - [ ] Framed transactions: Yamaha Bulk Header → blocks → Bulk Footer (stored Live Set Sounds of the CP88, CK88, YC).

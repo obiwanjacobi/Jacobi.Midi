@@ -3,10 +3,7 @@
   Boss GX-700 Guitar Effects Processor - memory map (MIDI Implementation v1.00, Mar. 8 1996).
 
   Checked against the bulk dumps in Jacobi.Midi.Tests/Schema (gx700-sysex-patch1.syx, gx700-sysex-system.syx).
-  The names of the enumerations were first taken from the boss-gx-700-patch-parser by Tom Weatherhead
-  (https://github.com/tom-weatherhead/boss-gx-700-patch-parser, src/script.js); where the manual differs, the
-  manual is followed and the difference is marked [TODO] verify.
-
+  
   Used with the Message32 messages of the Roland schema (4 address bytes): Model-ID 0x79,
   Device-ID = MIDI receive channel - 1 (0x00 in the dumps).
 
@@ -1529,7 +1526,7 @@
   </dataTypeDefs>
 
   <members>
-    <group name="AddressMap" nodeDef="roland.messageBody32" midi.device.modelId="0x79">
+    <group name="AddressMap" nodeDef="roland.messageBody32" midi.device.modelId="0x79" midi.messageInterval="60">
       <members>
         <!-- Patch 1-100. -->
         <repeat name="Memory" midi.address="0x00-00-00-00" midi.stride="0x00-01-00-00" midi.repeat="100">
