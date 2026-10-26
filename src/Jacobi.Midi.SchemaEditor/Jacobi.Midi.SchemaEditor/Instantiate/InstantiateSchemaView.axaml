@@ -230,7 +230,7 @@
                 <Border DockPanel.Dock="Top" IsVisible="{Binding IsMatch}" Margin="0,0,0,12" Padding="10" CornerRadius="6"
                         Background="{DynamicResource AppBackgroundCardBrush}" BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="1">
                     <StackPanel Spacing="6" DataContext="{Binding Match}" x:DataType="inst:SysExMatchViewModel">
-                        <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="8">
+                        <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="8">
                             <Button Content="Load File…" Command="{Binding LoadFileCommand}" IsEnabled="{Binding CanMatch}"
                                     ToolTip.Tip="Load a SysEx (.syx) file and match its message(s) with the schema" />
                             <Button Grid.Column="1" Content="{Binding ReceiveButtonText}" Command="{Binding ReceiveCommand}" IsEnabled="{Binding CanMatch}"
@@ -239,6 +239,10 @@
                                       IsEnabled="{Binding HasBuffers}" PlaceholderText="No SysEx loaded or received" HorizontalAlignment="Stretch" />
                             <Button Grid.Column="3" Content="Match" Command="{Binding MatchCommand}"
                                     ToolTip.Tip="Read the selected SysEx again, e.g. after selecting the body of an open choice" />
+                            <Button Grid.Column="4" Content="Match All" Command="{Binding MatchAllCommand}"
+                                    ToolTip.Tip="Read all loaded and received messages one after the other into the values, e.g. the data messages of a patch file" />
+                            <CheckBox Grid.Column="5" Content="Accumulate" IsChecked="{Binding Accumulate}" VerticalAlignment="Center"
+                                      ToolTip.Tip="Add the values of a match to those of the earlier matches instead of clearing them first" />
                         </Grid>
                         <SelectableTextBlock Text="{Binding SelectedBuffer.BytesText, FallbackValue=''}" FontFamily="Consolas,Menlo,monospace" FontSize="11"
                                              TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"

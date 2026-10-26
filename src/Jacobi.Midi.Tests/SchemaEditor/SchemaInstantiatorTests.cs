@@ -1129,7 +1129,7 @@ public class SchemaInstantiatorTests
         var root = instantiator.Create(msg);
         var rootName = instantiator.FindRootName(msg)!.Value;
         (string, byte[])? file = ("dump.syx", [0xF0, 0x01, 0x02, 0x03, 0xF7, 0xF0, 0x01, 0xF7]);
-        var match = new SysExMatchViewModel((bytes, warnings) => instantiator.Deserialize(rootName, root, bytes, warnings),
+        var match = new SysExMatchViewModel((bytes, accumulate, warnings) => instantiator.Deserialize(rootName, root, bytes, warnings, accumulate),
             () => Task.FromResult(file), new Jacobi.Midi.SchemaEditor.Midi.MidiBarViewModel(null));
 
         match.LoadFileCommand.Execute(null);

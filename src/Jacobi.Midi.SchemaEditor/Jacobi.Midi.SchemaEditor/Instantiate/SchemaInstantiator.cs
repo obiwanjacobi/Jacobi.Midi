@@ -202,10 +202,15 @@ internal sealed class SchemaInstantiator
     /// In an address map body, the part that was read is included (and the rest left out), so it can be sent back.
     /// </summary>
     /// <param name="warnings">Receives the situations the user may not expect (e.g. a message that is read only partly into a map), also when the read fails.</param>
+    /// <param name="accumulate">
+    /// True to add the values to those of the earlier reads instead of clearing them first, e.g. the data messages that
+    /// each carry a part of one patch; the part that was read is then included as well. A repeat of an address map that holds
+    /// values keeps its item: a message for another item of it is not read into it (with a warning).
+    /// </param>
     /// <returns>The number of bytes that were read (the bytes after them are not part of the instance).</returns>
     /// <exception cref="ExecutionPlanException">The plan cannot be built.</exception>
     /// <exception cref="InvalidOperationException">The bytes do not match the schema; the message describes the problem.</exception>
-    public long Deserialize(SchemaName root, InstanceNode instance, byte[] bytes, ICollection<string> warnings)
+    public long Deserialize(SchemaName root, InstanceNode instance, byte[] bytes, ICollection<string> warnings, bool accumulate = false)
     {
         ArgumentNullException.ThrowIfNull(instance);
         ArgumentNullException.ThrowIfNull(bytes);
@@ -215,7 +220,7 @@ internal sealed class SchemaInstantiator
         var isRoot = String.Equals(plan.Root.Path.Value, instance.Path.Value, StringComparison.OrdinalIgnoreCase);
         // the engine enters the root with the sink itself; the items of a root repeat are found by its path
         var sink = new InstanceValueSink(isRoot && instance is not InstanceRepeat ? instance : null, instance);
-        sink.Begin();
+        sink.Begin(accumulate);
         var completed = false;
         try
         {
@@ -228,12 +233,17 @@ internal sealed class SchemaInstantiator
         finally
         {
             sink.End(completed);
-            IncludeRead(instance, sink);
+            IncludeRead(instance, sink, accumulate);
+            foreach (var skipped in sink.Skipped)
+            {
+                warnings.Add($"Not read: the message addresses another item than the accumulated values, {skipped}.");
+            }
         }
     }
 
-    // in an address map body: include the part of the map that was read (the nearest node that can be included), leave out the rest
-    private static void IncludeRead(InstanceNode instance, InstanceValueSink sink)
+    // in an address map body: include the part of the map that was read (the nearest node that can be included) and leave
+    // out the rest; when accumulating, the part that was read is included as well (see InstanceBody.KeepContiguous)
+    private static void IncludeRead(InstanceNode instance, InstanceValueSink sink, bool accumulate)
     {
         if (FindAddressMap(instance) is not { } map)
         {
@@ -243,7 +253,14 @@ internal sealed class SchemaInstantiator
         {
             if (node.CanInclude)
             {
-                map.Body.IncludeOnly(node);
+                if (accumulate)
+                {
+                    node.IsIncluded = true;
+                }
+                else
+                {
+                    map.Body.IncludeOnly(node);
+                }
                 return;
             }
         }

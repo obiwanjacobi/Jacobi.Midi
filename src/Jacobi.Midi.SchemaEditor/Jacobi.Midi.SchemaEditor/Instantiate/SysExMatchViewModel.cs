@@ -43,22 +43,25 @@ internal sealed record SysExBuffer(string Source, byte[] Bytes)
 /// The match part of the instantiate dialog: loads a SysEx file or receives a SysEx message from the active MIDI connection
 /// and reads (deserializes) the selected buffer into the instance tree of the dialog, so the values of each field are shown.
 /// A read problem (the bytes do not match the schema) is caught and shown in <see cref="Error"/>; the values read up to it remain.
+/// With <see cref="Accumulate"/> a match adds to the values of the earlier matches, and <see cref="MatchAllCommand"/> reads all
+/// buffers one after the other, e.g. the data messages of a patch file that each carry a part of the patch.
 /// </summary>
 internal sealed partial class SysExMatchViewModel : ObservableObject
 {
-    private readonly Func<byte[], ICollection<string>, long>? _deserialize;
+    private readonly Func<byte[], bool, ICollection<string>, long>? _deserialize;
     private readonly Func<Task<(string Name, byte[] Bytes)?>> _openFile;
     private readonly MidiBarViewModel _midi;
     // only used on the thread that raises the received packets
     private SysEx7Assembler? _assembler;
 
     /// <param name="deserialize">
-    /// Reads the bytes into the instance tree, adds the situations the user may not expect to the warnings (also when it fails)
-    /// and returns the number of bytes read; null when the instance has no plan (a node def).
+    /// Reads the bytes into the instance tree, adding to the values of the earlier reads when the flag is set (see
+    /// <see cref="SchemaInstantiator.Deserialize"/>); adds the situations the user may not expect to the warnings (also when it
+    /// fails) and returns the number of bytes read; null when the instance has no plan (a node def).
     /// </param>
     /// <param name="openFile">Lets the user pick a SysEx file and returns its name and contents; null when the user cancelled.</param>
     /// <param name="midi">The MIDI connection the messages are received from.</param>
-    public SysExMatchViewModel(Func<byte[], ICollection<string>, long>? deserialize, Func<Task<(string Name, byte[] Bytes)?>> openFile, MidiBarViewModel midi)
+    public SysExMatchViewModel(Func<byte[], bool, ICollection<string>, long>? deserialize, Func<Task<(string Name, byte[] Bytes)?>> openFile, MidiBarViewModel midi)
     {
         _deserialize = deserialize;
         _openFile = openFile;
@@ -76,6 +79,13 @@ internal sealed partial class SysExMatchViewModel : ObservableObject
     public ObservableCollection<SysExBuffer> Buffers { get; } = [];
 
     public bool HasBuffers => Buffers.Count > 0;
+
+    /// <summary>
+    /// True when a match adds to the values of the earlier matches instead of clearing them first,
+    /// e.g. to collect the data messages of one patch that each carry a part of it.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool Accumulate { get; set; }
 
     /// <summary>The buffer that is matched.</summary>
     [ObservableProperty]
@@ -134,13 +144,8 @@ internal sealed partial class SysExMatchViewModel : ObservableObject
         var warnings = new List<string>();
         try
         {
-            var read = _deserialize(buffer.Bytes, warnings);
-            Status = $"Matched {buffer.Source}: read {read} of {buffer.Bytes.Length} byte(s).";
-            if (read < buffer.Bytes.Length)
-            {
-                var trailing = buffer.Bytes.AsSpan((int)read);
-                warnings.Add($"{trailing.Length} trailing byte(s) were not read: {Convert.ToHexString(trailing.Length <= 32 ? trailing : trailing[..32])}{(trailing.Length > 32 ? "…" : String.Empty)}");
-            }
+            var read = Read(buffer, Accumulate, warnings);
+            Status = $"Matched {buffer.Source}{(Accumulate ? " (accumulated)" : String.Empty)}: read {read} of {buffer.Bytes.Length} byte(s).";
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -149,6 +154,60 @@ internal sealed partial class SysExMatchViewModel : ObservableObject
             Error = exception.Message;
         }
         Warning = String.Join(Environment.NewLine, warnings);
+    }
+
+    private bool CanMatchAll() => CanMatch && Buffers.Count > 0;
+
+    /// <summary>
+    /// Reads all buffers into the instance tree, one after the other, each adding to the values of the ones before it
+    /// (the first one clears the values, unless <see cref="Accumulate"/>). A buffer that does not match is reported and the
+    /// next one is read.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanMatchAll))]
+    private void MatchAll()
+    {
+        if (_deserialize is null || Buffers.Count == 0)
+        {
+            return;
+        }
+
+        Warning = String.Empty;
+        Error = String.Empty;
+        var warnings = new List<string>();
+        var errors = new List<string>();
+        long read = 0;
+        for (var index = 0; index < Buffers.Count; index++)
+        {
+            var buffer = Buffers[index];
+            var bufferWarnings = new List<string>();
+            try
+            {
+                read += Read(buffer, Accumulate || index > 0, bufferWarnings);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // the engine and the processors can fail with their own exception types
+                errors.Add($"{buffer.Source}: {exception.Message}");
+            }
+            warnings.AddRange(bufferWarnings.Select(warning => $"{buffer.Source}: {warning}"));
+        }
+        var total = Buffers.Sum(buffer => (long)buffer.Bytes.Length);
+        Status = $"Matched {Buffers.Count} message(s): read {read} of {total} byte(s)"
+            + (errors.Count > 0 ? $"; {errors.Count} did not match the schema, the values read up to the problem are shown." : ".");
+        Error = String.Join(Environment.NewLine, errors);
+        Warning = String.Join(Environment.NewLine, warnings);
+    }
+
+    // reads the buffer into the instance tree; the trailing bytes that were not read are added to the warnings
+    private long Read(SysExBuffer buffer, bool accumulate, List<string> warnings)
+    {
+        var read = _deserialize!(buffer.Bytes, accumulate, warnings);
+        if (read < buffer.Bytes.Length)
+        {
+            var trailing = buffer.Bytes.AsSpan((int)read);
+            warnings.Add($"{trailing.Length} trailing byte(s) were not read: {Convert.ToHexString(trailing.Length <= 32 ? trailing : trailing[..32])}{(trailing.Length > 32 ? "…" : String.Empty)}");
+        }
+        return read;
     }
 
     /// <summary>Loads a SysEx file; each message in it becomes a buffer and the first one is matched.</summary>
@@ -165,7 +224,7 @@ internal sealed partial class SysExMatchViewModel : ObservableObject
             Add(buffers);
             if (buffers.Count > 1)
             {
-                Status = $"{file.Name} holds {buffers.Count} messages; select the one to match.";
+                Status = $"{file.Name} holds {buffers.Count} messages; select the one to match, or Match All to read them all.";
             }
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or UnauthorizedAccessException
@@ -221,6 +280,7 @@ internal sealed partial class SysExMatchViewModel : ObservableObject
             Buffers.Add(buffer);
         }
         OnPropertyChanged(nameof(HasBuffers));
+        MatchAllCommand.NotifyCanExecuteChanged();
         if (buffers.Count > 0)
         {
             SelectedBuffer = buffers[0];

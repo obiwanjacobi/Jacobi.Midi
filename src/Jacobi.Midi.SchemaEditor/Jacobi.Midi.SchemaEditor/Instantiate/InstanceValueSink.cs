@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
@@ -11,6 +12,8 @@ namespace Jacobi.Midi.SchemaEditor.Instantiate;
 /// and the field values are formatted as text (the label of a data type option when it has one).
 /// The items of a repeat are added as they are read and a choice selects the alternative that is read;
 /// the body of an open choice must have been selected by the user.
+/// When the values are accumulated (see <see cref="Begin"/>), a read adds to the values of the earlier reads, e.g. the data
+/// messages of one patch that each carry a part of it.
 /// </summary>
 /// <remarks>
 /// When the instance is not the root of the plan (a range is read), the scopes above it have no node:
@@ -24,38 +27,61 @@ internal sealed class InstanceValueSink : IOpenChoiceSink
     private readonly Dictionary<InstanceRepeat, int> _itemCounts;
     // the fields that received a value (shared by all scopes)
     private readonly List<InstanceField> _read;
+    // the address map repeats whose item was not read: another item than the accumulated one (shared by all scopes)
+    private readonly List<string> _skipped;
+    // true: the values are added to those of the earlier reads (shared by all scopes, see Begin)
+    private readonly StrongBox<bool> _accumulate;
+    // true for the scope of an item that is not read: its values are passed over
+    private readonly bool _ignore;
 
     /// <param name="node">The node the scope represents; null for a scope above <paramref name="target"/>.</param>
     /// <param name="target">The instance that is read: the root of the instance tree.</param>
     public InstanceValueSink(InstanceNode? node, InstanceNode target)
-        : this(node, target, [], [])
+        : this(node, target, [], [], [], new StrongBox<bool>(), ignore: false)
     {
     }
 
-    private InstanceValueSink(InstanceNode? node, InstanceNode target, Dictionary<InstanceRepeat, int> itemCounts, List<InstanceField> read)
+    private InstanceValueSink(InstanceNode? node, InstanceNode target, Dictionary<InstanceRepeat, int> itemCounts, List<InstanceField> read,
+        List<string> skipped, StrongBox<bool> accumulate, bool ignore)
     {
         _node = node;
         _target = target;
         _itemCounts = itemCounts;
         _read = read;
+        _skipped = skipped;
+        _accumulate = accumulate;
+        _ignore = ignore;
     }
 
     /// <summary>
-    /// Prepares the instance tree for a read: the values of the (non-constant) fields are cleared.
+    /// The address map repeats (display path and items) whose item was not read in the last read: the message addressed
+    /// another item than the one the accumulated values are of. Empty when nothing was skipped.
     /// </summary>
-    public void Begin()
+    public IReadOnlyList<string> Skipped => _skipped;
+
+    /// <summary>
+    /// Prepares the instance tree for a read: the values of the (non-constant) fields are cleared, unless
+    /// <paramref name="accumulate"/>: then the read adds to the values of the earlier reads. A repeat of an address map that
+    /// holds values keeps its item then; a message for another item of it is not read into it (see <see cref="Skipped"/>).
+    /// </summary>
+    public void Begin(bool accumulate = false)
     {
-        foreach (var field in _target.Fields().Where(field => !field.IsConstant))
+        _accumulate.Value = accumulate;
+        if (!accumulate)
         {
-            field.Value = String.Empty;
+            foreach (var field in _target.Fields().Where(field => !field.IsConstant))
+            {
+                field.Value = String.Empty;
+            }
         }
         _itemCounts.Clear();
         _read.Clear();
+        _skipped.Clear();
     }
 
     /// <summary>
-    /// Removes the items of the open repeats that were not read. After a failed read (<paramref name="completed"/> false)
-    /// only the repeats that were reached are trimmed: the ones after the failure keep their items.
+    /// Removes the items of the open repeats that were not read. After a failed read (<paramref name="completed"/> false),
+    /// or when the values are accumulated, only the repeats that were reached are trimmed: the others keep their items.
     /// Then the part that received values is expanded (see <see cref="RevealRead"/>).
     /// </summary>
     public void End(bool completed)
@@ -66,7 +92,7 @@ internal sealed class InstanceValueSink : IOpenChoiceSink
             {
                 repeat.Truncate(count);
             }
-            else if (completed)
+            else if (completed && !_accumulate.Value)
             {
                 repeat.Truncate(0);
             }
@@ -144,9 +170,18 @@ internal sealed class InstanceValueSink : IOpenChoiceSink
         {
             return Scope(null);
         }
+        if (_accumulate.Value && repeat is { IsAddressed: true, Items: [var shown] } && repeat.ItemIndex != index && HasValues(shown))
+        {
+            // the accumulated values are of another item of the address space: they stay one consistent item
+            _skipped.Add($"{repeat.DisplayPath}: item {index} (the values are of item {repeat.ItemIndex})");
+            return new InstanceValueSink(null, _target, _itemCounts, _read, _skipped, _accumulate, ignore: true);
+        }
         _itemCounts[repeat] = Math.Max(_itemCounts.GetValueOrDefault(repeat), index + 1);
         return Scope(repeat.GetOrAddItem(index));
     }
+
+    // a field below the node has a value that was read or typed (not a constant)
+    private static bool HasValues(InstanceNode node) => node.Fields().Any(field => !field.IsConstant && field.Value.Length > 0);
 
     public IValueSink EnterChoice(ChoiceContext context, int selectedIndex)
     {
@@ -175,7 +210,7 @@ internal sealed class InstanceValueSink : IOpenChoiceSink
     {
     }
 
-    private InstanceValueSink Scope(InstanceNode? node) => new(node, _target, _itemCounts, _read);
+    private InstanceValueSink Scope(InstanceNode? node) => new(node, _target, _itemCounts, _read, _skipped, _accumulate, _ignore);
 
     /// <summary>
     /// The instance node of the plan node in <paramref name="context"/>: a member of this scope (by name) or, above the
@@ -183,6 +218,7 @@ internal sealed class InstanceValueSink : IOpenChoiceSink
     /// </summary>
     private InstanceNode? Find(ValueContext context) => _node switch
     {
+        _ when _ignore => null,
         null => String.Equals(context.Node.Path.Value, _target.Path.Value, StringComparison.OrdinalIgnoreCase) ? _target : null,
         InstanceGroup group => group.Members.FirstOrDefault(member => IsNamed(member, context.Name)),
         // the scope of a choice holds the selected alternative
