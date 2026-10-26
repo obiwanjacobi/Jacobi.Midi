@@ -1011,7 +1011,7 @@ internal sealed partial class MainViewModel : ViewModelBase
                 match = new SysExMatchViewModel(deserialize, OpenSysExFile, MidiBar);
             }
             InstantiateDialog = new InstantiateSchemaViewModel(instance, serialize, SaveSysExFile, MidiBar, CloseInstantiateDialog, match,
-                instantiator.Warnings, describeTransfer);
+                instantiator.Warnings, describeTransfer, _clipboard);
         }
         catch (Exception exception) when (IsSchemaError(exception))
         {

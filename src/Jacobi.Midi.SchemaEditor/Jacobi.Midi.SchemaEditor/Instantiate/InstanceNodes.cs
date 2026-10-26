@@ -30,6 +30,18 @@ internal abstract partial class InstanceNode : ObservableObject
 
     public InstanceNode? Parent { get; internal set; }
 
+    private string _document = String.Empty;
+
+    /// <summary>
+    /// The name of the document the schema of the node is in: set on the top node of the tree (by the instantiator);
+    /// the body of an open choice is in the document of its root.
+    /// </summary>
+    public virtual string Document
+    {
+        get => Parent?.Document ?? _document;
+        internal set => _document = value;
+    }
+
     /// <summary>
     /// The repeat item indices that lead to this node, outermost to innermost (empty outside repeats).
     /// Like the engine, the body of an open choice starts anew.
@@ -372,6 +384,8 @@ internal partial class InstanceGroup : InstanceNode
 internal sealed class InstanceBody(SchemaGroup schema, SchemaPath path) : InstanceGroup(schema, path)
 {
     public override InstancePath Instance => InstancePath.Empty;
+
+    public override string Document => Root.Namespace;
 
     /// <summary>The name of the selected root (the option of the open choice), e.g. <c>Gp8.AddressMap</c>.</summary>
     public required SchemaName Root { get; init; }

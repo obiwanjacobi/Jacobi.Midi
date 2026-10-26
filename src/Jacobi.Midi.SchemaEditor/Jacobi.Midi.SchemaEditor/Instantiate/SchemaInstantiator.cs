@@ -76,7 +76,7 @@ internal sealed class SchemaInstantiator
     public InstanceGroup CreateRoot(string rootName)
     {
         var root = _schemas.FindRoot(new SchemaName($"{DocumentName}{SchemaName.Separator}{rootName}"));
-        return Expanded(BuildGroup(new InstanceGroup(root, new SchemaPath(root.Name)), root, DocumentName, CreatePlan(root)));
+        return Top(BuildGroup(new InstanceGroup(root, new SchemaPath(root.Name)), root, DocumentName, CreatePlan(root)), DocumentName);
     }
 
     /// <summary>
@@ -91,12 +91,14 @@ internal sealed class SchemaInstantiator
         var path = String.Join(SchemaPath.Separator, names);
         return current is null
             ? throw new InvalidOperationException($"The compiled schema has no node '{path}'.")
-            : Expanded(Build(current, documentName, new SchemaPath(path), top is SchemaGroup outermost ? CreatePlan(outermost) : null));
+            : Top(Build(current, documentName, new SchemaPath(path), top is SchemaGroup outermost ? CreatePlan(outermost) : null), documentName);
     }
 
-    private static T Expanded<T>(T instance)
+    // the top node of an instance tree: it knows its document and is expanded
+    private static T Top<T>(T instance, string documentName)
         where T : InstanceNode
     {
+        instance.Document = documentName;
         instance.ApplyDefaultExpansion();
         instance.IsExpanded = true;
         return instance;
@@ -301,7 +303,7 @@ internal sealed class SchemaInstantiator
 
     /// <summary>
     /// Finds the plain groups (in any depth, not only roots) of the authored documents that declare <paramref name="contract"/> as their nodeDef.
-    /// The authored documents are used because compiling replaces the nodeDef of a nested group by its expansion.
+    /// The authored documents are searched; each group found is then looked up in the compiled schema.
     /// </summary>
     private IEnumerable<(string Document, EditGroup Group)> FindConforming(SchemaName contract)
     {

@@ -41,7 +41,27 @@
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="ToolTip.Tip" Value="Include in what is sent (Save As, Send)" />
         </Style>
+        <!-- copies or pastes the values of a group -->
+        <Style Selector="Button.values">
+            <Setter Property="Padding" Value="6,1" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
     </UserControl.Styles>
+
+    <UserControl.Resources>
+        <!-- copy the values of a group (group, repeat item, body) to the clipboard, or paste them into another instance of the same group -->
+        <DataTemplate x:Key="ValuesButtons" x:DataType="inst:InstanceGroup">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+                <Button Classes="values" Content="Copy" CommandParameter="{Binding}"
+                        Command="{Binding $parent[inst:InstantiateSchemaView].((inst:InstantiateSchemaViewModel)DataContext).CopyValuesCommand}"
+                        ToolTip.Tip="Copy the values (fields, selected alternatives, repeat items) to the clipboard" />
+                <Button Classes="values" Content="Paste" CommandParameter="{Binding}"
+                        Command="{Binding $parent[inst:InstantiateSchemaView].((inst:InstantiateSchemaViewModel)DataContext).PasteValuesCommand}"
+                        ToolTip.Tip="Paste the values copied from the same group, or from a group of the same node def" />
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.Resources>
 
     <UserControl.DataTemplates>
         <!-- a field: the value as text; chosen from the options of its data type (or true/false for a boolean) when it has them
@@ -85,7 +105,10 @@
                             <TextBlock Text="{Binding InstanceText, StringFormat='instance {0}'}" Classes="path" VerticalAlignment="Center" />
                             <TextBlock Text="{Binding FieldCountText}" Classes="path" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
                         </StackPanel>
-                        <Button Grid.Column="2" Content="Remove" Command="{Binding RemoveCommand}" IsVisible="{Binding Repeat.IsOpen}" />
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ValuesButtons}" VerticalAlignment="Center" />
+                            <Button Content="Remove" Command="{Binding RemoveCommand}" IsVisible="{Binding Repeat.IsOpen}" />
+                        </StackPanel>
                     </Grid>
                     <ItemsControl ItemsSource="{Binding ShownMembers}" />
                 </StackPanel>
@@ -97,18 +120,21 @@
             <Border Margin="0,4" Padding="10" CornerRadius="6" Background="{DynamicResource AppBackgroundCardBrush}"
                     BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="1">
                 <StackPanel Spacing="6">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <ToggleButton Classes="expand" IsChecked="{Binding IsExpanded}">
-                            <Panel>
-                                <TextBlock Text="▾" IsVisible="{Binding IsExpanded}" />
-                                <TextBlock Text="▸" IsVisible="{Binding !IsExpanded}" />
-                            </Panel>
-                        </ToggleButton>
-                        <CheckBox Classes="include" IsChecked="{Binding IsIncluded}" IsVisible="{Binding CanInclude}" />
-                        <TextBlock Text="{Binding DisplayPath}" Classes="path" VerticalAlignment="Center" />
-                        <TextBlock Text="address map" Classes="path" VerticalAlignment="Center" IsVisible="{Binding IsAddressMap}" />
-                        <TextBlock Text="{Binding FieldCountText}" Classes="path" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
-                    </StackPanel>
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <ToggleButton Classes="expand" IsChecked="{Binding IsExpanded}">
+                                <Panel>
+                                    <TextBlock Text="▾" IsVisible="{Binding IsExpanded}" />
+                                    <TextBlock Text="▸" IsVisible="{Binding !IsExpanded}" />
+                                </Panel>
+                            </ToggleButton>
+                            <CheckBox Classes="include" IsChecked="{Binding IsIncluded}" IsVisible="{Binding CanInclude}" />
+                            <TextBlock Text="{Binding DisplayPath}" Classes="path" VerticalAlignment="Center" />
+                            <TextBlock Text="address map" Classes="path" VerticalAlignment="Center" IsVisible="{Binding IsAddressMap}" />
+                            <TextBlock Text="{Binding FieldCountText}" Classes="path" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
+                        </StackPanel>
+                        <ContentControl Grid.Column="1" Content="{Binding}" ContentTemplate="{StaticResource ValuesButtons}" VerticalAlignment="Center" />
+                    </Grid>
                     <TextBlock Text="{Binding Note}" Foreground="Orange" FontSize="11" TextWrapping="Wrap" IsVisible="{Binding HasNote}" />
                     <ItemsControl ItemsSource="{Binding ShownMembers}" />
                 </StackPanel>
@@ -120,17 +146,20 @@
             <Border Margin="0,4" Padding="10" CornerRadius="6" Background="{DynamicResource AppBackgroundCardBrush}"
                     BorderBrush="{DynamicResource AppDividerBrush}" BorderThickness="1">
                 <StackPanel Spacing="6">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <ToggleButton Classes="expand" IsChecked="{Binding IsExpanded}">
-                            <Panel>
-                                <TextBlock Text="▾" IsVisible="{Binding IsExpanded}" />
-                                <TextBlock Text="▸" IsVisible="{Binding !IsExpanded}" />
-                            </Panel>
-                        </ToggleButton>
-                        <CheckBox Classes="include" IsChecked="{Binding IsIncluded}" IsVisible="{Binding CanInclude}" />
-                        <TextBlock Text="{Binding DisplayPath}" Classes="caption" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding FieldCountText}" Classes="path" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
-                    </StackPanel>
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <ToggleButton Classes="expand" IsChecked="{Binding IsExpanded}">
+                                <Panel>
+                                    <TextBlock Text="▾" IsVisible="{Binding IsExpanded}" />
+                                    <TextBlock Text="▸" IsVisible="{Binding !IsExpanded}" />
+                                </Panel>
+                            </ToggleButton>
+                            <CheckBox Classes="include" IsChecked="{Binding IsIncluded}" IsVisible="{Binding CanInclude}" />
+                            <TextBlock Text="{Binding DisplayPath}" Classes="caption" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding FieldCountText}" Classes="path" VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
+                        </StackPanel>
+                        <ContentControl Grid.Column="1" Content="{Binding}" ContentTemplate="{StaticResource ValuesButtons}" VerticalAlignment="Center" />
+                    </Grid>
                     <ItemsControl ItemsSource="{Binding ShownMembers}" />
                 </StackPanel>
             </Border>

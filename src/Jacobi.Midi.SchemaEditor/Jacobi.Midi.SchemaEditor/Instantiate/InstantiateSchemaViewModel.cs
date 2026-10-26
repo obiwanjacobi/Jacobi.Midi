@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Avalonia.Input.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Jacobi.BinarySerializer.Execution;
@@ -16,6 +17,7 @@ namespace Jacobi.Midi.SchemaEditor.Instantiate;
 /// or shows the <see cref="Error"/> that prevented the instantiation.
 /// With an address map body, the included groups are serialized as one or more data messages (see <see cref="Transfer"/>).
 /// In match mode (<see cref="Match"/>) the values are read from a SysEx file or a received message first.
+/// The values of a group can be copied to the clipboard and pasted into another instance of the same group (see <see cref="InstanceValues"/>).
 /// </summary>
 internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
 {
@@ -24,6 +26,7 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
     private readonly Func<string?>? _describeTransfer;
     private readonly Func<string, byte[], Task<string?>>? _saveFile;
     private readonly MidiBarViewModel? _midi;
+    private readonly IClipboard? _clipboard;
 
     /// <param name="root">The instance tree to fill out.</param>
     /// <param name="serialize">
@@ -42,9 +45,11 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
     /// Describes the messages the included groups of an address map body are sent in (see <see cref="SchemaInstantiator.DescribeTransfer"/>);
     /// null, or returning null, when there is no address map.
     /// </param>
+    /// <param name="clipboard">The clipboard the values of a group are copied to and pasted from; null when there is none.</param>
     public InstantiateSchemaViewModel(InstanceNode root, Func<ICollection<string>, IReadOnlyList<SerializedMessage>>? serialize,
         Func<string, byte[], Task<string?>> saveFile, MidiBarViewModel midi, Action<InstantiateSchemaViewModel> close,
-        SysExMatchViewModel? match = null, IReadOnlyList<string>? warnings = null, Func<string?>? describeTransfer = null)
+        SysExMatchViewModel? match = null, IReadOnlyList<string>? warnings = null, Func<string?>? describeTransfer = null,
+        IClipboard? clipboard = null)
     {
         Root = root;
         Match = match;
@@ -56,6 +61,7 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
         _midi = midi;
         _close = close;
         _describeTransfer = describeTransfer;
+        _clipboard = clipboard;
         _midi.PropertyChanged += OnMidiPropertyChanged;
         root.InclusionChanged += OnInclusionChanged;
         RefreshTransfer();
@@ -268,6 +274,73 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
         {
             IsBusy = false;
         }
+    }
+
+    /// <summary>The most problems of a paste that are listed in the <see cref="StatusMessage"/>; the others are counted.</summary>
+    public const int PasteProblemLimit = 10;
+
+    private bool CanUseClipboard() => _clipboard is not null;
+
+    /// <summary>Copies the values of <paramref name="group"/> to the clipboard (see <see cref="InstanceValues"/>).</summary>
+    [RelayCommand(CanExecute = nameof(CanUseClipboard))]
+    private async Task CopyValues(InstanceGroup? group)
+    {
+        if (group is null || _clipboard is null)
+        {
+            return;
+        }
+        try
+        {
+            await _clipboard.SetTextAsync(InstanceValues.Copy(group).ToText());
+            StatusMessage = $"Copied the values of {group.DisplayPath}.";
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // the clipboard of the platform can fail with its own exception types
+            StatusMessage = $"Could not copy the values of {group.DisplayPath}: {exception.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Pastes the values on the clipboard into <paramref name="group"/> when they were copied from the same group
+    /// (see <see cref="InstanceValues.Fits"/>); what could not be pasted is listed in the <see cref="StatusMessage"/>.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanUseClipboard))]
+    private async Task PasteValues(InstanceGroup? group)
+    {
+        if (group is null || _clipboard is null)
+        {
+            return;
+        }
+        string? text;
+        try
+        {
+            text = await _clipboard.TryGetTextAsync();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            StatusMessage = $"Could not read the clipboard: {exception.Message}";
+            return;
+        }
+        StatusMessage = Paste(group, text);
+    }
+
+    /// <summary>Pastes the copied values in <paramref name="text"/> into <paramref name="group"/>; returns the outcome.</summary>
+    internal static string Paste(InstanceGroup group, string? text)
+    {
+        if (!InstanceValues.TryParse(text, out var values))
+        {
+            return "Could not paste: the clipboard holds no copied values.";
+        }
+        if (!values!.Fits(group))
+        {
+            return $"Could not paste: the values of {values.Source} ({values.Shape}) do not fit {group.DisplayPath} ({InstanceValues.ShapeOf(group)}).";
+        }
+        var problems = new List<string>();
+        var count = values.PasteInto(group, problems);
+        var more = problems.Count > PasteProblemLimit ? [$"... and {problems.Count - PasteProblemLimit} more."] : Array.Empty<string>();
+        return String.Join(Environment.NewLine,
+            [$"Pasted {count} value(s) of {values.Source} into {group.DisplayPath}.", .. problems.Take(PasteProblemLimit), .. more]);
     }
 
     private static string Count(IReadOnlyList<SerializedMessage> messages)
