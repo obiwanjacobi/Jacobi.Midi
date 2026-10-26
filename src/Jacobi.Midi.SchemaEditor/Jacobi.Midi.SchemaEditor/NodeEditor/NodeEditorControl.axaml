@@ -44,6 +44,13 @@
         <Style Selector="ComboBox.processors ComboBoxItem" x:DataType="ne:ProcessorOption">
             <Setter Property="IsEnabled" Value="{Binding IsSelectable}" />
         </Style>
+        <!-- the … button behind a value-or-reference property: opens the value reference finder -->
+        <Style Selector="Button.findref">
+            <Setter Property="Content" Value="…" />
+            <Setter Property="MinWidth" Value="32" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="ToolTip.Tip" Value="Find a field before this node (ref:) or a published value (pub:)" />
+        </Style>
         <Style Selector="TextBlock.warning">
             <Setter Property="FontSize" Value="11" />
             <Setter Property="Foreground" Value="Orange" />
@@ -245,7 +252,10 @@
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Count" Classes="label" />
-                            <TextBox Text="{Binding NodeFacets.Count, UpdateSourceTrigger=LostFocus}" PlaceholderText="number, ref:path or pub:ns.name" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                <TextBox Text="{Binding NodeFacets.Count, UpdateSourceTrigger=LostFocus}" PlaceholderText="number, ref:path or pub:ns.name" />
+                                <Button Grid.Column="1" Classes="findref" Command="{Binding FindValueRefCommand}" CommandParameter="Count" />
+                            </Grid>
                             <TextBlock Text="{Binding ValueProcessorDetails.ConversionNote}" Classes="kind" TextWrapping="Wrap"
                                        IsVisible="{Binding ValueProcessorDetails.ConversionNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}" />
                         </StackPanel>
@@ -253,7 +263,10 @@
                                         IsVisible="{Binding ValueProcessorDetails, Converter={x:Static ObjectConverters.IsNotNull}}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Byte size" Classes="label" />
-                            <TextBox Text="{Binding NodeFacets.ByteSize, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                <TextBox Text="{Binding NodeFacets.ByteSize, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
+                                <Button Grid.Column="1" Classes="findref" Command="{Binding FindValueRefCommand}" CommandParameter="ByteSize" />
+                            </Grid>
                         </StackPanel>
                     </StackPanel>
                 </DataTemplate>
@@ -269,7 +282,10 @@
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Selected index" Classes="label" />
-                            <TextBox Text="{Binding NodeFacets.SelectedIndex, UpdateSourceTrigger=LostFocus}" PlaceholderText="number, ref:path or pub:ns.name" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                <TextBox Text="{Binding NodeFacets.SelectedIndex, UpdateSourceTrigger=LostFocus}" PlaceholderText="number, ref:path or pub:ns.name" />
+                                <Button Grid.Column="1" Classes="findref" Command="{Binding FindValueRefCommand}" CommandParameter="SelectedIndex" />
+                            </Grid>
                             <TextBlock Text="{Binding ValueProcessorDetails.ConversionNote}" Classes="kind" TextWrapping="Wrap"
                                        IsVisible="{Binding ValueProcessorDetails.ConversionNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}" />
                         </StackPanel>
@@ -285,7 +301,10 @@
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Byte size" Classes="label" />
-                            <TextBox Text="{Binding NodeFacets.ByteSize, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                <TextBox Text="{Binding NodeFacets.ByteSize, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
+                                <Button Grid.Column="1" Classes="findref" Command="{Binding FindValueRefCommand}" CommandParameter="ByteSize" />
+                            </Grid>
                         </StackPanel>
                     </StackPanel>
                 </DataTemplate>
@@ -301,7 +320,10 @@
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Byte size" Classes="label" />
-                            <TextBox Text="{Binding NodeFacets.ByteSize, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                <TextBox Text="{Binding NodeFacets.ByteSize, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
+                                <Button Grid.Column="1" Classes="findref" Command="{Binding FindValueRefCommand}" CommandParameter="ByteSize" />
+                            </Grid>
                         </StackPanel>
                     </StackPanel>
                 </DataTemplate>
@@ -319,13 +341,19 @@
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Value" Classes="label" />
-                            <TextBox Text="{Binding NodeFacets.Value, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional constant, ref:path or pub:ns.name" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                <TextBox Text="{Binding NodeFacets.Value, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional constant, ref:path or pub:ns.name" />
+                                <Button Grid.Column="1" Classes="findref" Command="{Binding FindValueRefCommand}" CommandParameter="Value" />
+                            </Grid>
                             <TextBlock Text="{Binding NodeFacets.ValueWarning}" Foreground="Orange" FontSize="11" TextWrapping="Wrap"
                                        IsVisible="{Binding NodeFacets.ValueWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Byte length" Classes="label" />
-                            <TextBox Text="{Binding NodeFacets.ByteLength, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                <TextBox Text="{Binding NodeFacets.ByteLength, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
+                                <Button Grid.Column="1" Classes="findref" Command="{Binding FindValueRefCommand}" CommandParameter="ByteLength" />
+                            </Grid>
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Byte offset" Classes="label" />

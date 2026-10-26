@@ -337,6 +337,12 @@ internal sealed partial class MainViewModel : ViewModelBase
     public partial ConfirmViewModel? ConfirmDialog { get; private set; }
 
     /// <summary>
+    /// The value reference finder while it is shown (see <see cref="FindValueRef"/>); null otherwise.
+    /// </summary>
+    [ObservableProperty]
+    public partial ValueRefFinderViewModel? ValueRefDialog { get; private set; }
+
+    /// <summary>
     /// The item selected in the schema tree: an <see cref="EditNode"/> (a member or a node def; the <see cref="EditDocument"/> for the root),
     /// the <see cref="NodeDefsItem"/> of a document or null.
     /// </summary>
@@ -1010,6 +1016,80 @@ internal sealed partial class MainViewModel : ViewModelBase
             // the error is shown in the dialog: the status bar is easily overlooked
             StatusMessage = $"Cannot {(isMatch ? "match" : "instantiate")} {root.Name}: {exception.Message}";
             InstantiateDialog = new InstantiateSchemaViewModel(root.Name, exception.Message, CloseInstantiateDialog, isMatch);
+        }
+    }
+
+    /// <summary>
+    /// Opens the value reference finder for the value-or-reference property <paramref name="facet"/> of the edited node
+    /// (see <see cref="NodeFacets.GetValueOrRefLabel"/>): the fields before the node ('ref:') and the values published before it ('pub:').
+    /// The nodes are taken from the compiled schema (node defs expanded); when it does not compile, from the edited schema,
+    /// which the dialog tells. The chosen reference is written to the property.
+    /// </summary>
+    [RelayCommand]
+    private void FindValueRef(string? facet)
+    {
+        if (facet is null || IsReadOnly || ActiveDocument is not { } active || EditedNode is not { } node)
+        {
+            return;
+        }
+
+        var notes = new List<string>();
+        var (names, top) = CompiledNodeLocator.GetNames(node);
+        var inNodeDef = top.Parent is not EditDocument;
+        if (inNodeDef)
+        {
+            notes.Add($"This node is in the node def '{top.Name}': use a relative path (^), so the reference resolves wherever the node def is used. "
+                + "An absolute path starts at the node def and only resolves where the node def is used at that path.");
+        }
+        ValueRefCandidates candidates;
+        try
+        {
+            var compilation = LoadedSchemas.Compile(active.Schema);
+            var (compiled, compiledTop, _, _) = CompiledNodeLocator.Find(compilation.Schemas, compilation.Documents, node);
+            if (compiled is null || compiledTop is null)
+            {
+                throw new InvalidOperationException($"The compiled schema has no node '{String.Join(SchemaPath.Separator, names)}'.");
+            }
+            candidates = ValueRefFinder.Find(ValueRefFinder.FromCompiled(compiledTop), names, ProcessorCatalog.GetProperties);
+        }
+        catch (Exception exception) when (IsSchemaError(exception))
+        {
+            notes.Add($"The schema does not compile, so the nodes are taken from the edited schema without the members of node defs: {exception.Message}");
+            try
+            {
+                var schema = active.Schema;
+                candidates = ValueRefFinder.Find(ValueRefFinder.FromDraft(top, processor =>
+                        EffectiveNodeResolver.FindProcessorDef(schema, processor.Processor, name => LoadedSchemas.Find(name)?.Schema)?.Processor
+                            ?? processor.Processor.FullName),
+                    names, ProcessorCatalog.GetProperties);
+            }
+            catch (Exception draftException) when (IsSchemaError(draftException))
+            {
+                StatusMessage = $"Cannot find references for {node.Name}: {draftException.Message}";
+                return;
+            }
+        }
+
+        var title = $"The {NodeFacets.GetValueOrRefLabel(facet)} of {String.Join(SchemaPath.Separator, names)}";
+        ValueRefDialog = new ValueRefFinderViewModel(title, candidates, NodeFacets.GetValueOrRef(facet), notes,
+            (_, reference) => CloseValueRefDialog(node, facet, reference), relative: inNodeDef);
+    }
+
+    private void CloseValueRefDialog(EditNode node, string facet, string? reference)
+    {
+        ValueRefDialog = null;
+        // the node may have been deselected meanwhile: then its facets are not edited
+        if (reference is null || !ReferenceEquals(EditedNode, node))
+        {
+            return;
+        }
+        try
+        {
+            NodeFacets.SetValueOrRef(facet, reference);
+        }
+        catch (ArgumentException exception)
+        {
+            StatusMessage = $"The {NodeFacets.GetValueOrRefLabel(facet)} of {node.Name} was not changed: {exception.Message}";
         }
     }
 

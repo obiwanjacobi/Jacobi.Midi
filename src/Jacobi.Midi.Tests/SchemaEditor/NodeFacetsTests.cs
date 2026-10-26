@@ -24,6 +24,22 @@ public class NodeFacetsTests
     }
 
     [Fact]
+    public void ValueOrRef_ReadsAndWritesThePropertyByName()
+    {
+        var document = new SchemaWorkspaceDocument(SchemaFileService.CreateDocument("test"), SchemaFormat.Json);
+        var root = document.Schema.Members.OfType<EditGroup>().Single();
+        var repeat = document.AddRepeat(root, "Items", 1);
+        var facets = new NodeFacets(document, repeat);
+
+        facets.SetValueOrRef(nameof(NodeFacets.Count), "ref:test.SysEx.Length");
+
+        Assert.Equal("ref:test.SysEx.Length", facets.GetValueOrRef(nameof(NodeFacets.Count)));
+        Assert.True(repeat.Count is SchemaNodeRef);
+        Assert.Equal("byte size", NodeFacets.GetValueOrRefLabel(nameof(NodeFacets.ByteSize)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => facets.GetValueOrRef(nameof(NodeFacets.Name)));
+    }
+
+    [Fact]
     public void Edit_InvalidValueChangesNothing()
     {
         var document = new SchemaWorkspaceDocument(SchemaFileService.CreateDocument("test"), SchemaFormat.Json);

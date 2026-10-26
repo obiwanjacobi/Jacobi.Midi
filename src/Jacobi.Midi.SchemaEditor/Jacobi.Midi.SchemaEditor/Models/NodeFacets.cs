@@ -179,6 +179,49 @@ internal sealed partial class NodeFacets : ObservableObject
     }
 
     /// <summary>
+    /// The label of the value-or-reference property <paramref name="facet"/> (the name of <see cref="Value"/>, <see cref="ByteLength"/>,
+    /// <see cref="ByteSize"/>, <see cref="Count"/> or <see cref="SelectedIndex"/>), e.g. "byte size".
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The facet is not a value-or-reference property.</exception>
+    public static string GetValueOrRefLabel(string facet) => facet switch
+    {
+        nameof(Value) => "value",
+        nameof(ByteLength) => "byte length",
+        nameof(ByteSize) => "byte size",
+        nameof(Count) => "count",
+        nameof(SelectedIndex) => "selected index",
+        _ => throw new ArgumentOutOfRangeException(nameof(facet), facet, "Not a value-or-reference property.")
+    };
+
+    /// <summary>The text of the value-or-reference property <paramref name="facet"/> (see <see cref="GetValueOrRefLabel"/>).</summary>
+    /// <exception cref="ArgumentOutOfRangeException">The facet is not a value-or-reference property.</exception>
+    public string GetValueOrRef(string facet) => facet switch
+    {
+        nameof(Value) => Value,
+        nameof(ByteLength) => ByteLength,
+        nameof(ByteSize) => ByteSize,
+        nameof(Count) => Count,
+        nameof(SelectedIndex) => SelectedIndex,
+        _ => throw new ArgumentOutOfRangeException(nameof(facet), facet, "Not a value-or-reference property.")
+    };
+
+    /// <summary>Writes the text of the value-or-reference property <paramref name="facet"/> (see <see cref="GetValueOrRefLabel"/>).</summary>
+    /// <exception cref="ArgumentException">The text is not valid for the property.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The facet is not a value-or-reference property.</exception>
+    public void SetValueOrRef(string facet, string text)
+    {
+        switch (facet)
+        {
+            case nameof(Value): Value = text; break;
+            case nameof(ByteLength): ByteLength = text; break;
+            case nameof(ByteSize): ByteSize = text; break;
+            case nameof(Count): Count = text; break;
+            case nameof(SelectedIndex): SelectedIndex = text; break;
+            default: throw new ArgumentOutOfRangeException(nameof(facet), facet, "Not a value-or-reference property.");
+        }
+    }
+
+    /// <summary>
     /// A warning when the Value of a field does not fit its data type (see <see cref="DataTypeValueValidator"/>); otherwise null.
     /// Informational only: the value is still written.
     /// </summary>

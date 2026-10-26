@@ -153,6 +153,11 @@
             <rn:CloseDocumentView DataContext="{Binding CloseDialog}" />
         </Panel>
 
+        <!-- modal overlay of the value reference finder (the … button of a value-or-reference property) -->
+        <Panel Grid.RowSpan="4" IsVisible="{Binding ValueRefDialog, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <ne:ValueRefFinderView DataContext="{Binding ValueRefDialog}" />
+        </Panel>
+
         <!-- modal overlay of a confirmation (e.g. delete) -->
         <Panel Grid.RowSpan="4" IsVisible="{Binding ConfirmDialog, Converter={x:Static ObjectConverters.IsNotNull}}">
             <local:ConfirmView DataContext="{Binding ConfirmDialog}" />

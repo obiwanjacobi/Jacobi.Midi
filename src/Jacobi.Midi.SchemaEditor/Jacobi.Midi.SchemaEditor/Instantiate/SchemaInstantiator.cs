@@ -296,27 +296,8 @@ internal sealed class SchemaInstantiator
     /// Finds the compiled node of an edited group (in any of the documents) by its names from the root or node def down.
     /// </summary>
     /// <returns>The compiled node, the outermost compiled node above it (a root or node def), its names and the name of its document.</returns>
-    private (SchemaNode? Node, SchemaNode? Top, List<string> Names, string Document) FindCompiled(EditGroup group)
-    {
-        var names = new List<string>();
-        EditNode topNode = group;
-        for (EditNode? node = group; node is not null and not EditDocument; node = node.Parent)
-        {
-            names.Insert(0, node.Name);
-            topNode = node;
-        }
-        var owner = topNode.Parent as EditDocument ?? _edits.FirstOrDefault(edit => edit.NodeDefs.Contains(topNode)) ?? _edits[0];
-        var document = _schemas.Documents.First(candidate => String.Equals(candidate.Name, owner.Name, StringComparison.OrdinalIgnoreCase));
-        // the outermost node is a root of the document or a node def (which has no parent)
-        var top = owner.Members.Contains(topNode) ? (IReadOnlyList<SchemaNode>)document.Roots : document.NodeDefs;
-        var outermost = top.FirstOrDefault(candidate => String.Equals(candidate.Name, names[0], StringComparison.OrdinalIgnoreCase));
-        var current = outermost;
-        foreach (var name in names.Skip(1))
-        {
-            current = (current as SchemaGroup)?.Members.FirstOrDefault(member => String.Equals(member.Name, name, StringComparison.OrdinalIgnoreCase));
-        }
-        return (current, outermost, names, owner.Name);
-    }
+    private (SchemaNode? Node, SchemaNode? Top, IReadOnlyList<string> Names, string Document) FindCompiled(EditGroup group)
+        => CompiledNodeLocator.Find(_schemas, _edits, group);
 
     /// <summary>
     /// Finds the plain groups (in any depth, not only roots) of the authored documents that declare <paramref name="contract"/> as their nodeDef.
