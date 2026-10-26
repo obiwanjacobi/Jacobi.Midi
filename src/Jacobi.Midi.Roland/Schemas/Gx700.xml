@@ -1,30 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Boss GX-700 Guitar Effects Processor - memory map.
+  Boss GX-700 Guitar Effects Processor - memory map (MIDI Implementation v1.00, Mar. 8 1996).
 
-  Derived from the boss-gx-700-patch-parser by Tom Weatherhead
-  (https://github.com/tom-weatherhead/boss-gx-700-patch-parser, src/script.js) and checked against the bulk dumps
-  in Jacobi.Midi.Tests/Schema (gx700-sysex-patch1.syx, gx700-sysex-system.syx). There is no manual source yet.
+  Checked against the bulk dumps in Jacobi.Midi.Tests/Schema (gx700-sysex-patch1.syx, gx700-sysex-system.syx).
+  The names of the enumerations were first taken from the boss-gx-700-patch-parser by Tom Weatherhead
+  (https://github.com/tom-weatherhead/boss-gx-700-patch-parser, src/script.js); where the manual differs, the
+  manual is followed and the difference is marked [TODO] verify.
 
-  Used with the Message32 messages of the Roland schema (4 address bytes): Model-ID 0x79, Device-ID 0x00 in the dumps.
+  Used with the Message32 messages of the Roland schema (4 address bytes): Model-ID 0x79,
+  Device-ID = MIDI receive channel - 1 (0x00 in the dumps).
 
     F0 41 <dev> 79 12 <address:4> data <checksum> F7
 
-  Address (4 x 7 bits, as sent):   aa pp ss 00
-    aa   area: 00 = patches, 02 = system
-    pp   patch number 0x00-0x63 (patch 1-100), 00 in the system area
-    ss   section: one DT1 per section; the patch has 14 sections (header and 13 effects), the system 3
-  A section is transferred as a whole (one DT1 in the bulk dump), so the sections are atomic. Each section occupies
-  0x01-00 addresses (128), a patch 0x01-00-00.
+  Address (4 x 7 bits, as sent):   aa pp ss oo
+    aa   area: 00 = user patches (1-100), 01 = preset patches (101-200), 02 = system, 04 = temporary (bulk),
+         08 = individual temporary, 10 = display data (read only)
+    pp   patch number 0x00-0x63 in the patch areas, 00 elsewhere
+    ss   section (block): the patch has 14 sections (Table-1 - Table-14), the system 3 (Table-17, Table-18)
+    oo   offset of the parameter in the section
+  The sound change request (SCR) is at 04 7F 7F 7F: after a bulk write to the temporary area, the GX-700 only
+  applies the data after a write of 00 to the SCR address.
+
+  The bulk areas transfer a section as a whole (one DT1 per section in the bulk dump), so their sections are atomic.
+  In the individual temporary area every parameter can be sent on its own, but a message must hold the complete value
+  of a parameter (the manual marks the second byte of a 2 byte value with # : it cannot be a start address).
+  Each section occupies 0x01-00 addresses (128), a patch 0x01-00-00.
 
   Values are one 7-bit byte unless noted. Some values are stored with an offset; the comment gives the stored range
   and (=) the displayed value. Two kinds of 2 byte values are used:
-    nibble8  4 + 4 bits (MSB first): 0F 0F = 0xFF. Tempo, Resonance, Separation; the Program Change map.
-    sysex14  7 + 7 bits (MSB first): Delay Time.
-  Enumerations are dataTypeDefs with options that map the stored values to the names used by the parser. Lists that recur:
-    hiCut     0-15: 500 Hz, 630, 800, 1.00 kHz, 1.25k, 1.60k, 2.00k, 2.50k, 3.15k, 4.00k, 5.00k, 6.30k, 8.00k, 10.0k, 12.5k, Flat
-    lowCut    0-10: Flat, 55 Hz, 110, 165, 220, 280, 340, 400, 500, 630, 800
-    midiCc    MIDI CC#1-31, then CC#64-95 (63 entries), at the end of wahPedal, pedal and tempoIn
+    nibble8  4 + 4 bits (MSB first): 0F 0F = 0xFF. Tempo, Resonance, Separation, Assign Target; the system
+             Reverb Level, Number Up/Down Min/Max and the Program Change map.
+    sysex14  7 + 7 bits (MSB first): Delay Time, Assign Min/Max.
+  Enumerations are dataTypeDefs with options that map the stored values to names. Lists that recur:
+    hiCut     0-15 (Table-15): 500 Hz, 630, 800, 1.00 kHz, 1.25k, 1.60k, 2.00k, 2.50k, 3.15k, 4.00k, 5.00k, 6.30k,
+              8.00k, 10.0k, 12.5k, Flat
+    lowCut    0-10 (Table-16): Flat, 55 Hz, 110, 165, 220, 280, 340, 400, 500, 640, 800
+    MIDI CC   CC#1-31, then CC#64-95 at the end of wahPedal, pedal and assignSource; CC#0-31, CC#64-95 in tempoIn
+  Names (patch name, display) use the characters of Table-1.4: the dataTypeDef 'name'.
 
   The midi.* properties describe the address map (see src/Jacobi.Midi.Device/Addressing/readme.md).
 -->
@@ -43,413 +55,508 @@
       <processor name="midi.sysexbyte" />
     </field>
 
-    <!-- One patch: 14 sections, one DT1 each. The offsets are relative to the start of the section. -->
-    <group name="patch">
+    <!--
+      The sections of a patch: their layout, without the transfer (atomic) and the addresses.
+      The offsets are relative to the start of the section.
+    -->
+    <!-- Section 00: 66 bytes. Table-1 Level/Chain. -->
+    <group name="common">
       <members>
-        <!-- Section 00: 66 bytes. -->
-        <group name="Common" midi.atomic="true" midi.stride="0x01-00">
+        <!-- 0x00: 0-100 -->
+        <field name="OutputLevel" datatype="roland.level" />
+        <!--
+          0x01-0x0D: the effect chain, 1st - 13th: 1-13 = effectType (Table-1.1).
+          Every effect type must be in the chain exactly once.
+        -->
+        <repeat name="Chain" count="13">
           <members>
-            <!-- 0x00: [TODO] 0x4E in the dump (patch level?) -->
-            <field name="Unknown00" datatype="sys.uint8" />
-            <!-- 0x01-0x0D: 1-13. [TODO] verify: 01-0D in the dump; most likely the effect chain order (section numbers 1-13). -->
-            <repeat name="EffectOrder" count="13">
-              <members>
-                <field name="Section" datatype="sys.uint8" />
-              </members>
-            </repeat>
-            <!-- 0x0E-0x19: ASCII -->
-            <field name="Name" datatype="sys.string" byteLength="12">
-              <processor name="midi.string" />
-            </field>
-            <!-- 0x1A-0x41: [TODO] 4 blocks of 10 bytes, e.g. 03 07 00 00 00 64 00 00 00 7F (control assignments?). -->
-            <field name="Unknown1A" datatype="sys.bytes" byteLength="40" />
+            <field name="EffectType" datatype="effectType" />
           </members>
-        </group>
-
-        <!-- Section 01: 8 bytes. -->
-        <group name="Compressor" midi.atomic="true" midi.stride="0x01-00">
+        </repeat>
+        <!-- 0x0E-0x19: Table-1.4 -->
+        <field name="Name" datatype="text" byteLength="12" />
+        <!-- 0x1A-0x41: 4 assigns (realtime parameter control) of 10 bytes. -->
+        <repeat name="Assign" count="4">
           <members>
-            <!-- 0x00: 0 = off, 1 = on -->
-            <field name="On" datatype="roland.switch" />
-            <!-- 0x01: 0 = compressor, 1 = limiter -->
-            <field name="Type" datatype="compressorType" />
-            <!-- 0x02: 0-100 (compressor) -->
-            <field name="Sustain" datatype="roland.level" />
-            <!-- 0x03: 0-100 (compressor) -->
-            <field name="Attack" datatype="roland.level" />
-            <!-- 0x04: 0-100 (limiter) -->
-            <field name="Threshold" datatype="roland.level" />
-            <!-- 0x05: 0-100 (limiter) -->
-            <field name="Release" datatype="roland.level" />
-            <!-- 0x06: 0-100 (= -50 - +50) -->
-            <field name="Tone" datatype="int50" />
-            <!-- 0x07: 0-100 -->
-            <field name="EffectLevel" datatype="roland.level" />
+            <!-- 0x00 (MSB), 0x01 (LSB): 0-133 = assignTarget (Table-1.2) -->
+            <field name="Target" nodeDef="nibble8" datatype="assignTarget" />
+            <!-- 0x02 (MSB), 0x03 (LSB): the range of the target parameter -->
+            <field name="Min" nodeDef="sysex14" />
+            <!-- 0x04 (MSB), 0x05 (LSB): the range of the target parameter -->
+            <field name="Max" nodeDef="sysex14" />
+            <!-- 0x06: 0-67 = assignSource (Table-1.3) -->
+            <field name="Source" datatype="assignSource" />
+            <!-- 0x07: 0 = normal, 1 = toggle -->
+            <field name="Mode" datatype="assignMode" />
+            <!-- 0x08: 0-127 -->
+            <field name="ActLo" datatype="uint127" />
+            <!-- 0x09: 0-127 -->
+            <field name="ActHi" datatype="uint127" />
           </members>
-        </group>
-
-        <!-- Section 02: 13 bytes. -->
-        <group name="Wah" midi.atomic="true" midi.stride="0x01-00">
-          <members>
-            <!-- 0x00: 0 = off, 1 = on -->
-            <field name="On" datatype="roland.switch" />
-            <!-- 0x01: 0 = pedal wah, 1 = sw-pedal wah, 2 = auto wah -->
-            <field name="Mode" datatype="wahMode" />
-            <!-- 0x02: 0-100 (pedal) -->
-            <field name="Frequency" datatype="roland.level" />
-            <!-- 0x03: 0 = down, 1 = up (auto) -->
-            <field name="Polarity" datatype="polarity" />
-            <!-- 0x04: 0-100 (auto) -->
-            <field name="Sensitivity" datatype="roland.level" />
-            <!-- 0x05: 0-100 (auto) -->
-            <field name="Manual" datatype="roland.level" />
-            <!-- 0x06: 0-100 -->
-            <field name="Peak" datatype="roland.level" />
-            <!-- 0x07: 0 = fixed, 1 = EXP pedal, 2 = FC-200EXP, 3-65 = midiCc (pedal) -->
-            <field name="Pedal" datatype="wahPedal" />
-            <!-- 0x08: 0-100 (pedal) -->
-            <field name="PedalMin" datatype="roland.level" />
-            <!-- 0x09: 0-100 (pedal) -->
-            <field name="PedalMax" datatype="roland.level" />
-            <!-- 0x0A: 0-100 (auto) -->
-            <field name="Rate" datatype="roland.level" />
-            <!-- 0x0B: 0-100 (auto) -->
-            <field name="Depth" datatype="roland.level" />
-            <!-- 0x0C: 0-100 -->
-            <field name="EffectLevel" datatype="roland.level" />
-          </members>
-        </group>
-
-        <!-- Section 03: 6 bytes. -->
-        <group name="OverdriveDistortion" midi.atomic="true" midi.stride="0x01-00">
-          <members>
-            <!-- 0x00: 0 = off, 1 = on -->
-            <field name="On" datatype="roland.switch" />
-            <!-- 0x01: 0 = Vintage OD, 1 = Turbo OD, 2 = Blues, 3 = Distortion, 4 = Turbo DS, 5 = Metal, 6 = Fuzz -->
-            <field name="Type" datatype="distortionType" />
-            <!-- 0x02: 0-100 -->
-            <field name="Drive" datatype="roland.level" />
-            <!-- 0x03: 0-100 (= -50 - +50) -->
-            <field name="Bass" datatype="int50" />
-            <!-- 0x04: 0-100 (= -50 - +50) -->
-            <field name="Treble" datatype="int50" />
-            <!-- 0x05: 0-100 -->
-            <field name="EffectLevel" datatype="roland.level" />
-          </members>
-        </group>
-
-        <!-- Section 04: 10 bytes. -->
-        <group name="Preamp" midi.atomic="true" midi.stride="0x01-00">
-          <members>
-            <!-- 0x00: 0 = off, 1 = on -->
-            <field name="On" datatype="roland.switch" />
-            <!-- 0x01: 0 = JC-120, 1 = Clean Twin, 2 = Match Drive, 3 = BG Lead, 4 = MS1959 (I), 5 = MS1959 (II),
-                 6 = MS1959 (I+II), 7 = SLDN Lead, 8 = Metal 5150 -->
-            <field name="Type" datatype="preampType" />
-            <!-- 0x02: 0-100 -->
-            <field name="Volume" datatype="roland.level" />
-            <!-- 0x03: 0-100 -->
-            <field name="Bass" datatype="roland.level" />
-            <!-- 0x04: 0-100 -->
-            <field name="Middle" datatype="roland.level" />
-            <!-- 0x05: 0-100 -->
-            <field name="Treble" datatype="roland.level" />
-            <!-- 0x06: 0-100 -->
-            <field name="Presence" datatype="roland.level" />
-            <!-- 0x07: 0-100 -->
-            <field name="Master" datatype="roland.level" />
-            <!-- 0x08: 0 = off, 1 = on (JC-120, Clean Twin, BG Lead) -->
-            <field name="Bright" datatype="roland.switch" />
-            <!-- 0x09: 0 = low, 1 = middle, 2 = high -->
-            <field name="Gain" datatype="preampGain" />
-          </members>
-        </group>
-
-        <!-- Section 05: 4 bytes. -->
-        <group name="Loop" midi.atomic="true" midi.stride="0x01-00">
-          <members>
-            <!-- 0x00: 0 = off, 1 = on -->
-            <field name="On" datatype="roland.switch" />
-            <!-- 0x01: 0-100 % -->
-            <field name="ReturnLevel" datatype="roland.level" />
-            <!-- 0x02: 0-100 % -->
-            <field name="SendLevel" datatype="roland.level" />
-            <!-- 0x03: 0 = series, 1 = parallel -->
-            <field name="Mode" datatype="loopMode" />
-          </members>
-        </group>
-
-        <!-- Section 06: 7 bytes. -->
-        <group name="Equalizer" midi.atomic="true" midi.stride="0x01-00">
-          <members>
-            <!-- 0x00: 0 = off, 1 = on -->
-            <field name="On" datatype="roland.switch" />
-            <!-- 0x01: 0-40 (= -20 - +20 dB) -->
-            <field name="LowGain" datatype="int20" />
-            <!-- 0x02: 0-20 (= 100 Hz, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1.00 kHz, 1.25k, 1.60k, 2.00k, 2.50k,
-                 3.15k, 4.00k, 5.00k, 6.30k, 8.00k, 10.0k) -->
-            <field name="MiddleFrequency" datatype="eqMiddleFrequency" />
-            <!-- 0x03: 0-40 (= -20 - +20 dB) -->
-            <field name="MiddleGain" datatype="int20" />
-            <!-- 0x04: 0-5 (= 0.5, 1, 2, 4, 8, 16) -->
-            <field name="MiddleQ" datatype="eqMiddleQ" />
-            <!-- 0x05: 0-40 (= -20 - +20 dB) -->
-            <field name="HighGain" datatype="int20" />
-            <!-- 0x06: 0-40 (= -20 - +20 dB) -->
-            <field name="Level" datatype="int20" />
-          </members>
-        </group>
-
-        <!-- Section 07: 5 bytes. -->
-        <group name="SpeakerSimulator" midi.atomic="true" midi.stride="0x01-00">
-          <members>
-            <!-- 0x00: 0 = off, 1 = on -->
-            <field name="On" datatype="roland.switch" />
-            <!-- 0x01: 0 = Small, 1 = Middle, 2 = JC-120, 3-6 = Built-In 1-4, 7-8 = BG Stack 1-2, 9-10 = MS Stack 1-2,
-                 11 = Metal Stack -->
-            <field name="Type" datatype="speakerType" />
-            <!-- 0x02: 1-10 (as read by the parser) -->
-            <field name="MicSetting" datatype="sys.uint8" />
-            <!-- 0x03: 0-100 -->
-            <field name="MicLevel" datatype="roland.level" />
-            <!-- 0x04: 0-100 -->
-            <field name="DirectLevel" datatype="roland.level" />
-          </members>
-        </group>
-
-        <!-- Section 08: 5 bytes. -->
-        <group name="NoiseSuppressor" midi.atomic="true" midi.stride="0x01-00">
-          <members>
-            <!-- 0x00: 0 = off, 1 = on -->
-            <field name="On" datatype="roland.switch" />
-            <!-- 0x01: 0-100 -->
-            <field name="Threshold" datatype="roland.level" />
-            <!-- 0x02: 0-100 -->
-            <field name="Release" datatype="roland.level" />
-            <!-- 0x03: 0 = guitar in, 1 = NS in -->
-            <field name="Detect" datatype="nsDetect" />
-            <!-- 0x04: 0-100 -->
-            <field name="EffectLevel" datatype="roland.level" />
-          </members>
-        </group>
-
-        <!-- Section 09: 77 bytes. Which parameters apply depends on the mode (in parentheses). -->
-        <group name="Modulation" midi.atomic="true" midi.stride="0x01-00">
-          <members>
-            <!-- 0x00: 0 = off, 1 = on -->
-            <field name="On" datatype="roland.switch" />
-            <!-- 0x01: 0 = Flanger, 1 = Phaser, 2 = Pitch Shifter, 3 = Harmonist, 4 = Vibrato, 5 = Ring Modulator,
-                 6 = Humanizer -->
-            <field name="Mode" datatype="modulationMode" />
-            <!-- 0x02: 0-4 (= 4, 6, 8, 10, 12 stage) (phaser) -->
-            <field name="PhaserType" datatype="phaserType" />
-            <!-- 0x03: 0 = off, 1 = on, 2 = auto (vibrato) -->
-            <field name="VibratoTrigger" datatype="vibratoTrigger" />
-            <!-- 0x04: 0-100 (vibrato) -->
-            <field name="VibratoRiseTime" datatype="roland.level" />
-            <!-- 0x05: 0 = auto, 1 = pedal (humanizer) -->
-            <field name="HumanizerMode" datatype="humanizerMode" />
-            <!-- 0x06: 0-4 (= a, e, i, o, u) (humanizer) -->
-            <field name="HumanizerVowel1" datatype="vowel" />
-            <!-- 0x07: 0-4 (= a, e, i, o, u) (humanizer) -->
-            <field name="HumanizerVowel2" datatype="vowel" />
-            <!-- 0x08: 0-100 (flanger, phaser, vibrato, humanizer auto) -->
-            <field name="Rate" datatype="roland.level" />
-            <!-- 0x09: 0-100 (flanger, phaser, vibrato, humanizer auto) -->
-            <field name="Depth" datatype="roland.level" />
-            <!-- 0x0A: 0-100 (flanger, phaser) -->
-            <field name="Manual" datatype="roland.level" />
-            <!-- 0x0B (MSB), 0x0C (LSB): 0-200 (= -100 - +100) (flanger, phaser) -->
-            <field name="Resonance" nodeDef="nibble8" datatype="int100" />
-            <!-- 0x0D: 0 = off, 1-100 (phaser) -->
-            <field name="PhaserStep" datatype="roland.level" />
-            <!-- 0x0E (MSB), 0x0F (LSB): 0-200 (= -100 - +100) (flanger) -->
-            <field name="FlangerSeparation" nodeDef="nibble8" datatype="int100" />
-            <!-- 0x10: 0 = off, 1-100 (flanger) -->
-            <field name="FlangerGate" datatype="roland.level" />
-            <!-- 0x11: 0 = off, 1 = auto (humanizer auto) -->
-            <field name="HumanizerTrigger" datatype="humanizerTrigger" />
-            <!-- 0x12: 0 = EXP pedal, 1 = FC-200EXP, 2-64 = midiCc (humanizer pedal) -->
-            <field name="HumanizerPedal" datatype="pedal" />
-            <!-- 0x13: 0 = intelligent, 1-100 (ring modulator) -->
-            <field name="RingModFrequency" datatype="roland.level" />
-            <!-- 0x14: 0-100 (ring modulator) -->
-            <field name="RingModEffectLevel" datatype="roland.level" />
-            <!-- 0x15: 0-100 (ring modulator) -->
-            <field name="RingModDirectLevel" datatype="roland.level" />
-            <!-- 0x16: 0 = slow, 1 = fast, 2 = mono (pitch shifter) -->
-            <field name="PitchShifterMode" datatype="pitchShifterMode" />
-            <!-- 0x17: 0-48 (= -24 - +24 semitones) (pitch shifter) -->
-            <field name="Pitch1" datatype="int24" />
-            <!-- 0x18: 0-48 (= -24 - +24 semitones) (pitch shifter) -->
-            <field name="Pitch2" datatype="int24" />
-            <!-- 0x19: 0-48 (= -24 - +24 semitones) (pitch shifter) -->
-            <field name="Pitch3" datatype="int24" />
-            <!-- 0x1A: 0-100 (= -50 - +50) (pitch shifter) -->
-            <field name="Fine1" datatype="int50" />
-            <!-- 0x1B: 0-100 (= -50 - +50) (pitch shifter) -->
-            <field name="Fine2" datatype="int50" />
-            <!-- 0x1C: 0-100 (= -50 - +50) (pitch shifter) -->
-            <field name="Fine3" datatype="int50" />
-            <!-- 0x1D: 0-11 = C, Db, D, Eb, E, F, F#, G, Ab, A, Bb, B major; 12-23 = A, Bb, B, C, C#, D, D#, E, F, F#, G,
-                 G# minor (harmonist) -->
-            <field name="HarmonistKey" datatype="harmonistKey" />
-            <!-- 0x1E: 0-28 (= -2 octaves - +2 octaves in diatonic steps, 14 = unison) (harmonist) -->
-            <field name="HarmonistInterval1" datatype="harmonistInterval" />
-            <!-- 0x1F: 0-28 (= -2 octaves - +2 octaves in diatonic steps, 14 = unison) (harmonist) -->
-            <field name="HarmonistInterval2" datatype="harmonistInterval" />
-            <!-- 0x20: 0-28 (= -2 octaves - +2 octaves in diatonic steps, 14 = unison) (harmonist) -->
-            <field name="HarmonistInterval3" datatype="harmonistInterval" />
-            <!-- 0x21: 0-100 (= L100:0R - L0:100R) (pitch shifter, harmonist) -->
-            <field name="Pan1" datatype="roland.level" />
-            <!-- 0x22: 0-100 (= L100:0R - L0:100R) (pitch shifter, harmonist) -->
-            <field name="Pan2" datatype="roland.level" />
-            <!-- 0x23: 0-100 (= L100:0R - L0:100R) (pitch shifter, harmonist) -->
-            <field name="Pan3" datatype="roland.level" />
-            <!-- 0x24: 0-100 (pitch shifter, harmonist) -->
-            <field name="Level1" datatype="roland.level" />
-            <!-- 0x25: 0-100 (pitch shifter, harmonist) -->
-            <field name="Level2" datatype="roland.level" />
-            <!-- 0x26: 0-100 (pitch shifter, harmonist) -->
-            <field name="Level3" datatype="roland.level" />
-            <!-- 0x27: 0-100 (= D100:0E - D0:100E) (pitch shifter, harmonist) -->
-            <field name="Balance" datatype="roland.level" />
-            <!-- 0x28: 0-100 (pitch shifter, harmonist) -->
-            <field name="TotalLevel" datatype="roland.level" />
-            <!-- 0x29-0x4C: [TODO] 12 x 3 bytes, e.g. 1C 13 24 1B 12 24 ... (harmonist user scale: 12 notes x 3 voices?). -->
-            <field name="Unknown29" datatype="sys.bytes" byteLength="36" />
-          </members>
-        </group>
-
-        <!-- Section 0A: 21 bytes. -->
-        <group name="Delay" midi.atomic="true" midi.stride="0x01-00">
-          <members>
-            <!-- 0x00: 0 = off, 1 = on -->
-            <field name="On" datatype="roland.switch" />
-            <!-- 0x01: 0 = normal, 1 = tempo -->
-            <field name="Mode" datatype="delayMode" />
-            <!-- 0x02: 0 = fixed, 1 = control 1, 2 = control 2, 3 = FC-200CTL, 4-66 = midiCc (tempo) -->
-            <field name="TempoIn" datatype="tempoIn" />
-            <!-- 0x03 (MSB), 0x04 (LSB): 0-250 (= 50-300 BPM) (tempo, tempo in fixed) -->
-            <field name="Tempo" nodeDef="nibble8" datatype="uint50_300"/>
-            <!-- 0x05 (MSB), 0x06 (LSB): 1-2000 ms (normal) -->
-            <field name="TimeCenter" nodeDef="sysex14" datatype="uint2000"/>
-            <!-- 0x07 (MSB), 0x08 (LSB): 1-400 % of the center.
-                 [TODO] verify: the parser reads MSB x 256 + LSB, which cannot reach 400 with 7-bit bytes; 7 + 7 bits is assumed. -->
-            <field name="TimeLeft" nodeDef="sysex14" datatype="uint1_400" />
-            <!-- 0x09 (MSB), 0x0A (LSB): 1-400 % of the center -->
-            <field name="TimeRight" nodeDef="sysex14" datatype="uint1_400"/>
-            <!-- 0x0B: 0-10 (= 1/4, 1/3, 3/8, 1/2, 2/3, 3/4, 1.0, 1.5, 2.0, 3.0, 4.0) (tempo) -->
-            <field name="IntervalCenter" datatype="delayInterval" />
-            <!-- 0x0C: 0-100 -->
-            <field name="Feedback" datatype="roland.level" />
-            <!-- 0x0D: 0-100 -->
-            <field name="LevelCenter" datatype="roland.level" />
-            <!-- 0x0E: 0-100 -->
-            <field name="LevelLeft" datatype="roland.level" />
-            <!-- 0x0F: 0-100 -->
-            <field name="LevelRight" datatype="roland.level" />
-            <!-- 0x10: 0-50 (= -50 - 0) -->
-            <field name="HighDamp" datatype="shiftDown50" />
-            <!-- 0x11: 0-15 = hiCut -->
-            <field name="HighCut" datatype="hiCut" />
-            <!-- 0x12: 0 = off, 1 = on -->
-            <field name="Smooth" datatype="roland.switch" />
-            <!-- 0x13: 0-100 -->
-            <field name="EffectLevel" datatype="roland.level" />
-            <!-- 0x14: 0-100 -->
-            <field name="DirectLevel" datatype="roland.level" />
-          </members>
-        </group>
-
-        <!-- Section 0B: 9 bytes. -->
-        <group name="Chorus" midi.atomic="true" midi.stride="0x01-00">
-          <members>
-            <!-- 0x00: 0 = off, 1 = on -->
-            <field name="On" datatype="roland.switch" />
-            <!-- 0x01: 0 = mono, 1 = stereo -->
-            <field name="Mode" datatype="chorusMode" />
-            <!-- 0x02: 0-100 -->
-            <field name="Rate" datatype="roland.level" />
-            <!-- 0x03: 0-100 -->
-            <field name="Depth" datatype="roland.level" />
-            <!-- 0x04: x 0.5 ms -->
-            <field name="PreDelay" datatype="halves0_50" />
-            <!-- 0x05: 0-10 = lowCut -->
-            <field name="LowCut" datatype="lowCut" />
-            <!-- 0x06: 0-15 = hiCut -->
-            <field name="HighCut" datatype="hiCut" />
-            <!-- 0x07: 0-10 [TODO] (= tri 10:0 sin - tri 0:10 sin) -->
-            <field name="Lfo" datatype="sys.uint8" />
-            <!-- 0x08: 0-100 -->
-            <field name="EffectLevel" datatype="roland.level" />
-          </members>
-        </group>
-
-        <!-- Section 0C: 5 bytes. -->
-        <group name="TremoloPan" midi.atomic="true" midi.stride="0x01-00">
-          <members>
-            <!-- 0x00: 0 = off, 1 = on -->
-            <field name="On" datatype="roland.switch" />
-            <!-- 0x01: 0 = tremolo triangle, 1 = tremolo square, 2 = pan triangle, 3 = pan square -->
-            <field name="Mode" datatype="tremoloPanMode" />
-            <!-- 0x02: 0-100 -->
-            <field name="Rate" datatype="roland.level" />
-            <!-- 0x03: 0-100 -->
-            <field name="Depth" datatype="roland.level" />
-            <!-- 0x04: 0-100 (= L100:0R - L0:100R) -->
-            <field name="Balance" datatype="roland.level" />
-          </members>
-        </group>
-
-        <!-- Section 0D: 9 bytes. -->
-        <group name="Reverb" midi.atomic="true" midi.stride="0x01-00">
-          <members>
-            <!-- 0x00: 0 = off, 1 = on -->
-            <field name="On" datatype="roland.switch" />
-            <!-- 0x01: 0-4 (= Room1, Room2, Hall1, Hall2, Plate) -->
-            <field name="Type" datatype="reverbType" />
-            <!-- 0x02: 1-100 (= 0.1 - 10 s) -->
-            <field name="Time" datatype="tenths01_100" />
-            <!-- 0x03: 0-100 ms -->
-            <field name="PreDelay" datatype="roland.level" />
-            <!-- 0x04: 0-10 = lowCut -->
-            <field name="LowCut" datatype="lowCut" />
-            <!-- 0x05: 0-15 = hiCut -->
-            <field name="HighCut" datatype="hiCut" />
-            <!-- 0x06: 0-10 -->
-            <field name="Diffusion" datatype="uint10" />
-            <!-- 0x07: 0-100 -->
-            <field name="EffectLevel" datatype="roland.level" />
-            <!-- 0x08: 0-100 -->
-            <field name="DirectLevel" datatype="roland.level" />
-          </members>
-        </group>
+        </repeat>
       </members>
     </group>
 
-    <!--
-      The system: 3 sections, one DT1 each. Not described by the parser: the layout is taken from the dump only.
-      [TODO] name the system parameters.
-    -->
+    <!-- Section 01: 8 bytes. Table-2 Compressor. -->
+    <group name="compressor">
+      <members>
+        <!-- 0x00: 0 = off, 1 = on -->
+        <field name="On" datatype="roland.switch" />
+        <!-- 0x01: 0 = compressor, 1 = limiter -->
+        <field name="Type" datatype="compressorType" />
+        <!-- 0x02: 0-100 (compressor) -->
+        <field name="Sustain" datatype="roland.level" />
+        <!-- 0x03: 0-100 (compressor) -->
+        <field name="Attack" datatype="roland.level" />
+        <!-- 0x04: 0-100 (limiter) -->
+        <field name="Threshold" datatype="roland.level" />
+        <!-- 0x05: 0-100 (limiter) -->
+        <field name="Release" datatype="roland.level" />
+        <!-- 0x06: 0-100 (= -50 - +50) -->
+        <field name="Tone" datatype="int50" />
+        <!-- 0x07: 0-100 -->
+        <field name="EffectLevel" datatype="roland.level" />
+      </members>
+    </group>
+
+    <!-- Section 02: 13 bytes. Table-3 Wah. -->
+    <group name="wah">
+      <members>
+        <!-- 0x00: 0 = off, 1 = on -->
+        <field name="On" datatype="roland.switch" />
+        <!-- 0x01: 0 = pedal wah, 1 = sw-pedal wah, 2 = auto wah -->
+        <field name="Mode" datatype="wahMode" />
+        <!-- 0x02: 0-100 (pedal) -->
+        <field name="Frequency" datatype="roland.level" />
+        <!-- 0x03: 0 = down, 1 = up (auto) -->
+        <field name="Polarity" datatype="polarity" />
+        <!-- 0x04: 0-100 (auto) -->
+        <field name="Sensitivity" datatype="roland.level" />
+        <!-- 0x05: 0-100 (auto) -->
+        <field name="Manual" datatype="roland.level" />
+        <!-- 0x06: 0-100 -->
+        <field name="Peak" datatype="roland.level" />
+        <!-- 0x07: 0 = fixed, 1 = EXP pedal, 2 = FC-200EXP, 3-65 = MIDI CC (pedal source) -->
+        <field name="Pedal" datatype="wahPedal" />
+        <!-- 0x08: 0-100 (pedal) -->
+        <field name="PedalMin" datatype="roland.level" />
+        <!-- 0x09: 0-100 (pedal) -->
+        <field name="PedalMax" datatype="roland.level" />
+        <!-- 0x0A: 0-100 (auto) -->
+        <field name="Rate" datatype="roland.level" />
+        <!-- 0x0B: 0-100 (auto) -->
+        <field name="Depth" datatype="roland.level" />
+        <!-- 0x0C: 0-100 -->
+        <field name="EffectLevel" datatype="roland.level" />
+      </members>
+    </group>
+
+    <!-- Section 03: 6 bytes. Table-4 Distortion. -->
+    <group name="overdriveDistortion">
+      <members>
+        <!-- 0x00: 0 = off, 1 = on -->
+        <field name="On" datatype="roland.switch" />
+        <!-- 0x01: 0 = Vintage OD, 1 = Turbo OD, 2 = Blues, 3 = Distortion, 4 = Turbo DS, 5 = Metal, 6 = Fuzz -->
+        <field name="Type" datatype="distortionType" />
+        <!-- 0x02: 0-100 -->
+        <field name="Drive" datatype="roland.level" />
+        <!-- 0x03: 0-100 (= -50 - +50) -->
+        <field name="Bass" datatype="int50" />
+        <!-- 0x04: 0-100 (= -50 - +50) -->
+        <field name="Treble" datatype="int50" />
+        <!-- 0x05: 0-100 -->
+        <field name="EffectLevel" datatype="roland.level" />
+      </members>
+    </group>
+
+    <!-- Section 04: 10 bytes. Table-5 Preamp. -->
+    <group name="preamp">
+      <members>
+        <!-- 0x00: 0 = off, 1 = on -->
+        <field name="On" datatype="roland.switch" />
+        <!-- 0x01: 0 = JC-120, 1 = Clean Twin, 2 = Match Drive, 3 = BG Lead, 4 = MS1959 (I), 5 = MS1959 (II),
+             6 = MS1959 (I+II), 7 = SLDN Lead, 8 = Metal 5150 -->
+        <field name="Type" datatype="preampType" />
+        <!-- 0x02: 0-100 -->
+        <field name="Volume" datatype="roland.level" />
+        <!-- 0x03: 0-100 -->
+        <field name="Bass" datatype="roland.level" />
+        <!-- 0x04: 0-100 -->
+        <field name="Middle" datatype="roland.level" />
+        <!-- 0x05: 0-100 -->
+        <field name="Treble" datatype="roland.level" />
+        <!-- 0x06: 0-100 -->
+        <field name="Presence" datatype="roland.level" />
+        <!-- 0x07: 0-100 -->
+        <field name="Master" datatype="roland.level" />
+        <!-- 0x08: 0 = off, 1 = on -->
+        <field name="Bright" datatype="roland.switch" />
+        <!-- 0x09: 0 = low, 1 = middle, 2 = high -->
+        <field name="Gain" datatype="preampGain" />
+      </members>
+    </group>
+
+    <!-- Section 05: 4 bytes. Table-6 Loop. -->
+    <group name="loop">
+      <members>
+        <!-- 0x00: 0 = off, 1 = on -->
+        <field name="On" datatype="roland.switch" />
+        <!-- 0x01: 0-100 -->
+        <field name="ReturnLevel" datatype="roland.level" />
+        <!-- 0x02: 0-100 -->
+        <field name="SendLevel" datatype="roland.level" />
+        <!-- 0x03: 0 = series, 1 = parallel -->
+        <field name="Mode" datatype="loopMode" />
+      </members>
+    </group>
+
+    <!-- Section 06: 7 bytes. Table-7 Equalizer. -->
+    <group name="equalizer">
+      <members>
+        <!-- 0x00: 0 = off, 1 = on -->
+        <field name="On" datatype="roland.switch" />
+        <!-- 0x01: 0-40 (= -20 - +20 dB) -->
+        <field name="LowGain" datatype="int20" />
+        <!-- 0x02: 0-20 (= 100 Hz - 10.0 kHz, Table-7.1) -->
+        <field name="MiddleFrequency" datatype="eqMiddleFrequency" />
+        <!-- 0x03: 0-40 (= -20 - +20 dB) -->
+        <field name="MiddleGain" datatype="int20" />
+        <!-- 0x04: 0-5 (= 0.5, 1, 2, 4, 8, 16, Table-7.2) -->
+        <field name="MiddleQ" datatype="eqMiddleQ" />
+        <!-- 0x05: 0-40 (= -20 - +20 dB) -->
+        <field name="HighGain" datatype="int20" />
+        <!-- 0x06: 0-40 (= -20 - +20 dB) -->
+        <field name="Level" datatype="int20" />
+      </members>
+    </group>
+
+    <!-- Section 07: 5 bytes. Table-8 Speaker Simulator. -->
+    <group name="speakerSimulator">
+      <members>
+        <!-- 0x00: 0 = off, 1 = on -->
+        <field name="On" datatype="roland.switch" />
+        <!-- 0x01: 0 = Small, 1 = Middle, 2 = JC-120, 3-6 = Built-In 1-4, 7-8 = BG Stack 1-2, 9-10 = MS Stack 1-2,
+             11 = Metal Stack (Table-8.1) -->
+        <field name="Type" datatype="speakerType" />
+        <!-- 0x02: 1-10 -->
+        <field name="MicSetting" datatype="uint1_10" />
+        <!-- 0x03: 0-100 -->
+        <field name="MicLevel" datatype="roland.level" />
+        <!-- 0x04: 0-100 -->
+        <field name="DirectLevel" datatype="roland.level" />
+      </members>
+    </group>
+
+    <!-- Section 08: 5 bytes. Table-9 Noise Suppressor. -->
+    <group name="noiseSuppressor">
+      <members>
+        <!-- 0x00: 0 = off, 1 = on -->
+        <field name="On" datatype="roland.switch" />
+        <!-- 0x01: 0-100 -->
+        <field name="Threshold" datatype="roland.level" />
+        <!-- 0x02: 0-100 -->
+        <field name="Release" datatype="roland.level" />
+        <!-- 0x03: 0 = guitar in, 1 = NS in -->
+        <field name="Detect" datatype="nsDetect" />
+        <!-- 0x04: 0-100 -->
+        <field name="EffectLevel" datatype="roland.level" />
+      </members>
+    </group>
+
+    <!-- Section 09: 77 bytes. Table-10 Modulation. Which parameters apply depends on the mode (in parentheses). -->
+    <group name="modulation">
+      <members>
+        <!-- 0x00: 0 = off, 1 = on -->
+        <field name="On" datatype="roland.switch" />
+        <!-- 0x01: 0 = Flanger, 1 = Phaser, 2 = Pitch Shifter, 3 = Harmonist, 4 = Vibrato, 5 = Ring Modulator,
+             6 = Humanizer (Table-10.1) -->
+        <field name="Mode" datatype="modulationMode" />
+        <!-- 0x02: 0-4 (= 4, 6, 8, 10, 12 stage) (phaser) -->
+        <field name="PhaserType" datatype="phaserType" />
+        <!-- 0x03: 0 = off, 1 = on, 2 = auto (vibrato) -->
+        <field name="VibratoTrigger" datatype="vibratoTrigger" />
+        <!-- 0x04: 0-100 (vibrato) -->
+        <field name="VibratoRiseTime" datatype="roland.level" />
+        <!-- 0x05: 0 = auto, 1 = pedal (humanizer) -->
+        <field name="HumanizerMode" datatype="humanizerMode" />
+        <!-- 0x06: 0-4 (= a, e, i, o, u) (humanizer) -->
+        <field name="HumanizerVowel1" datatype="vowel" />
+        <!-- 0x07: 0-4 (= a, e, i, o, u) (humanizer) -->
+        <field name="HumanizerVowel2" datatype="vowel" />
+        <!-- 0x08: 0-100 (flanger, phaser, vibrato, humanizer) -->
+        <field name="Rate" datatype="roland.level" />
+        <!-- 0x09: 0-100 (flanger, phaser, vibrato, humanizer) -->
+        <field name="Depth" datatype="roland.level" />
+        <!-- 0x0A: 0-100 (flanger, phaser) -->
+        <field name="Manual" datatype="roland.level" />
+        <!-- 0x0B (MSB), 0x0C (LSB): 0-200 (= -100 - +100) (flanger, phaser) -->
+        <field name="Resonance" nodeDef="nibble8" datatype="int100" />
+        <!-- 0x0D: 0 = off, 1-100 (phaser step rate) -->
+        <field name="PhaserStep" datatype="roland.level" />
+        <!-- 0x0E (MSB), 0x0F (LSB): 0-200 (= -100 - +100) (flanger) -->
+        <field name="FlangerSeparation" nodeDef="nibble8" datatype="int100" />
+        <!-- 0x10: 0 = off, 1-100 (flanger) -->
+        <field name="FlangerGate" datatype="roland.level" />
+        <!-- 0x11: 0 = off, 1 = auto (humanizer) -->
+        <field name="HumanizerTrigger" datatype="humanizerTrigger" />
+        <!-- 0x12: 0 = EXP pedal, 1 = FC-200EXP, 2-64 = MIDI CC (humanizer pedal source) -->
+        <field name="HumanizerPedal" datatype="pedal" />
+        <!-- 0x13: 0 = intelligent, 1-100 (ring modulator) -->
+        <field name="RingModFrequency" datatype="roland.level" />
+        <!-- 0x14: 0-100 (ring modulator) -->
+        <field name="RingModEffectLevel" datatype="roland.level" />
+        <!-- 0x15: 0-100 (ring modulator) -->
+        <field name="RingModDirectLevel" datatype="roland.level" />
+        <!-- 0x16: 0 = slow, 1 = fast, 2 = mono (pitch shifter) -->
+        <field name="PitchShifterMode" datatype="pitchShifterMode" />
+        <!-- 0x17: 0-48 (= -24 - +24 semitones) (pitch shifter) -->
+        <field name="Pitch1" datatype="int24" />
+        <!-- 0x18: 0-48 (= -24 - +24 semitones) (pitch shifter) -->
+        <field name="Pitch2" datatype="int24" />
+        <!-- 0x19: 0-48 (= -24 - +24 semitones) (pitch shifter) -->
+        <field name="Pitch3" datatype="int24" />
+        <!-- 0x1A: 0-100 (= -50 - +50) (pitch shifter) -->
+        <field name="Fine1" datatype="int50" />
+        <!-- 0x1B: 0-100 (= -50 - +50) (pitch shifter) -->
+        <field name="Fine2" datatype="int50" />
+        <!-- 0x1C: 0-100 (= -50 - +50) (pitch shifter) -->
+        <field name="Fine3" datatype="int50" />
+        <!-- 0x1D: 0-11 = C, Db - B major, 12-23 = C, Db - B minor (harmonist) -->
+        <field name="HarmonistKey" datatype="harmonistKey" />
+        <!-- 0x1E: 0-28 (= -2 octaves - +2 octaves in diatonic steps, 14 = unison) (harmonist) -->
+        <field name="HarmonistInterval1" datatype="harmonistInterval" />
+        <!-- 0x1F: 0-28 (= -2 octaves - +2 octaves in diatonic steps, 14 = unison) (harmonist) -->
+        <field name="HarmonistInterval2" datatype="harmonistInterval" />
+        <!-- 0x20: 0-28 (= -2 octaves - +2 octaves in diatonic steps, 14 = unison) (harmonist) -->
+        <field name="HarmonistInterval3" datatype="harmonistInterval" />
+        <!-- 0x21: 0-100 (= L100:R0 - L0:R100) (pitch shifter, harmonist) -->
+        <field name="Pan1" datatype="roland.level" />
+        <!-- 0x22: 0-100 (= L100:R0 - L0:R100) (pitch shifter, harmonist) -->
+        <field name="Pan2" datatype="roland.level" />
+        <!-- 0x23: 0-100 (= L100:R0 - L0:R100) (pitch shifter, harmonist) -->
+        <field name="Pan3" datatype="roland.level" />
+        <!-- 0x24: 0-100 (pitch shifter, harmonist) -->
+        <field name="Level1" datatype="roland.level" />
+        <!-- 0x25: 0-100 (pitch shifter, harmonist) -->
+        <field name="Level2" datatype="roland.level" />
+        <!-- 0x26: 0-100 (pitch shifter, harmonist) -->
+        <field name="Level3" datatype="roland.level" />
+        <!-- 0x27: 0-100 (= D100:E0 - D0:E100) (pitch shifter, harmonist) -->
+        <field name="Balance" datatype="roland.level" />
+        <!-- 0x28: 0-100 (pitch shifter, harmonist) -->
+        <field name="TotalLevel" datatype="roland.level" />
+        <!--
+          0x29-0x4C: the harmonist scale, one item per note of the key: C, Db, D, Eb, E, F, F#, G, Ab, A, Bb, B.
+          Each item holds the interval of voice #1, #2 and #3 (harmonist).
+        -->
+        <repeat name="HarmonistScale" count="12">
+          <members>
+            <!-- 0x00: 0-48 (= -24 - +24 semitones, 24 = tonic, Table-10.2) -->
+            <field name="Interval1" datatype="int24" />
+            <!-- 0x01: 0-48 (= -24 - +24 semitones, 24 = tonic, Table-10.2) -->
+            <field name="Interval2" datatype="int24" />
+            <!-- 0x02: 0-48 (= -24 - +24 semitones, 24 = tonic, Table-10.2) -->
+            <field name="Interval3" datatype="int24" />
+          </members>
+        </repeat>
+      </members>
+    </group>
+
+    <!-- Section 0A: 21 bytes. Table-11 Delay. -->
+    <group name="delay">
+      <members>
+        <!-- 0x00: 0 = off, 1 = on -->
+        <field name="On" datatype="roland.switch" />
+        <!-- 0x01: 0 = normal, 1 = tempo -->
+        <field name="Mode" datatype="delayMode" />
+        <!-- 0x02: 0 = fixed, 1 = control 1, 2 = control 2, 3 = FC-200CTL, 4-67 = MIDI CC (tempo in control) -->
+        <field name="TempoIn" datatype="tempoIn" />
+        <!-- 0x03 (MSB), 0x04 (LSB): 0-250 (= 50-300 BPM) (tempo) -->
+        <field name="Tempo" nodeDef="nibble8" datatype="uint50_300" />
+        <!-- 0x05 (MSB), 0x06 (LSB): 0-2000 ms (normal) -->
+        <field name="TimeCenter" nodeDef="sysex14" datatype="uint2000" />
+        <!-- 0x07 (MSB), 0x08 (LSB): 0-400 % of the center (normal) -->
+        <field name="TimeLeft" nodeDef="sysex14" datatype="uint400" />
+        <!-- 0x09 (MSB), 0x0A (LSB): 0-400 % of the center (normal) -->
+        <field name="TimeRight" nodeDef="sysex14" datatype="uint400" />
+        <!-- 0x0B: 0-10 (= sixteenth note - whole note, Table-11.1) (tempo) -->
+        <field name="IntervalCenter" datatype="delayInterval" />
+        <!-- 0x0C: 0-100 -->
+        <field name="Feedback" datatype="roland.level" />
+        <!-- 0x0D: 0-100 -->
+        <field name="LevelCenter" datatype="roland.level" />
+        <!-- 0x0E: 0-100 -->
+        <field name="LevelLeft" datatype="roland.level" />
+        <!-- 0x0F: 0-100 -->
+        <field name="LevelRight" datatype="roland.level" />
+        <!-- 0x10: 0-50 (= -50 - 0) -->
+        <field name="HighDamp" datatype="shiftDown50" />
+        <!-- 0x11: 0-15 = hiCut -->
+        <field name="HighCut" datatype="hiCut" />
+        <!-- 0x12: 0 = off, 1 = on -->
+        <field name="Smooth" datatype="roland.switch" />
+        <!-- 0x13: 0-100 -->
+        <field name="EffectLevel" datatype="roland.level" />
+        <!-- 0x14: 0-100 -->
+        <field name="DirectLevel" datatype="roland.level" />
+      </members>
+    </group>
+
+    <!-- Section 0B: 9 bytes. Table-12 Chorus. -->
+    <group name="chorus">
+      <members>
+        <!-- 0x00: 0 = off, 1 = on -->
+        <field name="On" datatype="roland.switch" />
+        <!-- 0x01: 0 = mono, 1 = stereo -->
+        <field name="Mode" datatype="chorusMode" />
+        <!-- 0x02: 0-100 -->
+        <field name="Rate" datatype="roland.level" />
+        <!-- 0x03: 0-100 -->
+        <field name="Depth" datatype="roland.level" />
+        <!-- 0x04: 0-100 (= 0.0 - 50.0 ms) -->
+        <field name="PreDelay" datatype="halves0_50" />
+        <!-- 0x05: 0-10 = lowCut -->
+        <field name="LowCut" datatype="lowCut" />
+        <!-- 0x06: 0-15 = hiCut -->
+        <field name="HighCut" datatype="hiCut" />
+        <!-- 0x07: 0-10 (= T10:S0 - T0:S10, the mix of triangle and sine) -->
+        <field name="ModWave" datatype="uint10" />
+        <!-- 0x08: 0-100 -->
+        <field name="EffectLevel" datatype="roland.level" />
+      </members>
+    </group>
+
+    <!-- Section 0C: 5 bytes. Table-13 Tremolo/Pan. -->
+    <group name="tremoloPan">
+      <members>
+        <!-- 0x00: 0 = off, 1 = on -->
+        <field name="On" datatype="roland.switch" />
+        <!-- 0x01: 0 = tremolo triangle, 1 = tremolo square, 2 = pan triangle, 3 = pan square -->
+        <field name="Mode" datatype="tremoloPanMode" />
+        <!-- 0x02: 0-100 -->
+        <field name="Rate" datatype="roland.level" />
+        <!-- 0x03: 0-100 -->
+        <field name="Depth" datatype="roland.level" />
+        <!-- 0x04: 0-100 (= L100:R0 - L0:R100) -->
+        <field name="Balance" datatype="roland.level" />
+      </members>
+    </group>
+
+    <!-- Section 0D: 9 bytes. Table-14 Reverb. -->
+    <group name="reverb">
+      <members>
+        <!-- 0x00: 0 = off, 1 = on -->
+        <field name="On" datatype="roland.switch" />
+        <!-- 0x01: 0-4 (= Room1, Room2, Hall1, Hall2, Plate) -->
+        <field name="Type" datatype="reverbType" />
+        <!-- 0x02: 1-100 (= 0.1 - 10.0 s) -->
+        <field name="Time" datatype="tenths01_100" />
+        <!-- 0x03: 0-100 ms -->
+        <field name="PreDelay" datatype="roland.level" />
+        <!-- 0x04: 0-10 = lowCut (the manual refers to Table-15 and Table-16 the other way around) -->
+        <field name="LowCut" datatype="lowCut" />
+        <!-- 0x05: 0-15 = hiCut -->
+        <field name="HighCut" datatype="hiCut" />
+        <!-- 0x06: 0-10 -->
+        <field name="Diffusion" datatype="uint10" />
+        <!-- 0x07: 0-100 -->
+        <field name="EffectLevel" datatype="roland.level" />
+        <!-- 0x08: 0-100 -->
+        <field name="DirectLevel" datatype="roland.level" />
+      </members>
+    </group>
+
+    <!-- One patch in a bulk area (user, preset, temporary): 14 sections, one DT1 each. -->
+    <group name="patch">
+      <members>
+        <group name="Common" nodeDef="common" midi.atomic="true" midi.stride="0x01-00" />
+        <group name="Compressor" nodeDef="compressor" midi.atomic="true" midi.stride="0x01-00" />
+        <group name="Wah" nodeDef="wah" midi.atomic="true" midi.stride="0x01-00" />
+        <group name="OverdriveDistortion" nodeDef="overdriveDistortion" midi.atomic="true" midi.stride="0x01-00" />
+        <group name="Preamp" nodeDef="preamp" midi.atomic="true" midi.stride="0x01-00" />
+        <group name="Loop" nodeDef="loop" midi.atomic="true" midi.stride="0x01-00" />
+        <group name="Equalizer" nodeDef="equalizer" midi.atomic="true" midi.stride="0x01-00" />
+        <group name="SpeakerSimulator" nodeDef="speakerSimulator" midi.atomic="true" midi.stride="0x01-00" />
+        <group name="NoiseSuppressor" nodeDef="noiseSuppressor" midi.atomic="true" midi.stride="0x01-00" />
+        <group name="Modulation" nodeDef="modulation" midi.atomic="true" midi.stride="0x01-00" />
+        <group name="Delay" nodeDef="delay" midi.atomic="true" midi.stride="0x01-00" />
+        <group name="Chorus" nodeDef="chorus" midi.atomic="true" midi.stride="0x01-00" />
+        <group name="TremoloPan" nodeDef="tremoloPan" midi.atomic="true" midi.stride="0x01-00" />
+        <group name="Reverb" nodeDef="reverb" midi.atomic="true" midi.stride="0x01-00" />
+      </members>
+    </group>
+
+    <!-- The patch in the individual temporary area: the same sections, each parameter can be sent on its own. -->
+    <group name="individualPatch">
+      <members>
+        <group name="Common" nodeDef="common" midi.stride="0x01-00" />
+        <group name="Compressor" nodeDef="compressor" midi.stride="0x01-00" />
+        <group name="Wah" nodeDef="wah" midi.stride="0x01-00" />
+        <group name="OverdriveDistortion" nodeDef="overdriveDistortion" midi.stride="0x01-00" />
+        <group name="Preamp" nodeDef="preamp" midi.stride="0x01-00" />
+        <group name="Loop" nodeDef="loop" midi.stride="0x01-00" />
+        <group name="Equalizer" nodeDef="equalizer" midi.stride="0x01-00" />
+        <group name="SpeakerSimulator" nodeDef="speakerSimulator" midi.stride="0x01-00" />
+        <group name="NoiseSuppressor" nodeDef="noiseSuppressor" midi.stride="0x01-00" />
+        <group name="Modulation" nodeDef="modulation" midi.stride="0x01-00" />
+        <group name="Delay" nodeDef="delay" midi.stride="0x01-00" />
+        <group name="Chorus" nodeDef="chorus" midi.stride="0x01-00" />
+        <group name="TremoloPan" nodeDef="tremoloPan" midi.stride="0x01-00" />
+        <group name="Reverb" nodeDef="reverb" midi.stride="0x01-00" />
+      </members>
+    </group>
+
+    <!-- The system: 3 sections, one DT1 each. -->
     <group name="system">
       <members>
-        <!-- Section 00: 19 bytes. -->
+        <!-- Section 00: 19 bytes. Table-17 System Parameters. -->
         <group name="Common" midi.atomic="true" midi.stride="0x01-00">
           <members>
-            <!-- 0x00-0x12: [TODO] e.g. 05 01 00 00 00 14 06 04 04 04 00 01 0C 08 00 00 0F 00 01 in the dump. -->
-            <field name="Unknown00" datatype="sys.bytes" byteLength="19" />
+            <!-- 0x00: 0-10 (= 435 - 445 Hz) -->
+            <field name="TunerPitch" datatype="tunerPitch" />
+            <!-- 0x01: 0 = off, 1 = on, 2 = flat, 3 = double flat -->
+            <field name="TunerString" datatype="tunerString" />
+            <!-- 0x02: 0-100 -->
+            <field name="TunerLevel" datatype="roland.level" />
+            <!-- 0x03: 0 = guitar amp (combo), 1 = guitar amp (stack), 2 = power amp (combo), 3 = power amp (stack),
+                 4 = line -->
+            <field name="OutputType" datatype="outputType" />
+            <!-- 0x04: 0 = patch, 1 = always off, 2 = always on -->
+            <field name="SpeakerSimulator" datatype="speakerSimulatorMode" />
+            <!-- 0x05: 0-40 (= -20 - +20 dB) -->
+            <field name="NsThresholdLevel" datatype="int20" />
+            <!-- 0x06 (MSB), 0x07 (LSB): 0-200 -->
+            <field name="ReverbLevel" nodeDef="nibble8" datatype="uint200" />
+            <!-- 0x08: 0 = number up, 1 = number down, 2 = bypass, 3 = tuner, 4 = assignable -->
+            <field name="Control1Jack" datatype="controlJack" />
+            <!-- 0x09: 0 = number up, 1 = number down, 2 = bypass, 3 = tuner, 4 = assignable -->
+            <field name="Control2Jack" datatype="controlJack" />
+            <!-- 0x0A (MSB), 0x0B (LSB): 1-200 (patch number) -->
+            <field name="NumberUpDownMin" nodeDef="nibble8" datatype="patchNumber" />
+            <!-- 0x0C (MSB), 0x0D (LSB): 1-200 (patch number) -->
+            <field name="NumberUpDownMax" nodeDef="nibble8" datatype="patchNumber" />
+            <!-- 0x0E: 0 = off, 1 = on -->
+            <field name="AssignHold" datatype="roland.switch" />
+            <!-- 0x0F: 0 = bypass, 1 = mute -->
+            <field name="BypassMode" datatype="bypassMode" />
+            <!-- 0x10: 0-15 -->
+            <field name="LcdContrast" datatype="uint15" />
+            <!-- 0x11: 0-15 (= 1-16) -->
+            <field name="MidiChannel" datatype="midiChannel" />
+            <!-- 0x12: 0 = omni off, 1 = omni on -->
+            <field name="OmniMode" datatype="roland.switch" />
           </members>
         </group>
         <!--
-          Sections 01 and 02: 128 bytes each, 64 values of nibble8, 1-128 in order in the dump.
-          [TODO] verify: most likely the Program Change map (program 1-64 and 65-128 to a patch).
+          Sections 01 and 02: 128 bytes each. Table-18 MIDI Program Change Map: the patch (1-200) selected by
+          program change 1-64 (section 01) and 65-128 (section 02).
         -->
         <group name="ProgramChangeMap1" midi.atomic="true" midi.stride="0x01-00">
           <members>
             <repeat name="Program" count="64">
               <members>
-                <field name="Patch" nodeDef="nibble8" />
+                <!-- 0x00 (MSB), 0x01 (LSB): 1-200 -->
+                <field name="Patch" nodeDef="nibble8" datatype="patchNumber" />
               </members>
             </repeat>
           </members>
@@ -458,7 +565,8 @@
           <members>
             <repeat name="Program" count="64">
               <members>
-                <field name="Patch" nodeDef="nibble8" />
+                <!-- 0x00 (MSB), 0x01 (LSB): 1-200 -->
+                <field name="Patch" nodeDef="nibble8" datatype="patchNumber" />
               </members>
             </repeat>
           </members>
@@ -468,6 +576,35 @@
   </nodeDefs>
 
   <dataTypeDefs>
+    <!--
+      The character set of names and the display (Table-1.4): 0x16-0x7F. 0x20-0x7D is ASCII, the other bytes are
+      device specific characters, mapped to the closest Unicode character.
+    -->
+    <dataTypeDef name="text" basedOn="sys.string">
+      <processors>
+        <processor name="midi.string" validBytes="0x16-0x7F">
+          <properties>
+            <property name="0x16" value="‼" />
+            <property name="0x17" value="≈" />
+            <!-- small square outline -->
+            <property name="0x18" value="▫" />
+            <!-- small square filled -->
+            <property name="0x19" value="▪" />
+            <!-- Roman numeral two -->
+            <property name="0x1A" value="Ⅱ" />
+            <!-- a filled Roman numeral two: Unicode has none, the closest filled shape is used -->
+            <property name="0x1B" value="▮" />
+            <property name="0x1C" value="♂" />
+            <property name="0x1D" value="♀" />
+            <property name="0x1E" value="↑" />
+            <property name="0x1F" value="↓" />
+            <property name="0x7E" value="→" />
+            <property name="0x7F" value="←" />
+          </properties>
+        </processor>
+      </processors>
+    </dataTypeDef>
+
     <!-- -20 - +20 -->
     <dataTypeDef name="int20" basedOn="sys.uint8" min="-20" max="20" shift="-20" />
     <!-- -24 - +24 -->
@@ -478,12 +615,20 @@
     <dataTypeDef name="int100" basedOn="sys.uint8" min="-100" max="100" shift="-100" />
     <!-- +50 - +300 -->
     <dataTypeDef name="uint50_300" basedOn="sys.uint16" min="50" max="300" shift="50" />
-    <!-- +1 - +400 -->
-    <dataTypeDef name="uint1_400" basedOn="sys.uint16" min="1" max="400"/>
+    <!-- 0 - +400 -->
+    <dataTypeDef name="uint400" basedOn="sys.uint16" min="0" max="400" />
     <!-- 0 - +2000 -->
-    <dataTypeDef name="uint2000" basedOn="sys.uint16" min="0" max="2000"/>
+    <dataTypeDef name="uint2000" basedOn="sys.uint16" min="0" max="2000" />
     <!-- 0 - +10 -->
-    <dataTypeDef name="uint10" basedOn="sys.uint8" min="0" max="10"/>
+    <dataTypeDef name="uint10" basedOn="sys.uint8" min="0" max="10" />
+    <!-- +1 - +10 -->
+    <dataTypeDef name="uint1_10" basedOn="sys.uint8" min="1" max="10" />
+    <!-- 0 - +15 -->
+    <dataTypeDef name="uint15" basedOn="sys.uint8" min="0" max="15" />
+    <!-- 0 - +127 -->
+    <dataTypeDef name="uint127" basedOn="sys.uint8" min="0" max="127" />
+    <!-- 0 - +200 -->
+    <dataTypeDef name="uint200" basedOn="sys.uint8" min="0" max="200" />
     <!-- -50 - 0 -->
     <dataTypeDef name="shiftDown50" basedOn="sys.uint8" min="-50" max="0" shift="-50" />
 
@@ -491,7 +636,255 @@
     <dataTypeDef name="halves0_50" basedOn="sys.uint8" min="0" max="50" scale="0.5" />
     <!-- 0.1 - 10 : 0.1 -->
     <dataTypeDef name="tenths01_100" basedOn="sys.uint8" min="0.1" max="10" scale="0.1" />
-    
+
+    <!-- A patch number: 1-100 = user, 101-200 = preset. -->
+    <dataTypeDef name="patchNumber" basedOn="sys.uint8" min="1" max="200" />
+    <!-- System.Common.TunerPitch: 435 - 445 Hz. -->
+    <dataTypeDef name="tunerPitch" basedOn="sys.uint8" min="435" max="445" shift="435" />
+    <!-- System.Common.MidiChannel: 1 - 16. -->
+    <dataTypeDef name="midiChannel" basedOn="sys.uint8" min="1" max="16" shift="1" />
+
+    <!-- Common.Chain.EffectType (Table-1.1). -->
+    <dataTypeDef name="effectType" basedOn="sys.uint8" optionsDefault="Compressor">
+      <options>
+        <option value="1" name="Compressor" />
+        <option value="2" name="Wah" />
+        <option value="3" name="Distortion" />
+        <option value="4" name="Preamp" />
+        <option value="5" name="Loop" />
+        <option value="6" name="Equalizer" />
+        <option value="7" name="Speaker Simulator" />
+        <option value="8" name="Noise Suppressor" />
+        <option value="9" name="Modulation" />
+        <option value="10" name="Delay" />
+        <option value="11" name="Chorus" />
+        <option value="12" name="Tremolo/Pan" />
+        <option value="13" name="Reverb" />
+      </options>
+    </dataTypeDef>
+
+    <!-- Common.Assign.Target: the parameter controlled by the assign (Table-1.2, names as in the manual). -->
+    <dataTypeDef name="assignTarget" basedOn="sys.uint8" optionsDefault="NOT ASSIGN">
+      <options>
+        <option value="0" name="NOT ASSIGN" />
+        <option value="1" name="OUTPUT LEVEL" />
+        <option value="2" name="CS:ON/OFF" />
+        <option value="3" name="CS:MODE" />
+        <option value="4" name="CS:CS SUSTAIN" />
+        <option value="5" name="CS:CS ATTACK" />
+        <option value="6" name="CS:LM THRESHLD" />
+        <option value="7" name="CS:LM RELEASE" />
+        <option value="8" name="CS:TONE" />
+        <option value="9" name="CS:LEVEL" />
+        <option value="10" name="WAH:ON/OFF" />
+        <option value="11" name="WAH:MODE" />
+        <option value="12" name="WAH:PEAK" />
+        <option value="13" name="WAH:PEDAL FREQ" />
+        <option value="14" name="WAH:AUTO POL" />
+        <option value="15" name="WAH:AUTO SENS" />
+        <option value="16" name="WAH:AUTO MANU" />
+        <option value="17" name="WAH:AUTO RATE" />
+        <option value="18" name="WAH:AUTO DEPTH" />
+        <option value="19" name="WAH:LEVEL" />
+        <option value="20" name="DS:ON/OFF" />
+        <option value="21" name="DS:TYPE" />
+        <option value="22" name="DS:DRIVE" />
+        <option value="23" name="DS:BASS" />
+        <option value="24" name="DS:TREBLE" />
+        <option value="25" name="DS:LEVEL" />
+        <option value="26" name="PRE:ON/OFF" />
+        <option value="27" name="PRE:TYPE" />
+        <option value="28" name="PRE:VOLUME" />
+        <option value="29" name="PRE:BASS" />
+        <option value="30" name="PRE:MIDDLE" />
+        <option value="31" name="PRE:TREBLE" />
+        <option value="32" name="PRE:PRESENCE" />
+        <option value="33" name="PRE:MASTER" />
+        <option value="34" name="PRE:BRIGHT" />
+        <option value="35" name="PRE:GAIN" />
+        <option value="36" name="LOOP:ON/OFF" />
+        <option value="37" name="LOOP:LEVEL" />
+        <option value="38" name="LOOP:RETURN" />
+        <option value="39" name="LOOP:MODE" />
+        <option value="40" name="EQ:ON/OFF" />
+        <option value="41" name="EQ:LOW GAIN" />
+        <option value="42" name="EQ:MID FREQ" />
+        <option value="43" name="EQ:MID GAIN" />
+        <option value="44" name="EQ:MID Q" />
+        <option value="45" name="EQ:HI GAIN" />
+        <option value="46" name="EQ:LEVEL" />
+        <option value="47" name="SP:ON/OFF" />
+        <option value="48" name="SP:TYPE" />
+        <option value="49" name="SP:MIC SETTING" />
+        <option value="50" name="SP:MIC LEVEL" />
+        <option value="51" name="SP:DIRECT LEV" />
+        <option value="52" name="NS:ON/OFF" />
+        <option value="53" name="NS:THRESHOLD" />
+        <option value="54" name="NS:RELEASE" />
+        <option value="55" name="NS:LEVEL" />
+        <option value="56" name="MOD:ON/OFF" />
+        <option value="57" name="MOD:MODE" />
+        <option value="58" name="MOD:RATE" />
+        <option value="59" name="MOD:DEPTH" />
+        <option value="60" name="MOD:MANUAL" />
+        <option value="61" name="MOD:RESONANCE" />
+        <option value="62" name="MOD:FL SEPARATI" />
+        <option value="63" name="MOD:FL GATE" />
+        <option value="64" name="MOD:PH TYPE" />
+        <option value="65" name="MOD:PH STEP" />
+        <option value="66" name="MOD:PS TYPE" />
+        <option value="67" name="MOD:PS PITCH1" />
+        <option value="68" name="MOD:PS PITCH2" />
+        <option value="69" name="MOD:PS PITCH3" />
+        <option value="70" name="MOD:HR KEY" />
+        <option value="71" name="MOD:HR INT1" />
+        <option value="72" name="MOD:HR INT2" />
+        <option value="73" name="MOD:HR INT3" />
+        <option value="74" name="MOD:PS&amp;HR PAN1" />
+        <option value="75" name="MOD:PS&amp;HR PAN2" />
+        <option value="76" name="MOD:PS&amp;HR PAN3" />
+        <option value="77" name="MOD:PS&amp;HR LEV1" />
+        <option value="78" name="MOD:PS&amp;HR LEV2" />
+        <option value="79" name="MOD:PS&amp;HR LEV3" />
+        <option value="80" name="MOD:PS&amp;HR BAL" />
+        <option value="81" name="MOD:PS&amp;HR TOTAL" />
+        <option value="82" name="MOD:VB TRIGGER" />
+        <option value="83" name="MOD:VB RiseTIME" />
+        <option value="84" name="MOD:RM FREQ" />
+        <option value="85" name="MOD:RM E.LEVEL" />
+        <option value="86" name="MOD:RM D.LEVEL" />
+        <option value="87" name="MOD:HU TYPE" />
+        <option value="88" name="MOD:HU VOWEL1" />
+        <option value="89" name="MOD:HU VOWEL2" />
+        <option value="90" name="MOD:HU TRIGGER" />
+        <option value="91" name="DLY:ON/OFF" />
+        <option value="92" name="DLY:MODE" />
+        <option value="93" name="DLY:NR TIME C" />
+        <option value="94" name="DLY:NR TIME L" />
+        <option value="95" name="DLY:NR TIME R" />
+        <option value="96" name="DLY:TM TEMPO" />
+        <option value="97" name="DLY:TM INT.C" />
+        <option value="98" name="DLY:TM INT.L" />
+        <option value="99" name="DLY:TM INT.R" />
+        <option value="100" name="DLY:FEEDBACK" />
+        <option value="101" name="DLY:LEVEL C" />
+        <option value="102" name="DLY:LEVEL L" />
+        <option value="103" name="DLY:LEVEL R" />
+        <option value="104" name="DLY:HIGH DAMP" />
+        <option value="105" name="DLY:HI CUT" />
+        <option value="106" name="DLY:SMOOTH" />
+        <option value="107" name="DLY:EFFECT LEV" />
+        <option value="108" name="DLY:DIRECT LEV" />
+        <option value="109" name="CH:ON/OFF" />
+        <option value="110" name="CH:MODE" />
+        <option value="111" name="CH:RATE" />
+        <option value="112" name="CH:DEPTH" />
+        <option value="113" name="CH:PREDELAY" />
+        <option value="114" name="CH:LOW CUT" />
+        <option value="115" name="CH:HI CUT" />
+        <option value="116" name="CH:WAVE" />
+        <option value="117" name="CH:EFFECT LEV" />
+        <option value="118" name="TREM:ON/OFF" />
+        <option value="119" name="TREM:MODE" />
+        <option value="120" name="TREM:RATE" />
+        <option value="121" name="TREM:DEPTH" />
+        <option value="122" name="TREM:BALANCE" />
+        <option value="123" name="RV:ON/OFF" />
+        <option value="124" name="RV:TYPE" />
+        <option value="125" name="RV:RevTIME" />
+        <option value="126" name="RV:PREDELAY" />
+        <option value="127" name="RV:LOW CUT" />
+        <option value="128" name="RV:HI CUT" />
+        <option value="129" name="RV:DIFFUSION" />
+        <option value="130" name="RV:EFFECT LEV" />
+        <option value="131" name="RV:DIRECT LEV" />
+        <option value="132" name="BYPASS" />
+        <option value="133" name="TUNER" />
+      </options>
+    </dataTypeDef>
+
+    <!-- Common.Assign.Source: a pedal, a control or a MIDI CC (Table-1.3). -->
+    <dataTypeDef name="assignSource" basedOn="sys.uint8" optionsDefault="EXP Pedal">
+      <options>
+        <option value="0" name="EXP Pedal" />
+        <option value="1" name="CTL1 Pedal" />
+        <option value="2" name="CTL2 Pedal" />
+        <option value="3" name="FC-200EXP" />
+        <option value="4" name="FC-200CTL" />
+        <option value="5" name="MIDI CC#1" />
+        <option value="6" name="MIDI CC#2" />
+        <option value="7" name="MIDI CC#3" />
+        <option value="8" name="MIDI CC#4" />
+        <option value="9" name="MIDI CC#5" />
+        <option value="10" name="MIDI CC#6" />
+        <option value="11" name="MIDI CC#7" />
+        <option value="12" name="MIDI CC#8" />
+        <option value="13" name="MIDI CC#9" />
+        <option value="14" name="MIDI CC#10" />
+        <option value="15" name="MIDI CC#11" />
+        <option value="16" name="MIDI CC#12" />
+        <option value="17" name="MIDI CC#13" />
+        <option value="18" name="MIDI CC#14" />
+        <option value="19" name="MIDI CC#15" />
+        <option value="20" name="MIDI CC#16" />
+        <option value="21" name="MIDI CC#17" />
+        <option value="22" name="MIDI CC#18" />
+        <option value="23" name="MIDI CC#19" />
+        <option value="24" name="MIDI CC#20" />
+        <option value="25" name="MIDI CC#21" />
+        <option value="26" name="MIDI CC#22" />
+        <option value="27" name="MIDI CC#23" />
+        <option value="28" name="MIDI CC#24" />
+        <option value="29" name="MIDI CC#25" />
+        <option value="30" name="MIDI CC#26" />
+        <option value="31" name="MIDI CC#27" />
+        <option value="32" name="MIDI CC#28" />
+        <option value="33" name="MIDI CC#29" />
+        <option value="34" name="MIDI CC#30" />
+        <option value="35" name="MIDI CC#31" />
+        <option value="36" name="MIDI CC#64" />
+        <option value="37" name="MIDI CC#65" />
+        <option value="38" name="MIDI CC#66" />
+        <option value="39" name="MIDI CC#67" />
+        <option value="40" name="MIDI CC#68" />
+        <option value="41" name="MIDI CC#69" />
+        <option value="42" name="MIDI CC#70" />
+        <option value="43" name="MIDI CC#71" />
+        <option value="44" name="MIDI CC#72" />
+        <option value="45" name="MIDI CC#73" />
+        <option value="46" name="MIDI CC#74" />
+        <option value="47" name="MIDI CC#75" />
+        <option value="48" name="MIDI CC#76" />
+        <option value="49" name="MIDI CC#77" />
+        <option value="50" name="MIDI CC#78" />
+        <option value="51" name="MIDI CC#79" />
+        <option value="52" name="MIDI CC#80" />
+        <option value="53" name="MIDI CC#81" />
+        <option value="54" name="MIDI CC#82" />
+        <option value="55" name="MIDI CC#83" />
+        <option value="56" name="MIDI CC#84" />
+        <option value="57" name="MIDI CC#85" />
+        <option value="58" name="MIDI CC#86" />
+        <option value="59" name="MIDI CC#87" />
+        <option value="60" name="MIDI CC#88" />
+        <option value="61" name="MIDI CC#89" />
+        <option value="62" name="MIDI CC#90" />
+        <option value="63" name="MIDI CC#91" />
+        <option value="64" name="MIDI CC#92" />
+        <option value="65" name="MIDI CC#93" />
+        <option value="66" name="MIDI CC#94" />
+        <option value="67" name="MIDI CC#95" />
+      </options>
+    </dataTypeDef>
+
+    <!-- Common.Assign.Mode. -->
+    <dataTypeDef name="assignMode" basedOn="sys.uint8" optionsDefault="Normal">
+      <options>
+        <option value="0" name="Normal" />
+        <option value="1" name="Toggle" />
+      </options>
+    </dataTypeDef>
+
     <!-- Compressor.Type. -->
     <dataTypeDef name="compressorType" basedOn="sys.uint8" optionsDefault="Compressor">
       <options>
@@ -660,76 +1053,79 @@
       </options>
     </dataTypeDef>
 
-    <!-- Delay.TempoIn: fixed, a control or a MIDI CC. -->
+    <!--
+      Delay.TempoIn: fixed, a control or a MIDI CC.
+    -->
     <dataTypeDef name="tempoIn" basedOn="sys.uint8" optionsDefault="Fixed">
       <options>
         <option value="0" name="Fixed" />
         <option value="1" name="Control 1" />
         <option value="2" name="Control 2" />
         <option value="3" name="FC-200CTL" />
-        <option value="4" name="MIDI CC#1" />
-        <option value="5" name="MIDI CC#2" />
-        <option value="6" name="MIDI CC#3" />
-        <option value="7" name="MIDI CC#4" />
-        <option value="8" name="MIDI CC#5" />
-        <option value="9" name="MIDI CC#6" />
-        <option value="10" name="MIDI CC#7" />
-        <option value="11" name="MIDI CC#8" />
-        <option value="12" name="MIDI CC#9" />
-        <option value="13" name="MIDI CC#10" />
-        <option value="14" name="MIDI CC#11" />
-        <option value="15" name="MIDI CC#12" />
-        <option value="16" name="MIDI CC#13" />
-        <option value="17" name="MIDI CC#14" />
-        <option value="18" name="MIDI CC#15" />
-        <option value="19" name="MIDI CC#16" />
-        <option value="20" name="MIDI CC#17" />
-        <option value="21" name="MIDI CC#18" />
-        <option value="22" name="MIDI CC#19" />
-        <option value="23" name="MIDI CC#20" />
-        <option value="24" name="MIDI CC#21" />
-        <option value="25" name="MIDI CC#22" />
-        <option value="26" name="MIDI CC#23" />
-        <option value="27" name="MIDI CC#24" />
-        <option value="28" name="MIDI CC#25" />
-        <option value="29" name="MIDI CC#26" />
-        <option value="30" name="MIDI CC#27" />
-        <option value="31" name="MIDI CC#28" />
-        <option value="32" name="MIDI CC#29" />
-        <option value="33" name="MIDI CC#30" />
-        <option value="34" name="MIDI CC#31" />
-        <option value="35" name="MIDI CC#64" />
-        <option value="36" name="MIDI CC#65" />
-        <option value="37" name="MIDI CC#66" />
-        <option value="38" name="MIDI CC#67" />
-        <option value="39" name="MIDI CC#68" />
-        <option value="40" name="MIDI CC#69" />
-        <option value="41" name="MIDI CC#70" />
-        <option value="42" name="MIDI CC#71" />
-        <option value="43" name="MIDI CC#72" />
-        <option value="44" name="MIDI CC#73" />
-        <option value="45" name="MIDI CC#74" />
-        <option value="46" name="MIDI CC#75" />
-        <option value="47" name="MIDI CC#76" />
-        <option value="48" name="MIDI CC#77" />
-        <option value="49" name="MIDI CC#78" />
-        <option value="50" name="MIDI CC#79" />
-        <option value="51" name="MIDI CC#80" />
-        <option value="52" name="MIDI CC#81" />
-        <option value="53" name="MIDI CC#82" />
-        <option value="54" name="MIDI CC#83" />
-        <option value="55" name="MIDI CC#84" />
-        <option value="56" name="MIDI CC#85" />
-        <option value="57" name="MIDI CC#86" />
-        <option value="58" name="MIDI CC#87" />
-        <option value="59" name="MIDI CC#88" />
-        <option value="60" name="MIDI CC#89" />
-        <option value="61" name="MIDI CC#90" />
-        <option value="62" name="MIDI CC#91" />
-        <option value="63" name="MIDI CC#92" />
-        <option value="64" name="MIDI CC#93" />
-        <option value="65" name="MIDI CC#94" />
-        <option value="66" name="MIDI CC#95" />
+        <option value="4" name="MIDI CC#0" />
+        <option value="5" name="MIDI CC#1" />
+        <option value="6" name="MIDI CC#2" />
+        <option value="7" name="MIDI CC#3" />
+        <option value="8" name="MIDI CC#4" />
+        <option value="9" name="MIDI CC#5" />
+        <option value="10" name="MIDI CC#6" />
+        <option value="11" name="MIDI CC#7" />
+        <option value="12" name="MIDI CC#8" />
+        <option value="13" name="MIDI CC#9" />
+        <option value="14" name="MIDI CC#10" />
+        <option value="15" name="MIDI CC#11" />
+        <option value="16" name="MIDI CC#12" />
+        <option value="17" name="MIDI CC#13" />
+        <option value="18" name="MIDI CC#14" />
+        <option value="19" name="MIDI CC#15" />
+        <option value="20" name="MIDI CC#16" />
+        <option value="21" name="MIDI CC#17" />
+        <option value="22" name="MIDI CC#18" />
+        <option value="23" name="MIDI CC#19" />
+        <option value="24" name="MIDI CC#20" />
+        <option value="25" name="MIDI CC#21" />
+        <option value="26" name="MIDI CC#22" />
+        <option value="27" name="MIDI CC#23" />
+        <option value="28" name="MIDI CC#24" />
+        <option value="29" name="MIDI CC#25" />
+        <option value="30" name="MIDI CC#26" />
+        <option value="31" name="MIDI CC#27" />
+        <option value="32" name="MIDI CC#28" />
+        <option value="33" name="MIDI CC#29" />
+        <option value="34" name="MIDI CC#30" />
+        <option value="35" name="MIDI CC#31" />
+        <option value="36" name="MIDI CC#64" />
+        <option value="37" name="MIDI CC#65" />
+        <option value="38" name="MIDI CC#66" />
+        <option value="39" name="MIDI CC#67" />
+        <option value="40" name="MIDI CC#68" />
+        <option value="41" name="MIDI CC#69" />
+        <option value="42" name="MIDI CC#70" />
+        <option value="43" name="MIDI CC#71" />
+        <option value="44" name="MIDI CC#72" />
+        <option value="45" name="MIDI CC#73" />
+        <option value="46" name="MIDI CC#74" />
+        <option value="47" name="MIDI CC#75" />
+        <option value="48" name="MIDI CC#76" />
+        <option value="49" name="MIDI CC#77" />
+        <option value="50" name="MIDI CC#78" />
+        <option value="51" name="MIDI CC#79" />
+        <option value="52" name="MIDI CC#80" />
+        <option value="53" name="MIDI CC#81" />
+        <option value="54" name="MIDI CC#82" />
+        <option value="55" name="MIDI CC#83" />
+        <option value="56" name="MIDI CC#84" />
+        <option value="57" name="MIDI CC#85" />
+        <option value="58" name="MIDI CC#86" />
+        <option value="59" name="MIDI CC#87" />
+        <option value="60" name="MIDI CC#88" />
+        <option value="61" name="MIDI CC#89" />
+        <option value="62" name="MIDI CC#90" />
+        <option value="63" name="MIDI CC#91" />
+        <option value="64" name="MIDI CC#92" />
+        <option value="65" name="MIDI CC#93" />
+        <option value="66" name="MIDI CC#94" />
+        <option value="67" name="MIDI CC#95" />
       </options>
     </dataTypeDef>
 
@@ -778,7 +1174,7 @@
       </options>
     </dataTypeDef>
 
-    <!-- Equalizer.MiddleFrequency. -->
+    <!-- Equalizer.MiddleFrequency (Table-7.1). -->
     <dataTypeDef name="eqMiddleFrequency" basedOn="sys.uint8" optionsDefault="100 Hz">
       <options>
         <option value="0" name="100 Hz" />
@@ -805,7 +1201,7 @@
       </options>
     </dataTypeDef>
 
-    <!-- Equalizer.MiddleQ. -->
+    <!-- Equalizer.MiddleQ (Table-7.2). -->
     <dataTypeDef name="eqMiddleQ" basedOn="sys.uint8" optionsDefault="0.5">
       <options>
         <option value="0" name="0.5" />
@@ -817,7 +1213,7 @@
       </options>
     </dataTypeDef>
 
-    <!-- SpeakerSimulator.Type. -->
+    <!-- SpeakerSimulator.Type (Table-8.1). -->
     <dataTypeDef name="speakerType" basedOn="sys.uint8" optionsDefault="Small">
       <options>
         <option value="0" name="Small" />
@@ -843,7 +1239,7 @@
       </options>
     </dataTypeDef>
 
-    <!-- Modulation.Mode. -->
+    <!-- Modulation.Mode (Table-10.1). -->
     <dataTypeDef name="modulationMode" basedOn="sys.uint8" optionsDefault="Flanger">
       <options>
         <option value="0" name="Flanger" />
@@ -912,7 +1308,11 @@
       </options>
     </dataTypeDef>
 
-    <!-- Modulation.HarmonistKey. -->
+    <!--
+      Modulation.HarmonistKey: the manual gives "C, Db - B, Cmin, Db min - Bmin".
+      [TODO] verify: the parser had the minor keys from A min (12) to G# min (23) - this is how it is displayed on the device; have not verified the actual values.
+      [TODO] the manual gives the range 00H-18H: 24 (0x18) is not named.
+    -->
     <dataTypeDef name="harmonistKey" basedOn="sys.uint8" optionsDefault="C maj">
       <options>
         <option value="0" name="C maj" />
@@ -927,22 +1327,26 @@
         <option value="9" name="A maj" />
         <option value="10" name="Bb maj" />
         <option value="11" name="B maj" />
-        <option value="12" name="A min" />
-        <option value="13" name="Bb min" />
-        <option value="14" name="B min" />
-        <option value="15" name="C min" />
-        <option value="16" name="C# min" />
-        <option value="17" name="D min" />
-        <option value="18" name="D# min" />
-        <option value="19" name="E min" />
-        <option value="20" name="F min" />
-        <option value="21" name="F# min" />
-        <option value="22" name="G min" />
-        <option value="23" name="G# min" />
+        <option value="12" name="C min" />
+        <option value="13" name="Db min" />
+        <option value="14" name="D min" />
+        <option value="15" name="Eb min" />
+        <option value="16" name="E min" />
+        <option value="17" name="F min" />
+        <option value="18" name="F# min" />
+        <option value="19" name="G min" />
+        <option value="20" name="Ab min" />
+        <option value="21" name="A min" />
+        <option value="22" name="Bb min" />
+        <option value="23" name="B min" />
+        <!-- <option value="24" name="Key24" /> -->
       </options>
     </dataTypeDef>
 
-    <!-- Modulation.HarmonistInterval1-3: -2 octaves - +2 octaves in diatonic steps. -->
+    <!--
+      Modulation.HarmonistInterval1-3: -2 octaves - +2 octaves in diatonic steps.
+      [TODO] the manual gives the range 00H-1DH: 29 (0x1D) is not named (the user scale, HarmonistScale?).
+    -->
     <dataTypeDef name="harmonistInterval" basedOn="sys.uint8" optionsDefault="-2Oct">
       <options>
         <option value="0" name="-2Oct" />
@@ -974,6 +1378,7 @@
         <option value="26" name="+Oct+6th" />
         <option value="27" name="+Oct+7th" />
         <option value="28" name="+2Oct" />
+        <!-- <option value="29" name="Interval29" /> -->
       </options>
     </dataTypeDef>
 
@@ -985,24 +1390,24 @@
       </options>
     </dataTypeDef>
 
-    <!-- Delay.IntervalCenter: note length relative to the tempo. -->
-    <dataTypeDef name="delayInterval" basedOn="sys.uint8" optionsDefault="1/4">
+    <!-- Delay.IntervalCenter: the note length of the delay at the tempo (Table-11.1). -->
+    <dataTypeDef name="delayInterval" basedOn="sys.uint8" optionsDefault="Sixteenth Note">
       <options>
-        <option value="0" name="1/4" />
-        <option value="1" name="1/3" />
-        <option value="2" name="3/8" />
-        <option value="3" name="1/2" />
-        <option value="4" name="2/3" />
-        <option value="5" name="3/4" />
-        <option value="6" name="1.0" />
-        <option value="7" name="1.5" />
-        <option value="8" name="2.0" />
-        <option value="9" name="3.0" />
-        <option value="10" name="4.0" />
+        <option value="0" name="Sixteenth Note" />
+        <option value="1" name="Triplet Eighth Note" />
+        <option value="2" name="Dotted Sixteenth Note" />
+        <option value="3" name="Eighth Note" />
+        <option value="4" name="Triplet Quarter Note" />
+        <option value="5" name="Dotted Eighth Note" />
+        <option value="6" name="Quarter Note" />
+        <option value="7" name="Dotted Quarter Note" />
+        <option value="8" name="Half Note" />
+        <option value="9" name="Dotted Half Note" />
+        <option value="10" name="Whole Note" />
       </options>
     </dataTypeDef>
 
-    <!-- High cut filter (Delay, Chorus, Reverb). -->
+    <!-- High cut filter (Delay, Chorus, Reverb; Table-15). -->
     <dataTypeDef name="hiCut" basedOn="sys.uint8" optionsDefault="500 Hz">
       <options>
         <option value="0" name="500 Hz" />
@@ -1024,7 +1429,10 @@
       </options>
     </dataTypeDef>
 
-    <!-- Low cut filter (Chorus, Reverb). -->
+    <!--
+      Low cut filter (Chorus, Reverb; Table-16).
+      [TODO] verify: the manual gives 640 Hz for 9, the parser had 630 Hz.
+    -->
     <dataTypeDef name="lowCut" basedOn="sys.uint8" optionsDefault="Flat">
       <options>
         <option value="0" name="Flat" />
@@ -1036,7 +1444,7 @@
         <option value="6" name="340 Hz" />
         <option value="7" name="400 Hz" />
         <option value="8" name="500 Hz" />
-        <option value="9" name="630 Hz" />
+        <option value="9" name="640 Hz" />
         <option value="10" name="800 Hz" />
       </options>
     </dataTypeDef>
@@ -1069,19 +1477,93 @@
         <option value="4" name="Plate" />
       </options>
     </dataTypeDef>
+
+    <!-- System.Common.TunerString. -->
+    <dataTypeDef name="tunerString" basedOn="sys.uint8" optionsDefault="Off">
+      <options>
+        <option value="0" name="Off" />
+        <option value="1" name="On" />
+        <option value="2" name="Flat" />
+        <option value="3" name="Double Flat" />
+      </options>
+    </dataTypeDef>
+
+    <!-- System.Common.OutputType. -->
+    <dataTypeDef name="outputType" basedOn="sys.uint8" optionsDefault="Guitar Amp (Combo)">
+      <options>
+        <option value="0" name="Guitar Amp (Combo)" />
+        <option value="1" name="Guitar Amp (Stack)" />
+        <option value="2" name="Power Amp (Combo)" />
+        <option value="3" name="Power Amp (Stack)" />
+        <option value="4" name="Line" />
+      </options>
+    </dataTypeDef>
+
+    <!-- System.Common.SpeakerSimulator. -->
+    <dataTypeDef name="speakerSimulatorMode" basedOn="sys.uint8" optionsDefault="Patch">
+      <options>
+        <option value="0" name="Patch" />
+        <option value="1" name="Always Off" />
+        <option value="2" name="Always On" />
+      </options>
+    </dataTypeDef>
+
+    <!-- System.Common.Control1Jack/Control2Jack. -->
+    <dataTypeDef name="controlJack" basedOn="sys.uint8" optionsDefault="Number Up">
+      <options>
+        <option value="0" name="Number Up" />
+        <option value="1" name="Number Down" />
+        <option value="2" name="Bypass" />
+        <option value="3" name="Tuner" />
+        <option value="4" name="Assignable" />
+      </options>
+    </dataTypeDef>
+
+    <!-- System.Common.BypassMode. -->
+    <dataTypeDef name="bypassMode" basedOn="sys.uint8" optionsDefault="Bypass">
+      <options>
+        <option value="0" name="Bypass" />
+        <option value="1" name="Mute" />
+      </options>
+    </dataTypeDef>
   </dataTypeDefs>
 
   <members>
     <group name="AddressMap" nodeDef="roland.messageBody32" midi.device.modelId="0x79">
       <members>
-        <!-- [TODO] the temporary (edit) patch address is unknown. -->
-        <!-- <group name="Temporary" nodeDef="patch" midi.address="0x00-00-00-00" /> -->
+        <!-- Patch 1-100. -->
         <repeat name="Memory" midi.address="0x00-00-00-00" midi.stride="0x00-01-00-00" midi.repeat="100">
           <members>
             <group name="Patch" nodeDef="patch" />
           </members>
         </repeat>
+        <!-- Patch 101-200. -->
+        <repeat name="Preset" midi.address="0x01-00-00-00" midi.stride="0x00-01-00-00" midi.repeat="100">
+          <members>
+            <group name="Patch" nodeDef="patch" />
+          </members>
+        </repeat>
         <group name="System" nodeDef="system" midi.address="0x02-00-00-00" />
+        <!-- The temporary buffer, written in bulk: send the SoundChangeRequest after the data. -->
+        <group name="Temporary" nodeDef="patch" midi.address="0x04-00-00-00" />
+        <!-- Table-19: applies the data written to the Temporary area. -->
+        <group name="SoundChangeRequest" midi.address="0x04-7F-7F-7F" midi.access="write">
+          <members>
+            <!-- 0x00: 00 -->
+            <field name="Request" datatype="sys.uint8" value="0" />
+          </members>
+        </group>
+        <!-- The temporary buffer, written per parameter. -->
+        <group name="IndividualTemporary" nodeDef="individualPatch" midi.address="0x08-00-00-00" />
+        <!-- Table-20: the 2 lines of the display. -->
+        <group name="Display" midi.address="0x10-00-00-00" midi.access="read">
+          <members>
+            <!-- 0x00-0x0F: Table-1.4 -->
+            <field name="Line1" datatype="text" byteLength="16" />
+            <!-- 0x10-0x1F: Table-1.4 -->
+            <field name="Line2" datatype="text" byteLength="16" />
+          </members>
+        </group>
       </members>
     </group>
   </members>

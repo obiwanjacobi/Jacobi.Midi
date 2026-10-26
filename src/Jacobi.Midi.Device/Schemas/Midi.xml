@@ -2,6 +2,6 @@
 <schema name="Midi">
   <processorDefs>
     <processor name="sysexbyte" processor="sys.bitslicer" bits="7" byteorder="big" />
-    <processor name="string" processor="sys.string" encoding="ascii" />
+    <processor name="string" processor="sys.string" padding="32" validBytes="0x20-0x7F" encoding="ascii" />
   </processorDefs>
 </schema>

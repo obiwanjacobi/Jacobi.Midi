@@ -3,6 +3,10 @@ name: device-schema
 description: Rules for creating or editing MIDI device schemas in XML (e.g. Gp8.xml, Gx700.xml, G50.xml in src/Jacobi.Midi.<Vendor>/Schemas) and vendor envelope schemas (Roland.xml): file layout, header comment, naming, data types, address map (midi.* properties), comments and tests. Use for any change to a *.xml schema under a Schemas folder or to Jacobi.Midi.Device/Midi.xml.
 ---
 
+# MIDI device documentation
+
+When handed a .pdf look for the Midi Implementation section or similar. If the .pdf has no text (layer) stop and tell the user - do not OCR yourself. If anything is unclear, you can use a best guess/most likely option, but do list these in the final report to the user and ask the user to check these in the .pdf document.
+
 # MIDI device schemas (XML)
 
 A device schema describes the SysEx data of one device: its parameters and, for address based devices, its
@@ -15,8 +19,8 @@ Sources of truth, read them when a rule below is not enough:
 - Address map and `midi.*` properties: `src/Jacobi.Midi.Device/Addressing/readme.md`.
 - Vendor conventions: `docs/analysis/<vendor>.md`.
 
-Reference examples: `Gp8.xml` (address map, manual based) and `Gx700.xml` (address map, reverse engineered from
-dumps) in `src/Jacobi.Midi.Roland/Schemas`, `G50.xml` (not address based) in `src/Jacobi.Midi.Yamaha/Schemas`.
+Reference examples: `Gp8.xml` (address map, manual based) and `Gx700.xml` (address map, manual based and checked
+against dumps; section nodeDefs reused by an atomic bulk patch and a non-atomic individual patch) in `src/Jacobi.Midi.Roland/Schemas`, `G50.xml` (not address based) in `src/Jacobi.Midi.Yamaha/Schemas`.
 
 ## Location and naming
 
@@ -80,7 +84,7 @@ Put the comment on its own line **above** the member (GP-8 style), not trailing 
 - Format: `<offset>: <stored range or values>`. The offset is hex, relative to the start of the nodeDef or section. Add the displayed value with `(= ...)` when it differs from the stored value: `0-100 (= -50 - +50)`.
 - Enumerations: list the values (`0 = down, 100 = up`), or better, model them with a dataTypeDef with `options` (see `upDown` in `Gp8.xml`).
 - A section or group gets a comment with its number and size: `<!-- Section 01: 8 bytes. -->`.
-- Older files (`Gx700.xml`, `G50.xml`) use trailing, column-aligned comments. When editing a few lines there, keep the existing style and its alignment. Do not convert a whole file without asking.
+- Older files (`G50.xml`) use trailing, column-aligned comments. When editing a few lines there, keep the existing style and its alignment. Do not convert a whole file without asking.
 
 ## Unknown and unverified data
 

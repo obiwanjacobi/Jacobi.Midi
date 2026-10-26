@@ -108,8 +108,8 @@ public class Gp8AddressMapTests
 
         var item = new InstancePath([0]);
         Assert.True(store.TryGet("AddressMap.Memory.Patch.Name", item, out var name));
-        // padded with spaces to 16 characters
-        Assert.Equal(" Dig Chorus     ", name.Value);
+        // padded with spaces to 16 characters: the padding is trimmed (midi.string)
+        Assert.Equal(" Dig Chorus", name.Value);
         // 0x15-0x16 = 02 2C: 2 * 128 + 44
         Assert.True(store.TryGet("AddressMap.Memory.Patch.DigitalDelay.DTime", item, out var time));
         Assert.Equal((ushort)300, time.Value);

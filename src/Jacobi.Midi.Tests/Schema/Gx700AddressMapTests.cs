@@ -12,6 +12,15 @@ namespace Jacobi.Midi.Tests.Schema;
 /// </summary>
 public class Gx700AddressMapTests
 {
+    private const int SectionStride = 0x80;                  // wire 00 00 01 00
+    private const int PatchStride = 0x4000;                  // wire 00 01 00 00
+    private const int PresetStart = 0x200000;                // wire 01 00 00 00
+    private const int SystemStart = 0x400000;                // wire 02 00 00 00
+    private const int TemporaryStart = 0x800000;             // wire 04 00 00 00
+    private const int SoundChangeRequest = 0x9FFFFF;        // wire 04 7F 7F 7F
+    private const int IndividualStart = 0x1000000;           // wire 08 00 00 00
+    private const int DisplayStart = 0x2000000;              // wire 10 00 00 00
+
     private static readonly DeviceValues Device = new() { ["deviceId"] = 0 };
 
     private static AddressMap CreateMap()
@@ -64,6 +73,41 @@ public class Gx700AddressMapTests
         Assert.Equal("Message32.DT1", Assert.Single(map.Protocol.DataMessages).Name);
     }
 
+    [Fact]
+    public void Range_CoversAllAreas()
+    {
+        var map = CreateMap();
+
+        Assert.Equal(new AddressRange(0, DisplayStart + 0x20), map.Range);
+    }
+
+    [Fact]
+    public void GetAddressRange_Areas()
+    {
+        var map = CreateMap();
+
+        var memory = map.CreateRange("AddressMap.Memory.Patch.Common", new InstancePath([5]));
+        Assert.Equal(new AddressRange(5 * PatchStride, 0x42), map.GetAddressRange(memory));
+
+        var preset = map.CreateRange("AddressMap.Preset.Patch.Delay", new InstancePath([2]));
+        Assert.Equal(new AddressRange(PresetStart + 2 * PatchStride + 0x0A * SectionStride, 0x15), map.GetAddressRange(preset));
+
+        var system = map.CreateRange("AddressMap.System.ProgramChangeMap2");
+        Assert.Equal(new AddressRange(SystemStart + 2 * SectionStride, 0x80), map.GetAddressRange(system));
+
+        var temporary = map.CreateRange("AddressMap.Temporary.Reverb");
+        Assert.Equal(new AddressRange(TemporaryStart + 0x0D * SectionStride, 0x09), map.GetAddressRange(temporary));
+
+        var scr = map.CreateRange("AddressMap.SoundChangeRequest");
+        Assert.Equal(new AddressRange(SoundChangeRequest, 1), map.GetAddressRange(scr));
+
+        var individual = map.CreateRange("AddressMap.IndividualTemporary.Modulation");
+        Assert.Equal(new AddressRange(IndividualStart + 0x09 * SectionStride, 0x4D), map.GetAddressRange(individual));
+
+        var display = map.CreateRange("AddressMap.Display");
+        Assert.Equal(new AddressRange(DisplayStart, 0x20), map.GetAddressRange(display));
+    }
+
     [Theory]
     [InlineData("gx700-sysex-patch1.syx", 14)]
     [InlineData("gx700-sysex-system.syx", 3)]
@@ -91,7 +135,15 @@ public class Gx700AddressMapTests
         var messages = DumpMessages("gx700-sysex-patch1.syx");
 
         var common = Decode(map, messages[0x00]);
+        Assert.Equal((byte)78, Value(common, "AddressMap.Memory.Patch.Common.OutputLevel", 0));
+        Assert.Equal("Compressor", Value(common, "AddressMap.Memory.Patch.Common.Chain.EffectType", 0, 0));
+        Assert.Equal("Reverb", Value(common, "AddressMap.Memory.Patch.Common.Chain.EffectType", 0, 12));
         Assert.Equal("VINTAGE TWIN", Value(common, "AddressMap.Memory.Patch.Common.Name", 0));
+        // assign #2: target 03 07 = 0x37, max 00 64 = 100, source 0B = 11
+        Assert.Equal("NS:LEVEL", Value(common, "AddressMap.Memory.Patch.Common.Assign.Target", 0, 1));
+        Assert.Equal((ushort)100, Value(common, "AddressMap.Memory.Patch.Common.Assign.Max", 0, 1));
+        Assert.Equal("MIDI CC#7", Value(common, "AddressMap.Memory.Patch.Common.Assign.Source", 0, 1));
+        Assert.Equal((byte)127, Value(common, "AddressMap.Memory.Patch.Common.Assign.ActHi", 0, 1));
 
         var preamp = Decode(map, messages[0x04]);
         Assert.Equal(true, Value(preamp, "AddressMap.Memory.Patch.Preamp.On", 0));
@@ -113,6 +165,17 @@ public class Gx700AddressMapTests
     {
         var map = CreateMap();
         var messages = DumpMessages("gx700-sysex-system.syx");
+
+        var common = Decode(map, messages[0]);
+        // tuner pitch 05 = 440 Hz
+        Assert.Equal(440m, Value(common, "AddressMap.System.Common.TunerPitch"));
+        // reverb level 06 04 = 6 * 16 + 4
+        Assert.Equal((byte)100, Value(common, "AddressMap.System.Common.ReverbLevel"));
+        Assert.Equal("Assignable", Value(common, "AddressMap.System.Common.Control1Jack"));
+        // number up/down max 0C 08 = 12 * 16 + 8
+        Assert.Equal((byte)200, Value(common, "AddressMap.System.Common.NumberUpDownMax"));
+        Assert.Equal(1m, Value(common, "AddressMap.System.Common.MidiChannel"));
+        Assert.Equal(true, Value(common, "AddressMap.System.Common.OmniMode"));
 
         var map1 = Decode(map, messages[1]);
         Assert.Equal((byte)1, Value(map1, "AddressMap.System.ProgramChangeMap1.Program.Patch", 0));

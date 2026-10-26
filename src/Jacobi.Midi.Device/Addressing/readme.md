@@ -84,7 +84,7 @@ The schemas in the repository:
 - [TestDevice.cs](../../Jacobi.Midi.Tests/Addressing/TestDevice.cs): a complete envelope and device map without vendor schemas (the test schemas): 2 address bytes, a `sys.crc` (CRC-7) checksum, an atomic patch nodeDef, a non-atomic group and a repeat with reserved addresses.
 - [Roland.xml](../../Jacobi.Midi.Roland/Schemas/Roland.xml): the Roland Type IV envelope (RQ1, DT1). `Message16`, `Message24` and `Message32` are the same messages with 2, 3 and 4 address bytes, each with its own open choice contract (`messageBody16`, `messageBody24`, `messageBody32`); a device map conforms to one address size only.
 - [Gp8.xml](../../Jacobi.Midi.Roland/Schemas/Gp8.xml): a device map with 2 address bytes; a temporary patch and a repeat of 128 memory patches with a stride larger than the patch.
-- [Gx700.xml](../../Jacobi.Midi.Roland/Schemas/Gx700.xml): a device map with 4 address bytes; atomic sections inside a patch.
+- [Gx700.xml](../../Jacobi.Midi.Roland/Schemas/Gx700.xml): a device map with 4 address bytes; atomic sections inside a patch, the same sections without `midi.atomic` in the individual (per parameter) temporary area, a write-only trigger address (Sound Change Request) and a read-only area (display).
 
 A minimal stand-alone example (a made-up device, not in the repository). The envelope has a request and a data
 message with a 2 byte address; the checksum and framing processors are left out:
