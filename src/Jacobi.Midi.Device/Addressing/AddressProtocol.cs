@@ -52,14 +52,14 @@ internal sealed class AddressProtocol
     /// Finds the messages of a contract in the schemas: the data messages (<c>midi.message="data"</c>) that contain an
     /// open choice with <c>midi.role="data"</c> whose memberNodeDef is the contract, and the requests and replies
     /// (<c>midi.message="request"</c>, <c>ack</c>, <c>nak</c>, <c>error</c>) in the same envelope roots.
-    /// Problems are added to <paramref name="errors"/>.
+    /// Problems are added to <paramref name="problems"/>.
     /// </summary>
-    internal static AddressProtocol Create(SchemaSet schemas, Serializer serializer, SchemaName contract, List<string> errors)
+    internal static AddressProtocol Create(SchemaSet schemas, Serializer serializer, SchemaName contract, AddressMapProblems problems)
     {
         var requests = new List<AddressMessage>();
         var dataMessages = new List<AddressMessage>();
         var replies = new List<AddressMessage>();
-        var exchanges = new List<string>();
+        var exchanges = new List<(string Document, SchemaPath Path, string Value)>();
         var bodies = new List<BodyCandidate>();
 
         foreach (var document in schemas.Documents)
@@ -68,7 +68,7 @@ internal sealed class AddressProtocol
             {
                 if (root.NodeDef is { } nodeDef && SameName(Qualify(nodeDef, document.Name), contract))
                 {
-                    bodies.Add(new BodyCandidate(new SchemaName($"{document.Name}.{root.Name}"), DeviceValues.FromProperties(root, errors)));
+                    bodies.Add(new BodyCandidate(new SchemaName($"{document.Name}.{root.Name}"), DeviceValues.FromProperties(root, document.Name, new SchemaPath(root.Name), problems)));
                 }
 
                 if (!CarriesContract(root, document.Name, contract))
@@ -78,7 +78,7 @@ internal sealed class AddressProtocol
 
                 var plan = serializer.GetPlan(new SchemaName($"{document.Name}.{root.Name}"));
                 var found = new List<AddressMessage>();
-                CollectMessages(plan, plan.Root, document.Name, contract, found, errors);
+                CollectMessages(plan, plan.Root, document.Name, contract, found, problems);
                 if (found.Any(m => m.Kind == AddressMessageKind.Data))
                 {
                     requests.AddRange(found.Where(m => m.Kind == AddressMessageKind.Request));
@@ -86,7 +86,7 @@ internal sealed class AddressProtocol
                     replies.AddRange(found.Where(m => IsReply(m.Kind)));
                     if (MidiProperties.Find(root, MidiProperties.Exchange) is { } exchange)
                     {
-                        exchanges.Add(exchange);
+                        exchanges.Add((document.Name, new SchemaPath(root.Name), exchange));
                     }
                 }
             }
@@ -94,16 +94,19 @@ internal sealed class AddressProtocol
 
         if (dataMessages.Count == 0)
         {
-            errors.Add($"There is no data message (midi.message=\"data\" with an open choice midi.role=\"data\") for the contract '{contract}'.");
+            problems.Error(contract.Namespace, default, $"There is no data message (midi.message=\"data\" with an open choice midi.role=\"data\") for the contract '{contract}'.");
         }
-        if (exchanges.Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
+        if (exchanges.Select(e => e.Value).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
         {
-            errors.Add($"The envelopes of the contract '{contract}' declare different exchange protocols: {String.Join(", ", exchanges)}.");
+            foreach (var (document, path, _) in exchanges)
+            {
+                problems.Error(document, path, $"The envelopes of the contract '{contract}' declare different exchange protocols: {String.Join(", ", exchanges.Select(e => e.Value))}.");
+            }
         }
 
         var inferred = replies.Any(r => r.Kind is AddressMessageKind.Ack or AddressMessageKind.Nak) ? Acknowledged : OneWay;
-        var addressSpace = AddressSpaceOf(requests.Concat(dataMessages), errors);
-        return new AddressProtocol(serializer, contract, addressSpace, exchanges.FirstOrDefault() ?? inferred,
+        var addressSpace = AddressSpaceOf(requests.Concat(dataMessages), problems);
+        return new AddressProtocol(serializer, contract, addressSpace, exchanges.FirstOrDefault().Value ?? inferred,
             requests, dataMessages, replies, bodies);
     }
 
@@ -111,11 +114,11 @@ internal sealed class AddressProtocol
     /// A copy with the settings of a map root applied (<c>midi.unit</c>, <c>midi.maxDataSize</c>,
     /// <c>midi.messageInterval</c>, <c>midi.exchange</c>).
     /// </summary>
-    internal AddressProtocol WithOverrides(SchemaNode mapRoot, List<string> errors)
+    internal AddressProtocol WithOverrides(string document, GroupInfo mapRoot, AddressMapProblems problems)
     {
-        var unit = Unit(mapRoot, errors);
-        var maxDataSize = Number(mapRoot, MidiProperties.MaxDataSize, errors);
-        var interval = Number(mapRoot, MidiProperties.MessageInterval, errors);
+        var unit = Unit(document, mapRoot, problems);
+        var maxDataSize = Number(document, mapRoot, MidiProperties.MaxDataSize, problems);
+        var interval = Number(document, mapRoot, MidiProperties.MessageInterval, problems);
         var exchange = MidiProperties.Find(mapRoot, MidiProperties.Exchange);
         if (unit is null && maxDataSize is null && interval is null && exchange is null)
         {
@@ -251,24 +254,24 @@ internal sealed class AddressProtocol
         });
 
     private static void CollectMessages(ExecutionPlan plan, GroupInfo group, string documentName, SchemaName contract,
-        List<AddressMessage> messages, List<string> errors)
+        List<AddressMessage> messages, AddressMapProblems problems)
     {
         foreach (var member in group.Members.OfType<GroupInfo>())
         {
             if (MidiProperties.Find(member, MidiProperties.Message) is not { } kindText)
             {
-                CollectMessages(plan, member, documentName, contract, messages, errors);
+                CollectMessages(plan, member, documentName, contract, messages, problems);
                 continue;
             }
 
             if (!Enum.TryParse<AddressMessageKind>(kindText, ignoreCase: true, out var kind))
             {
-                errors.Add($"{member.Path}: '{MidiProperties.Message}' must be request, data, ack, nak or error, not '{kindText}'.");
+                problems.Error(documentName, member.Path, $"'{MidiProperties.Message}' must be request, data, ack, nak or error, not '{kindText}'.");
                 continue;
             }
 
             var roles = new Dictionary<string, NodeInfo>(StringComparer.OrdinalIgnoreCase);
-            CollectRoles(member, roles, errors);
+            CollectRoles(documentName, member, roles, problems);
 
             if (kind == AddressMessageKind.Data)
             {
@@ -285,33 +288,33 @@ internal sealed class AddressProtocol
             {
                 Name = member.Path,
                 Kind = kind,
-                Unit = Unit(member.Group, errors) ?? AddressUnit.Range,
-                MaxDataSize = (int)(Number(member.Group, MidiProperties.MaxDataSize, errors) ?? 0),
-                Interval = TimeSpan.FromMilliseconds(Number(member.Group, MidiProperties.MessageInterval, errors) ?? 0),
+                Unit = Unit(documentName, member, problems) ?? AddressUnit.Range,
+                MaxDataSize = (int)(Number(documentName, member, MidiProperties.MaxDataSize, problems) ?? 0),
+                Interval = TimeSpan.FromMilliseconds(Number(documentName, member, MidiProperties.MessageInterval, problems) ?? 0),
                 Range = plan.CreateRange(member.Path),
                 Roles = roles,
             };
-            Validate(message, errors);
+            Validate(documentName, member.Path, message, problems);
             messages.Add(message);
         }
     }
 
-    private static void CollectRoles(GroupInfo group, Dictionary<string, NodeInfo> roles, List<string> errors)
+    private static void CollectRoles(string document, GroupInfo group, Dictionary<string, NodeInfo> roles, AddressMapProblems problems)
     {
         foreach (var member in group.Members)
         {
             if (MidiProperties.Find(member, MidiProperties.Role) is { } role && !roles.TryAdd(role, member))
             {
-                errors.Add($"{member.Path}: the role '{role}' is already used by '{roles[role].Path}'.");
+                problems.Error(document, member.Path, $"the role '{role}' is already used by '{roles[role].Path}'.");
             }
             if (member is GroupInfo child and not ChoiceInfo)
             {
-                CollectRoles(child, roles, errors);
+                CollectRoles(document, child, roles, problems);
             }
         }
     }
 
-    private static void Validate(AddressMessage message, List<string> errors)
+    private static void Validate(string document, SchemaPath path, AddressMessage message, AddressMapProblems problems)
     {
         if (IsReply(message.Kind))
         {
@@ -320,7 +323,7 @@ internal sealed class AddressProtocol
             {
                 if (message.Roles.ContainsKey(role))
                 {
-                    errors.Add($"{message.Name}: a reply ({message.Kind}) has no role '{role}'.");
+                    problems.Error(document, message.Roles[role].Path, $"a reply ({message.Kind}) has no role '{role}'.");
                 }
             }
             return;
@@ -328,25 +331,25 @@ internal sealed class AddressProtocol
 
         if (!message.Roles.TryGetValue(MidiProperties.RoleAddress, out var address) || address is not FieldInfo)
         {
-            errors.Add($"{message.Name}: the message has no field with the role '{MidiProperties.RoleAddress}'.");
+            problems.Error(document, path, $"the message has no field with the role '{MidiProperties.RoleAddress}'.");
         }
 
         var hasSize = message.Roles.ContainsKey(MidiProperties.RoleSize);
         if (message.Kind == AddressMessageKind.Request && message.Unit == AddressUnit.Range && !hasSize)
         {
-            errors.Add($"{message.Name}: a request for a range needs a field with the role '{MidiProperties.RoleSize}' (or a '{MidiProperties.Unit}').");
+            problems.Error(document, path, $"a request for a range needs a field with the role '{MidiProperties.RoleSize}' (or a '{MidiProperties.Unit}').");
         }
         if (hasSize && (message.Kind == AddressMessageKind.Data || message.Unit != AddressUnit.Range))
         {
-            errors.Add($"{message.Name}: the role '{MidiProperties.RoleSize}' is only used on a request for a range.");
+            problems.Error(document, message.Roles[MidiProperties.RoleSize].Path, $"the role '{MidiProperties.RoleSize}' is only used on a request for a range.");
         }
         if (message.Kind == AddressMessageKind.Request && message.Roles.ContainsKey(MidiProperties.RoleData))
         {
-            errors.Add($"{message.Name}: a request carries no data (role '{MidiProperties.RoleData}').");
+            problems.Error(document, message.Roles[MidiProperties.RoleData].Path, $"a request carries no data (role '{MidiProperties.RoleData}').");
         }
     }
 
-    private static AddressSpace AddressSpaceOf(IEnumerable<AddressMessage> messages, List<string> errors)
+    private static AddressSpace AddressSpaceOf(IEnumerable<AddressMessage> messages, AddressMapProblems problems)
     {
         AddressSpace? space = null;
         foreach (var message in messages)
@@ -355,17 +358,18 @@ internal sealed class AddressProtocol
             {
                 continue;
             }
+            var document = message.Range.ExecutionPlan.Name?.Namespace ?? String.Empty;
             if (field.ByteLength is not int byteCount)
             {
-                errors.Add($"{field.Path}: the address field needs a constant byteLength (the number of address bytes).");
+                problems.Error(document, field.Path, "the address field needs a constant byteLength (the number of address bytes).");
                 continue;
             }
 
-            var bits = Number(field.Field, MidiProperties.AddressBits, errors) is { } b ? (int)b : 7;
+            var bits = Number(document, field, MidiProperties.AddressBits, problems) is { } b ? (int)b : 7;
             var current = new AddressSpace(byteCount, bits);
             if (space is { } previous && previous != current)
             {
-                errors.Add($"{field.Path}: the address ({byteCount} x {bits} bits) differs from the other messages ({previous.ByteCount} x {previous.BitsPerByte} bits).");
+                problems.Error(document, field.Path, $"the address ({byteCount} x {bits} bits) differs from the other messages ({previous.ByteCount} x {previous.BitsPerByte} bits).");
                 continue;
             }
             space = current;
@@ -373,7 +377,7 @@ internal sealed class AddressProtocol
         return space ?? new AddressSpace(0);
     }
 
-    private static AddressUnit? Unit(SchemaNode node, List<string> errors)
+    private static AddressUnit? Unit(string document, NodeInfo node, AddressMapProblems problems)
     {
         if (MidiProperties.Find(node, MidiProperties.Unit) is not { } text)
         {
@@ -383,11 +387,11 @@ internal sealed class AddressProtocol
         {
             return unit;
         }
-        errors.Add($"{node.Name}: '{MidiProperties.Unit}' must be range, field or atomic, not '{text}'.");
+        problems.Error(document, node.Path, $"'{MidiProperties.Unit}' must be range, field or atomic, not '{text}'.");
         return null;
     }
 
-    private static long? Number(SchemaNode node, string property, List<string> errors)
+    private static long? Number(string document, NodeInfo node, string property, AddressMapProblems problems)
     {
         if (MidiProperties.Find(node, property) is not { } text)
         {
@@ -397,7 +401,7 @@ internal sealed class AddressProtocol
         {
             return (long)value;
         }
-        errors.Add($"{node.Name}: '{property}' has no valid number: '{text}'.");
+        problems.Error(document, node.Path, $"'{property}' has no valid number: '{text}'.");
         return null;
     }
 

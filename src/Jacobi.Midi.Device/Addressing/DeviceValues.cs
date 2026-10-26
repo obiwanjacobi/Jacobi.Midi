@@ -41,7 +41,7 @@ public sealed class DeviceValues : IEnumerable<KeyValuePair<string, long>>
     }
 
     /// <summary>Reads the <c>midi.device.&lt;name&gt;</c> properties of a schema node (the map root).</summary>
-    internal static DeviceValues FromProperties(SchemaNode node, List<string> errors)
+    internal static DeviceValues FromProperties(SchemaNode node, string document, SchemaPath path, AddressMapProblems problems)
     {
         var values = new DeviceValues();
         foreach (var property in node.Properties)
@@ -58,7 +58,7 @@ public sealed class DeviceValues : IEnumerable<KeyValuePair<string, long>>
             }
             else
             {
-                errors.Add($"{node.Name}: '{property.Name}' has no valid number: '{property.Value}'.");
+                problems.Error(document, path, $"'{property.Name}' has no valid number: '{property.Value}'.");
             }
         }
         return values;

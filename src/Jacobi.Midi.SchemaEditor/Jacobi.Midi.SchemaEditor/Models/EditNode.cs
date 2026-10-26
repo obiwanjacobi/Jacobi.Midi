@@ -1,6 +1,9 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.Device.Addressing;
 
 namespace Jacobi.Midi.SchemaEditor.Models;
 
@@ -16,6 +19,59 @@ internal abstract partial class EditNode : ObservableObject
     public required partial ObservableCollection<EditProperty> Properties { get; set; }
 
     public EditGroup? Parent { get; set; }
+
+    /// <summary>
+    /// The address map tag that marks the node in the schema tree: its role (<c>midi.role</c>, e.g. 'address') or the kind
+    /// of message it is (<c>midi.message</c>, e.g. 'message: request'); null when it has neither.
+    /// </summary>
+    public string? AddressTag
+        => FindProperty(AddressMapTags.Role) is { } role ? role
+        : FindProperty(AddressMapTags.Message) is { } message ? $"message: {message}"
+        : null;
+
+    private string? FindProperty(string name)
+        => Properties?.FirstOrDefault(property => String.Equals(property.Name?.Trim(), name, StringComparison.OrdinalIgnoreCase))?.Value?.Trim() is { Length: > 0 } value
+            ? value : null;
+
+    // the tag follows the properties: added, removed, renamed or changed
+    partial void OnPropertiesChanged(ObservableCollection<EditProperty>? oldValue, ObservableCollection<EditProperty> newValue)
+    {
+        if (oldValue is not null)
+        {
+            oldValue.CollectionChanged -= OnPropertiesCollectionChanged;
+            foreach (var property in oldValue)
+            {
+                property.PropertyChanged -= OnPropertyEdited;
+            }
+        }
+        if (newValue is not null)
+        {
+            newValue.CollectionChanged += OnPropertiesCollectionChanged;
+            foreach (var property in newValue)
+            {
+                property.PropertyChanged += OnPropertyEdited;
+            }
+        }
+        OnPropertyChanged(nameof(AddressTag));
+    }
+
+    private void OnPropertiesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        foreach (var property in e.OldItems?.OfType<EditProperty>() ?? [])
+        {
+            property.PropertyChanged -= OnPropertyEdited;
+        }
+        // a reset gives no old items: subscribe the current items once more (unsubscribing first keeps it once)
+        var added = e.Action == NotifyCollectionChangedAction.Reset ? Properties : e.NewItems?.OfType<EditProperty>() ?? [];
+        foreach (var property in added)
+        {
+            property.PropertyChanged -= OnPropertyEdited;
+            property.PropertyChanged += OnPropertyEdited;
+        }
+        OnPropertyChanged(nameof(AddressTag));
+    }
+
+    private void OnPropertyEdited(object? sender, PropertyChangedEventArgs e) => OnPropertyChanged(nameof(AddressTag));
 }
 
 internal partial class EditField : EditNode

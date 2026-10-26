@@ -98,6 +98,8 @@ internal sealed partial class MainViewModel : ViewModelBase
         {
             OnPropertyChanged(nameof(DocumentSourceNote));
             OnPropertyChanged(nameof(HasDocumentSourceNote));
+            // any edit may change how the address map tags are used
+            ScheduleAddressMapCheck();
         };
         // pre-loaded: the 'sys' processors of the serializer, and the base 'midi' schema and 'midi' processors
         // that the vendor and device schemas build on
@@ -1302,6 +1304,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     partial void OnSelectedDocumentChanged(SchemaWorkspaceDocument? value)
     {
         OnPropertyChanged(nameof(HasSelectedDocument));
+        ScheduleAddressMapCheck();
         // a document that is not in the tree yet replaces the unpinned documents in it
         if (value is not null && !_treeDocuments.Contains(value))
         {
@@ -1448,6 +1451,8 @@ internal sealed partial class MainViewModel : ViewModelBase
         DocumentTabs = ActiveDocument is not null && value is EditDocument ? CreateDocumentTabs(ActiveDocument) : null;
         DocumentName = (value as EditDocument)?.Name ?? String.Empty;
         LoadNodeEditors();
+        OnPropertyChanged(nameof(SelectedNodeIssues));
+        OnPropertyChanged(nameof(HasSelectedNodeIssues));
         // a tab the new selection does not have would stay selected (but hidden)
         if (!IsEditorTabAvailable(SelectedEditorTab))
         {

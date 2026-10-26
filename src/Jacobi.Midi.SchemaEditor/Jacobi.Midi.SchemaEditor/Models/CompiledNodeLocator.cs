@@ -52,4 +52,51 @@ internal static class CompiledNodeLocator
         }
         return (current, outermost, names, owner.Name);
     }
+
+    /// <summary>
+    /// The reverse of <see cref="Find"/>: the authored node of a compiled node, given by the name of its document and its path
+    /// from a root of that document (node defs expanded, as in a plan). A member that comes from a node def is found in the
+    /// node def (which may be in another of the <paramref name="documents"/>). Null when the path does not lead to an authored node.
+    /// </summary>
+    public static EditNode? FindAuthored(IReadOnlyList<EditDocument> documents, string documentName, SchemaPath path)
+    {
+        ArgumentNullException.ThrowIfNull(documents);
+        var names = path.Segments.ToList();
+        var owner = FindDocument(documents, documentName);
+        EditNode? current = owner?.Members.FirstOrDefault(member => SameName(member.Name, names.FirstOrDefault()));
+        foreach (var name in names.Skip(1))
+        {
+            if (current is null || owner is null)
+            {
+                return null;
+            }
+            (current, owner) = FindMember(documents, current, owner, name);
+        }
+        return current;
+    }
+
+    // a member by name: an authored member, or one of the node def the group conforms to (and of the node defs it conforms to)
+    private static (EditNode? Member, EditDocument? Owner) FindMember(IReadOnlyList<EditDocument> documents, EditNode node, EditDocument owner, string name)
+    {
+        var visited = new HashSet<EditNode>();
+        for (var current = node; current is not null && visited.Add(current);)
+        {
+            if (current is EditGroup group && group.Members.FirstOrDefault(member => SameName(member.Name, name)) is { } member)
+            {
+                return (member, owner);
+            }
+            if (current.NodeDef is not { } nodeDef)
+            {
+                break;
+            }
+            owner = String.IsNullOrEmpty(nodeDef.Namespace) ? owner : FindDocument(documents, nodeDef.Namespace) ?? owner;
+            current = owner.NodeDefs.FirstOrDefault(def => SameName(def.Name, nodeDef.Name));
+        }
+        return (null, null);
+    }
+
+    private static EditDocument? FindDocument(IReadOnlyList<EditDocument> documents, string name)
+        => documents.FirstOrDefault(document => SameName(document.Name, name));
+
+    private static bool SameName(string? left, string? right) => String.Equals(left, right, StringComparison.OrdinalIgnoreCase);
 }

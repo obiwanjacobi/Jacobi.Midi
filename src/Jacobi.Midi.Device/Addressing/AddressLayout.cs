@@ -73,9 +73,9 @@ internal sealed class AddressLayout
     public AddressLayoutNode? Find(SchemaPath path)
         => _byPath.GetValueOrDefault(path);
 
-    public static AddressLayout Build(GroupInfo root, int bitsPerByte, List<string> errors)
+    public static AddressLayout Build(string document, GroupInfo root, int bitsPerByte, AddressMapProblems problems)
     {
-        var builder = new Builder(bitsPerByte, errors);
+        var builder = new Builder(document, bitsPerByte, problems);
         var layout = builder.Node(root, parent: null, cursor: 0, inRepeat: false, inAtomic: false, AddressAccess.ReadWrite)!;
         var result = new AddressLayout(layout);
         result.Index(layout);
@@ -215,7 +215,7 @@ internal sealed class AddressLayout
         }
     }
 
-    private sealed class Builder(int bitsPerByte, List<string> errors)
+    private sealed class Builder(string document, int bitsPerByte, AddressMapProblems problems)
     {
         public AddressLayoutNode? Node(NodeInfo node, AddressLayoutNode? parent, long cursor, bool inRepeat, bool inAtomic, AddressAccess inheritedAccess)
         {
@@ -452,6 +452,6 @@ internal sealed class AddressLayout
         }
 
         private void Error(NodeInfo node, string message)
-            => errors.Add($"{node.Path}: {message}");
+            => problems.Error(document, node.Path, message);
     }
 }

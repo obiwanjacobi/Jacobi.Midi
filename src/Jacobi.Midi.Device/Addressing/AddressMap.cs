@@ -75,31 +75,34 @@ internal sealed class AddressMap
 
         if (plan.Name is not { } root)
         {
-            throw new AddressMapException(plan.Root.Path, [$"{plan.Root.Path}: the plan has no schema name; create it with the serializer (GetPlan)."]);
+            throw new AddressMapException(plan.Root.Path.Value,
+                [new AddressMapProblem(String.Empty, plan.Root.Path, "the plan has no schema name; create it with the serializer (GetPlan).")]);
         }
 
-        var errors = new List<string>();
+        var problems = new AddressMapProblems();
         var group = plan.Root.Group;
+        var document = root.Namespace;
 
         if (group.NodeDef is not { } contract)
         {
-            throw new AddressMapException(root.FullName, [$"{plan.Root.Path}: the map root does not conform to a message contract (it has no nodeDef)."]);
+            throw new AddressMapException(root.FullName,
+                [new AddressMapProblem(document, plan.Root.Path, "the map root does not conform to a message contract (it has no nodeDef).")]);
         }
         contract = String.IsNullOrEmpty(contract.Namespace) ? new SchemaName($"{root.Namespace}.{contract.Name}") : contract;
 
-        var protocol = AddressProtocol.Create(serializer.Schemas, serializer, contract, errors).WithOverrides(group, errors);
-        var device = DeviceValues.FromProperties(group, errors);
-        var layout = AddressLayout.Build(plan.Root, protocol.AddressSpace.BitsPerByte, errors);
+        var protocol = AddressProtocol.Create(serializer.Schemas, serializer, contract, problems).WithOverrides(document, plan.Root, problems);
+        var device = DeviceValues.FromProperties(group, document, plan.Root.Path, problems);
+        var layout = AddressLayout.Build(document, plan.Root, protocol.AddressSpace.BitsPerByte, problems);
 
         var end = layout.Root.RangeIn(0).End;
         if (protocol.AddressSpace.ByteCount > 0 && end > protocol.AddressSpace.Capacity)
         {
-            errors.Add($"{plan.Root.Path}: the map ends at 0x{end:X}, outside the address space of {protocol.AddressSpace.ByteCount} x {protocol.AddressSpace.BitsPerByte} bits.");
+            problems.Error(document, plan.Root.Path, $"the map ends at 0x{end:X}, outside the address space of {protocol.AddressSpace.ByteCount} x {protocol.AddressSpace.BitsPerByte} bits.");
         }
 
-        if (errors.Count > 0)
+        if (problems.HasErrors)
         {
-            throw new AddressMapException(root.FullName, errors);
+            throw new AddressMapException(root.FullName, problems);
         }
         return new AddressMap(serializer, root, plan, protocol, device, layout);
     }

@@ -53,12 +53,15 @@
                     <TextBlock Text="{Binding DataType}" Classes="path" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Spacing="2">
-                    <TextBox Text="{Binding Value}" IsReadOnly="{Binding IsConstant}" PlaceholderText="{Binding Sample}"
+                    <TextBox Text="{Binding Value}" IsReadOnly="{Binding IsReadOnly}" PlaceholderText="{Binding Sample}"
                              IsVisible="{Binding !ShowsOptions}" />
                     <ComboBox Classes="options" IsEditable="True" Text="{Binding Value}" ItemsSource="{Binding Options}"
                               PlaceholderText="{Binding Sample}" IsVisible="{Binding ShowsOptions}" />
                     <TextBlock Text="{Binding ValueWarning}" Foreground="Orange" FontSize="11" TextWrapping="Wrap"
                                IsVisible="{Binding ValueWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    <!-- a role field of an envelope message (midi.role): how its value is supplied -->
+                    <TextBlock Text="{Binding RoleNote}" Foreground="{DynamicResource AppTextAccentBrush}" FontSize="11" TextWrapping="Wrap"
+                               IsVisible="{Binding HasRoleNote}" />
                 </StackPanel>
             </Grid>
         </DataTemplate>

@@ -164,6 +164,35 @@ public sealed class AddressMapAdapter
         return (addressMap, new DataPlan(message, addressMap.Protocol.AddressSpace, [.. blocks.OrderBy(block => block.Addresses.Start)]));
     }
 
+    /// <summary>
+    /// How the value of an envelope node with <paramref name="role"/> (<c>midi.role</c>) is supplied when a data message
+    /// carries <paramref name="map"/>: a short description, or null when the client's value model supplies it (a device
+    /// value the map root does not fix, or not a role).
+    /// </summary>
+    /// <exception cref="AddressMapException">The map is not valid.</exception>
+    public string? DescribeRole(SchemaName map, string role)
+    {
+        ArgumentNullException.ThrowIfNull(role);
+        if (String.Equals(role, MidiProperties.RoleAddress, StringComparison.OrdinalIgnoreCase))
+        {
+            return "address: calculated from the map";
+        }
+        if (String.Equals(role, MidiProperties.RoleSize, StringComparison.OrdinalIgnoreCase))
+        {
+            return "size: calculated from the map";
+        }
+        if (String.Equals(role, MidiProperties.RoleData, StringComparison.OrdinalIgnoreCase))
+        {
+            return "data: the included groups of the map";
+        }
+        if (role.StartsWith(MidiProperties.RoleDevicePrefix, StringComparison.OrdinalIgnoreCase)
+            && MapOf(map).Device.TryGet(role[MidiProperties.RoleDevicePrefix.Length..], out var value))
+        {
+            return $"{role}: 0x{value:X2}, fixed by '{map}'";
+        }
+        return null;
+    }
+
     private AddressMap MapOf(SchemaName map)
         => IsMapRoot(map)
             ? _maps.Get(_serializer.GetPlan(map))

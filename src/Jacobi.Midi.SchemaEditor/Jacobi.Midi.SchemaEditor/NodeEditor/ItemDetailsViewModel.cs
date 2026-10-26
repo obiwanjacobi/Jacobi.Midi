@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.SchemaEditor.Assemblies;
 using Jacobi.Midi.SchemaEditor.Models;
 
@@ -291,13 +292,22 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
                 .Select(descriptor => new PropertyOption($"{key}{ProcessorKey.Separator}{descriptor.Name}", descriptor)))
             .DistinctBy(option => option.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
+        // the address map tags (midi.*) of a node: checked on their own, their use is checked with the whole schema set
+        if (_item is EditNode)
+        {
+            options.AddRange(AddressMapTags.Descriptors.Select(descriptor => new PropertyOption(descriptor.Name, descriptor)));
+        }
         return new PropertyCheck(options,
-            name => ProcessorPropertyValidator.TrySplitPrefixed(name, out var key, out _) && GetDescribedProperties(key) is { } descriptors
-                ? ProcessorPropertyValidator.Find(key, descriptors, name)
-                : null,
-            (name, value) => ProcessorPropertyValidator.TrySplitPrefixed(name, out var key, out _) && GetDescribedProperties(key) is { } descriptors
-                ? ProcessorPropertyValidator.Validate(key, descriptors, name, value, schema, catalog.DataTypes)
-                : null);
+            name => _item is EditNode && AddressMapTags.IsTag(name)
+                ? AddressMapTags.Descriptors.FirstOrDefault(descriptor => String.Equals(descriptor.Name, name.Trim(), StringComparison.OrdinalIgnoreCase))
+                : ProcessorPropertyValidator.TrySplitPrefixed(name, out var key, out _) && GetDescribedProperties(key) is { } descriptors
+                    ? ProcessorPropertyValidator.Find(key, descriptors, name)
+                    : null,
+            (name, value) => _item is EditNode && AddressMapTags.IsTag(name)
+                ? AddressMapTags.Validate(name, value)
+                : ProcessorPropertyValidator.TrySplitPrefixed(name, out var key, out _) && GetDescribedProperties(key) is { } descriptors
+                    ? ProcessorPropertyValidator.Validate(key, descriptors, name, value, schema, catalog.DataTypes)
+                    : null);
     }
 
     /// <summary>
@@ -384,8 +394,9 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
 
     private void OnModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        // a value edit does not change which entries are effective; the row already shows it
-        if (sender is EditProperty && e.PropertyName == nameof(EditProperty.Value))
+        // a value edit does not change which entries are effective; the row already shows it.
+        // The address tag is derived from the properties: it changes no entries either
+        if ((sender is EditProperty && e.PropertyName == nameof(EditProperty.Value)) || e.PropertyName == nameof(EditNode.AddressTag))
         {
             return;
         }

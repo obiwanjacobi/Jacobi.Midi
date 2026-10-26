@@ -216,6 +216,7 @@ message selects the device map as its body and narrows it to one group occurrenc
 - **Tools with their own value model.** `AddressMapAdapter` lets a client that reads and writes arbitrary messages into its own value model (e.g. the Schema Editor's instantiate, match and workbench) work with the maps. Without address maps in the schemas its reads are plain serializer reads.
   - *Item counts:* `ItemCount` gives the number of items of a map repeat in the address space, so the client can show them all.
   - *Reading:* a read with a map root plan (a dump of the map) ends the repeats after `midi.repeat` items or at the end of the data. When the client selects a map root as the body of an open choice, the adapter narrows the body to the group occurrence the message carries, recognised as `TryReadData` does (any device id for now). When the message is not recognised, the largest group at the address is read as far as the data goes, with a warning.
+  - *Roles:* `DescribeRole` tells how an envelope field with a role gets its value when a message carries the map (calculated, fixed by the map root), or null when the client supplies it.
   - *Writing:* the client selects map nodes (`MapOccurrence`: a group, a repeat or one repeat item, by path and instance). `PlanData` gives the blocks and addresses, `WriteData` the messages: split as the message exchange does (one data message, its unit and maximum data size, widened to atomic groups), each with the address and size of its block. The client's value model supplies the whole message: the device values the map root does not fix come from the envelope, the data from the body.
 - **Writing.** A data message carries a block that is exactly one group occurrence (with the GP-8 every transfer is a whole, atomic patch).
 - **Replies** (`ack`, `nak`, `error`) are recognised by their constants and device values alone.
@@ -224,11 +225,19 @@ message selects the device map as its body and narrows it to one group occurrenc
 
 The map and its envelopes are validated when the map is first used (or prepared, see the
 [message exchange](../Exchange/readme.md)). All problems are reported together in an `AddressMapException`, each
-with its node path:
+an `AddressMapProblem` located at its node (the document and the node path from a root, node defs expanded):
 
 - **Layout**: addresses in plan order without overlap, no `midi.address` inside a repeat item, constant field sizes, repeat counts (`midi.repeat` or a constant `count`), `midi.repeat` only on repeats, `midi.stride` not smaller than the content, valid address notation and access values, atomic groups not nested, the map within the address space. Choices and virtual fields (`byteOffset`) are not supported in a map.
 - **Envelope**: at least one data message carries the map; requests and data messages have an `address` field with a constant `byteLength` and agree on the address space; a `size` role only on a `range` request, which needs one; a `data` role only on data messages; replies have no address, size or data; the envelopes agree on `midi.exchange`.
 - **Device values**: the device values the messages need (`deviceId` for the GP-8) are checked when an exchange first uses the map; they come from the map root or the client.
+
+Tools that show problems while a schema is written (the Schema Editor) use `AddressMapValidator.Validate`: it checks
+all tags of all schemas of a serializer, also those that no map uses, and reports errors, warnings and information:
+
+- **Tags on their own** (`AddressMapTags.Validate`, also used per property): a known `midi.*` name and a valid value.
+- **Roles in context**: a role is used inside a message (`midi.message`, a group inside an envelope root, not nested); `data` only on an open choice, the other roles only on fields.
+- **Fulfilment**: a data message without a map root that conforms to its contract (information); a `device.<name>` role the map root does not fix, so the client supplies it (information); a `midi.device.<name>` on a map root that no message uses (warning).
+- **Every map** with its envelopes, as above.
 
 ## Public types
 
@@ -244,7 +253,8 @@ Namespace `Jacobi.Midi.Device.Addressing`.
 | `AddressAccess` | The access of an addressed node (`midi.access`). |
 | `DeviceValues` | The device values by name (`deviceId`, `modelId`, ...): those of the map root plus those of the client. |
 | `ReceivedData` | A recognised data message: its address, device values and block; `Decode` reads its values into a value model. |
-| `AddressMapException` | All problems found in a map and its envelopes. |
+| `AddressMapException`, `AddressMapProblem`, `AddressMapProblemSeverity` | All problems found in a map and its envelopes, each located at its schema node. |
+| `AddressMapValidator`, `AddressMapTags` | Validate the use of the tags in all schemas, and the tags on their own (names, descriptions, values, the role of a node), for tools such as the Schema Editor. |
 | `AddressMapAdapter`, `MapOccurrence`, `DataPlan`, `EncodedDataMessage` | Reads and writes any message with the client's value model and lets the address maps in the schemas give the item counts, place the data of a message and calculate the addresses of the data messages for a selection of map nodes (for tools such as the Schema Editor). |
 
 ## Limitations

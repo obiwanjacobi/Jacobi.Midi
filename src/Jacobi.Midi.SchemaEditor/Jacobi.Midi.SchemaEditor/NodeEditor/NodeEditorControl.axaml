@@ -535,6 +535,20 @@
                     ToolTip.Tip="Delete the selected item" />
         </Grid>
 
+        <!-- the address map issues of the selected node (see the list in the schema panel) -->
+        <ItemsControl Grid.Row="1" Margin="0,10,0,0" ItemsSource="{Binding SelectedNodeIssues}" IsVisible="{Binding HasSelectedNodeIssues}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="models:AddressMapIssue">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                        <TextBlock Text="{Binding SeverityText}" Classes="warning" FontWeight="Bold" IsVisible="{Binding !IsInformation}" />
+                        <TextBlock Text="{Binding SeverityText}" Classes="warning" FontWeight="Bold" IsVisible="{Binding IsInformation}"
+                                   Foreground="{DynamicResource AppTextMutedBrush}" />
+                        <TextBlock Grid.Column="1" Text="{Binding Message}" Classes="warning" />
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
         <TabControl Grid.Row="2" Margin="0,14,0,0" SelectedIndex="{Binding SelectedEditorTab}"
                     IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNotNull}}">
             <TabItem Header="General">

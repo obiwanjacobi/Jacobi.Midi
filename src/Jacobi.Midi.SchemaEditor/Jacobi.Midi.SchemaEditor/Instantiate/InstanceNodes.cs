@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.Device.Addressing;
 
 namespace Jacobi.Midi.SchemaEditor.Instantiate;
 
@@ -275,6 +276,7 @@ internal sealed partial class InstanceField : InstanceNode
         Value = constant ?? String.Empty;
         IsConstant = constant is not null;
         Options = options ?? [];
+        Role = AddressMapTags.RoleOf(schema);
     }
 
     public SchemaField Field => (SchemaField)Schema;
@@ -290,7 +292,27 @@ internal sealed partial class InstanceField : InstanceNode
     /// <summary>True when the schema gives the field a constant value.</summary>
     public bool IsConstant { get; }
 
-    public bool IsEditable => !IsConstant;
+    /// <summary>The role of the field in an envelope message (<c>midi.role</c>, e.g. 'address'); null when it has none.</summary>
+    public string? Role { get; }
+
+    /// <summary>
+    /// How the value of a role field is supplied while the message carries an address map (see
+    /// <see cref="AddressMapAdapter.DescribeRole"/>), e.g. 'address: calculated from the map';
+    /// null when the value is given here.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsEditable), nameof(IsReadOnly), nameof(ShowsOptions), nameof(ValueWarning), nameof(RoleNote), nameof(HasRoleNote))]
+    public partial string? RoleSupply { get; set; }
+
+    /// <summary>True when the value is given here: not a constant and not supplied by an address map.</summary>
+    public bool IsEditable => !IsConstant && RoleSupply is null;
+
+    public bool IsReadOnly => !IsEditable;
+
+    /// <summary>The marker of a role field: how its value is supplied, or its role when the value is given here; null without a role.</summary>
+    public string? RoleNote => RoleSupply ?? (Role is null ? null : $"{Role}: the value given here");
+
+    public bool HasRoleNote => RoleNote is not null;
 
     /// <summary>The option values of the data type of the field (as text), in the order of the data type; empty when it has none.</summary>
     public IReadOnlyList<string> Options { get; }
@@ -305,7 +327,7 @@ internal sealed partial class InstanceField : InstanceNode
     /// A warning when the <see cref="Value"/> does not fit the data type of the field; otherwise null.
     /// Informational only: it does not prevent confirming the dialog.
     /// </summary>
-    public string? ValueWarning => IsConstant ? null : _validate?.Invoke(Value);
+    public string? ValueWarning => IsEditable ? _validate?.Invoke(Value) : null;
 
     partial void OnValueChanged(string value) => OnPropertyChanged(nameof(ValueWarning));
 }

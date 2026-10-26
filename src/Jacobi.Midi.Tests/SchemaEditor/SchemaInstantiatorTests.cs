@@ -838,6 +838,25 @@ public class SchemaInstantiatorTests
         => [.. gp8.Temporary.Members.Where(member => member.CanInclude)];
 
     [Fact]
+    public void AddressMapBody_MarksHowTheRoleFieldsOfTheMessageAreSupplied()
+    {
+        var gp8 = InstantiateGp8DataMessage();
+        var roles = gp8.Root.Fields().Where(field => field.Role is not null).ToDictionary(field => field.Role!);
+
+        // the map supplies the address and the model id it fixes; the device id is given here
+        Assert.False(roles["address"].IsEditable);
+        Assert.False(roles["device.modelId"].IsEditable);
+        Assert.Contains("0x13", roles["device.modelId"].RoleNote);
+        Assert.True(roles["device.deviceId"].IsEditable);
+        Assert.Null(roles["device.deviceId"].RoleSupply);
+        Assert.Contains("device.deviceId", roles["device.deviceId"].RoleNote);
+
+        // without a body the values are given here
+        FindChoice(gp8.Root, "Data")!.SelectedOption = null;
+        Assert.All(roles.Values, field => Assert.True(field.IsEditable));
+    }
+
+    [Fact]
     public void AddressMapBody_ShowsOneItemOfARepeatAndIncludesNothing()
     {
         var gp8 = InstantiateGp8DataMessage();

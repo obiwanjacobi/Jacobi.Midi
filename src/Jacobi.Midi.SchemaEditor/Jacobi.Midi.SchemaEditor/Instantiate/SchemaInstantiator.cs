@@ -403,7 +403,65 @@ internal sealed class SchemaInstantiator
         }
         bodies.Sort((left, right) => String.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase));
         // the selected index is not used by an open choice
-        return new InstanceChoice(schema, path, bodies, constantIndex: null);
+        var open = new InstanceChoice(schema, path, bodies, constantIndex: null);
+        if (AddressMapTags.IsData(schema))
+        {
+            open.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(InstanceChoice.Selected))
+                {
+                    MarkRoles(open);
+                }
+            };
+        }
+        return open;
+    }
+
+    /// <summary>
+    /// Marks how the role fields of the message that <paramref name="data"/> is the data of (<c>midi.role="data"</c>) get
+    /// their value: with an address map as the body the map supplies them (see <see cref="AddressMapAdapter.DescribeRole"/>),
+    /// otherwise the values are given in the instance.
+    /// </summary>
+    private void MarkRoles(InstanceChoice data)
+    {
+        var message = data.Parent;
+        while (message is not null && AddressMapTags.MessageOf(message.Schema) is null)
+        {
+            message = message.Parent;
+        }
+        if (message is not InstanceGroup group)
+        {
+            return;
+        }
+
+        var map = data.Selected is InstanceBody { IsAddressMap: true } body ? body.Root : (SchemaName?)null;
+        foreach (var field in RoleFields(group))
+        {
+            field.RoleSupply = map is { } root ? DescribeRole(root, field.Role!) : null;
+        }
+    }
+
+    // the role fields of a message; the data (an open choice) has its own fields
+    private static IEnumerable<InstanceField> RoleFields(InstanceGroup group)
+        => group.Members.SelectMany(member => member switch
+        {
+            InstanceField { Role: not null } field => [field],
+            InstanceGroup child => RoleFields(child),
+            _ => Enumerable.Empty<InstanceField>(),
+        });
+
+    private string? DescribeRole(SchemaName map, string role)
+    {
+        try
+        {
+            return Adapter.DescribeRole(map, role);
+        }
+        catch (Exception exception) when (exception is AddressMapException or ExecutionPlanException or InvalidOperationException or ArgumentException)
+        {
+            // the body is only an address map when its map is valid (see DetectAddressMap)
+            AddWarning($"How the role '{role}' is supplied by '{map}' is not known: {exception.Message}");
+            return null;
+        }
     }
 
     /// <summary>

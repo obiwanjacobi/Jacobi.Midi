@@ -5,6 +5,15 @@
              xmlns:schema="using:Jacobi.BinarySerializer.Schema"
              x:Class="Jacobi.Midi.SchemaEditor.SchemaTree.SchemaTreeControl">
 
+    <UserControl.Styles>
+        <!-- the address map tag of a node (its midi.role or midi.message): the roles a message fulfils from the map -->
+        <Style Selector="TextBlock.addressTag">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextAccentBrush}" />
+        </Style>
+    </UserControl.Styles>
+
     <DockPanel x:Name="Root" x:DataType="st:SchemaTreeViewModel">
         <TreeView x:Name="Tree"
                   ItemsSource="{Binding Items}"
@@ -62,6 +71,7 @@
                         </StackPanel.ContextFlyout>
                         <TextBlock Text="{Binding Name}" Foreground="{DynamicResource AppTextBodyBrush}" />
                         <TextBlock Text="{Binding Kind}" Foreground="{DynamicResource AppTextMutedBrush}" />
+                        <TextBlock Text="{Binding AddressTag}" Classes="addressTag" IsVisible="{Binding AddressTag, Converter={x:Static ObjectConverters.IsNotNull}}" />
                     </StackPanel>
                 </TreeDataTemplate>
                 <DataTemplate x:DataType="models:EditField">
@@ -76,6 +86,7 @@
                         </StackPanel.ContextFlyout>
                         <TextBlock Text="{Binding Name}" Foreground="{DynamicResource AppTextBodyBrush}" />
                         <TextBlock Text="{Binding DataType}" Foreground="{DynamicResource AppTextMutedBrush}" />
+                        <TextBlock Text="{Binding AddressTag}" Classes="addressTag" IsVisible="{Binding AddressTag, Converter={x:Static ObjectConverters.IsNotNull}}" />
                     </StackPanel>
                 </DataTemplate>
             </TreeView.DataTemplates>
