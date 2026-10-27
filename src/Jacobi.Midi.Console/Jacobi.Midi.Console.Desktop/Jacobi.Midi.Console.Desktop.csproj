@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- One build per OS family: the Windows TFM references the Windows MIDI backend,
+         plain net11.0 is used for Linux and macOS. See the root readme (Platform-specific backends). -->
+    <TargetFrameworks>net11.0;net11.0-windows10.0.26100.0</TargetFrameworks>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Jacobi.Midi.Console\Jacobi.Midi.Console.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'windows'">
+    <ProjectReference Include="..\..\Jacobi.Midi.Windows\Jacobi.Midi.Windows.csproj" />
+  </ItemGroup>
+</Project>

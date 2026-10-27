@@ -23,6 +23,29 @@
             "cwd": "${workspaceFolder}/src/Jacobi.Midi.SchemaEditor/Jacobi.Midi.SchemaEditor.Desktop",
             "console": "internalConsole",
             "stopAtEntry": false
+        },
+        {
+            "name": "Console.Desktop (Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build Console.Desktop (Debug)",
+            "program": "${workspaceFolder}/src/Jacobi.Midi.Console/Jacobi.Midi.Console.Desktop/bin/Debug/net11.0-windows10.0.26100.0/Jacobi.Midi.Console.Desktop.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/Jacobi.Midi.Console/Jacobi.Midi.Console.Desktop",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": "Console.Desktop (Release)",
+            "type": "coreclr",
+            "request": "launch",
+            "noDebug": true,
+            "preLaunchTask": "build Console.Desktop (Release)",
+            "program": "${workspaceFolder}/src/Jacobi.Midi.Console/Jacobi.Midi.Console.Desktop/bin/Release/net11.0-windows10.0.26100.0/Jacobi.Midi.Console.Desktop.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/Jacobi.Midi.Console/Jacobi.Midi.Console.Desktop",
+            "console": "internalConsole",
+            "stopAtEntry": false
         }
     ]
 }

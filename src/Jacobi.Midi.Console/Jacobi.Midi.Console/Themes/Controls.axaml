@@ -1,0 +1,55 @@
+<!--
+    The control themes of the console's look: the chrome, the templates of the parameter controls (chrome + face
+    host) and the brushes of the faces. A look replaces these themes and the palette; the controls stay the same.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:chrome="using:Jacobi.Midi.Console.Chrome"
+                    xmlns:controls="using:Jacobi.Midi.Console.Controls"
+                    xmlns:faces="using:Jacobi.Midi.Console.Faces">
+
+    <ControlTheme x:Key="{x:Type chrome:ControlChrome}" TargetType="chrome:ControlChrome">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Padding" Value="8" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{TemplateBinding Background}"
+                        CornerRadius="{TemplateBinding CornerRadius}"
+                        Padding="{TemplateBinding Padding}">
+                    <StackPanel Spacing="4" HorizontalAlignment="Center">
+                        <ContentPresenter Name="PART_ContentPresenter"
+                                          Content="{TemplateBinding Content}"
+                                          HorizontalAlignment="Center" />
+                        <TextBlock Text="{TemplateBinding ValueText}"
+                                   HorizontalAlignment="Center"
+                                   FontSize="15" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource ConsoleTextBrush}" />
+                        <TextBlock Text="{TemplateBinding Label}"
+                                   HorizontalAlignment="Center"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource ConsoleLabelBrush}" />
+                    </StackPanel>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type controls:KnobControl}" TargetType="controls:KnobControl">
+        <Setter Property="Cursor" Value="SizeNorthSouth" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <chrome:ControlChrome Label="{TemplateBinding Label}" ValueText="{TemplateBinding ValueText}">
+                    <faces:FaceHost Kind="Knob" State="{TemplateBinding FaceState}" />
+                </chrome:ControlChrome>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type faces:ArcKnobFace}" TargetType="faces:ArcKnobFace">
+        <Setter Property="AccentBrush" Value="{DynamicResource ConsoleAccentBrush}" />
+        <Setter Property="TrackBrush" Value="{DynamicResource ConsoleTrackBrush}" />
+        <Setter Property="BodyBrush" Value="{DynamicResource ConsoleBodyBrush}" />
+        <Setter Property="PointerBrush" Value="{DynamicResource ConsolePointerBrush}" />
+    </ControlTheme>
+</ResourceDictionary>

@@ -32,6 +32,36 @@
             "group": "build"
         },
         {
+            "label": "build Console.Desktop (Debug)",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/src/Jacobi.Midi.Console/Jacobi.Midi.Console.Desktop/Jacobi.Midi.Console.Desktop.csproj",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary"
+            ],
+            "problemMatcher": "$msCompile",
+            "group": "build"
+        },
+        {
+            "label": "build Console.Desktop (Release)",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/src/Jacobi.Midi.Console/Jacobi.Midi.Console.Desktop/Jacobi.Midi.Console.Desktop.csproj",
+                "--configuration",
+                "Release",
+                "--framework",
+                "net11.0-windows10.0.26100.0",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary"
+            ],
+            "problemMatcher": "$msCompile",
+            "group": "build"
+        },
+        {
             "label": "build Jacobi.Midi",
             "command": "dotnet",
             "type": "process",

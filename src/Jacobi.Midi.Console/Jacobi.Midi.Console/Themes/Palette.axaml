@@ -1,0 +1,31 @@
+<!--
+    The neutral palette of the console's look, one dictionary per theme variant.
+    Controls and faces reference these brushes by key through {DynamicResource}. A layout control or a control
+    overrides a key (e.g. ConsoleAccentBrush with a device's accent) in its own Resources: resource lookup then gives
+    the colour cascade of the readme (control, layout control, device, look).
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="ConsoleBackgroundBrush" Color="#E7E5DF" />
+            <SolidColorBrush x:Key="ConsolePlateBrush" Color="#F6F5F1" />
+            <SolidColorBrush x:Key="ConsoleTextBrush" Color="#2B2B2B" />
+            <SolidColorBrush x:Key="ConsoleLabelBrush" Color="#62615C" />
+            <SolidColorBrush x:Key="ConsoleTrackBrush" Color="#D6D4CE" />
+            <SolidColorBrush x:Key="ConsoleAccentBrush" Color="#4A4945" />
+            <SolidColorBrush x:Key="ConsoleBodyBrush" Color="#2D2D2D" />
+            <SolidColorBrush x:Key="ConsolePointerBrush" Color="#F6F5F1" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+            <SolidColorBrush x:Key="ConsoleBackgroundBrush" Color="#17191B" />
+            <SolidColorBrush x:Key="ConsolePlateBrush" Color="#2C2F33" />
+            <SolidColorBrush x:Key="ConsoleTextBrush" Color="#E6E9EC" />
+            <SolidColorBrush x:Key="ConsoleLabelBrush" Color="#A9B0B8" />
+            <SolidColorBrush x:Key="ConsoleTrackBrush" Color="#44484D" />
+            <SolidColorBrush x:Key="ConsoleAccentBrush" Color="#C9CED4" />
+            <SolidColorBrush x:Key="ConsoleBodyBrush" Color="#5C6168" />
+            <SolidColorBrush x:Key="ConsolePointerBrush" Color="#F2F4F6" />
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

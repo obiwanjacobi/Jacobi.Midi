@@ -4,7 +4,13 @@
     <Project Path="../../Jacobi.BinarySerializer/src/Jacobi.BinarySerializer.Tests/Jacobi.BinarySerializer.Tests.csproj" />
     <Project Path="../../Jacobi.BinarySerializer/src/Jacobi.BinarySerializer/Jacobi.BinarySerializer.csproj" />
   </Folder>
-  <Folder Name="/MidiConsole/" />
+  <Folder Name="/MidiConsole/">
+    <File Path="Jacobi.Midi.Console/readme.md" />
+    <Project Path="Jacobi.Midi.Console/Jacobi.Midi.Console.Browser/Jacobi.Midi.Console.Browser.csproj" />
+    <Project Path="Jacobi.Midi.Console/Jacobi.Midi.Console.Core/Jacobi.Midi.Console.Core.csproj" />
+    <Project Path="Jacobi.Midi.Console/Jacobi.Midi.Console.Desktop/Jacobi.Midi.Console.Desktop.csproj" />
+    <Project Path="Jacobi.Midi.Console/Jacobi.Midi.Console/Jacobi.Midi.Console.csproj" />
+  </Folder>
   <Folder Name="/SchemaEditor/">
     <Project Path="Jacobi.Midi.SchemaEditor/Jacobi.Midi.SchemaEditor.Browser/Jacobi.Midi.SchemaEditor.Browser.csproj" />
     <Project Path="Jacobi.Midi.SchemaEditor/Jacobi.Midi.SchemaEditor.Desktop/Jacobi.Midi.SchemaEditor.Desktop.csproj" />
