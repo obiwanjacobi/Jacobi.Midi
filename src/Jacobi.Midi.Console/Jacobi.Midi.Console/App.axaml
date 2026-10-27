@@ -14,5 +14,10 @@
 
     <Application.Styles>
         <FluentTheme />
+        <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
+        <!-- a flyout inherits the cursor of the control it opens on (a knob's up-down): it has the arrow -->
+        <Style Selector="FlyoutPresenter">
+            <Setter Property="Cursor" Value="Arrow" />
+        </Style>
     </Application.Styles>
 </Application>

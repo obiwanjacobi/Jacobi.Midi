@@ -28,6 +28,10 @@ public abstract class Face : Control
     public static readonly StyledProperty<IBrush?> AccentBrushProperty =
         AvaloniaProperty.Register<Face, IBrush?>(nameof(AccentBrush));
 
+    /// <summary>The accent for text and figures in displays: lighter than the accent where that is needed to read it.</summary>
+    public static readonly StyledProperty<IBrush?> AccentDisplayBrushProperty =
+        AvaloniaProperty.Register<Face, IBrush?>(nameof(AccentDisplayBrush));
+
     /// <summary>The colour of the range without value.</summary>
     public static readonly StyledProperty<IBrush?> TrackBrushProperty =
         AvaloniaProperty.Register<Face, IBrush?>(nameof(TrackBrush));
@@ -85,6 +89,12 @@ public abstract class Face : Control
     {
         get => GetValue(AccentBrushProperty);
         set => SetValue(AccentBrushProperty, value);
+    }
+
+    public IBrush? AccentDisplayBrush
+    {
+        get => GetValue(AccentDisplayBrushProperty);
+        set => SetValue(AccentDisplayBrushProperty, value);
     }
 
     public IBrush? TrackBrush

@@ -13,7 +13,8 @@ namespace Jacobi.Midi.Console.Controls;
 /// variable) while the control is on screen, and provides the label, the value text and the face state its template
 /// shows. A control without parameter shows its value as unknown. What every control does: Ctrl+click resets the
 /// value to its default, a double-click opens an editor to type the value (for controls that can be typed into:
-/// <see cref="EditText"/>). The derived control decides the rest of the interaction and the face state.
+/// <see cref="EditText"/>). The derived control decides the rest of the interaction and the face state. In Edit mode
+/// (<see cref="IsEditing"/>) none of it: the value is locked (<see cref="CanChange"/>), the cursor is the arrow.
 /// </summary>
 public abstract class ParameterControlBase : TemplatedControl
 {
@@ -23,6 +24,10 @@ public abstract class ParameterControlBase : TemplatedControl
     /// <summary>The parameter the control shows and changes; null for an unbound control.</summary>
     public static readonly StyledProperty<IControlValue?> ParameterProperty =
         AvaloniaProperty.Register<ParameterControlBase, IControlValue?>(nameof(Parameter));
+
+    /// <summary>Edit mode: inherited from the dashboard (see <see cref="DashboardEditing"/>).</summary>
+    public static readonly StyledProperty<bool> IsEditingProperty =
+        DashboardEditing.IsEditingProperty.AddOwner<ParameterControlBase>();
 
     public static readonly DirectProperty<ParameterControlBase, FaceState?> FaceStateProperty =
         AvaloniaProperty.RegisterDirect<ParameterControlBase, FaceState?>(nameof(FaceState), control => control.FaceState);
@@ -58,6 +63,15 @@ public abstract class ParameterControlBase : TemplatedControl
         get => GetValue(ParameterProperty);
         set => SetValue(ParameterProperty, value);
     }
+
+    public bool IsEditing
+    {
+        get => GetValue(IsEditingProperty);
+        set => SetValue(IsEditingProperty, value);
+    }
+
+    /// <summary>True when the user can change the value: the control is enabled and not in Edit mode.</summary>
+    protected bool CanChange => IsEnabled && !IsEditing;
 
     /// <summary>What the face draws.</summary>
     public FaceState? FaceState
@@ -105,7 +119,7 @@ public abstract class ParameterControlBase : TemplatedControl
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
-        if (IsEnabled && e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        if (CanChange && e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             Reset();
             e.Handled = true;
@@ -115,7 +129,7 @@ public abstract class ParameterControlBase : TemplatedControl
     // a text box below the control: Enter applies the typed value, Escape (or clicking elsewhere) cancels
     private bool OpenEditor()
     {
-        if (!IsEnabled || Parameter is null || EditText is not { } text)
+        if (!CanChange || Parameter is null || EditText is not { } text)
             return false;
 
         var box = new TextBox { Text = text, MinWidth = 96 };
@@ -156,6 +170,14 @@ public abstract class ParameterControlBase : TemplatedControl
         {
             Subscribe(_isOnScreen ? Parameter : null);
             RefreshFromParameter();
+        }
+        else if (change.Property == IsEditingProperty)
+        {
+            // the theme's cursor (up-down, hand) says how to change the value: not in Edit mode
+            if (IsEditing)
+                SetValue(CursorProperty, new Cursor(StandardCursorType.Arrow));
+            else
+                ClearValue(CursorProperty);
         }
     }
 

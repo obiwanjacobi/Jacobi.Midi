@@ -1,56 +1,48 @@
 <dashboard format="jacobi.midi.dashboard/1" name="GP-8 compare" cellSize="24">
   <device alias="gp8" mapRoot="Gp8.AddressMap" />
   <!-- two patches side by side: each section has its own 'patch' -->
-  <row gap="1" device="gp8">
-    <section label="Patch A" direction="column" base="AddressMap.Memory[$patch].Patch">
+  <grid device="gp8" size="45,14">
+    <section label="Patch A" at="0,0" size="22,14" base="AddressMap.Memory[$patch].Patch">
       <variable name="patch" value="0" />
-      <row gap="1">
-        <numberBox label="Patch">
-          <bind slot="value" parameter="$patch" />
-        </numberBox>
-        <text label="Name">
-          <bind slot="value" parameter="Name" />
-        </text>
-      </row>
-      <row>
-        <knob label="Volume">
-          <bind slot="value" parameter="MasterVolume" />
-        </knob>
-        <knob label="Drive">
-          <bind slot="value" parameter="TurboOverdrive.Drive" />
-        </knob>
-        <knob label="Delay">
-          <bind slot="value" parameter="DigitalDelay.ELevel" />
-        </knob>
-        <knob label="Chorus">
-          <bind slot="value" parameter="DigitalChorus.ELevel" />
-        </knob>
-      </row>
+      <numberBox label="Patch" at="0,0" size="6,4">
+        <bind slot="value" parameter="$patch" />
+      </numberBox>
+      <text label="Name" at="6,0" size="9,4">
+        <bind slot="value" parameter="Name" />
+      </text>
+      <knob label="Volume" at="0,4" size="5,7">
+        <bind slot="value" parameter="MasterVolume" />
+      </knob>
+      <knob label="Drive" at="5,4" size="5,7">
+        <bind slot="value" parameter="TurboOverdrive.Drive" />
+      </knob>
+      <knob label="Delay" at="10,4" size="5,7">
+        <bind slot="value" parameter="DigitalDelay.ELevel" />
+      </knob>
+      <knob label="Chorus" at="15,4" size="5,7">
+        <bind slot="value" parameter="DigitalChorus.ELevel" />
+      </knob>
     </section>
-    <section label="Patch B" direction="column" base="AddressMap.Memory[$patch].Patch">
+    <section label="Patch B" at="23,0" size="22,14" base="AddressMap.Memory[$patch].Patch">
       <variable name="patch" value="1" />
-      <row gap="1">
-        <numberBox label="Patch">
-          <bind slot="value" parameter="$patch" />
-        </numberBox>
-        <text label="Name">
-          <bind slot="value" parameter="Name" />
-        </text>
-      </row>
-      <row>
-        <knob label="Volume">
-          <bind slot="value" parameter="MasterVolume" />
-        </knob>
-        <knob label="Drive">
-          <bind slot="value" parameter="TurboOverdrive.Drive" />
-        </knob>
-        <knob label="Delay">
-          <bind slot="value" parameter="DigitalDelay.ELevel" />
-        </knob>
-        <knob label="Chorus">
-          <bind slot="value" parameter="DigitalChorus.ELevel" />
-        </knob>
-      </row>
+      <numberBox label="Patch" at="0,0" size="6,4">
+        <bind slot="value" parameter="$patch" />
+      </numberBox>
+      <text label="Name" at="6,0" size="9,4">
+        <bind slot="value" parameter="Name" />
+      </text>
+      <knob label="Volume" at="0,4" size="5,7">
+        <bind slot="value" parameter="MasterVolume" />
+      </knob>
+      <knob label="Drive" at="5,4" size="5,7">
+        <bind slot="value" parameter="TurboOverdrive.Drive" />
+      </knob>
+      <knob label="Delay" at="10,4" size="5,7">
+        <bind slot="value" parameter="DigitalDelay.ELevel" />
+      </knob>
+      <knob label="Chorus" at="15,4" size="5,7">
+        <bind slot="value" parameter="DigitalChorus.ELevel" />
+      </knob>
     </section>
-  </row>
+  </grid>
 </dashboard>

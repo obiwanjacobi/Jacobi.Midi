@@ -1,3 +1,4 @@
+using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Core.Schemas;
 
 namespace Jacobi.Midi.Console.Core.Dashboards;
@@ -36,5 +37,8 @@ public sealed class Dashboard
 /// <summary>
 /// A device a dashboard needs: the alias its bindings use and the map root the rig's device must have.
 /// </summary>
-/// <param name="Color">Overrides the rig's colour of the device on this dashboard (<c>#RRGGBB</c>).</param>
-public sealed record DashboardDevice(string Alias, string MapRoot, string? Color = null);
+public sealed record DashboardDevice(string Alias, string MapRoot)
+{
+    /// <summary>Overrides the rig's colours of the device on this dashboard.</summary>
+    public AreaColors Colors { get; init; } = AreaColors.None;
+}

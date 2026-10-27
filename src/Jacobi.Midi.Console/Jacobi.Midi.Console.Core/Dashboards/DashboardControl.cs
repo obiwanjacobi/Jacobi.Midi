@@ -1,3 +1,5 @@
+using Jacobi.Midi.Console.Core.Palettes;
+
 namespace Jacobi.Midi.Console.Core.Dashboards;
 
 /// <summary>
@@ -8,19 +10,25 @@ namespace Jacobi.Midi.Console.Core.Dashboards;
 public closed class DashboardControl
 {
     /// <summary>The name shown; for a parameter control the default is the parameter's field name.</summary>
-    public string? Label { get; init; }
+    public string? Label { get; set; }
 
-    /// <summary>The size in cells; null for the default size of the control type.</summary>
-    public CellSize? Size { get; init; }
+    /// <summary>The size in cells; null until it is given (see <see cref="GridLayout.Complete"/>).</summary>
+    public CellSize? Size { get; set; }
 
-    /// <summary>The cell position; only used inside a grid.</summary>
-    public CellPosition? At { get; init; }
+    /// <summary>
+    /// The cell position in a grid or section (of its grid, inside the section's frame); not used inside a row, column
+    /// or tabs. Null until it is given (see <see cref="GridLayout.Complete"/>).
+    /// </summary>
+    public CellPosition? At { get; set; }
 
-    /// <summary>The share of the remaining space; only used inside a row, column or section.</summary>
+    /// <summary>The share of the remaining space; only used inside a row or column.</summary>
     public int? Grow { get; init; }
 
-    /// <summary>Another colour for this control and the controls inside it (<c>#RRGGBB</c>).</summary>
-    public string? Color { get; init; }
+    /// <summary>
+    /// Other colours (accent, plate, panel) for this control and the controls inside it; the user changes them in the
+    /// console.
+    /// </summary>
+    public AreaColors Colors { get; set; } = AreaColors.None;
 
     /// <summary>The device alias of the bindings in and below this control; inherited by the controls inside it.</summary>
     public string? Device { get; init; }
@@ -40,7 +48,7 @@ public closed class ParameterControl : DashboardControl
     public abstract ParameterControlKind Kind { get; }
 
     /// <summary>How the values are presented: unit and decimals.</summary>
-    public DisplaySettings Display { get; init; } = DisplaySettings.Default;
+    public DisplaySettings Display { get; set; } = DisplaySettings.Default;
 
     /// <summary>The bound slots by name; an unbound slot is left out.</summary>
     public abstract IEnumerable<KeyValuePair<string, Binding>> Slots { get; }
@@ -113,9 +121,6 @@ public sealed class LayoutControl : DashboardControl
     /// </summary>
     public IReadOnlyList<IndexVariable> Variables { get; init; } = [];
 
-    /// <summary>The direction a section arranges its children in.</summary>
-    public LayoutDirection Direction { get; init; } = LayoutDirection.Row;
-
     /// <summary>The space between the children, in cells.</summary>
     public int Gap { get; init; }
 
@@ -159,14 +164,7 @@ public enum LayoutControlKind
     Label,
 }
 
-/// <summary>The direction in which a layout control arranges its children.</summary>
-public enum LayoutDirection
-{
-    Row,
-    Column,
-}
-
-/// <summary>A size in cells.</summary>
+/// <summary>A size in cells; written as <c>columns,rows</c> (e.g. <c>2,2</c>).</summary>
 public readonly record struct CellSize(int Columns, int Rows);
 
 /// <summary>A cell position inside a grid, zero based.</summary>

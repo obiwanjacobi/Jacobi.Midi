@@ -1,3 +1,4 @@
+using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Core.Schemas;
 
 namespace Jacobi.Midi.Console.Core.Rigs;
@@ -39,8 +40,11 @@ public sealed class DeviceInstance
     /// <summary>How to reach the device; null when it is not connected.</summary>
     public EndpointReference? Endpoint { get; init; }
 
-    /// <summary>The colour the device's palette is derived from (<c>#RRGGBB</c>); null for the look's neutral palette.</summary>
-    public string? Color { get; init; }
+    /// <summary>
+    /// The colours of the device's controls (accent, plate, panel); the look's where it has none. The user changes
+    /// them in the console.
+    /// </summary>
+    public AreaColors Colors { get; set; } = AreaColors.None;
 
     /// <summary>Assemblies and schema files for this device only: its schema or customisations of it.</summary>
     public SchemaSources Sources { get; init; } = SchemaSources.None;

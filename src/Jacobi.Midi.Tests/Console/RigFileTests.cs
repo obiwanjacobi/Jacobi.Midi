@@ -1,4 +1,5 @@
 using Jacobi.Midi.Console.Core.Files;
+using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Core.Rigs;
 using Xunit;
 
@@ -53,7 +54,7 @@ public class RigFileTests
         var synth = rig.Find("SYNTH")!;
         Assert.Equal(["Schemas/AcmeCustom.xml"], synth.Sources.Schemas);
         Assert.Empty(synth.Sources.Assemblies);
-        Assert.Equal(("Acme S-1", "Acme.AddressMap", "#3D8BFD"), (synth.Name, synth.MapRoot, synth.Color));
+        Assert.Equal(("Acme S-1", "Acme.AddressMap", "#3D8BFD"), (synth.Name, synth.MapRoot, synth.Colors.Accent));
         Assert.Equal(0x10, synth.DeviceValues["deviceId"]);
         Assert.Equal(0x7F1C, synth.DeviceValues["GROUPID"]);
         Assert.Equal(new EndpointReference("USB MIDI Interface", 2), synth.Endpoint);
@@ -79,6 +80,21 @@ public class RigFileTests
         var written = RigFile.Write(RigFile.Read(Xml, FileFormat.Xml), format);
 
         Assert.Equal(written, RigFile.Write(RigFile.Read(written, format), format));
+    }
+
+    [Theory]
+    [InlineData(FileFormat.Xml)]
+    [InlineData(FileFormat.Json)]
+    public void Write_HasTheColourTheUserChanged(FileFormat format)
+    {
+        var rig = RigFile.Read(Xml, FileFormat.Xml);
+        rig.Find("synth")!.Colors = new AreaColors("#A8423A", Panel: "#1F2A3A");
+        rig.Find("pedalboard")!.Colors = AreaColors.None;
+
+        var read = RigFile.Read(RigFile.Write(rig, format), format);
+
+        Assert.Equal(new AreaColors("#A8423A", Panel: "#1F2A3A"), read.Find("synth")!.Colors);
+        Assert.Equal(AreaColors.None, read.Find("pedalboard")!.Colors);
     }
 
     [Fact]

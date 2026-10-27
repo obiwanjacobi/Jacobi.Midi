@@ -166,7 +166,7 @@ public sealed class AnodizedNumberBoxFace : Face
 
         var number = new Rect(0, 0, Bounds.Width * (1 - ArrowsWidth), Bounds.Height);
         using (context.PushOpacity(text.Text is null ? 0.4 : 1))
-            DrawCenteredText(context, text.Text ?? "–", number, DisplayFont, AccentBrush, 18);
+            DrawCenteredText(context, text.Text ?? "–", number, DisplayFont, AccentDisplayBrush, 18);
     }
 }
 
@@ -189,9 +189,9 @@ public sealed class AnodizedTextFace : Face
         if (text.Text is null)
         {
             using (context.PushOpacity(0.4))
-                DrawCenteredText(context, "– – –", display, DisplayFont, AccentBrush, 18);
+                DrawCenteredText(context, "– – –", display, DisplayFont, AccentDisplayBrush, 18);
             return;
         }
-        DrawCenteredText(context, text.Text, display.Deflate(new Thickness(8, 0)), DisplayFont, AccentBrush, 18);
+        DrawCenteredText(context, text.Text, display.Deflate(new Thickness(8, 0)), DisplayFont, AccentDisplayBrush, 18);
     }
 }

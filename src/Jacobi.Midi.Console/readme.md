@@ -92,7 +92,7 @@ steps, option names), the dashboard says how it is *shown*. Per control:
 - `unit`: the text after the value (`ms`, `Hz`, `dB`, `%`).
 - `decimals`: the number of decimals shown.
 - `label`: the name shown; default the parameter's field name.
-- `color`: another colour for this control (see [Colour](#colour)).
+- `color`, `plateColor`, `panelColor`: other colours for this control's accent, plate and (for a section) panel (see [Colour](#colour)).
 
 Should units turn out to be the same for every dashboard of a device, a schema property can be added later as the
 default; the dashboard setting stays the override.
@@ -100,15 +100,27 @@ default; the dashboard setting stays the override.
 ## Layout controls
 
 Layout controls have no MIDI function: they arrange, group and label. The root of a dashboard is a layout control, so
-a dashboard is a tree. Every control has a **size in cells**; the cell is the unit of the whole dashboard (a knob is 2×2,
-an envelope 6×3) and the cell size scales the whole dashboard.
+a dashboard is a tree.
+
+**Everything is on a grid of cells** (`GridLayout`). Every control has a **size in cells** (`size`: columns,rows); the
+cell is the unit of the whole dashboard and the dashboard's cell size scales it as a whole. The root (usually a grid) and
+every grid and section place their children at a **cell position** (`at`: column,row, zero based from the top left of
+the grid; for a section, of the grid inside its frame). A parameter control is fitted to its cells (`CellFit`): scaled
+by the side that limits it, so making it bigger makes its knob bigger, and its chrome stretched along the other side,
+so its plate fills its cells and lines up with the grid; a new control gets a default size per kind in which it fits unscaled (a knob is 5×7). A
+section's frame and title take a fixed number of cells around its grid (`GridLayout.SectionInset`: one on the sides
+and bottom, two on top), in every look. Positions and sizes are never empty: a file that leaves them out gets them when
+it is opened (the controls side by side below those that have a position), and the console says so.
+
+When a control is moved or sized onto other controls, these are **pushed down** below it (and the controls they then
+overlap, and so on); a grid or section that no longer fits its children **grows**, and pushes in its own grid in turn.
 
 | Control | Arranges its children | Used for |
 |---------|-----------------------|----------|
-| Row, Column | next to / below each other (flex): `gap`, alignment, `wrap`; a child's `grow` shares the remaining space | most layouts; they adapt when controls are added or removed |
-| Grid | on cells, each child at a cell position (`at`) | exact placement, e.g. to copy a device's panel layout |
-| Section | as a row or column, inside a frame with a title | a group of parameters: "Filter", "Amp", a device |
-| Tabs | one page at a time | many parameters on a small screen; the sections of a patch |
+| Grid | on cells, each child at its position (`at`) in its size | the root of a dashboard; exact placement, e.g. to copy a device's panel layout |
+| Section | as a grid, inside a frame with a title | a group of parameters: "Filter", "Amp", a device |
+| Row, Column | next to / below each other (flex): `gap`, `wrap`; a child's `grow` shares the remaining space; the children have no position | a strip of controls that adapts when controls are added or removed |
+| Tabs | one page at a time (the headers take two rows) | many parameters on a small screen; the sections of a patch |
 | Spacer, Separator | — | room or a line between controls |
 | Label | — | a text on the dashboard |
 
@@ -174,9 +186,10 @@ blocks (v2, see [Looks](#looks-v2)).
 
 A face draws the face state with the palette's brushes, nothing else: it never sees the device state, the schema or
 MIDI, and it has no behaviour. The interaction stays in the control, so a knob is dragged the same way whatever face
-it has. A face also tells its preferred size in cells (a ring of LEDs needs more room than a flat arc); the chrome
-and the layout controls adapt to it. Sizes in cells are at a reference cell of 24 pixels (`Face.CellPixels`); the
-dashboard as a whole is scaled to its own cell size, in one place, so controls, fonts, gaps and grids scale together.
+it has. A face also tells its natural size in cells (a ring of LEDs needs more room than a flat arc); a control with
+its chrome is fitted to the cells it is given (scaled, its plate filling the cells). Sizes in cells are at a reference cell of 24 pixels
+(`Face.CellPixels`); the dashboard as a whole is scaled to its own cell size, in one place, so controls, fonts, gaps
+and grids scale together.
 
 In Avalonia a control is one class per control type, a face a small control that draws itself, chosen by key from
 the look, a chrome a `ControlTheme` of the frame control (also used by sections), and the palette, typography and
@@ -188,7 +201,7 @@ The resource keys every look provides (the face themes take them; the chrome tem
 
 | Layer | Keys |
 |-------|------|
-| Palette | `ConsoleAccentBrush`, `ConsoleTrackBrush`, `ConsoleBodyBrush`, `ConsoleSurfaceBrush`, `ConsolePointerBrush`, `ConsoleDisplayBrush`, `ConsoleDisplayTextBrush`, `ConsoleOutlineBrush`, `ConsoleTextBrush`, `ConsoleLabelBrush`, `ConsoleBackgroundBrush`, `ConsoleSectionBrush` (and look specific ones for its own chrome, e.g. `ConsolePlateBrush`, `ConsoleScrewBrush`) |
+| Palette | `ConsoleAccentBrush`, `ConsoleAccentTextBrush`, `ConsoleAccentDisplayBrush` (these three are derived from the accent in code, see [Colour](#colour)), `ConsoleTrackBrush`, `ConsoleBodyBrush`, `ConsoleSurfaceBrush`, `ConsolePointerBrush`, `ConsoleDisplayBrush`, `ConsoleDisplayTextBrush`, `ConsoleOutlineBrush`, `ConsoleTextBrush`, `ConsoleBackgroundBrush`, the materials `ConsolePlateBrush` (a control's plate, transparent when the controls are on the panel) and `ConsoleSectionBrush` (a section's panel) with `ConsolePlateTextBrush` (the label on the plate) (these three are tinted in code when a plate or panel has a colour) (and look specific ones for its own chrome, e.g. `ConsoleScrewBrush`) |
 | Typography | `ConsoleLabelFont`, `ConsoleDisplayFont` |
 | Finish | `ConsoleGlowOpacity` (0 draws no glow) |
 
@@ -203,22 +216,57 @@ expensive while values change, so they are applied in one place and can be reduc
 
 ### Colour
 
-Colour carries meaning, not decoration. The colour of a control is found in this order; the first that is set wins:
+Colour carries meaning, not decoration. Three areas of controls and sections have a colour (`ColorArea`):
 
-1. the control's own `color`;
-2. the palette of the nearest layout control that sets one;
-3. the palette of the device the control's (first) slot is bound to;
-4. the look's neutral palette (unbound controls, layout controls without a device).
+- the **accent**: what shows the value and the device (arcs, LEDs, a section's tag or strip); `color` in the files;
+- the **plate**: the material a control is mounted on (Foundry's steel plate; Anodized has none until it is given a colour); `plateColor`;
+- the **panel**: the material of a section (cast iron, aluminium); `panelColor`.
 
-**A palette per device.** A device instance has one colour in the rig; the console derives the device's palette from it
-(accent, track, fill, text on the accent) for the light and the dark variant of the look, with enough contrast for
-the text. Because the colour is part of the rig, a device has the same colours on every dashboard; a dashboard can
-override it (e.g. two devices of the same colour on one dashboard). On a dashboard that combines devices, the colour
-shows which device a control belongs to.
+The colour of an area is found in this order; the first that is set wins:
 
-**A colour per control.** The user can give a single control another colour: a swatch of its device's palette, or any
-colour (from which the same palette is derived). Use it to make a control stand out, not to show the device: that is
-what the device palette does.
+1. the control's own colour;
+2. the colour of the nearest layout control that sets one;
+3. the colour of the device: the `device` of a layout control, the device the (first) slot of a parameter control is
+   bound to;
+4. the look's (unbound controls, devices without a colour).
+
+**A palette derived from one colour.** The console derives the palette from a colour (`Palette` in Console.Core):
+the accent itself, the text on the accent (dark or light, whichever has the most contrast) and the accent for text and
+figures in the dark displays, lightened in steps until it has a contrast of 4.5 (WCAG 2) with them. The derived
+colours are the resources `ConsoleAccentBrush`, `ConsoleAccentTextBrush` and `ConsoleAccentDisplayBrush`; the looks
+draw everything in or on the accent with these keys, never with a colour of their own. A look sets them from its
+accent for the whole application; a control whose colour differs from the colour around it sets them for itself and
+the controls inside it.
+
+**Materials keep their shading.** A plate or panel colour does not replace the look's material by a flat colour: the
+stops of the material's gradient get the hue and saturation of the colour, and keep their differences in lightness
+around it (`Palette.Tint`), so brushed steel becomes painted metal and keeps its light. A material the look does not
+have (Anodized's transparent plate) becomes a plain one, lit from above. The label on a plate gets the text colour with
+the most contrast; on a look whose controls are on the panel, the labels follow the panel's colour until the plate
+has one.
+
+**Colours per device.** A device instance has its colours in the rig. Because they are part of the rig, a device has
+the same colours on every dashboard; a dashboard can override them, per area (e.g. two devices of the same colour on
+one dashboard). On a dashboard that combines devices, the colour shows which device a control belongs to.
+
+**A colour per control.** The user can give a single control or section another colour. Use it to make a control
+stand out, not to show the device: that is what the device colour does.
+
+**Picking a colour.** In *Edit* mode, a right-click on a control opens the colour chooser for
+the area under the pointer, named in its title: on the face or on a section's tag or strip (the elements of a look's
+chrome with the class `accentArea`) the accent, elsewhere on a parameter control its plate, elsewhere on a layout
+control its panel. The property panel opens the same chooser for each area of the selected control. It offers:
+
+- the colours of the look for the area: a few colours designed to suit it (in `ConsoleLooks`; Foundry has metals and patina, steel and enamel plates, iron and painted panels; Anodized LED colours and anodized aluminium);
+- tints and shades of the current colour;
+- any colour (a colour view in a flyout of its own, applied with *Apply*);
+- *Inherited*: takes the colour away, so the control has the colour of the cascade again;
+- *For all controls of device ...*: the pick becomes the device's colour in the rig instead of the control's.
+
+A pick applies at once. The dashboard or the rig is then changed: *Save* writes the selected dashboard and the rig when
+they changed, *Save as...* writes one of them to another file (XML or JSON by its extension). A file that was not
+read from disk (the demo) is saved with a file picker. When the dashboard gives a device a colour of its own, a new rig
+colour does not show on it; the console says so.
 
 ### Looks in v1
 
@@ -302,7 +350,16 @@ Several dashboards can be open on one rig; the toolbar switches between them (`D
 dashboard; each dashboard (`DashboardSession`) has its own index variables. A dashboard that brings its own schemas
 rebuilds the schema library, and with it the device states (their values are reset; this is reported).
 
-In v1 *Edit* mode only shows that it is not available yet: the dashboard stays visible and its values are locked.
+What *Edit* mode does so far:
+
+- the values are locked: the controls do not change them (`DashboardEditing.IsEditing`, inherited by all controls of the dashboard), the cursor is the arrow;
+- a click selects the control under the pointer (outlined); a right-click also opens the colour chooser for the part under the pointer (see [Colour](#colour)); in *Play* mode a right-click does nothing;
+- the right panel shows the selected control: its label, position in its grid (column, row), size (columns × rows) and display settings (unit, decimals) to change, its three colours (each opens the colour chooser, ✕ makes it inherited), and its device, base, variables and bindings as they are;
+- dragging a control in a grid or section moves it, dragging the handle at the bottom right of the selection sizes it, by whole cells; the control follows the pointer and is placed when it is let go (controls in the way are pushed down, grids grow); the cells of the grid the selected control is in are drawn over it, with the column and row numbers every five cells;
+- every change is an edit (`IEdit`) in the edit history (`EditHistory`): undo (↶, Ctrl+Z) and redo (↷, Ctrl+Y); the history is cleared when a dashboard is closed or another rig is opened. A dashboard or rig counts the edits since it was read or saved, so undoing all of them makes it unchanged again.
+
+Still to come: the rig and parameter tree, the palettes, dragging controls into another grid or section, and adding
+and deleting controls.
 
 ## Schemas
 
@@ -370,7 +427,7 @@ The same rig in XML:
 - `assemblies`, `schemas`: on the rig for all its devices, on a device for that device only (see [Schemas](#schemas)); a relative path is relative to the rig file. A dashboard has them too.
 - `deviceValues`: in the notation of the schemas (`0x10`, `10H` or decimal); written in hex.
 - `endpoint`: the endpoint is matched by its **name** and UMP group. Endpoint ids are not portable (native Windows ids) and do not identify an instrument behind a DIN port. When no endpoint with that name is found, the device is shown as not connected and the user picks another endpoint.
-- `color`: the colour the device's palette is derived from.
+- `color`, `plateColor`, `panelColor`: the colours of the device's controls (see [Colour](#colour)).
 
 ### Dashboard
 
@@ -381,27 +438,27 @@ The same rig in XML:
   "cellSize": 24,
   "devices": [ { "alias": "synth", "mapRoot": "Acme.AddressMap" } ],
   "layout": {
-    "type": "row", "gap": 1,
+    "type": "grid", "size": [37, 10],
     "children": [
-      { "type": "section", "label": "Filter", "direction": "row",
+      { "type": "section", "label": "Filter", "at": [0, 0], "size": [12, 10],
         "device": "synth", "base": "AddressMap.Edit.Filter",
         "children": [
-          { "type": "knob", "label": "Cutoff", "bind": { "value": "Cutoff" } },
-          { "type": "knob", "label": "Resonance", "bind": { "value": "Resonance" }, "color": "#E8590C" }
+          { "type": "knob", "label": "Cutoff", "at": [0, 0], "size": [5, 7], "bind": { "value": "Cutoff" } },
+          { "type": "knob", "label": "Resonance", "at": [5, 0], "size": [5, 7], "bind": { "value": "Resonance" }, "color": "#E8590C" }
         ] },
-      { "type": "envelope", "label": "Amp env", "size": [6, 3], "unit": "ms",
+      { "type": "envelope", "label": "Amp env", "at": [13, 0], "size": [10, 6], "unit": "ms",
         "device": "synth", "base": "AddressMap.Edit.AmpEnv",
         "segments": [
           { "time": "Attack" },
           { "time": "Decay", "level": "Sustain", "hold": true },
           { "time": "Release" }
         ] },
-      { "type": "section", "label": "Stored patch",
+      { "type": "section", "label": "Stored patch", "at": [24, 0], "size": [13, 10],
         "device": "synth", "base": "AddressMap.Programs[$patch].Program",
         "variables": [ { "name": "patch", "value": 0 } ],
         "children": [
-          { "type": "numberBox", "label": "Patch", "bind": { "value": "$patch" } },
-          { "type": "knob", "label": "Level", "bind": { "value": "Level" } }
+          { "type": "numberBox", "label": "Patch", "at": [0, 0], "size": [6, 4], "bind": { "value": "$patch" } },
+          { "type": "knob", "label": "Level", "at": [6, 0], "size": [5, 7], "bind": { "value": "Level" } }
         ] }
     ]
   }
@@ -413,37 +470,37 @@ The same dashboard in XML:
 ```xml
 <dashboard format="jacobi.midi.dashboard/1" name="Lead sound" cellSize="24">
   <device alias="synth" mapRoot="Acme.AddressMap" />
-  <row gap="1">
-    <section label="Filter" direction="row" device="synth" base="AddressMap.Edit.Filter">
-      <knob label="Cutoff">
+  <grid size="37,10">
+    <section label="Filter" at="0,0" size="12,10" device="synth" base="AddressMap.Edit.Filter">
+      <knob label="Cutoff" at="0,0" size="5,7">
         <bind slot="value" parameter="Cutoff" />
       </knob>
-      <knob label="Resonance" color="#E8590C">
+      <knob label="Resonance" at="5,0" size="5,7" color="#E8590C">
         <bind slot="value" parameter="Resonance" />
       </knob>
     </section>
-    <envelope label="Amp env" size="6,3" unit="ms" device="synth" base="AddressMap.Edit.AmpEnv">
+    <envelope label="Amp env" at="13,0" size="10,6" unit="ms" device="synth" base="AddressMap.Edit.AmpEnv">
       <segment time="Attack" />
       <segment time="Decay" level="Sustain" hold="true" />
       <segment time="Release" />
     </envelope>
-    <section label="Stored patch" device="synth" base="AddressMap.Programs[$patch].Program">
+    <section label="Stored patch" at="24,0" size="13,10" device="synth" base="AddressMap.Programs[$patch].Program">
       <variable name="patch" value="0" />
-      <numberBox label="Patch">
+      <numberBox label="Patch" at="0,0" size="6,4">
         <bind slot="value" parameter="$patch" />
       </numberBox>
-      <knob label="Level">
+      <knob label="Level" at="6,0" size="5,7">
         <bind slot="value" parameter="Level" />
       </knob>
     </section>
-  </row>
+  </grid>
 </dashboard>
 ```
 
-- `devices` lists the aliases the dashboard needs with the map root they must have, and optionally a `color` that overrides the rig's colour on this dashboard. Opening a dashboard whose alias is not in the rig asks the user to pick a rig device with the same map root.
+- `devices` lists the aliases the dashboard needs with the map root they must have, and optionally colours (`color`, `plateColor`, `panelColor`) that override the rig's on this dashboard. Opening a dashboard whose alias is not in the rig asks the user to pick a rig device with the same map root.
 - A binding is written as `[device:]path`. The path is a schema path in the notation of the serializer's node references: a repeat item is given by its index (`Programs[5].Program.Level`) or by an index variable (`Programs[$patch].Program.Level`), so the instance is part of the path. The device and the start of the path may come from the `device` and `base` of the control or of a layout control around it; a binding with its own device (`pedalboard:AddressMap.Temporary.Compressor.Attack`) has a full path.
 - `variables` of a layout control: the index variables with their starting value (zero based); see [Index variables](#index-variables).
-- A control without a `size` gets the default size of its type; `at` is only used inside a grid, `grow` only inside a row, column or section.
+- `size` (columns,rows) and, inside a grid or section, `at` (column,row) are written for every control; a file without them gets them when it is opened (see [Layout controls](#layout-controls)). `grow` is only used inside a row or column.
 - Every file names its kind and version in `format`; a file of another kind or version is not read.
 
 ### One model, two formats
@@ -611,7 +668,8 @@ to a level above both applications.
 - [x] First controls and dashboard view (before the synchronisation, which is postponed): the layers (control, face, chrome, palette) with two looks, Foundry and Anodized, to tweak; knob, fader, switch and text; the layout controls; a dashboard is opened with its rig and schema library (`DashboardSession`), the controls follow the device state (`ParameterValue`), with ranges, steps and value types from the data types (`ParameterInfo`); values from dumps; the GP-8 demo; tests of the session.
 - [x] Dashboard canvas with the layout controls and the parameter controls in *Play* mode.
 - [x] Dashboard canvas, done as: index variables as binding targets (`$patch`, `VariableValue`) instead of an index selector control, with the number box (▲/▼) in both kits; controls that re-bind when a variable changes; typing a value (double-click) and reset (Ctrl+click) for all controls; several dashboards on one rig sharing the device states (`RigSession`, `DashboardSession`); the Edit/Play switch (Edit not available yet); the GP-8 compare demo; tests.
-- [ ] Device palettes and control colours.
+- [x] Device palettes and control colours: the palette derived from one colour with contrast (`RgbColor`, `Palette`); the colour cascade in the dashboard builder; colours per look, tints and shades and any colour in a colour chooser (right-click); control and device colours; Save and Save as for the dashboard and the rig; tests.
+- [x] *Edit* mode foundation: values locked, selecting controls, colours by right-click, the property panel (label, size, display settings, colours, bindings shown), undo and redo of every edit; tests of the edit history.
 - [ ] *Edit* mode: rig and parameter tree, drag & drop, control palettes, control panel.
 
 ## Not in v1

@@ -1,5 +1,6 @@
 using Jacobi.Midi.Console.Core.Dashboards;
 using Jacobi.Midi.Console.Core.Files;
+using Jacobi.Midi.Console.Core.Palettes;
 using Xunit;
 
 namespace Jacobi.Midi.Tests.Console;
@@ -17,7 +18,7 @@ public class DashboardFileTests
           <assembly path="Custom.dll" />
           <row gap="1" wrap="true">
             <variable name="patch" value="5" />
-            <section label="Filter" direction="column" device="synth" base="AddressMap.Edit.Filter">
+            <section label="Filter" device="synth" base="AddressMap.Edit.Filter">
               <knob label="Cutoff" unit="Hz" decimals="1">
                 <bind slot="value" parameter="Cutoff" />
               </knob>
@@ -58,7 +59,7 @@ public class DashboardFileTests
             "type": "row", "gap": 1, "wrap": true,
             "variables": [ { "name": "patch", "value": 5 } ],
             "children": [
-              { "type": "section", "label": "Filter", "direction": "column", "device": "synth", "base": "AddressMap.Edit.Filter",
+              { "type": "section", "label": "Filter", "device": "synth", "base": "AddressMap.Edit.Filter",
                 "children": [
                   { "type": "knob", "label": "Cutoff", "unit": "Hz", "decimals": 1, "bind": { "value": "Cutoff" } },
                   { "type": "knob", "label": "Resonance", "color": "#E8590C", "grow": 2, "bind": { "value": "Resonance" } }
@@ -88,7 +89,7 @@ public class DashboardFileTests
 
         Assert.Equal("Lead sound", dashboard.Name);
         Assert.Equal(40, dashboard.CellSize);
-        Assert.Equal([new DashboardDevice("synth", "Acme.AddressMap", "#3D8BFD"), new DashboardDevice("pedalboard", "Gx.AddressMap")], dashboard.Devices);
+        Assert.Equal([new DashboardDevice("synth", "Acme.AddressMap") { Colors = new("#3D8BFD") }, new DashboardDevice("pedalboard", "Gx.AddressMap")], dashboard.Devices);
         Assert.Equal(["Custom.dll"], dashboard.Sources.Assemblies);
 
         var row = dashboard.Layout;
@@ -100,7 +101,6 @@ public class DashboardFileTests
 
         var section = Assert.IsType<LayoutControl>(row.Children[0]);
         Assert.Equal(LayoutControlKind.Section, section.Kind);
-        Assert.Equal(LayoutDirection.Column, section.Direction);
         Assert.Equal(("synth", "AddressMap.Edit.Filter"), (section.Device, section.Base));
 
         var cutoff = Assert.IsType<ValueControl>(section.Children[0]);
@@ -109,7 +109,7 @@ public class DashboardFileTests
         Assert.Equal(new Binding("Cutoff"), cutoff.Bindings[SlotNames.Value]);
 
         var resonance = Assert.IsType<ValueControl>(section.Children[1]);
-        Assert.Equal(("#E8590C", 2), (resonance.Color, resonance.Grow));
+        Assert.Equal(("#E8590C", 2), (resonance.Colors.Accent, resonance.Grow));
 
         var envelope = Assert.IsType<EnvelopeControl>(row.Children[1]);
         Assert.Equal(new CellSize(6, 3), envelope.Size);
@@ -149,6 +149,24 @@ public class DashboardFileTests
         Assert.Equal(written, DashboardFile.Write(DashboardFile.Read(written, format), format));
     }
 
+    [Theory]
+    [InlineData(FileFormat.Xml)]
+    [InlineData(FileFormat.Json)]
+    public void Write_HasTheColoursTheUserChanged(FileFormat format)
+    {
+        var dashboard = DashboardFile.Read(Xml, FileFormat.Xml);
+        var row = dashboard.Layout;
+        var section = (LayoutControl)row.Children[0];
+        section.Colors = new AreaColors(Plate: "#2E3F5C", Panel: "#263B30");
+        section.Children[1].Colors = AreaColors.None;
+
+        var read = DashboardFile.Read(DashboardFile.Write(dashboard, format), format);
+
+        var readSection = (LayoutControl)read.Layout.Children[0];
+        Assert.Equal(new AreaColors(Plate: "#2E3F5C", Panel: "#263B30"), readSection.Colors);
+        Assert.Equal(AreaColors.None, readSection.Children[1].Colors);
+    }
+
     [Fact]
     public void Write_Json_GroupsChildrenByRole()
     {
@@ -170,9 +188,10 @@ public class DashboardFileTests
     [InlineData("""<knob><bind slot="value" parameter="Level[x]" /></knob>""", "'parameter': 'Level[x]'")]
     [InlineData("""<knob><bind slot="value" /></knob>""", "'parameter' is required")]
     [InlineData("""<knob color="red" />""", "is not a colour")]
+    [InlineData("""<knob plateColor="#12345" />""", "'plateColor': '#12345' is not a colour")]
     [InlineData("""<knob size="0,2" />""", "smaller than one cell")]
     [InlineData("""<knob size="two" />""", "not a pair of whole numbers")]
-    [InlineData("""<section direction="diagonal" />""", "'direction': 'diagonal' is not one of row, column")]
+    [InlineData("""<section direction="column" />""", "unknown attribute 'direction'")]
     [InlineData("""<section base="Edit..Filter[" />""", "'base'")]
     [InlineData("""<envelope><segment time="Attack"><bind slot="value" parameter="X" /></segment></envelope>""", "'segment' cannot contain 'bind'")]
     [InlineData("""<dial />""", "'dial' is not a control")]

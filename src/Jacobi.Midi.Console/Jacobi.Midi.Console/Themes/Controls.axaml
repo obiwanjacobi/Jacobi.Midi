@@ -84,6 +84,7 @@
     -->
     <ControlTheme x:Key="ConsoleFaceTheme" TargetType="faces:Face">
         <Setter Property="AccentBrush" Value="{DynamicResource ConsoleAccentBrush}" />
+        <Setter Property="AccentDisplayBrush" Value="{DynamicResource ConsoleAccentDisplayBrush}" />
         <Setter Property="TrackBrush" Value="{DynamicResource ConsoleTrackBrush}" />
         <Setter Property="BodyBrush" Value="{DynamicResource ConsoleBodyBrush}" />
         <Setter Property="SurfaceBrush" Value="{DynamicResource ConsoleSurfaceBrush}" />

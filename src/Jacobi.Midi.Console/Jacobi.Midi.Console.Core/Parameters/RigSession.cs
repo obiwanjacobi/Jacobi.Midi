@@ -1,4 +1,5 @@
 using Jacobi.Midi.Console.Core.Devices;
+using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Core.Rigs;
 using Jacobi.Midi.Console.Core.Schemas;
 
@@ -53,6 +54,6 @@ public sealed class RigSession
         return new RigSession(rig, library, devices, problems);
     }
 
-    /// <summary>The colour of a device in the rig; null when it has none.</summary>
-    public string? ColorOf(string alias) => Rig.Find(alias)?.Color;
+    /// <summary>The colours of a device in the rig; none for a device that is not in it.</summary>
+    public AreaColors ColorsOf(string alias) => Rig.Find(alias)?.Colors ?? AreaColors.None;
 }

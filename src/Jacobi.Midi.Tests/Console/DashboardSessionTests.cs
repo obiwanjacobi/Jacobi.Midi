@@ -2,6 +2,7 @@ using Jacobi.BinarySerializer.Execution;
 using Jacobi.Midi.Console.Core.Dashboards;
 using Jacobi.Midi.Console.Core.Devices;
 using Jacobi.Midi.Console.Core.Files;
+using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Core.Parameters;
 using Jacobi.Midi.Console.Core.Rigs;
 using Xunit;
@@ -61,7 +62,7 @@ public class DashboardSessionTests
         Assert.Equal(["gp8"], session.Rig.Devices.Keys);
         Assert.All(Enumerable.Range(0, 6), index => Assert.NotNull(ValueOf(session, index)));
         Assert.IsType<VariableValue>(ValueOf(session, Patch));
-        Assert.Equal("#D4A838", session.ColorOf("gp8"));
+        Assert.Equal(new AreaColors("#D4A838"), session.ColorsOf("gp8"));
     }
 
     [Fact]
@@ -189,6 +190,27 @@ public class DashboardSessionTests
 
         Assert.Equal(77m, ValueOf(second, Sens).Number);
         Assert.Equal(1, changes);
+    }
+
+    [Fact]
+    public void ColorsOf_ADevice_AreTheDashboardsOverTheRigs()
+    {
+        var dashboard = Dashboard.Replace("""<device alias="gp8" mapRoot="Gp8.AddressMap" />""",
+            """<device alias="gp8" mapRoot="Gp8.AddressMap" panelColor="#263B30" />""");
+
+        using var session = Open(dashboard);
+
+        Assert.Equal(new AreaColors("#D4A838", Panel: "#263B30"), session.ColorsOf("gp8"));
+    }
+
+    [Fact]
+    public void SlotDeviceOf_IsTheDeviceOfTheFirstBoundSlot()
+    {
+        using var session = Open();
+
+        Assert.Equal("gp8", session.SlotDeviceOf((ParameterControl)session.Dashboard.Layout.Children[Sens]));
+        // bound to an index variable: no device parameter
+        Assert.Null(session.SlotDeviceOf((ParameterControl)session.Dashboard.Layout.Children[Patch]));
     }
 
     [Fact]

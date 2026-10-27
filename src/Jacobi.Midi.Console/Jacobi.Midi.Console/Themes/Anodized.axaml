@@ -1,7 +1,11 @@
 <!--
     The Anodized look: dark bead-blasted aluminium panels, machined caps, LEDs and OLED displays in the accent.
     The palette (materials and colours for the faces) and the chrome of controls and sections.
-    The accent is the device's colour; a section of a device overrides ConsoleAccentBrush.
+    The accent and the colours derived from it (ConsoleAccentBrush, ConsoleAccentTextBrush, ConsoleAccentDisplayBrush)
+    come from the look in code (see ConsoleLooks and PaletteBrushes); a control or section with a colour of its own or
+    of its device overrides them, and its plate (ConsolePlateBrush, ConsolePlateTextBrush) and panel
+    (ConsoleSectionBrush) with this dictionary's materials tinted. Elements in the accent have the class accentArea:
+    a right-click on them picks the accent, elsewhere the plate or the panel.
 -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -13,8 +17,7 @@
         <GradientStop Offset="1" Color="#17191B" />
     </LinearGradientBrush>
     <SolidColorBrush x:Key="ConsoleTextBrush" Color="#C9CED4" />
-    <SolidColorBrush x:Key="ConsoleLabelBrush" Color="#A9B0B8" />
-    <SolidColorBrush x:Key="ConsoleAccentBrush" Color="#3CC8F0" />
+    <SolidColorBrush x:Key="ConsolePlateTextBrush" Color="#A9B0B8" />
     <SolidColorBrush x:Key="ConsoleTrackBrush" Color="#4A4F55" />
     <!-- a machined cap: the light turns around it -->
     <ConicGradientBrush x:Key="ConsoleBodyBrush" Center="50%,50%">
@@ -40,6 +43,8 @@
         <GradientStop Offset="1" Color="#2C2F33" />
     </LinearGradientBrush>
     <SolidColorBrush x:Key="ConsoleOutlineBrush" Color="#000000" />
+    <!-- the controls are on the panel: no plate until it is given a colour -->
+    <SolidColorBrush x:Key="ConsolePlateBrush" Color="Transparent" />
 
     <!-- typography -->
     <FontFamily x:Key="ConsoleLabelFont">$Default</FontFamily>
@@ -53,38 +58,41 @@
         <Setter Property="Padding" Value="8" />
         <Setter Property="Template">
             <ControlTemplate>
-                <StackPanel Margin="{TemplateBinding Padding}" Spacing="8" HorizontalAlignment="Center">
-                    <TextBlock Text="{TemplateBinding Label, Converter={x:Static chrome:UpperCaseConverter.Instance}}"
-                                       FontFamily="{DynamicResource ConsoleLabelFont}" HorizontalAlignment="Center"
-                               Foreground="{DynamicResource ConsoleLabelBrush}" FontSize="12" LetterSpacing="1.5" />
-                    <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" HorizontalAlignment="Center" />
-                    <Border Background="{DynamicResource ConsoleDisplayBrush}" CornerRadius="3" Padding="8,2" HorizontalAlignment="Center"
-                            BoxShadow="inset 0 1 2 0 #FF000000"
-                            IsVisible="{TemplateBinding ValueText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                        <TextBlock Text="{TemplateBinding ValueText}" Foreground="{DynamicResource ConsoleAccentBrush}"
-                                   FontFamily="{DynamicResource ConsoleDisplayFont}" FontSize="13" />
-                    </Border>
-                </StackPanel>
+                <Border Background="{DynamicResource ConsolePlateBrush}" CornerRadius="4">
+                    <StackPanel Margin="{TemplateBinding Padding}" Spacing="8" HorizontalAlignment="Center">
+                        <TextBlock Text="{TemplateBinding Label, Converter={x:Static chrome:UpperCaseConverter.Instance}}"
+                                   FontFamily="{DynamicResource ConsoleLabelFont}" HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource ConsolePlateTextBrush}" FontSize="12" LetterSpacing="1.5" />
+                        <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" HorizontalAlignment="Center" />
+                        <Border Background="{DynamicResource ConsoleDisplayBrush}" CornerRadius="3" Padding="8,2" HorizontalAlignment="Center"
+                                BoxShadow="inset 0 1 2 0 #FF000000"
+                                IsVisible="{TemplateBinding ValueText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                            <TextBlock Text="{TemplateBinding ValueText}" Foreground="{DynamicResource ConsoleAccentDisplayBrush}"
+                                       FontFamily="{DynamicResource ConsoleDisplayFont}" FontSize="13" />
+                        </Border>
+                    </StackPanel>
+                </Border>
             </ControlTemplate>
         </Setter>
     </ControlTheme>
 
-    <!-- a section: an aluminium panel with an LED strip and the title in the device's colour -->
+    <!-- a section: an aluminium panel with an LED strip and the title in the device's colour; the title in the top inset
+         (Padding, in cells) -->
     <ControlTheme x:Key="{x:Type chrome:SectionFrame}" TargetType="chrome:SectionFrame">
         <Setter Property="Template">
             <ControlTemplate>
                 <Border Background="{DynamicResource ConsoleSectionBrush}" BorderBrush="#0F1012" BorderThickness="1" CornerRadius="6"
                         BoxShadow="inset 0 1 0 0 #24FFFFFF, 0 8 18 0 #73000000">
-                    <Grid ColumnDefinitions="3,*">
-                        <Border Background="{DynamicResource ConsoleAccentBrush}" Margin="0,16" CornerRadius="0,2,2,0" />
-                        <StackPanel Grid.Column="1" Margin="16,12,18,16" Spacing="10">
-                            <TextBlock Text="{TemplateBinding Header, Converter={x:Static chrome:UpperCaseConverter.Instance}}"
-                                       FontFamily="{DynamicResource ConsoleLabelFont}"
-                                       IsVisible="{TemplateBinding Header, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                       Foreground="{DynamicResource ConsoleAccentBrush}" FontSize="13" FontWeight="SemiBold" LetterSpacing="2.5" />
-                            <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" />
-                        </StackPanel>
-                    </Grid>
+                    <Panel>
+                        <Border Classes="accentArea" Background="{DynamicResource ConsoleAccentBrush}" Width="3" Margin="0,16"
+                                HorizontalAlignment="Left" CornerRadius="0,2,2,0" />
+                        <TextBlock Classes="accentArea" Background="Transparent" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="20,14,0,0"
+                                   Text="{TemplateBinding Header, Converter={x:Static chrome:UpperCaseConverter.Instance}}"
+                                   FontFamily="{DynamicResource ConsoleLabelFont}"
+                                   IsVisible="{TemplateBinding Header, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                   Foreground="{DynamicResource ConsoleAccentDisplayBrush}" FontSize="13" FontWeight="SemiBold" LetterSpacing="2.5" />
+                        <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" Margin="{TemplateBinding Padding}" />
+                    </Panel>
                 </Border>
             </ControlTemplate>
         </Setter>

@@ -1,6 +1,7 @@
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.Midi.Console.Core.Dashboards;
 using Jacobi.Midi.Console.Core.Devices;
+using Jacobi.Midi.Console.Core.Palettes;
 
 namespace Jacobi.Midi.Console.Core.Parameters;
 
@@ -54,9 +55,16 @@ public sealed class DashboardSession : IDisposable
     /// <summary>The device state of a device of the dashboard; null when the rig does not have it.</summary>
     public DeviceState? DeviceOf(string alias) => Rig.Devices.GetValueOrDefault(alias);
 
-    /// <summary>The colour of a device: the dashboard's, else the rig's; null when neither gives one.</summary>
-    public string? ColorOf(string alias)
-        => Dashboard.FindDevice(alias)?.Color ?? Rig.ColorOf(alias);
+    /// <summary>The colours of a device: per area the dashboard's, else the rig's; none where neither gives one.</summary>
+    public AreaColors ColorsOf(string alias)
+        => (Dashboard.FindDevice(alias)?.Colors ?? AreaColors.None).Over(Rig.ColorsOf(alias));
+
+    /// <summary>
+    /// The device of the control's first bound slot: the device whose colour the control has when no colour is given
+    /// for it or a layout control around it. Null when no slot is bound to a device parameter.
+    /// </summary>
+    public string? SlotDeviceOf(ParameterControl control)
+        => Resolution.Bindings.FirstOrDefault(binding => binding.Control == control && binding.Parameter is not null)?.Parameter!.Device;
 
     /// <summary>The current (zero based) index of a variable.</summary>
     public int IndexOf(VariableReference variable)

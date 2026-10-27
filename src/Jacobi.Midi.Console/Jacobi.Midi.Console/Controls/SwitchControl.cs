@@ -37,7 +37,7 @@ public sealed class SwitchControl : ParameterControlBase
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
-        if (e.InitialPressMouseButton != MouseButton.Left || !IsEnabled)
+        if (e.InitialPressMouseButton != MouseButton.Left || !CanChange)
             return;
         Toggle();
         e.Handled = true;
@@ -46,7 +46,7 @@ public sealed class SwitchControl : ParameterControlBase
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
-        if (e.Key is not (Key.Space or Key.Enter) || !IsEnabled)
+        if (e.Key is not (Key.Space or Key.Enter) || !CanChange)
             return;
         Toggle();
         e.Handled = true;

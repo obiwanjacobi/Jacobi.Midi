@@ -36,11 +36,10 @@ public static class RigFile
 
         foreach (var device in rig.Devices)
         {
-            var element = root.Add(new FileElement(DeviceName, FileRoles.Devices)
+            var element = root.Add(ConsoleFile.SetColors(new FileElement(DeviceName, FileRoles.Devices)
                 .Set("alias", device.Alias)
                 .Set("name", device.Name)
-                .Set("mapRoot", device.MapRoot)
-                .Set("color", device.Color));
+                .Set("mapRoot", device.MapRoot), device.Colors));
             ConsoleFile.AddSources(element, device.Sources);
             foreach (var (name, value) in device.DeviceValues)
             {
@@ -134,7 +133,7 @@ public static class RigFile
             Alias = element.GetRequired("alias"),
             Name = element.Get("name"),
             MapRoot = element.GetRequired("mapRoot"),
-            Color = ConsoleFile.GetColor(element, "color"),
+            Colors = ConsoleFile.GetColors(element),
             DeviceValues = values,
             Endpoint = endpoint,
             Sources = new SchemaSources { Assemblies = assemblies, Schemas = schemas },

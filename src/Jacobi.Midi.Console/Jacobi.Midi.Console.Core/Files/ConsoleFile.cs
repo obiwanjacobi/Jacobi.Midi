@@ -1,4 +1,4 @@
-using System.Globalization;
+using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Core.Schemas;
 
 namespace Jacobi.Midi.Console.Core.Files;
@@ -62,13 +62,27 @@ internal static class ConsoleFile
             throw root.Error($"'{FormatAttribute}': '{format}' is not supported; expected '{expected}'.");
     }
 
+    /// <summary>The colours of the areas: <c>color</c> (the accent), <c>plateColor</c> and <c>panelColor</c>.</summary>
+    public static AreaColors GetColors(FileElement element)
+        => new(GetColor(element, ColorAttribute(ColorArea.Accent)), GetColor(element, ColorAttribute(ColorArea.Plate)), GetColor(element, ColorAttribute(ColorArea.Panel)));
+
+    /// <summary>Sets the colours the areas have; see <see cref="GetColors"/>.</summary>
+    public static FileElement SetColors(FileElement element, AreaColors colors)
+    {
+        foreach (var area in AreaColors.Areas)
+            element.Set(ColorAttribute(area), colors[area]);
+        return element;
+    }
+
+    private static string ColorAttribute(ColorArea area)
+        => area == ColorArea.Accent ? "color" : $"{FileNames.Of(area)}Color";
+
     /// <summary>A colour: <c>#RRGGBB</c> or <c>#AARRGGBB</c>.</summary>
     public static string? GetColor(FileElement element, string attribute)
     {
         if (element.Get(attribute) is not { } text)
             return null;
-        return text.Length is 7 or 9 && text[0] == '#'
-            && UInt32.TryParse(text.AsSpan(1), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out _)
+        return RgbColor.TryParse(text, out _)
             ? text
             : throw element.Error($"'{attribute}': '{text}' is not a colour (#RRGGBB or #AARRGGBB).");
     }

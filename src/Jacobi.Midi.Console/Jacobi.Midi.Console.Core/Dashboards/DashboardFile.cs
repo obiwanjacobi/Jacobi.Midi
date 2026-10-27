@@ -36,10 +36,9 @@ public static class DashboardFile
             .Set("cellSize", dashboard.CellSize);
         foreach (var device in dashboard.Devices)
         {
-            root.Add(new FileElement(DeviceName, FileRoles.Devices)
+            root.Add(ConsoleFile.SetColors(new FileElement(DeviceName, FileRoles.Devices)
                 .Set("alias", device.Alias)
-                .Set("mapRoot", device.MapRoot)
-                .Set("color", device.Color));
+                .Set("mapRoot", device.MapRoot), device.Colors));
         }
         ConsoleFile.AddSources(root, dashboard.Sources);
         root.Add(ToElement(dashboard.Layout, FileRoles.Layout));
@@ -58,17 +57,14 @@ public static class DashboardFile
             element.Set("size", size.Columns, size.Rows);
         if (control.At is { } at)
             element.Set("at", at.Column, at.Row);
-        element
-            .Set("grow", control.Grow)
-            .Set("color", control.Color)
+        element.Set("grow", control.Grow);
+        ConsoleFile.SetColors(element, control.Colors)
             .Set("device", control.Device)
             .Set("base", control.Base);
 
         switch (control)
         {
             case LayoutControl layout:
-                if (layout.Direction != LayoutDirection.Row)
-                    element.Set("direction", FileNames.Of(layout.Direction));
                 if (layout.Gap != 0)
                     element.Set("gap", layout.Gap);
                 element.SetFlag("wrap", layout.Wrap);
@@ -165,7 +161,7 @@ public static class DashboardFile
 
     private static DashboardDevice ReadDevice(FileElement element)
     {
-        var device = new DashboardDevice(element.GetRequired("alias"), element.GetRequired("mapRoot"), ConsoleFile.GetColor(element, "color"));
+        var device = new DashboardDevice(element.GetRequired("alias"), element.GetRequired("mapRoot")) { Colors = ConsoleFile.GetColors(element) };
         element.EnsureAllRead();
         return device;
     }
@@ -177,7 +173,7 @@ public static class DashboardFile
         var size = ReadSize(element);
         var at = ReadPosition(element);
         var grow = ConsoleFile.GetInt(element, "grow", minimum: 0);
-        var color = ConsoleFile.GetColor(element, "color");
+        var colors = ConsoleFile.GetColors(element);
         var device = element.Get("device");
         var basePath = ReadBase(element);
 
@@ -188,8 +184,7 @@ public static class DashboardFile
             control = new LayoutControl
             {
                 Kind = layoutKind,
-                Label = label, Size = size, At = at, Grow = grow, Color = color, Device = device, Base = basePath,
-                Direction = element.GetEnum<LayoutDirection>("direction") ?? LayoutDirection.Row,
+                Label = label, Size = size, At = at, Grow = grow, Colors = colors, Device = device, Base = basePath,
                 Gap = ConsoleFile.GetInt(element, "gap", minimum: 0) ?? 0,
                 Wrap = element.GetFlag("wrap"),
                 Variables = ReadVariables(element, children.Where(IsVariable)),
@@ -206,13 +201,13 @@ public static class DashboardFile
             control = kind == ParameterControlKind.Envelope
                 ? new EnvelopeControl
                 {
-                    Label = label, Size = size, At = at, Grow = grow, Color = color, Device = device, Base = basePath,
+                    Label = label, Size = size, At = at, Grow = grow, Colors = colors, Device = device, Base = basePath,
                     Display = display,
                     Segments = [.. element.TakeChildren().Select(ReadSegment)],
                 }
                 : new ValueControl(kind)
                 {
-                    Label = label, Size = size, At = at, Grow = grow, Color = color, Device = device, Base = basePath,
+                    Label = label, Size = size, At = at, Grow = grow, Colors = colors, Device = device, Base = basePath,
                     Display = display,
                     Bindings = ReadBindings(element, kind),
                 };

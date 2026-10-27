@@ -130,7 +130,7 @@ public abstract class RangeControl : ParameterControlBase
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
-        if (e.Handled || Range is not { } range || !IsEnabled || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        if (e.Handled || Range is not { } range || !CanChange || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             return;
 
         e.Pointer.Capture(this);
@@ -176,7 +176,7 @@ public abstract class RangeControl : ParameterControlBase
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
-        if (!IsEnabled)
+        if (!CanChange)
             return;
         Nudge(Math.Sign(e.Delta.Y), e.KeyModifiers.HasFlag(KeyModifiers.Shift));
         e.Handled = true;
@@ -191,7 +191,7 @@ public abstract class RangeControl : ParameterControlBase
             Key.Down or Key.Left => -1,
             _ => 0,
         };
-        if (direction == 0 || !IsEnabled)
+        if (direction == 0 || !CanChange)
             return;
 
         Nudge(direction, e.KeyModifiers.HasFlag(KeyModifiers.Shift));
