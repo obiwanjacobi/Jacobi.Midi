@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
+    <!-- the GP-8 bulk dump of the tests, for the demo dashboard -->
+    <AvaloniaResource Include="..\..\Jacobi.Midi.Tests\Schema\gp8-sysex.syx" Link="Assets\Demo\gp8-sysex.syx" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,6 +26,9 @@
   <ItemGroup>
     <ProjectReference Include="..\Jacobi.Midi.Console.Core\Jacobi.Midi.Console.Core.csproj" />
     <ProjectReference Include="..\..\Jacobi.Midi.Core\Jacobi.Midi.Core.csproj" />
+    <!-- the device assemblies the console preloads -->
+    <ProjectReference Include="..\..\Jacobi.Midi.Roland\Jacobi.Midi.Roland.csproj" />
+    <ProjectReference Include="..\..\Jacobi.Midi.Yamaha\Jacobi.Midi.Yamaha.csproj" />
   </ItemGroup>
 
   <ItemGroup>

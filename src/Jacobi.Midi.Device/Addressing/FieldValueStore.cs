@@ -5,10 +5,12 @@ using Jacobi.BinarySerializer.Processor;
 namespace Jacobi.Midi.Device.Addressing;
 
 /// <summary>
-/// A flat value model that keeps field values by schema path and instance: as a sink it stores what is read, as a
-/// source it provides what it holds (no value for anything else). Used to complete atomic groups (read-modify-write).
+/// A flat value model that keeps field values by schema path and instance (the paths and instances of the map plan):
+/// as a sink it stores what is read, as a source it provides what it holds (no value for anything else). Used by the
+/// message exchange to complete atomic groups (read-modify-write) and by clients that keep the values of a device
+/// (e.g. the console's device state). Not thread-safe.
 /// </summary>
-internal sealed class FieldValueStore : IValueSink, IValueSource
+public sealed class FieldValueStore : IValueSink, IValueSource
 {
     private readonly Dictionary<(string Path, InstancePath Instance), LogicalField> _values = [];
 

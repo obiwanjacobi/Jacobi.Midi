@@ -1,0 +1,56 @@
+<dashboard format="jacobi.midi.dashboard/1" name="GP-8 compare" cellSize="24">
+  <device alias="gp8" mapRoot="Gp8.AddressMap" />
+  <!-- two patches side by side: each section has its own 'patch' -->
+  <row gap="1" device="gp8">
+    <section label="Patch A" direction="column" base="AddressMap.Memory[$patch].Patch">
+      <variable name="patch" value="0" />
+      <row gap="1">
+        <numberBox label="Patch">
+          <bind slot="value" parameter="$patch" />
+        </numberBox>
+        <text label="Name">
+          <bind slot="value" parameter="Name" />
+        </text>
+      </row>
+      <row>
+        <knob label="Volume">
+          <bind slot="value" parameter="MasterVolume" />
+        </knob>
+        <knob label="Drive">
+          <bind slot="value" parameter="TurboOverdrive.Drive" />
+        </knob>
+        <knob label="Delay">
+          <bind slot="value" parameter="DigitalDelay.ELevel" />
+        </knob>
+        <knob label="Chorus">
+          <bind slot="value" parameter="DigitalChorus.ELevel" />
+        </knob>
+      </row>
+    </section>
+    <section label="Patch B" direction="column" base="AddressMap.Memory[$patch].Patch">
+      <variable name="patch" value="1" />
+      <row gap="1">
+        <numberBox label="Patch">
+          <bind slot="value" parameter="$patch" />
+        </numberBox>
+        <text label="Name">
+          <bind slot="value" parameter="Name" />
+        </text>
+      </row>
+      <row>
+        <knob label="Volume">
+          <bind slot="value" parameter="MasterVolume" />
+        </knob>
+        <knob label="Drive">
+          <bind slot="value" parameter="TurboOverdrive.Drive" />
+        </knob>
+        <knob label="Delay">
+          <bind slot="value" parameter="DigitalDelay.ELevel" />
+        </knob>
+        <knob label="Chorus">
+          <bind slot="value" parameter="DigitalChorus.ELevel" />
+        </knob>
+      </row>
+    </section>
+  </row>
+</dashboard>

@@ -1,0 +1,92 @@
+<!--
+    The Anodized look: dark bead-blasted aluminium panels, machined caps, LEDs and OLED displays in the accent.
+    The palette (materials and colours for the faces) and the chrome of controls and sections.
+    The accent is the device's colour; a section of a device overrides ConsoleAccentBrush.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:chrome="using:Jacobi.Midi.Console.Chrome">
+
+    <!-- palette -->
+    <LinearGradientBrush x:Key="ConsoleBackgroundBrush" StartPoint="0%,0%" EndPoint="0%,100%">
+        <GradientStop Offset="0" Color="#25282B" />
+        <GradientStop Offset="1" Color="#17191B" />
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="ConsoleTextBrush" Color="#C9CED4" />
+    <SolidColorBrush x:Key="ConsoleLabelBrush" Color="#A9B0B8" />
+    <SolidColorBrush x:Key="ConsoleAccentBrush" Color="#3CC8F0" />
+    <SolidColorBrush x:Key="ConsoleTrackBrush" Color="#4A4F55" />
+    <!-- a machined cap: the light turns around it -->
+    <ConicGradientBrush x:Key="ConsoleBodyBrush" Center="50%,50%">
+        <GradientStop Offset="0" Color="#D3D7DC" />
+        <GradientStop Offset="0.125" Color="#7B8189" />
+        <GradientStop Offset="0.25" Color="#E8EBEE" />
+        <GradientStop Offset="0.375" Color="#6C727A" />
+        <GradientStop Offset="0.5" Color="#CBD0D5" />
+        <GradientStop Offset="0.625" Color="#787E86" />
+        <GradientStop Offset="0.75" Color="#E1E4E8" />
+        <GradientStop Offset="0.875" Color="#6D737B" />
+        <GradientStop Offset="1" Color="#D3D7DC" />
+    </ConicGradientBrush>
+    <RadialGradientBrush x:Key="ConsoleSurfaceBrush" Center="40%,35%" GradientOrigin="40%,35%" RadiusX="70%" RadiusY="70%">
+        <GradientStop Offset="0" Color="#9AA0A7" />
+        <GradientStop Offset="1" Color="#5C6168" />
+    </RadialGradientBrush>
+    <SolidColorBrush x:Key="ConsolePointerBrush" Color="#F2F4F6" />
+    <SolidColorBrush x:Key="ConsoleDisplayBrush" Color="#060708" />
+    <SolidColorBrush x:Key="ConsoleDisplayTextBrush" Color="#3CC8F0" />
+    <LinearGradientBrush x:Key="ConsoleSectionBrush" StartPoint="0%,0%" EndPoint="0%,100%">
+        <GradientStop Offset="0" Color="#3C4045" />
+        <GradientStop Offset="1" Color="#2C2F33" />
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="ConsoleOutlineBrush" Color="#000000" />
+
+    <!-- typography -->
+    <FontFamily x:Key="ConsoleLabelFont">$Default</FontFamily>
+    <FontFamily x:Key="ConsoleDisplayFont">Cascadia Mono, Consolas, Menlo, monospace</FontFamily>
+
+    <!-- finish -->
+    <x:Double x:Key="ConsoleGlowOpacity">0.3</x:Double>
+
+    <!-- a control: on the panel, with a printed label and an OLED readout in the accent -->
+    <ControlTheme x:Key="{x:Type chrome:ControlChrome}" TargetType="chrome:ControlChrome">
+        <Setter Property="Padding" Value="8" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <StackPanel Margin="{TemplateBinding Padding}" Spacing="8" HorizontalAlignment="Center">
+                    <TextBlock Text="{TemplateBinding Label, Converter={x:Static chrome:UpperCaseConverter.Instance}}"
+                                       FontFamily="{DynamicResource ConsoleLabelFont}" HorizontalAlignment="Center"
+                               Foreground="{DynamicResource ConsoleLabelBrush}" FontSize="12" LetterSpacing="1.5" />
+                    <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" HorizontalAlignment="Center" />
+                    <Border Background="{DynamicResource ConsoleDisplayBrush}" CornerRadius="3" Padding="8,2" HorizontalAlignment="Center"
+                            BoxShadow="inset 0 1 2 0 #FF000000"
+                            IsVisible="{TemplateBinding ValueText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Text="{TemplateBinding ValueText}" Foreground="{DynamicResource ConsoleAccentBrush}"
+                                   FontFamily="{DynamicResource ConsoleDisplayFont}" FontSize="13" />
+                    </Border>
+                </StackPanel>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+    <!-- a section: an aluminium panel with an LED strip and the title in the device's colour -->
+    <ControlTheme x:Key="{x:Type chrome:SectionFrame}" TargetType="chrome:SectionFrame">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{DynamicResource ConsoleSectionBrush}" BorderBrush="#0F1012" BorderThickness="1" CornerRadius="6"
+                        BoxShadow="inset 0 1 0 0 #24FFFFFF, 0 8 18 0 #73000000">
+                    <Grid ColumnDefinitions="3,*">
+                        <Border Background="{DynamicResource ConsoleAccentBrush}" Margin="0,16" CornerRadius="0,2,2,0" />
+                        <StackPanel Grid.Column="1" Margin="16,12,18,16" Spacing="10">
+                            <TextBlock Text="{TemplateBinding Header, Converter={x:Static chrome:UpperCaseConverter.Instance}}"
+                                       FontFamily="{DynamicResource ConsoleLabelFont}"
+                                       IsVisible="{TemplateBinding Header, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                       Foreground="{DynamicResource ConsoleAccentBrush}" FontSize="13" FontWeight="SemiBold" LetterSpacing="2.5" />
+                            <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+</ResourceDictionary>

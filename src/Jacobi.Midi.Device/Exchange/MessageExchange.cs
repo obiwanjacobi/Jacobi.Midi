@@ -308,24 +308,12 @@ public sealed class MessageExchange : IAsyncDisposable
             ?? ExchangeProtocols.Find(map.Protocol.Exchange)
             ?? throw new InvalidOperationException($"The exchange protocol '{map.Protocol.Exchange}' of '{map.Root}' is not known.");
 
-    // the device values of the map root, with the client's values over them; all values the messages need must be known
-    private DeviceValues DeviceFor(AddressMap map)
-    {
-        var device = map.Device.With(_device);
-        var missing = map.RequiredDeviceValues.Where(name => !device.TryGet(name, out _)).ToList();
-        if (missing.Count > 0)
-        {
-            throw new InvalidOperationException($"The device values {String.Join(", ", missing)} are required by the messages of '{map.Root}'; supply them when the exchange is created.");
-        }
-        return device;
-    }
+    // the device values of the map root, with those the exchange was created with over them
+    private DeviceValues DeviceFor(AddressMap map) => map.DeviceFor(_device);
 
-    // Picks the messages for a range (see AddressMap.PlanBlocks). Only messages whose device values are known are used.
+    // Picks the messages for a range (see AddressMap.SelectBlocks).
     private static List<Transfer> SelectBlocks(AddressMap map, PlanRange range, IReadOnlyList<AddressMessage> messages, DeviceValues device)
-    {
-        var usable = messages.Where(m => m.DeviceValueNames.All(name => device.TryGet(name, out _))).ToList();
-        return [.. map.PlanBlocks(range, usable).Select(planned => new Transfer(planned.Message, planned.Block))];
-    }
+        => [.. map.SelectBlocks(range, messages, device).Select(planned => new Transfer(planned.Message, planned.Block))];
 
     // raised by the port, possibly on a background thread
     private void OnReceived(ReadOnlyMemory<byte> sysEx)

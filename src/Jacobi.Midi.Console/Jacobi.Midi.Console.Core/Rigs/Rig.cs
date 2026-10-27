@@ -1,3 +1,5 @@
+using Jacobi.Midi.Console.Core.Schemas;
+
 namespace Jacobi.Midi.Console.Core.Rigs;
 
 /// <summary>
@@ -6,8 +8,8 @@ namespace Jacobi.Midi.Console.Core.Rigs;
 /// </summary>
 public sealed class Rig
 {
-    /// <summary>Schema files beyond the schemas embedded in the device assemblies.</summary>
-    public IReadOnlyList<string> Schemas { get; init; } = [];
+    /// <summary>Assemblies and schema files beyond the built-in ones, for all devices of the rig.</summary>
+    public SchemaSources Sources { get; init; } = SchemaSources.None;
 
     public IReadOnlyList<DeviceInstance> Devices { get; init; } = [];
 
@@ -31,14 +33,17 @@ public sealed class DeviceInstance
     /// <summary>The map root of the device's schema (e.g. <c>Gx700.AddressMap</c>).</summary>
     public required string MapRoot { get; init; }
 
-    /// <summary>The device values the map root does not fix (e.g. <c>deviceId</c>), by name.</summary>
-    public IReadOnlyDictionary<string, long> DeviceValues { get; init; } = new Dictionary<string, long>();
+    /// <summary>The device values the map root does not fix (e.g. <c>deviceId</c>), by name (case-insensitive).</summary>
+    public IReadOnlyDictionary<string, long> DeviceValues { get; init; } = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>How to reach the device; null when it is not connected.</summary>
     public EndpointReference? Endpoint { get; init; }
 
     /// <summary>The colour the device's palette is derived from (<c>#RRGGBB</c>); null for the look's neutral palette.</summary>
     public string? Color { get; init; }
+
+    /// <summary>Assemblies and schema files for this device only: its schema or customisations of it.</summary>
+    public SchemaSources Sources { get; init; } = SchemaSources.None;
 }
 
 /// <summary>

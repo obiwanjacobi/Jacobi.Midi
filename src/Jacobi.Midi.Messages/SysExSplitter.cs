@@ -1,9 +1,9 @@
-namespace Jacobi.Midi.SchemaEditor.Workbench;
+namespace Jacobi.Midi.Messages;
 
 /// <summary>
 /// Splits a byte stream (e.g. the contents of a .syx file) into its SysEx messages (each F0 … F7).
 /// </summary>
-internal static class SysExSplitter
+public static class SysExSplitter
 {
     /// <summary>
     /// Splits <paramref name="data"/> into its messages. Data that does not start with F0 is one message.
@@ -12,7 +12,7 @@ internal static class SysExSplitter
     public static IReadOnlyList<byte[]> Split(byte[] data)
     {
         ArgumentNullException.ThrowIfNull(data);
-        if (data.Length == 0 || data[0] != 0xF0)
+        if (data.Length == 0 || data[0] != SysEx.Start)
         {
             return [data];
         }
@@ -21,11 +21,11 @@ internal static class SysExSplitter
         var start = 0;
         while (start < data.Length)
         {
-            var end = Array.IndexOf(data, (byte)0xF7, start);
+            var end = Array.IndexOf(data, SysEx.End, start);
             var next = end < 0 ? data.Length : end + 1;
             messages.Add(data[start..next]);
             // skip anything between the messages
-            start = Array.IndexOf(data, (byte)0xF0, next);
+            start = Array.IndexOf(data, SysEx.Start, next);
             if (start < 0)
             {
                 break;

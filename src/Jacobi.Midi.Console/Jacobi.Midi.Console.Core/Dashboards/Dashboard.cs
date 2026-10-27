@@ -1,3 +1,5 @@
+using Jacobi.Midi.Console.Core.Schemas;
+
 namespace Jacobi.Midi.Console.Core.Dashboards;
 
 /// <summary>
@@ -6,13 +8,22 @@ namespace Jacobi.Midi.Console.Core.Dashboards;
 /// </summary>
 public sealed class Dashboard
 {
+    /// <summary>The cell size at which the controls are shown at their own size (not scaled).</summary>
+    public const int DefaultCellSize = 24;
+
     public required string Name { get; init; }
 
-    /// <summary>The size of a cell in device independent pixels; the unit of all control sizes.</summary>
-    public int CellSize { get; init; } = 48;
+    /// <summary>
+    /// The size of a cell in device independent pixels: the unit of all sizes, gaps and grid positions. The whole
+    /// dashboard scales with it.
+    /// </summary>
+    public int CellSize { get; init; } = DefaultCellSize;
 
     /// <summary>The device aliases the dashboard needs, with the map root each must have.</summary>
     public IReadOnlyList<DashboardDevice> Devices { get; init; } = [];
+
+    /// <summary>Assemblies and schema files for this dashboard: customisations on top of those of the rig and its devices.</summary>
+    public SchemaSources Sources { get; init; } = SchemaSources.None;
 
     /// <summary>The root of the control tree.</summary>
     public required LayoutControl Layout { get; init; }

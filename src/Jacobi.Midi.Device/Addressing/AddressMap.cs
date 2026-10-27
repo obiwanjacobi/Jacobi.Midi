@@ -344,6 +344,28 @@ internal sealed class AddressMap
         return [.. blocks.OrderBy(t => t.Block.Addresses.Start)];
     }
 
+    /// <summary>
+    /// The blocks to transfer a node range with, using only the messages whose device values are known in
+    /// <paramref name="device"/> (see <see cref="PlanBlocks"/>). Used by the message exchange and for offline data.
+    /// </summary>
+    internal List<(AddressMessage Message, AddressBlock Block)> SelectBlocks(PlanRange range, IReadOnlyList<AddressMessage> messages, DeviceValues device)
+        => PlanBlocks(range, [.. messages.Where(message => message.DeviceValueNames.All(name => device.TryGet(name, out _)))]);
+
+    /// <summary>
+    /// The device values of the map root with the client's values over them; all values the messages need must be known.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">A device value the messages need is not known.</exception>
+    internal DeviceValues DeviceFor(DeviceValues client)
+    {
+        var device = Device.With(client);
+        var missing = RequiredDeviceValues.Where(name => !device.TryGet(name, out _)).ToList();
+        if (missing.Count > 0)
+        {
+            throw new InvalidOperationException($"The device values {String.Join(", ", missing)} are required by the messages of '{Root}'; supply them with the device.");
+        }
+        return device;
+    }
+
     /// <summary>The number of items of a repeat of the map in the address space (<c>midi.repeat</c>, or its constant count); null for any other node.</summary>
     internal int? ItemCount(SchemaPath repeat) => _layout.Find(repeat) is { IsRepeat: true } layout ? layout.Count : null;
 

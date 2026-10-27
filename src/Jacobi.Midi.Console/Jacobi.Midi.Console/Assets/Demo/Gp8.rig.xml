@@ -1,0 +1,5 @@
+<rig format="jacobi.midi.rig/1">
+  <device alias="gp8" name="Boss GP-8" mapRoot="Gp8.AddressMap" color="#D4A838">
+    <deviceValue name="deviceId" value="0x00" />
+  </device>
+</rig>

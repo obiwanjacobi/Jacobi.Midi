@@ -1,0 +1,68 @@
+<dashboard format="jacobi.midi.dashboard/1" name="GP-8 patch" cellSize="24">
+  <device alias="gp8" mapRoot="Gp8.AddressMap" />
+  <column gap="1" device="gp8" base="AddressMap.Memory[$patch].Patch">
+    <variable name="patch" value="0" />
+    <row gap="1">
+      <section label="Patch">
+        <numberBox label="Patch">
+          <bind slot="value" parameter="$patch" />
+        </numberBox>
+        <text label="Name">
+          <bind slot="value" parameter="Name" />
+        </text>
+      </section>
+      <section label="Output">
+        <knob label="Volume">
+          <bind slot="value" parameter="MasterVolume" />
+        </knob>
+      </section>
+    </row>
+    <row gap="1">
+      <section label="Dynamic filter">
+        <switch label="On">
+          <bind slot="value" parameter="EffectSwiches2.DynamicFilterOn" />
+        </switch>
+        <knob label="Sens">
+          <bind slot="value" parameter="DynamicFilter.Sens" />
+        </knob>
+        <knob label="Cutoff">
+          <bind slot="value" parameter="DynamicFilter.CutoffFreq" />
+        </knob>
+        <knob label="Q">
+          <bind slot="value" parameter="DynamicFilter.Q" />
+        </knob>
+      </section>
+      <section label="Delay">
+        <switch label="On">
+          <bind slot="value" parameter="EffectSwiches1.DelayOn" />
+        </switch>
+        <knob label="Level">
+          <bind slot="value" parameter="DigitalDelay.ELevel" />
+        </knob>
+        <knob label="Time" unit="ms">
+          <bind slot="value" parameter="DigitalDelay.DTime" />
+        </knob>
+        <knob label="Feedback">
+          <bind slot="value" parameter="DigitalDelay.Feedback" />
+        </knob>
+      </section>
+    </row>
+    <section label="Equalizer">
+      <switch label="On">
+        <bind slot="value" parameter="EffectSwiches1.EqualizerOn" />
+      </switch>
+      <slider label="High">
+        <bind slot="value" parameter="Equalizer.HiLevel" />
+      </slider>
+      <slider label="Mid">
+        <bind slot="value" parameter="Equalizer.MidLevel" />
+      </slider>
+      <slider label="Low">
+        <bind slot="value" parameter="Equalizer.LoLevel" />
+      </slider>
+      <slider label="Out">
+        <bind slot="value" parameter="Equalizer.OutLevel" />
+      </slider>
+    </section>
+  </column>
+</dashboard>

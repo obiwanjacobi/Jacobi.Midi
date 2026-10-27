@@ -218,6 +218,8 @@ message selects the device map as its body and narrows it to one group occurrenc
   - *Reading:* a read with a map root plan (a dump of the map) ends the repeats after `midi.repeat` items or at the end of the data. When the client selects a map root as the body of an open choice, the adapter narrows the body to the group occurrence the message carries, recognised as `TryReadData` does (any device id for now). When the message is not recognised, the largest group at the address is read as far as the data goes, with a warning.
   - *Roles:* `DescribeRole` tells how an envelope field with a role gets its value when a message carries the map (calculated, fixed by the map root), or null when the client supplies it.
   - *Writing:* the client selects map nodes (`MapOccurrence`: a group, a repeat or one repeat item, by path and instance). `PlanData` gives the blocks and addresses, `WriteData` the messages: split as the message exchange does (one data message, its unit and maximum data size, widened to atomic groups), each with the address and size of its block. The client's value model supplies the whole message: the device values the map root does not fix come from the envelope, the data from the body.
+  - *Offline data of a map* (e.g. a dump in a .syx file), with a value model of the map only: `ReadData` decodes the data messages of the map for a device into the sink, as the exchange decodes what it receives (other messages are skipped with a warning); `EncodeData` writes a range of the map as the data messages the exchange would send (widened to atomic groups, the same choice of messages). The device values and the choice of messages are those of the exchange (`AddressMap.DeviceFor`, `AddressMap.SelectBlocks`).
+- **A value model of a device.** `FieldValueStore` keeps field values by the path and instance of the map plan: as a sink it stores what is read, as a source it gives what it holds. The exchange uses it to complete atomic groups (read-modify-write); a client can use it to keep the values of a device (the console's device state).
 - **Writing.** A data message carries a block that is exactly one group occurrence (with the GP-8 every transfer is a whole, atomic patch).
 - **Replies** (`ack`, `nak`, `error`) are recognised by their constants and device values alone.
 
@@ -255,7 +257,8 @@ Namespace `Jacobi.Midi.Device.Addressing`.
 | `ReceivedData` | A recognised data message: its address, device values and block; `Decode` reads its values into a value model. |
 | `AddressMapException`, `AddressMapProblem`, `AddressMapProblemSeverity` | All problems found in a map and its envelopes, each located at its schema node. |
 | `AddressMapValidator`, `AddressMapTags` | Validate the use of the tags in all schemas, and the tags on their own (names, descriptions, values, the role of a node), for tools such as the Schema Editor. |
-| `AddressMapAdapter`, `MapOccurrence`, `DataPlan`, `EncodedDataMessage` | Reads and writes any message with the client's value model and lets the address maps in the schemas give the item counts, place the data of a message and calculate the addresses of the data messages for a selection of map nodes (for tools such as the Schema Editor). |
+| `AddressMapAdapter`, `MapOccurrence`, `DataPlan`, `EncodedDataMessage` | Reads and writes any message with the client's value model and lets the address maps in the schemas give the item counts, place the data of a message and calculate the addresses of the data messages for a selection of map nodes (for tools such as the Schema Editor); reads and writes the data of a map offline (a dump). |
+| `FieldValueStore` | A flat value model of field values by path and instance of the map plan. |
 
 ## Limitations
 

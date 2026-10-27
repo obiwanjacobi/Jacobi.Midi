@@ -1,7 +1,7 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using Jacobi.Midi.Console.Faces;
+using Jacobi.Midi.Console.Looks;
 using Jacobi.Midi.Console.ViewModels;
 using Jacobi.Midi.Console.Views;
 using Jacobi.Midi.Core;
@@ -24,8 +24,7 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
-        // the faces of the current look; a look switch replaces this resource
-        Resources[Kits.ResourceKey] = Kits.Flat;
+        ConsoleLooks.Apply(this, ConsoleLooks.Foundry);
 #if DEBUG
         this.AttachDeveloperTools();
 #endif
@@ -37,21 +36,29 @@ public partial class App : Application
         {
             desktop.MainWindow = new MainWindow
             {
-                DataContext = new MainViewModel()
+                DataContext = CreateMainViewModel()
             };
         }
         else if (ApplicationLifetime is IActivityApplicationLifetime singleViewFactoryApplicationLifetime)
         {
-            singleViewFactoryApplicationLifetime.MainViewFactory = () => new MainView { DataContext = new MainViewModel() };
+            singleViewFactoryApplicationLifetime.MainViewFactory = () => new MainView { DataContext = CreateMainViewModel() };
         }
         else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
         {
             singleViewPlatform.MainView = new MainView
             {
-                DataContext = new MainViewModel()
+                DataContext = CreateMainViewModel()
             };
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    // until there are recent files, the console starts with the GP-8 demo
+    private static MainViewModel CreateMainViewModel()
+    {
+        var viewModel = new MainViewModel();
+        viewModel.OpenDemo();
+        return viewModel;
     }
 }

@@ -26,8 +26,8 @@ public closed class DashboardControl
     public string? Device { get; init; }
 
     /// <summary>
-    /// The full schema path (from the map root) that the binding paths in and below this control are relative to;
-    /// inherited by the controls inside it. Bases do not stack: the nearest one is used.
+    /// The full schema path (from the map root, with repeat indices) that the binding paths in and below this control
+    /// are relative to; inherited by the controls inside it. Bases do not stack: the nearest one is used.
     /// </summary>
     public string? Base { get; init; }
 }
@@ -98,13 +98,20 @@ public sealed class EnvelopeControl : ParameterControl
 public sealed record EnvelopeSegment(Binding? Time, Binding? Level = null, bool Hold = false);
 
 /// <summary>
-/// A control without MIDI function: it arranges, groups and labels the controls inside it.
+/// A control without MIDI function: it arranges, groups and labels the controls inside it, and may declare the index
+/// variables the bindings inside it use.
 /// </summary>
 public sealed class LayoutControl : DashboardControl
 {
     public required LayoutControlKind Kind { get; init; }
 
     public IReadOnlyList<DashboardControl> Children { get; init; } = [];
+
+    /// <summary>
+    /// The index variables of the controls inside this one (<c>Programs[$patch]</c>). A variable of a nearer layout
+    /// control hides one with the same name further out.
+    /// </summary>
+    public IReadOnlyList<IndexVariable> Variables { get; init; } = [];
 
     /// <summary>The direction a section arranges its children in.</summary>
     public LayoutDirection Direction { get; init; } = LayoutDirection.Row;
@@ -115,6 +122,16 @@ public sealed class LayoutControl : DashboardControl
     /// <summary>Whether a row or column wraps its children onto more lines.</summary>
     public bool Wrap { get; init; }
 }
+
+/// <summary>
+/// An index into a repeat of a device's address space that the user changes in the UI, e.g. the patch number.
+/// Declared on a layout control and used in the paths of the bindings inside it: <c>Programs[$patch].Program.Level</c>.
+/// A parameter control bound to <c>$patch</c> changes it, like any parameter: changing it re-binds the controls that
+/// use it.
+/// </summary>
+/// <param name="Name">The name used in paths after <c>$</c>.</param>
+/// <param name="Value">The zero based index the dashboard starts with.</param>
+public sealed record IndexVariable(string Name, int Value = 0);
 
 /// <summary>The kinds of parameter controls.</summary>
 public enum ParameterControlKind
@@ -191,4 +208,19 @@ public static class SlotNames
 
     /// <summary>The level slot of an envelope segment (zero based index).</summary>
     public static string Level(int segment) => $"segment{segment + 1}.level";
+
+    /// <summary>The slots a control kind has; an envelope's slots follow from its segments (none here).</summary>
+    public static IReadOnlySet<string> Of(ParameterControlKind kind)
+        => kind switch
+        {
+            ParameterControlKind.Slider => SliderSlots,
+            ParameterControlKind.XyPad => XySlots,
+            ParameterControlKind.Envelope => NoSlots,
+            _ => ValueSlots,
+        };
+
+    private static readonly IReadOnlySet<string> ValueSlots = new HashSet<string> { Value };
+    private static readonly IReadOnlySet<string> SliderSlots = new HashSet<string> { Value, Min, Max };
+    private static readonly IReadOnlySet<string> XySlots = new HashSet<string> { X, Y };
+    private static readonly IReadOnlySet<string> NoSlots = new HashSet<string>();
 }

@@ -3,44 +3,62 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:Jacobi.Midi.Console.ViewModels"
-             xmlns:controls="using:Jacobi.Midi.Console.Controls"
+             xmlns:parameters="using:Jacobi.Midi.Console.Core.Parameters"
              mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
              x:Class="Jacobi.Midi.Console.Views.MainView"
              x:DataType="vm:MainViewModel"
              Background="{DynamicResource ConsoleBackgroundBrush}">
 
     <DockPanel>
-        <Border DockPanel.Dock="Top" Padding="24,14" Background="{DynamicResource ConsolePlateBrush}">
-            <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="SemiBold"
-                       Foreground="{DynamicResource ConsoleTextBrush}" />
+        <Border DockPanel.Dock="Top" Padding="20,10" Background="#40000000">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <ComboBox ItemsSource="{Binding Dashboards}" SelectedItem="{Binding SelectedDashboard}" MinWidth="220" FontSize="16">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="parameters:DashboardSession">
+                                <TextBlock Text="{Binding Dashboard.Name}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <Button Content="+" ToolTip.Tip="Open a dashboard next to the open ones" Command="{Binding OpenDashboardCommand}" />
+                    <Button Content="✕" ToolTip.Tip="Close the dashboard" Command="{Binding CloseDashboardCommand}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ToggleButton Content="Edit" IsChecked="{Binding IsEditing}" CornerRadius="4,0,0,4" />
+                    <ToggleButton Content="Play" IsChecked="{Binding IsPlaying}" CornerRadius="0,4,4,0" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                    <Button Content="Open rig…" Command="{Binding OpenRigCommand}" />
+                    <Button Content="Load dump…" Command="{Binding LoadDumpCommand}" />
+                    <ComboBox ItemsSource="{Binding Looks}" SelectedItem="{Binding SelectedLook}" MinWidth="120" />
+                </StackPanel>
+            </Grid>
         </Border>
 
-        <!--
-            Until the dashboard canvas exists: a fixed section that shows the layers at work. The section overrides
-            the accent (as a device palette will), Resonance has its own colour, Tone is bipolar, Drive is unknown.
-        -->
-        <ScrollViewer>
-            <StackPanel Margin="24" Spacing="18" HorizontalAlignment="Left">
-                <Border Background="{DynamicResource ConsolePlateBrush}" CornerRadius="14" Padding="18,14">
-                    <Border.Resources>
-                        <SolidColorBrush x:Key="ConsoleAccentBrush" Color="#D9581A" />
-                    </Border.Resources>
-                    <StackPanel Spacing="10">
-                        <TextBlock Text="Filter · synth" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource ConsoleTextBrush}" />
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <controls:KnobControl Label="Cutoff" Minimum="0" Maximum="127" Value="64" />
-                            <controls:KnobControl Label="Resonance" Value="35">
-                                <controls:KnobControl.Resources>
-                                    <SolidColorBrush x:Key="ConsoleAccentBrush" Color="#3F8A4A" />
-                                </controls:KnobControl.Resources>
-                            </controls:KnobControl>
-                            <controls:KnobControl Label="Tone" Minimum="-50" Maximum="50" Value="18" />
-                            <controls:KnobControl Label="Drive" />
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
+        <Border DockPanel.Dock="Bottom" Padding="20,6" Background="#40000000">
+            <StackPanel Spacing="4">
+                <TextBlock Text="{Binding Status}" Foreground="{DynamicResource ConsoleTextBrush}" FontSize="12" />
+                <Expander Header="{Binding Problems.Count, StringFormat='Problems ({0})'}"
+                          IsVisible="{Binding Problems.Count}">
+                    <ItemsControl ItemsSource="{Binding Problems}" MaxHeight="160">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" Foreground="#FFB4A0" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Expander>
             </StackPanel>
+        </Border>
+
+        <Border DockPanel.Dock="Top" Padding="20,8" Background="#60000000" IsVisible="{Binding IsEditing}">
+            <TextBlock Text="Edit mode is not available yet: the dashboard is shown as it is, its values are locked."
+                       Foreground="{DynamicResource ConsoleTextBrush}" FontSize="12" />
+        </Border>
+
+        <ScrollViewer HorizontalScrollBarVisibility="Auto">
+            <ContentControl x:Name="DashboardHost" Margin="24" HorizontalAlignment="Left" VerticalAlignment="Top"
+                            IsHitTestVisible="{Binding IsPlaying}" />
         </ScrollViewer>
     </DockPanel>
 </UserControl>

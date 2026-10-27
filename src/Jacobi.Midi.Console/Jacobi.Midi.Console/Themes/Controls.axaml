@@ -1,39 +1,13 @@
 <!--
-    The control themes of the console's look: the chrome, the templates of the parameter controls (chrome + face
-    host) and the brushes of the faces. A look replaces these themes and the palette; the controls stay the same.
+    The parts all looks share: the templates of the parameter controls (the chrome around a face host, which takes
+    the face from the kit of the look) and the brushes of the faces (the palette keys). A look supplies the palette,
+    the kit and the chrome themes (see Foundry.axaml, Anodized.axaml).
 -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:chrome="using:Jacobi.Midi.Console.Chrome"
                     xmlns:controls="using:Jacobi.Midi.Console.Controls"
                     xmlns:faces="using:Jacobi.Midi.Console.Faces">
-
-    <ControlTheme x:Key="{x:Type chrome:ControlChrome}" TargetType="chrome:ControlChrome">
-        <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Padding" Value="8" />
-        <Setter Property="CornerRadius" Value="12" />
-        <Setter Property="Template">
-            <ControlTemplate>
-                <Border Background="{TemplateBinding Background}"
-                        CornerRadius="{TemplateBinding CornerRadius}"
-                        Padding="{TemplateBinding Padding}">
-                    <StackPanel Spacing="4" HorizontalAlignment="Center">
-                        <ContentPresenter Name="PART_ContentPresenter"
-                                          Content="{TemplateBinding Content}"
-                                          HorizontalAlignment="Center" />
-                        <TextBlock Text="{TemplateBinding ValueText}"
-                                   HorizontalAlignment="Center"
-                                   FontSize="15" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource ConsoleTextBrush}" />
-                        <TextBlock Text="{TemplateBinding Label}"
-                                   HorizontalAlignment="Center"
-                                   FontSize="12"
-                                   Foreground="{DynamicResource ConsoleLabelBrush}" />
-                    </StackPanel>
-                </Border>
-            </ControlTemplate>
-        </Setter>
-    </ControlTheme>
 
     <ControlTheme x:Key="{x:Type controls:KnobControl}" TargetType="controls:KnobControl">
         <Setter Property="Cursor" Value="SizeNorthSouth" />
@@ -44,12 +18,91 @@
                 </chrome:ControlChrome>
             </ControlTemplate>
         </Setter>
+        <Style Selector="^:disabled">
+            <Setter Property="Opacity" Value="0.5" />
+        </Style>
     </ControlTheme>
 
-    <ControlTheme x:Key="{x:Type faces:ArcKnobFace}" TargetType="faces:ArcKnobFace">
+    <ControlTheme x:Key="{x:Type controls:FaderControl}" TargetType="controls:FaderControl">
+        <Setter Property="Cursor" Value="SizeNorthSouth" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <chrome:ControlChrome Label="{TemplateBinding Label}" ValueText="{TemplateBinding ValueText}">
+                    <faces:FaceHost Kind="Slider" State="{TemplateBinding FaceState}" />
+                </chrome:ControlChrome>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:disabled">
+            <Setter Property="Opacity" Value="0.5" />
+        </Style>
+    </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type controls:SwitchControl}" TargetType="controls:SwitchControl">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <chrome:ControlChrome Label="{TemplateBinding Label}" ValueText="{TemplateBinding ValueText}">
+                    <faces:FaceHost Kind="Switch" State="{TemplateBinding FaceState}" />
+                </chrome:ControlChrome>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:disabled">
+            <Setter Property="Opacity" Value="0.5" />
+        </Style>
+    </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type controls:NumberBoxControl}" TargetType="controls:NumberBoxControl">
+        <Setter Property="Cursor" Value="SizeNorthSouth" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <chrome:ControlChrome Label="{TemplateBinding Label}" ValueText="{TemplateBinding ValueText}">
+                    <faces:FaceHost Kind="NumberBox" State="{TemplateBinding FaceState}" />
+                </chrome:ControlChrome>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:disabled">
+            <Setter Property="Opacity" Value="0.5" />
+        </Style>
+    </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type controls:TextControl}" TargetType="controls:TextControl">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <chrome:ControlChrome Label="{TemplateBinding Label}" ValueText="{TemplateBinding ValueText}">
+                    <faces:FaceHost Kind="Text" State="{TemplateBinding FaceState}" />
+                </chrome:ControlChrome>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:disabled">
+            <Setter Property="Opacity" Value="0.5" />
+        </Style>
+    </ControlTheme>
+
+    <!--
+        every face draws with the same keys of the palette, the typography and the finish;
+        a look gives them other colours, materials, fonts and effects
+    -->
+    <ControlTheme x:Key="ConsoleFaceTheme" TargetType="faces:Face">
         <Setter Property="AccentBrush" Value="{DynamicResource ConsoleAccentBrush}" />
         <Setter Property="TrackBrush" Value="{DynamicResource ConsoleTrackBrush}" />
         <Setter Property="BodyBrush" Value="{DynamicResource ConsoleBodyBrush}" />
+        <Setter Property="SurfaceBrush" Value="{DynamicResource ConsoleSurfaceBrush}" />
         <Setter Property="PointerBrush" Value="{DynamicResource ConsolePointerBrush}" />
+        <Setter Property="DisplayBrush" Value="{DynamicResource ConsoleDisplayBrush}" />
+        <Setter Property="DisplayTextBrush" Value="{DynamicResource ConsoleDisplayTextBrush}" />
+        <Setter Property="OutlineBrush" Value="{DynamicResource ConsoleOutlineBrush}" />
+        <Setter Property="DisplayFont" Value="{DynamicResource ConsoleDisplayFont}" />
+        <Setter Property="GlowOpacity" Value="{DynamicResource ConsoleGlowOpacity}" />
     </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type faces:FoundryKnobFace}" TargetType="faces:FoundryKnobFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
+    <ControlTheme x:Key="{x:Type faces:FoundryFaderFace}" TargetType="faces:FoundryFaderFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
+    <ControlTheme x:Key="{x:Type faces:FoundrySwitchFace}" TargetType="faces:FoundrySwitchFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
+    <ControlTheme x:Key="{x:Type faces:FoundryNumberBoxFace}" TargetType="faces:FoundryNumberBoxFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
+    <ControlTheme x:Key="{x:Type faces:FoundryTextFace}" TargetType="faces:FoundryTextFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
+    <ControlTheme x:Key="{x:Type faces:AnodizedKnobFace}" TargetType="faces:AnodizedKnobFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
+    <ControlTheme x:Key="{x:Type faces:AnodizedFaderFace}" TargetType="faces:AnodizedFaderFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
+    <ControlTheme x:Key="{x:Type faces:AnodizedSwitchFace}" TargetType="faces:AnodizedSwitchFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
+    <ControlTheme x:Key="{x:Type faces:AnodizedNumberBoxFace}" TargetType="faces:AnodizedNumberBoxFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
+    <ControlTheme x:Key="{x:Type faces:AnodizedTextFace}" TargetType="faces:AnodizedTextFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
 </ResourceDictionary>

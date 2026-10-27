@@ -16,16 +16,30 @@ public sealed class Kit(string name, IReadOnlyDictionary<ParameterControlKind, F
 }
 
 /// <summary>
-/// The kits of the console, and the resource key under which the current kit is found.
+/// The kits of the console, and the resource key under which the kit of the current look is found.
 /// </summary>
 public static class Kits
 {
     /// <summary>The resource key of the kit of the current look.</summary>
     public const string ResourceKey = "ConsoleKit";
 
-    /// <summary>The flat kit: arcs, bars and tiles in the device's accent.</summary>
-    public static Kit Flat { get; } = new("flat", new Dictionary<ParameterControlKind, Func<Face>>
+    /// <summary>Industrial: engraved tracks, bakelite and brass, pilot lamps and amber readouts.</summary>
+    public static Kit Foundry { get; } = new("foundry", new Dictionary<ParameterControlKind, Func<Face>>
     {
-        [ParameterControlKind.Knob] = () => new ArcKnobFace(),
+        [ParameterControlKind.Knob] = () => new FoundryKnobFace(),
+        [ParameterControlKind.Slider] = () => new FoundryFaderFace(),
+        [ParameterControlKind.Switch] = () => new FoundrySwitchFace(),
+        [ParameterControlKind.NumberBox] = () => new FoundryNumberBoxFace(),
+        [ParameterControlKind.Text] = () => new FoundryTextFace(),
+    });
+
+    /// <summary>Machined aluminium: LED rings and meters, machined caps and OLED displays.</summary>
+    public static Kit Anodized { get; } = new("anodized", new Dictionary<ParameterControlKind, Func<Face>>
+    {
+        [ParameterControlKind.Knob] = () => new AnodizedKnobFace(),
+        [ParameterControlKind.Slider] = () => new AnodizedFaderFace(),
+        [ParameterControlKind.Switch] = () => new AnodizedSwitchFace(),
+        [ParameterControlKind.NumberBox] = () => new AnodizedNumberBoxFace(),
+        [ParameterControlKind.Text] = () => new AnodizedTextFace(),
     });
 }

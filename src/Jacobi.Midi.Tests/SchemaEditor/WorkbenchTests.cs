@@ -1,3 +1,4 @@
+using Jacobi.Midi.Messages;
 using Jacobi.Midi.SchemaEditor.Assemblies;
 using Jacobi.Midi.SchemaEditor.Instantiate;
 using Jacobi.Midi.SchemaEditor.Midi;

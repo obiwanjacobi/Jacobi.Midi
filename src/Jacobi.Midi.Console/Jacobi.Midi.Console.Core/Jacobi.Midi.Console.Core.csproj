@@ -6,6 +6,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\Jacobi.BinarySerializer\src\Jacobi.BinarySerializer\Jacobi.BinarySerializer.csproj" />
+    <ProjectReference Include="..\..\..\..\Jacobi.BinarySerializer\src\Jacobi.BinarySerializer.Processors\Jacobi.BinarySerializer.Processors.csproj" />
+    <ProjectReference Include="..\..\Jacobi.Midi.Device\Jacobi.Midi.Device.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Jacobi.Midi.Tests" />

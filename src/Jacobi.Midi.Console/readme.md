@@ -29,17 +29,19 @@ Not in v1: see [Not in v1](#not-in-v1).
 
 | Term | Meaning |
 |------|---------|
-| **Rig** | The devices of the user: a list of device instances. Saved in its own file, so the same rig serves all dashboards. |
-| **Device instance** | One device of the rig: an **alias** (`synth`, `pedalboard`), a display name, the **map root** of its schema (e.g. `Gx700.AddressMap`), the `DeviceValues` the map root does not fix (e.g. `deviceId`), how to reach it (the endpoint by name and the UMP group) and its colour. |
+| **Rig** | The devices of the user: a list of device instances, and the assemblies and schema files they need. Saved in its own file, so the same rig serves all dashboards. |
+| **Device instance** | One device of the rig: an **alias** (`synth`, `pedalboard`), a display name, the **map root** of its schema (e.g. `Gx700.AddressMap`), the `DeviceValues` the map root does not fix (e.g. `deviceId`), how to reach it (the endpoint by name and the UMP group), its colour, and its own assemblies and schema files. |
+| **Schema library** | The schemas and processors the console works with, compiled into one `SchemaSet` and `Serializer`: the built-in assemblies plus the assemblies and schema files of the rig, its devices and the dashboard (see [Schemas](#schemas)). |
+| **Index variable** | A repeat index the user changes in the UI, e.g. the patch number: declared on a layout control and used in binding paths as `Programs[$patch]`. Changed by a control bound to `$patch`. |
 | **Parameter** | One field of a device's address map, identified by its schema path and `InstancePath` (e.g. the `Rate` of the phaser in the temporary patch). The display name, value range, steps and option names come from the schema's data type (`min`, `max`, `scale`, `shift`, `options`). |
 | **Dashboard** | A tree of controls: layout controls that contain parameter controls and other layout controls. It refers to devices by alias only, so it is portable between rigs. |
 | **Control** | An element of a dashboard. A **parameter control** (knob, envelope, ...) has named **slots**, each holding one parameter. A **layout control** (row, grid, section, ...) has no slots: it arranges and groups the controls inside it. |
-| **Binding** | What fills a slot: device alias + schema path + instance path. The slots of one control may be bound to parameters of different devices. |
+| **Binding** | What fills a slot: device alias + schema path, with the repeat indices (constant or index variables) in the path. The slots of one control may be bound to parameters of different devices. |
 | **Device state** | The console's value model of one device instance: the last known value of each parameter. All controls bound to the same parameter, on any dashboard, show the same value. |
 | **Face** | The inner part of a parameter control: how its value is drawn (an arc, a ring of LEDs, a schematic symbol). Faces of one style for all control types form a **kit**. |
 | **Chrome** | The outer part of a control or section: the plate or frame around it, with the label and the value text. |
 | **Palette** | The colours a control is drawn with. Each device has its own palette, derived from the device's colour. |
-| **Look** | A named combination of chrome, a kit of faces, a neutral palette, typography and a finish: the style of all controls. v1 has one look (light and dark); choosing and composing looks is v2. |
+| **Look** | A named combination of chrome, a kit of faces, a neutral palette, typography and a finish: the style of all controls. v1 has two ready-made looks to choose from (Foundry, Anodized); composing looks is v2. |
 | **Edit / Play** | The two modes of a dashboard: in *Edit* the layout and bindings are changed, in *Play* the controls are used. |
 
 ### Single place of truth
@@ -60,7 +62,7 @@ dashboard; the user can change the control type afterwards.
 | Slider (horizontal, vertical) | value | one number, or two numbers (min/max), both with a range |
 | Switch | value | a `sys.bool` (e.g. `roland.switch`) |
 | Selector | value | a data type with `options`: a row of segments, or a drop-down list when there are many options |
-| Number box | value | any number, when typing the exact value matters |
+| Number box | value | any number, when typing or stepping the exact value matters; an index variable (`$patch`) |
 | Text | value | a string (a patch name) |
 | XY pad | x, y | two numbers |
 | Envelope | per segment: time, level | a set of envelope parameters |
@@ -76,8 +78,8 @@ together; a segment without a bound level uses a fixed level (0 or the maximum) 
 ### Behaviour of all parameter controls
 
 - Drag vertically or turn the mouse wheel to change the value; with Shift in fine steps.
-- Double-click to type a value.
-- Ctrl+click resets to the default value (the data type's `optionsDefault`, otherwise not available).
+- Double-click to type a value (Enter applies it, Escape cancels; an invalid value keeps the editor open). A number box steps with ▲/▼ instead, so a quick second click there is another step.
+- Ctrl+click resets to the default value: the data type's `optionsDefault`, otherwise the origin of a number (zero within its range) and off for a switch; a text has none.
 - The name and the value are always shown. The value is the logical value of the data type (after `scale` and `shift`); its unit and number of decimals are display settings of the control (see below).
 - A parameter whose value is not known yet (not received from the device, not loaded) is drawn hollow, without a value.
 - Keyboard: Tab moves between controls, the arrow keys change the value.
@@ -113,10 +115,30 @@ an envelope 6×3) and the cell size scales the whole dashboard.
 A layout control can set what its children inherit:
 
 - `device` and `base`: the device alias and the schema path that the bindings inside it are relative to. A section "Filter" with the base `AddressMap.Edit.Filter` holds knobs bound to `Cutoff` and `Resonance`. This is the same `base` a multi-slot control (the envelope) uses for its slots: one mechanism. A `base` is always a full path from the map root; bases do not stack.
+- index variables: see below.
 - the palette: by default the palette of its `device` (see below).
 
 Moving a section moves its controls; copying a section and changing its `base` (e.g. from the first to the second
 oscillator) copies all its bindings.
+
+### Index variables
+
+The parameters of a stored patch are in a repeat of the address map (128 memory patches of the GP-8). Which patch a
+dashboard shows is not fixed: the user selects it. A layout control declares an **index variable** with its starting
+value (e.g. `patch`, 5), and the bindings inside it use it as a repeat index: `AddressMap.Memory[$patch].Patch.Level`
+(directly, or through a `base` such as `AddressMap.Memory[$patch].Patch`). A variable is inherited like `device` and
+`base`; a declaration on a nearer layout control hides one with the same name further out. A variable on the
+dashboard's root applies to the whole dashboard; two sections with their own variable show two patches side by side
+(to compare them).
+
+There is no special selector control: a variable is a binding target like a device parameter. A slot bound to
+`$patch` (`<bind slot="value" parameter="$patch" />`) shows and changes the variable, so any number control selects
+the patch: typically a number box, but a knob or a fader works too.
+
+- A control sees the variable as the item number: the index + 1, from 1 to the number of items of the repeat it indexes, from the address map (`AddressMapAdapter.ItemCount`). A variable used on repeats with different item counts is reported; a variable that indexes no repeat in a binding path has no range and is reported too.
+- Changing the variable resolves the bindings again: the controls that use it are pointed to the newly selected item (`ParameterValue` is re-targeted) and show its values (offline: unknown, or from a loaded dump; online: received from the device, see [Synchronisation](#synchronisation-with-the-device)).
+- Showing the number as a device's own patch name (U01-1, A-11, ...) is a display setting still to be designed.
+- The dashboard file holds the starting value; the selected value is state of the open dashboard.
 
 ## Visual style
 
@@ -153,12 +175,22 @@ blocks (v2, see [Looks](#looks-v2)).
 A face draws the face state with the palette's brushes, nothing else: it never sees the device state, the schema or
 MIDI, and it has no behaviour. The interaction stays in the control, so a knob is dragged the same way whatever face
 it has. A face also tells its preferred size in cells (a ring of LEDs needs more room than a flat arc); the chrome
-and the layout controls adapt to it.
+and the layout controls adapt to it. Sizes in cells are at a reference cell of 24 pixels (`Face.CellPixels`); the
+dashboard as a whole is scaled to its own cell size, in one place, so controls, fonts, gaps and grids scale together.
 
-In Avalonia a control is one class per control type, a face a small control that draws itself (`Render`), chosen by
-key from the look, a chrome a `ControlTheme` of the frame control (also used by sections), and the palette, typography
-and finish are resources. Static parts (plate, track) and the value (arc, pointer) are drawn separately, so a change
-of the value only redraws the value.
+In Avalonia a control is one class per control type, a face a small control that draws itself, chosen by key from
+the look, a chrome a `ControlTheme` of the frame control (also used by sections), and the palette, typography and
+finish are resources. A face draws on two layers: the static parts (a track, a body, a slot: `RenderStatic`) are only
+drawn again when the brushes change or the value becomes known or unknown; the value (an arc, a pointer, lit LEDs:
+`RenderValue`) is drawn again on every change of the value.
+
+The resource keys every look provides (the face themes take them; the chrome templates use them too):
+
+| Layer | Keys |
+|-------|------|
+| Palette | `ConsoleAccentBrush`, `ConsoleTrackBrush`, `ConsoleBodyBrush`, `ConsoleSurfaceBrush`, `ConsolePointerBrush`, `ConsoleDisplayBrush`, `ConsoleDisplayTextBrush`, `ConsoleOutlineBrush`, `ConsoleTextBrush`, `ConsoleLabelBrush`, `ConsoleBackgroundBrush`, `ConsoleSectionBrush` (and look specific ones for its own chrome, e.g. `ConsolePlateBrush`, `ConsoleScrewBrush`) |
+| Typography | `ConsoleLabelFont`, `ConsoleDisplayFont` |
+| Finish | `ConsoleGlowOpacity` (0 draws no glow) |
 
 **Kits.** A face is needed per control type: knob, slider, switch, selector, number box, text, XY pad and envelope.
 Faces that belong together form a kit; a look picks a kit and may override the face of a single control type. Faces of
@@ -187,6 +219,26 @@ shows which device a control belongs to.
 **A colour per control.** The user can give a single control another colour: a swatch of its device's palette, or any
 colour (from which the same palette is derived). Use it to make a control stand out, not to show the device: that is
 what the device palette does.
+
+### Looks in v1
+
+Two ready-made looks, kept simple as the basis for tweaking before more controls are added:
+
+| Look | Faces (kit) | Chrome | Palette |
+|------|-------------|--------|---------|
+| **Foundry** | knob: engraved track, bakelite body, brass cap; fader: dark slot, brass cap; switch: pilot lamp and lever; text: amber readout | a control on a brushed steel plate with four screws, an engraved label and an amber readout; a section on a cast iron panel with a tag in the device colour | iron, steel, bakelite, brass, amber |
+| **Anodized** | knob: ring of LEDs, machined cap; fader: slot with an LED meter; switch: LED bar and push button; text: OLED display | a control on the panel with a printed label and an OLED readout; a section on an aluminium panel with an LED strip and a title in the device colour | dark aluminium, LEDs and OLED in the accent |
+
+Where things are, for tweaking (in `Jacobi.Midi.Console`):
+
+- **Shapes**: the faces in `Faces/FoundryFaces.cs` and `Faces/AnodizedFaces.cs` (drawn in code; shared drawing code in `FaceDrawing`), collected per look in `Kits`.
+- **Colours, materials, fonts and glow**: the palette, typography and finish in `Themes/Foundry.axaml` and `Themes/Anodized.axaml`: the same keys in both (see [Composable controls](#composable-controls)), solid colours or gradients.
+- **Chrome**: the `ControlChrome` and `SectionFrame` control themes in the same two files.
+- **Templates**: `Themes/Controls.axaml` puts a chrome around a face host for each control and gives every face its brushes from the palette keys; it is shared by the looks.
+- **Looks**: `ConsoleLooks` (in `Looks/Look.cs`) lists them; applying one replaces the look's resources and kit and rebuilds the dashboard.
+
+The accent is the device colour of the rig (or the dashboard); a look's own accent is used for controls without a
+device. The look is chosen in the toolbar and not saved yet.
 
 ### Looks (v2)
 
@@ -245,6 +297,35 @@ In *Edit* mode:
 
 In *Play* mode the layout is locked and only the values change.
 
+Several dashboards can be open on one rig; the toolbar switches between them (`Dashboards: [name ▾]`), opens another
+(+) and closes one (✕). They share the rig's device states (`RigSession`), so a parameter has one value on every
+dashboard; each dashboard (`DashboardSession`) has its own index variables. A dashboard that brings its own schemas
+rebuilds the schema library, and with it the device states (their values are reset; this is reported).
+
+In v1 *Edit* mode only shows that it is not available yet: the dashboard stays visible and its values are locked.
+
+## Schemas
+
+The console works with the serializer's own objects: a compiled `SchemaSet` and a `Serializer` with the processors,
+the same objects the message exchange needs to read and write the MIDI messages. The `SchemaLibraryBuilder` gathers
+them, in this order:
+
+1. the built-in assemblies: the serializer's processors (`sys`) and the base `midi` schema with its processors (`SchemaLibraryBuilder.CoreAssemblies`), and the device assemblies the host preloads (Roland, Yamaha, ...);
+2. the assemblies and schema files of the rig;
+3. those of the rig's devices;
+4. those of the dashboard.
+
+An assembly brings its embedded schemas (`.xml`, `.json` resources) and its processor factories. A schema document of a
+later source replaces an earlier one with the same name, so a device or a dashboard can customise a built-in schema;
+the replacement is reported as information. A source that cannot be loaded (a missing file, an assembly that does not
+load, an invalid schema) is reported and the others are still used; schemas that do not compile are reported and the
+library then has no serializer.
+
+With the library, `BindingResolver` checks a dashboard against the schemas: every device's map root must be an address
+map, every binding a field of its device's map (the path starts at the map root, e.g. `AddressMap.…`), every index
+variable must index a repeat of the map and stay below its item count. With the rig it also checks that the rig has the
+dashboard's devices with the same map roots. All problems are reported together.
+
 ## Files
 
 The rig and the dashboards are separate files, in XML or JSON (the format follows the file extension, as with the
@@ -256,12 +337,14 @@ the final names.
 ```json
 {
   "format": "jacobi.midi.rig/1",
+  "assemblies": [ "Acme.Midi.dll" ],
   "schemas": [ "C:/Schemas/Acme.xml" ],
   "devices": [
     {
       "alias": "synth",
       "name": "Acme S-1",
       "mapRoot": "Acme.AddressMap",
+      "schemas": [ "AcmeS1Custom.xml" ],
       "deviceValues": { "deviceId": "0x10" },
       "endpoint": { "name": "USB MIDI Interface", "group": 0 },
       "color": "#3D8BFD"
@@ -270,7 +353,22 @@ the final names.
 }
 ```
 
-- `schemas`: schema files beyond the schemas embedded in the device assemblies (Device, Roland, Yamaha, Korg).
+The same rig in XML:
+
+```xml
+<rig format="jacobi.midi.rig/1">
+  <assembly path="Acme.Midi.dll" />
+  <schema path="C:/Schemas/Acme.xml" />
+  <device alias="synth" name="Acme S-1" mapRoot="Acme.AddressMap" color="#3D8BFD">
+    <schema path="AcmeS1Custom.xml" />
+    <deviceValue name="deviceId" value="0x10" />
+    <endpoint name="USB MIDI Interface" group="0" />
+  </device>
+</rig>
+```
+
+- `assemblies`, `schemas`: on the rig for all its devices, on a device for that device only (see [Schemas](#schemas)); a relative path is relative to the rig file. A dashboard has them too.
+- `deviceValues`: in the notation of the schemas (`0x10`, `10H` or decimal); written in hex.
 - `endpoint`: the endpoint is matched by its **name** and UMP group. Endpoint ids are not portable (native Windows ids) and do not identify an instrument behind a DIN port. When no endpoint with that name is found, the device is shown as not connected and the user picks another endpoint.
 - `color`: the colour the device's palette is derived from.
 
@@ -280,7 +378,7 @@ the final names.
 {
   "format": "jacobi.midi.dashboard/1",
   "name": "Lead sound",
-  "cellSize": 48,
+  "cellSize": 24,
   "devices": [ { "alias": "synth", "mapRoot": "Acme.AddressMap" } ],
   "layout": {
     "type": "row", "gap": 1,
@@ -297,6 +395,13 @@ the final names.
           { "time": "Attack" },
           { "time": "Decay", "level": "Sustain", "hold": true },
           { "time": "Release" }
+        ] },
+      { "type": "section", "label": "Stored patch",
+        "device": "synth", "base": "AddressMap.Programs[$patch].Program",
+        "variables": [ { "name": "patch", "value": 0 } ],
+        "children": [
+          { "type": "numberBox", "label": "Patch", "bind": { "value": "$patch" } },
+          { "type": "knob", "label": "Level", "bind": { "value": "Level" } }
         ] }
     ]
   }
@@ -306,17 +411,15 @@ the final names.
 The same dashboard in XML:
 
 ```xml
-<dashboard format="jacobi.midi.dashboard/1" name="Lead sound" cellSize="48">
-  <devices>
-    <device alias="synth" mapRoot="Acme.AddressMap" />
-  </devices>
+<dashboard format="jacobi.midi.dashboard/1" name="Lead sound" cellSize="24">
+  <device alias="synth" mapRoot="Acme.AddressMap" />
   <row gap="1">
     <section label="Filter" direction="row" device="synth" base="AddressMap.Edit.Filter">
       <knob label="Cutoff">
-        <bind slot="value" path="Cutoff" />
+        <bind slot="value" parameter="Cutoff" />
       </knob>
       <knob label="Resonance" color="#E8590C">
-        <bind slot="value" path="Resonance" />
+        <bind slot="value" parameter="Resonance" />
       </knob>
     </section>
     <envelope label="Amp env" size="6,3" unit="ms" device="synth" base="AddressMap.Edit.AmpEnv">
@@ -324,14 +427,37 @@ The same dashboard in XML:
       <segment time="Decay" level="Sustain" hold="true" />
       <segment time="Release" />
     </envelope>
+    <section label="Stored patch" device="synth" base="AddressMap.Programs[$patch].Program">
+      <variable name="patch" value="0" />
+      <numberBox label="Patch">
+        <bind slot="value" parameter="$patch" />
+      </numberBox>
+      <knob label="Level">
+        <bind slot="value" parameter="Level" />
+      </knob>
+    </section>
   </row>
 </dashboard>
 ```
 
 - `devices` lists the aliases the dashboard needs with the map root they must have, and optionally a `color` that overrides the rig's colour on this dashboard. Opening a dashboard whose alias is not in the rig asks the user to pick a rig device with the same map root.
-- A binding has a device alias, a schema path and, for a parameter inside a repeat, an `instance` (e.g. `[5]`). The device and the start of the path may come from the `device` and `base` of the control or of a layout control around it. In v1 the instance is fixed: a dashboard binds to one place in the device's address space, normally the edit buffer (temporary patch).
+- A binding is written as `[device:]path`. The path is a schema path in the notation of the serializer's node references: a repeat item is given by its index (`Programs[5].Program.Level`) or by an index variable (`Programs[$patch].Program.Level`), so the instance is part of the path. The device and the start of the path may come from the `device` and `base` of the control or of a layout control around it; a binding with its own device (`pedalboard:AddressMap.Temporary.Compressor.Attack`) has a full path.
+- `variables` of a layout control: the index variables with their starting value (zero based); see [Index variables](#index-variables).
 - A control without a `size` gets the default size of its type; `at` is only used inside a grid, `grow` only inside a row, column or section.
-- The model is independent of the format: one model, an XML and a JSON reader/writer, as for the schemas.
+- Every file names its kind and version in `format`; a file of another kind or version is not read.
+
+### One model, two formats
+
+The model is independent of the format (`RigFile`, `DashboardFile`). The mappers turn the model into a tree of
+format-neutral elements (a name, attributes and child elements) and back; one XML and one JSON implementation turn
+such a tree into text and back:
+
+- In **XML** an element is an element: its attributes are attributes, its children child elements, without wrappers.
+- In **JSON** an element is an object: its attributes are properties, its children are grouped in a property by their role (`children`, `segments`, `devices`, `variables` as arrays; `layout`, `endpoint` as an object; `bind`, `deviceValues` as an object of key and value; `assemblies`, `schemas` as an array of values). Elements of different kinds in one role (the controls) give their kind in `type`. These roles are listed in one place (`FileRoles`).
+
+Reading is strict: an unknown attribute or element, a missing required value, an invalid value (a binding, a colour,
+a size) or a duplicate (a device alias, a slot) is reported with its location in the file, e.g.
+`dashboard/row[0]/knob[1]: unknown attribute 'colour'.` Nothing is ignored silently.
 
 ## Synchronisation with the device
 
@@ -342,7 +468,8 @@ builds SysEx messages itself.
 2. **Sync.** The ranges (`PlanRange`) that cover the bound parameters are received (`Receive`) into the device state. The exchange widens a range to the atomic groups it overlaps, so a sync usually delivers more values than are bound; the device state keeps them all.
 3. **Follow.** The exchange listens (`Listen`) on the same ranges, so changes made on the device show up on the dashboard.
 4. **Change.** A control writes the device state, which queues a `Send` of the parameter's range. While a knob is dragged, only the latest value per parameter is kept in the queue, so the device gets as many messages as it can take (paced by `midi.messageInterval`), not one per mouse move.
-5. **Failure.** A block that times out or is rejected (`AddressBlockStatus`) is shown on the controls of its parameters and in the status bar; nothing fails silently.
+5. **Select.** When the user changes an index variable, the bindings are resolved again; the controls that use it get the new instance, and its ranges are received (step 2) and followed (step 3) instead of those of the previous one.
+6. **Failure.** A block that times out or is rejected (`AddressBlockStatus`) is shown on the controls of its parameters and in the status bar; nothing fails silently.
 
 Each device has its own exchange: a control whose slots are bound to different devices sends to each device
 separately. There is no transaction across devices.
@@ -350,6 +477,17 @@ separately. There is no transaction across devices.
 **Offline**, the device state is filled from a `.syx` dump (the data messages are recognised with the address map,
 as with `ReceivedData`) and can be written to a dump again. Synchronisation is the only difference between offline
 and online.
+
+### Device state
+
+`DeviceState` keeps the values of one device instance in a `FieldValueStore` of the Device project, by the path and
+instance of the device's map plan: the identity of a resolved binding (`ParameterReference`). A parameter without a
+value is unknown.
+
+- **Reading and writing.** Controls use `TryGetValue` and `SetValue`; the exchange receives into a sink (`CreateSink`) and sends from `Source`.
+- **Changes.** `ValueChanged` reports every value that changed, with its origin: `User`, `Device` or `Dump`. Setting the known value again reports nothing. The event is raised on the thread that changed the value; the UI marshals it.
+- **Dumps.** `LoadDump` splits a dump into its SysEx messages (`SysExSplitter` of the Messages project) and decodes the data messages of the device's map for this device (`AddressMapAdapter.ReadData`); other messages are skipped and reported. `SaveDump` writes a range of the map as the data messages the exchange would send (`AddressMapAdapter.EncodeData`): widened to atomic groups, all their values must be known.
+- **Lossy values.** A value of a dump that the schema does not describe (a physical value that is not one of the options of its data type) is read as the data type's `optionsDefault` and saved as that: such bytes are not reproduced. The GP-8 bulk dump in the tests has four patches like that (`DynamicFilter.UpDown`, `Compressor.Turbo`).
 
 ### Exchange patterns the console does not support (v2)
 
@@ -442,8 +580,8 @@ keep its Avalonia versions in sync with the Schema Editor's.
 
 | Project | Contents |
 |---------|----------|
-| `Jacobi.Midi.Console.Core` | The support code without UI: rig, dashboard, controls and bindings (`BindingResolver`), the face state (`FaceState`, `ValueRange`); later the XML and JSON readers and writers, the device state and its synchronisation with the message exchange. Tested in `Jacobi.Midi.Tests` (`Console` folder). |
-| `Jacobi.Midi.Console` | The platform independent Avalonia UI (MVVM): parameter controls (`Controls`), faces and kits (`Faces`), chromes (`Chrome`), palette and control themes (`Themes`); later the dashboard canvas, layout controls, looks, rig and parameter tree and edit panels. |
+| `Jacobi.Midi.Console.Core` | The support code without UI: rig, dashboard, controls and bindings (`BindingResolver`), their XML and JSON files (`RigFile`, `DashboardFile`, `Files`), the schema library (`Schemas`), the device state with dumps (`Devices`), an open dashboard and the values its controls follow (`Parameters`), the face state (`FaceState`, `ValueRange`); later the synchronisation with the message exchange. Tested in `Jacobi.Midi.Tests` (`Console` folder). |
+| `Jacobi.Midi.Console` | The platform independent Avalonia UI (MVVM): parameter controls (`Controls`), faces and kits (`Faces`), chromes (`Chrome`), looks (`Looks`, `Themes`), the dashboard view with the layout controls (`Dashboards`), the GP-8 demo (`Assets/Demo`); later the rig and parameter tree and the edit panels. |
 | `Jacobi.Midi.Console.Desktop` | The desktop host; the Windows build references the Windows MIDI backend, as the Schema Editor's desktop host does. |
 | `Jacobi.Midi.Console.Browser` | The browser (WebAssembly) host; without MIDI, so the console works offline there (see [Browser support](#browser-support-ideas-not-in-v1)). |
 
@@ -459,17 +597,20 @@ to a level above both applications.
 
 - [ ] **Sending one parameter.** A data message only carries one whole group occurrence (see [Device todo](../Jacobi.Midi.Device/todo.md)): one field of a non-atomic group, such as a parameter in the GX-700's individual temporary area, cannot be sent yet (`NotSupportedException`). The console sends one parameter per change, so this has to be solved first: an open choice that targets a range in Jacobi.BinarySerializer, and `CreateData`/`Decode` that accept any aligned block.
 - [ ] **The message interval as the pause on the wire** (see [Device todo](../Jacobi.Midi.Device/todo.md)). Dragging a knob streams messages; over a DIN connection the transmission time must be part of the pause.
-- [ ] **A public value store.** The device state needs a value model by path and instance, as the internal `FieldValueStore` of the addressing code is. Make one public implementation and use it in both places.
+- [x] **A public value store.** The device state needs a value model by path and instance, as the internal `FieldValueStore` of the addressing code is. Make one public implementation and use it in both places.
 
 ## Milestones
 
 - [x] Skeleton: the four projects in the solution; the model types; binding resolution with `device`/`base` inheritance; the face state; the layers proven with one knob (`KnobControl`, `ArcKnobFace` in the flat kit, `ControlChrome`, palette resources); tests.
-- [ ] Model: rig, dashboard, parameter and layout controls, bindings with `device`/`base` inheritance; XML and JSON reading and writing; tests.
-- [ ] Device state: values by parameter, offline loading from and saving to a dump; tests with the test device of the addressing tests.
+- [x] Model: rig, dashboard, parameter and layout controls, bindings with `device`/`base` inheritance; XML and JSON reading and writing; tests.
+- [x] Schemas and index variables: the schema library (built-in assemblies plus the assemblies and schema files of rig, device and dashboard, compiled with the serializer's objects); bindings checked against it; index variables on layout controls with the index selector, their item counts from the address maps; tests with the GP-8 schema.
+- [x] Device state: values by parameter, offline loading from and saving to a dump; tests with the test device of the addressing tests.
 - [ ] Synchronisation: exchanges per device instance, sync, follow and change with the latest-value queue; unsupported devices marked; tests with a fake port.
 - [ ] Shared UI library extracted from the Schema Editor.
-- [ ] Composable controls: control, face, chrome and palette as separate layers with the face state; one kit and one look; all styling through named resources.
-- [ ] Dashboard canvas with the layout controls and the parameter controls in *Play* mode.
+- [x] Composable controls: control, face, chrome and palette as separate layers with the face state; one kit and one look; all styling through named resources.
+- [x] First controls and dashboard view (before the synchronisation, which is postponed): the layers (control, face, chrome, palette) with two looks, Foundry and Anodized, to tweak; knob, fader, switch and text; the layout controls; a dashboard is opened with its rig and schema library (`DashboardSession`), the controls follow the device state (`ParameterValue`), with ranges, steps and value types from the data types (`ParameterInfo`); values from dumps; the GP-8 demo; tests of the session.
+- [x] Dashboard canvas with the layout controls and the parameter controls in *Play* mode.
+- [x] Dashboard canvas, done as: index variables as binding targets (`$patch`, `VariableValue`) instead of an index selector control, with the number box (▲/▼) in both kits; controls that re-bind when a variable changes; typing a value (double-click) and reset (Ctrl+click) for all controls; several dashboards on one rig sharing the device states (`RigSession`, `DashboardSession`); the Edit/Play switch (Edit not available yet); the GP-8 compare demo; tests.
 - [ ] Device palettes and control colours.
 - [ ] *Edit* mode: rig and parameter tree, drag & drop, control palettes, control panel.
 
@@ -477,7 +618,6 @@ to a level above both applications.
 
 - Choosing and composing looks; more kits, chromes and finishes (see [Looks](#looks-v2)).
 - Exchange patterns the message exchange does not have, generic or device specific (see [Exchange patterns the console does not support](#exchange-patterns-the-console-does-not-support-v2)).
-- A "current patch" that changes the instance of many bindings at once; v1 bindings have a fixed instance.
 - Parameters that are not in an address map: CC, NRPN, Program Change, MIDI 2.0 controllers and Property Exchange (see [Parameter sources and targets](#parameter-sources-and-targets)).
 - The patch librarian (it will build on device state snapshots).
 - MIDI learn, mapping a hardware controller onto dashboard controls.

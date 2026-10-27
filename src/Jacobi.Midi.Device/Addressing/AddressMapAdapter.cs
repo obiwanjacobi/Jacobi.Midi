@@ -135,6 +135,69 @@ public sealed class AddressMapAdapter
             addressMap.CreateMessage(plan.Message, block, source, addressMap.Device)))];
     }
 
+    /// <summary>
+    /// Decodes the data messages of a map in <paramref name="messages"/> (e.g. a dump read from a .syx file) into the
+    /// sink, in order, as the message exchange decodes what it receives: a message is the data of the map when it is
+    /// recognised for the device (<see cref="AddressMap.TryReadData"/>). Other messages are skipped with a warning.
+    /// </summary>
+    /// <param name="map">The map root (see <see cref="IsMap"/>).</param>
+    /// <param name="device">The device values the map root does not fix (e.g. <c>deviceId</c>).</param>
+    /// <param name="sink">The value model: paths and instances of the map plan.</param>
+    /// <param name="warnings">Receives the messages that were skipped.</param>
+    /// <returns>The number of messages decoded.</returns>
+    /// <exception cref="AddressMapException">The map is not valid.</exception>
+    /// <exception cref="InvalidOperationException">A device value the messages need is not given.</exception>
+    public int ReadData(SchemaName map, IEnumerable<ReadOnlyMemory<byte>> messages, DeviceValues device, IValueSink sink, ICollection<string> warnings)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentNullException.ThrowIfNull(sink);
+        ArgumentNullException.ThrowIfNull(warnings);
+        var addressMap = MapOf(map);
+        var values = addressMap.DeviceFor(device);
+
+        var decoded = 0;
+        var index = 0;
+        foreach (var message in messages)
+        {
+            index++;
+            if (addressMap.TryReadData(message, values, out var data))
+            {
+                data.Decode(sink);
+                decoded++;
+            }
+            else
+            {
+                warnings.Add($"Message {index} ({message.Length} bytes) is not data of '{addressMap.Root}' for this device; it is skipped.");
+            }
+        }
+        return decoded;
+    }
+
+    /// <summary>
+    /// Encodes a node range of a map as the data messages that transfer it, as the message exchange sends it: widened
+    /// to the atomic groups it overlaps and split into blocks for the data messages whose device values are known.
+    /// The source must hold the values of the whole widened range.
+    /// </summary>
+    /// <param name="range">A range of the map plan.</param>
+    /// <param name="source">The value model: paths and instances of the map plan.</param>
+    /// <param name="device">The device values the map root does not fix (e.g. <c>deviceId</c>).</param>
+    /// <exception cref="AddressMapException">The map is not valid.</exception>
+    /// <exception cref="InvalidOperationException">A device value the messages need is not given, or the source has no value for a field.</exception>
+    /// <exception cref="NotSupportedException">A block is not one group of the map (a data message can only carry a group).</exception>
+    public IReadOnlyList<EncodedDataMessage> EncodeData(PlanRange range, IValueSource source, DeviceValues device)
+    {
+        ArgumentNullException.ThrowIfNull(range);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(device);
+        var addressMap = _maps.Get(range);
+        var values = addressMap.DeviceFor(device);
+        var widened = addressMap.WidenToAtomic(range);
+        return [.. addressMap.SelectBlocks(widened, addressMap.Protocol.DataMessages, values)
+            .Select(planned => new EncodedDataMessage(planned.Message, planned.Block,
+                addressMap.CreateData(planned.Message, planned.Block, source, values)))];
+    }
+
     private (AddressMap Map, DataPlan Plan) Plan(SchemaName envelope, SchemaPath dataChoice, SchemaName map,
         IEnumerable<MapOccurrence> selection, ICollection<string> warnings)
     {

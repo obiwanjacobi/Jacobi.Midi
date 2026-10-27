@@ -1,12 +1,12 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Jacobi.Midi.Console.App"
-             RequestedThemeVariant="Default">
+             RequestedThemeVariant="Dark">
 
+    <!-- the look (palette, chrome, kit) is added in code: see Looks.Apply -->
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceInclude Source="avares://Jacobi.Midi.Console/Themes/Palette.axaml" />
                 <ResourceInclude Source="avares://Jacobi.Midi.Console/Themes/Controls.axaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
