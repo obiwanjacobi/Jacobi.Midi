@@ -47,7 +47,7 @@ public sealed class DeviceInstance
     public AreaColors Colors { get; set; } = AreaColors.None;
 
     /// <summary>Assemblies and schema files for this device only: its schema or customisations of it.</summary>
-    public SchemaSources Sources { get; init; } = SchemaSources.None;
+    public SchemaSources Sources { get; set; } = SchemaSources.None;
 }
 
 /// <summary>

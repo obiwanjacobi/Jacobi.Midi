@@ -111,6 +111,35 @@ internal partial class MainView : UserControl
         ColorChooser.Create(_viewModel, null, device.Alias, area, current, device.Alias).ShowAt(button);
     }
 
+    // the + of the rig: a device for an address map of the schemas (the other root groups in a submenu), or from a
+    // schema file or an assembly
+    private void OnAddDeviceClicked(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || _viewModel is not { } viewModel)
+            return;
+        var menu = new MenuFlyout();
+        var others = new MenuItem { Header = "Other root groups" };
+        foreach (var root in viewModel.MapRoots)
+        {
+            var item = new MenuItem { Header = root, Command = viewModel.AddDeviceCommand, CommandParameter = root };
+            if (viewModel.IsAddressMap(root))
+                menu.Items.Add(item);
+            else
+                others.Items.Add(item);
+        }
+        if (others.Items.Count > 0)
+            menu.Items.Add(others);
+        if (viewModel.MapRoots.Count > 0)
+            menu.Items.Add(new Separator());
+        var fromSchema = new MenuItem { Header = "From a schema file…" };
+        fromSchema.Click += async (_, _) => await viewModel.AddDeviceFrom(SchemaSourceKind.Schema);
+        var fromAssembly = new MenuItem { Header = "From an assembly…" };
+        fromAssembly.Click += async (_, _) => await viewModel.AddDeviceFrom(SchemaSourceKind.Assembly);
+        menu.Items.Add(fromSchema);
+        menu.Items.Add(fromAssembly);
+        menu.ShowAt(button);
+    }
+
     // a press on an item of the rig tree or a palette: it may become a drag
     private void OnDragSourcePressed(object? sender, PointerPressedEventArgs e)
     {

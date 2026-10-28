@@ -1,5 +1,6 @@
 using System.Reflection;
 using Jacobi.BinarySerializer;
+using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Device.Addressing;
@@ -14,14 +15,78 @@ namespace Jacobi.Midi.Console.Core.Schemas;
 /// </summary>
 public sealed class SchemaLibrary
 {
-    internal SchemaLibrary(ProcessorManager processors, SchemaSet? schemas, Serializer? serializer, IReadOnlyList<SchemaLibraryProblem> problems)
+    internal SchemaLibrary(ProcessorManager processors, SchemaSet? schemas, Serializer? serializer, IReadOnlyList<SchemaLibraryProblem> problems,
+        IReadOnlyDictionary<string, string> documentSources)
     {
         Processors = processors;
         Schemas = schemas;
         Serializer = serializer;
         Maps = serializer is null ? null : new AddressMapAdapter(serializer);
         Problems = problems;
+        DocumentSources = documentSources;
     }
+
+    /// <summary>
+    /// Where each schema document of the library comes from, by its name: the path of a schema file, or
+    /// <c>assembly/resource</c> for a schema embedded in an assembly. A document that replaced another has the source of
+    /// the one that replaced it.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> DocumentSources { get; }
+
+    /// <summary>
+    /// The root groups of the schemas (<c>document.group</c>), any of which can be the root of a device: its groups and
+    /// fields are the device's parameters. The address maps (<see cref="Maps"/>) come first: the roots data messages
+    /// carry; whether and how a device's values are sent and received is up to them (the Device project), not to the
+    /// console. Empty when the schemas do not compile.
+    /// </summary>
+    public IReadOnlyList<SchemaName> Roots
+    {
+        get
+        {
+            if (Schemas is null)
+                return [];
+            var roots = Schemas.Documents.SelectMany(document => document.Roots.Select(root => new SchemaName($"{document.Name}{SchemaName.Separator}{root.Name}"))).ToList();
+            return [.. roots.OrderBy(root => Maps?.IsMap(root) == true ? 0 : 1)];
+        }
+    }
+
+    /// <summary>True when the name is a root group of the schemas (see <see cref="Roots"/>).</summary>
+    public bool HasRoot(SchemaName name) => Roots.Contains(name);
+
+    /// <summary>
+    /// The number of items of a repeat of a root: in the address space of an address map (<c>midi.repeat</c>), else the
+    /// repeat's count in the schema; null for a node that is not a repeat, or a repeat whose count is a value.
+    /// </summary>
+    /// <exception cref="AddressMapException">The root is an address map that is not valid.</exception>
+    public int? ItemCount(SchemaName root, string repeat)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(repeat);
+        if (Maps?.IsMap(root) == true)
+            return Maps.ItemCount(root, new SchemaPath(repeat));
+        return Serializer?.GetPlan(root).Find(new SchemaPath(repeat)) is RepeatInfo { Count: int count } ? count : null;
+    }
+
+    /// <summary>
+    /// The roots (see <see cref="Roots"/>, address maps first) of the documents a schema file brought, whether or not they
+    /// replaced documents of the same name (a schema built into the console).
+    /// </summary>
+    public IReadOnlyList<SchemaName> RootsFromFile(string path)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        var fullPath = Path.GetFullPath(path);
+        return RootsWhere(source => Path.IsPathRooted(source) && String.Equals(Path.GetFullPath(source), fullPath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>The roots of the documents an assembly embeds (see <see cref="RootsFromFile"/>).</summary>
+    public IReadOnlyList<SchemaName> RootsFromAssembly(string assemblyName)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(assemblyName);
+        return RootsWhere(source => source.StartsWith(assemblyName + "/", StringComparison.OrdinalIgnoreCase));
+    }
+
+    // the roots whose document (the namespace of the root) comes from a matching source
+    private IReadOnlyList<SchemaName> RootsWhere(Func<string, bool> isFrom)
+        => [.. Roots.Where(root => DocumentSources.TryGetValue(root.Namespace, out var source) && isFrom(source))];
 
     public ProcessorManager Processors { get; }
 
@@ -148,15 +213,18 @@ public sealed class SchemaLibraryBuilder
         {
             var schemas = builder.Compile();
             var serializer = new SerializerBuilder().AddSchemas(schemas).AddProcessors(_processors).Build();
-            return new SchemaLibrary(_processors, schemas, serializer, problems);
+            return new SchemaLibrary(_processors, schemas, serializer, problems, DocumentSources());
         }
         catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or NotSupportedException
             or KeyNotFoundException)
         {
             problems.Add(new("compile", exception.Message));
-            return new SchemaLibrary(_processors, null, null, problems);
+            return new SchemaLibrary(_processors, null, null, problems, DocumentSources());
         }
     }
+
+    private Dictionary<string, string> DocumentSources()
+        => _documents.ToDictionary(document => document.Key, document => document.Value.Source, StringComparer.OrdinalIgnoreCase);
 
     private void AddDocument(string source, Func<SchemaDocument> load)
     {

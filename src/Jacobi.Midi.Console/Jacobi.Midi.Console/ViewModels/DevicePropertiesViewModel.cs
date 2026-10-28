@@ -118,6 +118,17 @@ internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, Dev
     [RelayCommand]
     private void Remove() => owner.RemoveDevice(device);
 
+    /// <summary>The schema files and assemblies of this device only (its schema, or customisations of it).</summary>
+    public IReadOnlyList<SourceViewModel> Sources
+        => [.. device.Sources.Schemas.Select(path => new SourceViewModel(path, "schema", () => owner.RemoveDeviceSource(device, path))),
+            .. device.Sources.Assemblies.Select(path => new SourceViewModel(path, "assembly", () => owner.RemoveDeviceSource(device, path)))];
+
+    [RelayCommand]
+    private Task AddSchemaFile() => owner.AddDeviceSource(device, SchemaSourceKind.Schema);
+
+    [RelayCommand]
+    private Task AddAssembly() => owner.AddDeviceSource(device, SchemaSourceKind.Assembly);
+
     /// <summary>Shows the values as they are now: after an edit or undo.</summary>
     public void Refresh() => OnPropertyChanged(String.Empty);
 
@@ -131,4 +142,15 @@ internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, Dev
 
     private IBrush? BrushOf(ColorArea area)
         => RgbColor.TryParse(device.Colors[area], out var color) ? new SolidColorBrush(PaletteBrushes.ToColor(color.Value)) : null;
+}
+
+/// <summary>A schema file or assembly of the selected device, in the device panel: its name, its path and kind, and a command to remove it.</summary>
+internal sealed partial class SourceViewModel(string path, string kind, Action remove)
+{
+    public string Name => Path.GetFileName(path);
+
+    public string Tip => $"{kind}: {path}";
+
+    [RelayCommand]
+    private void Remove() => remove();
 }

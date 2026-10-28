@@ -70,18 +70,80 @@ public sealed class SchemaLibraryTests : IDisposable
     }
 
     [Fact]
-    public void DeviceWhoseMapRootIsNoMap_IsAProblem()
+    public void DeviceWhoseRootIsNoRootGroup_IsAProblem_AnyRootGroupIsNot()
     {
-        var dashboard = new Dashboard
+        Dashboard With(string root) => new()
         {
             Name = "Test",
-            Devices = [new DashboardDevice("gp8", "Roland.Message16")],
+            Devices = [new DashboardDevice("gp8", root)],
             Layout = new LayoutControl { Kind = LayoutControlKind.Row },
         };
 
-        var resolution = BindingResolver.Resolve(dashboard, new BindingContext { Library = Library });
+        var problem = Assert.Single(BindingResolver.Resolve(With("Gp8.Nothing"), new BindingContext { Library = Library }).Problems);
+        Assert.Contains("'Gp8.Nothing' (device 'gp8') is not a root group", problem.Message);
+        // not an address map, but a root group of the schemas
+        Assert.Empty(BindingResolver.Resolve(With("Roland.Message16"), new BindingContext { Library = Library }).Problems);
+    }
 
-        Assert.Contains("'Roland.Message16' (device 'gp8') is not an address map", Assert.Single(resolution.Problems).Message);
+    [Fact]
+    public void DeviceWithAPlainRoot_WorksLikeAnyOther_ButHasNoDataMessages()
+    {
+        // a plain schema: groups, a repeat and fields, no address map
+        const string schema = """
+            <schema name="Plain">
+              <members>
+                <group name="Settings">
+                  <members>
+                    <field name="Level" datatype="sys.uint8"/>
+                    <repeat name="Slot" count="4">
+                      <members>
+                        <field name="Value" datatype="sys.uint8"/>
+                      </members>
+                    </repeat>
+                  </members>
+                </group>
+              </members>
+            </schema>
+            """;
+        const string rig = """
+            <rig format="jacobi.midi.rig/1">
+              <device alias="plain" mapRoot="Plain.Settings" />
+            </rig>
+            """;
+        const string dashboard = """
+            <dashboard format="jacobi.midi.dashboard/1" name="Test">
+              <device alias="plain" mapRoot="Plain.Settings" />
+              <grid device="plain" base="Settings" size="20,10">
+                <variable name="slot" value="2" />
+                <numberBox at="0,0" size="6,4"><bind slot="value" parameter="Level" /></numberBox>
+                <numberBox at="6,0" size="6,4"><bind slot="value" parameter="Slot[$slot].Value" /></numberBox>
+                <numberBox at="12,0" size="6,4"><bind slot="value" parameter="$slot" /></numberBox>
+              </grid>
+            </dashboard>
+            """;
+        var path = Path.Combine(_directory, "Plain.xml");
+        File.WriteAllText(path, schema);
+        var library = ConsoleLibrary.BuiltIn().AddSchemaFile(path).Build();
+        var plain = new Jacobi.BinarySerializer.Schema.SchemaName("Plain.Settings");
+        Assert.True(library.HasRoot(plain));
+        Assert.False(library.Maps!.IsMap(plain));
+        Assert.Equal(["Plain.Settings"], library.RootsFromFile(path).Select(root => root.FullName));
+        Assert.Equal(4, library.ItemCount(plain, "Settings.Slot"));
+
+        var rigSession = Jacobi.Midi.Console.Core.Parameters.RigSession.Open(Jacobi.Midi.Console.Core.Rigs.RigFile.Read(rig, Jacobi.Midi.Console.Core.Files.FileFormat.Xml), library);
+        using var session = Jacobi.Midi.Console.Core.Parameters.DashboardSession.Open(rigSession, DashboardFile.Read(dashboard, Jacobi.Midi.Console.Core.Files.FileFormat.Xml));
+
+        Assert.Empty(rigSession.Problems);
+        Assert.Empty(session.Problems);
+        Assert.Equal(["Level", "Slot"], rigSession.Devices["plain"].Parameters.Children.Select(node => node.Name));
+        var level = session.ValueOf((ParameterControl)session.Dashboard.Layout.Children[0], SlotNames.Value)!;
+        level.Set(42m);
+        Assert.Equal(42m, level.Number);
+        Assert.Equal(new Jacobi.Midi.Console.Core.Faces.ValueRange(1, 4), session.ValueOf((ParameterControl)session.Dashboard.Layout.Children[2], SlotNames.Value)!.Info.Range);
+
+        var load = rigSession.Devices["plain"].LoadDump([0xF0, 0x41, 0x00, 0x13, 0x12, 0x00, 0x00, 0x00, 0x00, 0xF7]);
+        Assert.Equal(0, load.Decoded);
+        Assert.Contains("not an address map", Assert.Single(load.Warnings));
     }
 
     [Fact]
@@ -179,4 +241,31 @@ public sealed class SchemaLibraryTests : IDisposable
 
     private static ValueControl Knob(string path)
         => new(ParameterControlKind.Knob) { Bindings = new Dictionary<string, Binding> { [SlotNames.Value] = new(path) } };
+
+    [Fact]
+    public void MapRoots_OfASource_AreThoseOfItsDocuments_AlsoWhenTheyReplaceABuiltInOne()
+    {
+        // the GX-700 schema is built in (the Roland assembly); the same schema from a file replaces it
+        var roland = typeof(Jacobi.Midi.Roland.Processors.ProcessorFactory).Assembly;
+        var resource = roland.GetManifestResourceNames().Single(name => name.EndsWith("Gx700.xml", StringComparison.Ordinal));
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}-Gx700.xml");
+        using (var stream = roland.GetManifestResourceStream(resource)!)
+        using (var file = File.Create(path))
+            stream.CopyTo(file);
+        try
+        {
+            var library = ConsoleLibrary.BuiltIn().AddSchemaFile(path).Build();
+
+            var fromFile = library.RootsFromFile(path).Select(name => name.ToString()).ToList();
+            Assert.Equal("Gx700.AddressMap", fromFile[0]);
+            Assert.All(fromFile, root => Assert.StartsWith("Gx700.", root));
+            Assert.DoesNotContain("Gx700.AddressMap", library.RootsFromAssembly(roland.GetName().Name!).Select(name => name.ToString()));
+            Assert.Contains("Gp8.AddressMap", library.RootsFromAssembly(roland.GetName().Name!).Select(name => name.ToString()));
+            Assert.Contains(library.Problems, problem => !problem.IsError && problem.Source == path);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }

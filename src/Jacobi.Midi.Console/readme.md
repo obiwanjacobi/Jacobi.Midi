@@ -30,10 +30,10 @@ Not in v1: see [Not in v1](#not-in-v1).
 | Term | Meaning |
 |------|---------|
 | **Rig** | The devices of the user: a list of device instances, and the assemblies and schema files they need. Saved in its own file, so the same rig serves all dashboards. |
-| **Device instance** | One device of the rig: an **alias** (`synth`, `pedalboard`), a display name, the **map root** of its schema (e.g. `Gx700.AddressMap`), the `DeviceValues` the map root does not fix (e.g. `deviceId`), how to reach it (the endpoint by name and the UMP group), its colour, and its own assemblies and schema files. |
+| **Device instance** | One device of the rig: an **alias** (`synth`, `pedalboard`), a display name, the **map root**: the root group of its schema (any root group; usually an address map, e.g. `Gx700.AddressMap`), the `DeviceValues` the map root does not fix (e.g. `deviceId`), how to reach it (the endpoint by name and the UMP group), its colour, and its own assemblies and schema files. |
 | **Schema library** | The schemas and processors the console works with, compiled into one `SchemaSet` and `Serializer`: the built-in assemblies plus the assemblies and schema files of the rig, its devices and the dashboard (see [Schemas](#schemas)). |
 | **Index variable** | A repeat index the user changes in the UI, e.g. the patch number: declared on a layout control and used in binding paths as `Programs[$patch]`. Changed by a control bound to `$patch`. |
-| **Parameter** | One field of a device's address map, identified by its schema path and `InstancePath` (e.g. the `Rate` of the phaser in the temporary patch). The display name, value range, steps and option names come from the schema's data type (`min`, `max`, `scale`, `shift`, `options`). |
+| **Parameter** | One field of the root group of a device (usually its address map), identified by its schema path and `InstancePath` (e.g. the `Rate` of the phaser in the temporary patch). The display name, value range, steps and option names come from the schema's data type (`min`, `max`, `scale`, `shift`, `options`). |
 | **Dashboard** | A tree of controls: layout controls that contain parameter controls and other layout controls. It refers to devices by alias only, so it is portable between rigs. |
 | **Control** | An element of a dashboard. A **parameter control** (knob, envelope, ...) has named **slots**, each holding one parameter. A **layout control** (row, grid, section, ...) has no slots: it arranges and groups the controls inside it. |
 | **Binding** | What fills a slot: device alias + schema path, with the repeat indices (constant or index variables) in the path. The slots of one control may be bound to parameters of different devices. |
@@ -152,7 +152,7 @@ There is no special selector control: a variable is a binding target like a devi
 `$patch` (`<bind slot="value" parameter="$patch" />`) shows and changes the variable, so any number control selects
 the patch: typically a number box, but a knob or a fader works too.
 
-- A control sees the variable as the item number: the index + 1, from 1 to the number of items of the repeat it indexes, from the address map (`AddressMapAdapter.ItemCount`). A variable used on repeats with different item counts is reported; a variable that indexes no repeat in a binding path has no range and is reported too.
+- A control sees the variable as the item number: the index + 1, from 1 to the number of items of the repeat it indexes, from the address map, or the repeat's own count in a schema without one (`SchemaLibrary.ItemCount`). A variable used on repeats with different item counts is reported; a variable that indexes no repeat in a binding path has no range and is reported too.
 - Changing the variable resolves the bindings again: the controls that use it are pointed to the newly selected item (`ParameterValue` is re-targeted) and show its values (offline: unknown, or from a loaded dump; online: received from the device, see [Synchronisation](#synchronisation-with-the-device)).
 - Showing the number as a device's own patch name (U01-1, A-11, ...) is a display setting still to be designed.
 - The dashboard file holds the starting value; the selected value is state of the open dashboard.
@@ -372,11 +372,12 @@ What *Edit* mode does so far:
 - dragging a field onto the dashboard creates the suggested control (`ControlCatalog.Suggest`: options a selector, a `sys.bool` a switch, a string a text, a number with a range a knob, else a number box), bound to it; a group, a repeat or a device creates a section with its `device` and `base`, a control per field and a nested section per group, laid out by `GridLayout.Complete`; dropping a field on a parameter control binds its slot (`ControlDrops`). A binding is relative to the base around it when it can be (`BindingScope.BindingOf`). A repeat in the path gets the index the base around it gives, else an index variable in scope that indexes the same repeat (`BindingResolution.Repeats`), else a new variable named after the repeat: on the nearest grid or section around a dropped field, on the new section of a dropped group with a number box bound to it. A device the dashboard does not list yet is added;
 - dragging a control over another grid, section, row, column or tabs moves it into it; its bindings stay bound to the same parameters (`ControlMoves`: a moved layout control keeps the device and base it inherited, a binding that would point elsewhere is written again; a variable that is not around its new place is reported). A palette item dropped in a grid or section goes to the cell under the pointer, elsewhere after the other controls;
 - Delete (or *Delete* in the panel) deletes the selected control and the controls inside it; the root stays;
+- the notifications (below the status) list what the console tells: problems (files, schemas, devices, bindings, dumps) in their own colour, and information (a schema that replaces a built-in one, sizes given to a file); the header counts both;
 - Esc, or a click beside the dashboard, selects nothing: the panel shows the dashboard (its name and zoom);
 - tabs: a click on a tab header shows its page and selects it (drop on the page to add to it, on the headers to add a page); the page shown stays shown when the dashboard is built again, and selecting a control shows the pages it is on;
 - a label or separator has only an accent: it is drawn in the look's text or outline colour until it is given a colour (right-click, or the panel);
 - the control panel changes the kind with a button per kind (one single-value control into another, a grid into a section, a row into a column: `ControlCatalog.WithKind`), the bindings of the slots as text (`[device:]path` or `$name`), the device and base (with what is inherited as the placeholder), the index variables of a layout control and the gap and wrap of a row or column. With nothing selected it shows the dashboard's name and zoom (its `cellSize` as a percentage of the default 24 pixels, 25-400%: the whole dashboard scales with it and it is saved with the dashboard); *+* makes a new, empty dashboard on the rig. The panel is made anew for every selection, and a press on the dashboard first takes the text being typed in it, so that nothing of one control is taken for the next;
-- selecting a device in the rig shows its properties: alias, name, map root (one of the address maps of the library, `AddressMapAdapter.MapRoots`), device values, endpoint and colours; *+* adds a device, *Remove* takes it out. Open dashboards that use a renamed or removed alias are reported.
+- selecting a device in the rig shows its properties: alias, name, map root (one of the root groups of the library, `SchemaLibrary.Roots`, address maps first), device values, endpoint, colours and its own schemas (schema files and assemblies, added and removed there); *Remove* takes it out. The *+* of the rig adds a device for an address map of the library (the other root groups in a submenu; named after it: `Gp8.AddressMap` is `gp8`), or from a schema file or an assembly the user picks: it becomes a schema source of the new device, which gets a root group of the documents the file brings (`SchemaLibrary.RootsFromFile`, an address map first), also when such a document replaces a built-in one of the same name; that replacement holds for all devices of the rig, and is shown as information. A change of the schemas builds the library again, which resets the values of the devices (reported); schema files and assemblies are loaded by their path, so not in the browser. Open dashboards that use a renamed or removed alias are reported.
 
 Still to come: choosing the rig device for a dashboard alias that is not in the rig, selecting several controls, and
 copy and paste.
@@ -394,13 +395,14 @@ them, in this order:
 
 An assembly brings its embedded schemas (`.xml`, `.json` resources) and its processor factories. A schema document of a
 later source replaces an earlier one with the same name, so a device or a dashboard can customise a built-in schema;
-the replacement is reported as information. A source that cannot be loaded (a missing file, an assembly that does not
+the replacement is shown as information in the notifications. A source that cannot be loaded (a missing file, an assembly that does not
 load, an invalid schema) is reported and the others are still used; schemas that do not compile are reported and the
 library then has no serializer.
 
-With the library, `BindingResolver` checks a dashboard against the schemas: every device's map root must be an address
-map, every binding a field of its device's map (the path starts at the map root, e.g. `AddressMap.…`), every index
-variable must index a repeat of the map and stay below its item count. With the rig it also checks that the rig has the
+With the library, `BindingResolver` checks a dashboard against the schemas: every device's map root must be a root
+group of the schemas (an address map or not: a plain schema of groups and fields works the same; whether its values can
+be sent and received is up to the Device project, not the console), every binding a field of its device's root (the path
+starts at the root, e.g. `AddressMap.…`), every index variable must index a repeat of it and stay below its item count. With the rig it also checks that the rig has the
 dashboard's devices with the same map roots. All problems are reported together.
 
 ## Files

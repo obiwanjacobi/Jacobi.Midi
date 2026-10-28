@@ -160,11 +160,12 @@ public class DeviceStateTests
     }
 
     [Fact]
-    public void DeviceState_NeedsAnAddressMap()
+    public void DeviceState_NeedsARootGroup_NotAnAddressMap()
     {
-        var device = new DeviceInstance { Alias = "x", MapRoot = "Roland.Message16" };
+        Assert.Throws<ArgumentException>(() => new DeviceState(new DeviceInstance { Alias = "x", MapRoot = "Roland.Nothing" }, ConsoleLibrary.BuiltInLibrary));
 
-        Assert.Throws<ArgumentException>(() => new DeviceState(device, ConsoleLibrary.BuiltInLibrary));
+        var state = new DeviceState(new DeviceInstance { Alias = "x", MapRoot = "Roland.Message16" }, ConsoleLibrary.BuiltInLibrary);
+        Assert.Equal("Roland.Message16", state.MapRoot.FullName);
     }
 
     [Fact]

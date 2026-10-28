@@ -27,7 +27,7 @@ namespace Jacobi.Midi.Console.ViewModels;
 /// Every change is an edit in the <see cref="History"/>, so it can be undone, and marks the dashboard or the rig as
 /// changed; after it the dashboard is resolved again, after an edit of the rig the rig is opened again (the devices that
 /// stay the same keep their values). Save writes them to their files. Every problem (files, schemas, devices, bindings,
-/// dumps) is listed in <see cref="Problems"/>.
+/// dumps) is listed in the <see cref="Notifications"/>, with the information the user should know.
 /// </para>
 /// </summary>
 internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, IDisposable
@@ -37,7 +37,8 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     /// <summary>The size of the root grid of a new dashboard.</summary>
     private static readonly CellSize NewDashboardSize = new(48, 30);
 
-    private readonly List<string> _reports = [];
+    // what the console said about files, dumps and edits, besides the problems of the rig and the dashboard
+    private readonly List<Notification> _reports = [];
     private Rig? _rig;
     private FileOrigin _rigOrigin = new();
     // the dashboards in the order they were opened (the order of Dashboards), with where they were read from
@@ -96,7 +97,22 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     [ObservableProperty]
     public partial string Status { get; private set; } = String.Empty;
 
-    public ObservableCollection<string> Problems { get; } = [];
+    /// <summary>
+    /// What the console tells the user: the problems (of files, schemas, devices, bindings, dumps) and information (a
+    /// schema that replaces a built-in one, sizes given to a file).
+    /// </summary>
+    public ObservableCollection<Notification> Notifications { get; } = [];
+
+    /// <summary>The header of the notifications: how many, and how many of them are problems.</summary>
+    public string NotificationsHeader
+    {
+        get
+        {
+            var problems = Notifications.Count(notification => notification.IsProblem);
+            return problems == 0 ? $"Notifications ({Notifications.Count})"
+                : $"Notifications ({Notifications.Count}, {problems} problem{(problems == 1 ? "" : "s")})";
+        }
+    }
 
     public string Title => SelectedDashboard?.Dashboard.Name ?? "MIDI Console";
 
@@ -159,8 +175,11 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     public IReadOnlyList<PaletteItem> LayoutPalette { get; }
         = [.. ControlCatalog.LayoutKinds.Select(kind => new PaletteItem(kind, IsAvailable: true))];
 
-    /// <summary>The address map roots of the schema library, for the map root of a device.</summary>
-    public IReadOnlyList<string> MapRoots => Rig?.Library.Maps?.MapRoots.Select(name => name.ToString()).ToList() ?? [];
+    /// <summary>The root groups of the schema library (address maps first), for the root of a device.</summary>
+    public IReadOnlyList<string> MapRoots => Rig?.Library.Roots.Select(name => name.ToString()).ToList() ?? [];
+
+    /// <summary>True when a root of the schema library is an address map: a root data messages carry.</summary>
+    public bool IsAddressMap(string root) => Rig?.Library.Maps?.IsMap(new BinarySerializer.Schema.SchemaName(root)) == true;
 
     /// <summary>The control selected in Edit mode; null when none is.</summary>
     [ObservableProperty]
@@ -259,7 +278,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             if (Rig is not null && !dashboard.Sources.IsEmpty)
                 Status = $"'{dashboard.Name}' opened; its schemas were added, so the values of the devices were reset.";
         }
-        RefreshProblems();
+        RefreshNotifications();
     }
 
     /// <summary>Opens a new, empty dashboard on the rig, in Edit mode: a grid to drop controls on.</summary>
@@ -388,7 +407,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         Status = $"{edit.Description}: {color?.ToString() ?? "the look's"}. Save to keep it in the rig.";
         // the dashboard's colour of the device wins: say so, the change does not show here
         if (SelectedDashboard?.Dashboard.FindDevice(alias)?.Colors[area] is { } own)
-            Report($"Device '{alias}'", $"the dashboard gives it its own {name} colour ({own}), so the rig's colour does not show on it.");
+            Inform($"Device '{alias}'", $"the dashboard gives it its own {name} colour ({own}), so the rig's colour does not show on it.");
     }
 
     /// <summary>
@@ -451,7 +470,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         if (given > 0)
         {
             origin.Changes++;
-            Report($"'{origin.Name}'", $"{given} sizes and positions were missing and are given; save it to keep them.");
+            Inform($"'{origin.Name}'", $"{given} sizes and positions were missing and are given; save it to keep them.");
         }
         return dashboard;
     }
@@ -688,22 +707,143 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             Report($"'{dashboard.Name}'", $"it uses device '{old}', which the rig now calls '{alias}'.");
     }
 
-    /// <summary>Adds a device to the rig, with the first address map of the schemas as its map root; it is selected.</summary>
+    /// <summary>
+    /// Adds a device for an address map of the schema library to the rig, named after the map (<c>Gp8.AddressMap</c>:
+    /// <c>gp8</c>); it is selected.
+    /// </summary>
     [RelayCommand]
-    private void AddDevice()
+    private void AddDevice(string mapRoot)
     {
-        if (_rig is not { } rig || MapRoots.Count == 0)
+        if (_rig is null)
         {
-            Status = _rig is null ? "Open a rig first." : "The schemas have no address map to give a device.";
+            Status = "Open a rig first.";
             return;
         }
-        var alias = "device";
-        for (var number = 2; rig.Find(alias) is not null; number++)
-            alias = $"device{number}";
-        var device = new DeviceInstance { Alias = alias, MapRoot = MapRoots[0] };
-        DoRigEdit(new ValueEdit<IReadOnlyList<DeviceInstance>>($"add device '{alias}'", () => rig.Devices, value => rig.Devices = value, [.. rig.Devices, device]));
+        AddDevice(new DeviceInstance { Alias = AliasFor(mapRoot), MapRoot = mapRoot }, rebuildsLibrary: false);
+    }
+
+    /// <summary>
+    /// Adds a device to the rig for the address map of a schema file or an assembly the user picks: the file becomes a
+    /// schema source of the device, and the library is built again with it (the values of the devices are reset).
+    /// </summary>
+    public async Task AddDeviceFrom(SchemaSourceKind kind)
+    {
+        if (_rig is null)
+        {
+            Status = "Open a rig first.";
+            return;
+        }
+        if (await PickSource(kind) is not { } path)
+            return;
+        var device = new DeviceInstance { Alias = "device", MapRoot = String.Empty, Sources = SourcesWith(SchemaSources.None, kind, path) };
+        // the root groups of the documents the file brings (address maps first; also those that replace a built-in
+        // schema of the same name, which is told in the notifications)
+        var library = BuildLibrary(device);
+        var brought = (kind == SchemaSourceKind.Assembly ? library.RootsFromAssembly(AssemblyNameOf(path)) : library.RootsFromFile(path))
+            .Select(name => name.ToString()).ToList();
+        if (brought.Count == 0)
+        {
+            var problems = library.Problems.Where(problem => problem.IsError).Select(problem => $"{problem.Source}: {problem.Message}").ToList();
+            Report($"'{Path.GetFileName(path)}'", problems.Count > 0
+                ? $"no device is added: {String.Join(" ", problems)}"
+                : "it has no root group: no device is added. Add it to a device in its panel when that device's schema needs it.");
+            return;
+        }
+        device.MapRoot = brought[0];
+        device.Alias = AliasFor(device.MapRoot);
+        AddDevice(device, rebuildsLibrary: true);
+        if (brought.Count > 1)
+            Status += $" It brings {brought.Count} root groups; choose another as its root in its panel.";
+    }
+
+    // the name an assembly file has (its embedded schemas are known by it); the file name when it cannot be read
+    private static string AssemblyNameOf(string path)
+    {
+        try
+        {
+            return System.Reflection.AssemblyName.GetAssemblyName(path).Name ?? Path.GetFileNameWithoutExtension(path);
+        }
+        catch (Exception exception) when (exception is IOException or BadImageFormatException or ArgumentException or System.Security.SecurityException)
+        {
+            return Path.GetFileNameWithoutExtension(path);
+        }
+    }
+
+    /// <summary>Adds a schema file or an assembly the user picks to a device; the library is built again with it.</summary>
+    public async Task AddDeviceSource(DeviceInstance device, SchemaSourceKind kind)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        if (await PickSource(kind) is not { } path)
+            return;
+        if (device.Sources.Schemas.Concat(device.Sources.Assemblies).Contains(path, StringComparer.OrdinalIgnoreCase))
+        {
+            Status = $"Device '{device.Alias}' has '{Path.GetFileName(path)}' already.";
+            return;
+        }
+        EditDeviceSources(device, SourcesWith(device.Sources, kind, path), $"'{Path.GetFileName(path)}' added");
+    }
+
+    /// <summary>Takes a schema file or an assembly out of the sources of a device; the library is built again without it.</summary>
+    public void RemoveDeviceSource(DeviceInstance device, string path)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        var sources = device.Sources with
+        {
+            Schemas = [.. device.Sources.Schemas.Where(schema => schema != path)],
+            Assemblies = [.. device.Sources.Assemblies.Where(assembly => assembly != path)],
+        };
+        EditDeviceSources(device, sources, $"'{Path.GetFileName(path)}' removed");
+    }
+
+    private void EditDeviceSources(DeviceInstance device, SchemaSources sources, string shown)
+    {
+        DoRigEdit(new ValueEdit<SchemaSources>($"schemas of device '{device.Alias}'", () => device.Sources, value => device.Sources = value, sources), rebuildsLibrary: true);
+        Status = $"Device '{device.Alias}': {shown}; the schemas were built again, so the values of the devices were reset. Save to keep it in the rig.";
+    }
+
+    private void AddDevice(DeviceInstance device, bool rebuildsLibrary)
+    {
+        var rig = _rig!;
+        DoRigEdit(new ValueEdit<IReadOnlyList<DeviceInstance>>($"add device '{device.Alias}'", () => rig.Devices, value => rig.Devices = value, [.. rig.Devices, device]), rebuildsLibrary);
         SelectedRigItem = RigTree.FirstOrDefault(item => item.Instance == device);
-        Status = $"Device '{alias}' added: choose its map root. Save to keep it in the rig.";
+        Status = $"Device '{device.Alias}' ({device.MapRoot}) added{(rebuildsLibrary ? "; the schemas were built again, so the values of the devices were reset" : "")}. Save to keep it in the rig.";
+    }
+
+    // the alias of a new device: the first part of its map root in lower case (Gp8.AddressMap: gp8), unique in the rig
+    private string AliasFor(string mapRoot)
+    {
+        var name = mapRoot.Split('.')[0].ToLowerInvariant();
+        if (String.IsNullOrEmpty(name) || name.Contains(Binding.DeviceSeparator, StringComparison.Ordinal))
+            name = "device";
+        var alias = name;
+        for (var number = 2; _rig?.Find(alias) is not null; number++)
+            alias = $"{name}{number}";
+        return alias;
+    }
+
+    private static SchemaSources SourcesWith(SchemaSources sources, SchemaSourceKind kind, string path)
+        => kind == SchemaSourceKind.Assembly
+            ? sources with { Assemblies = [.. sources.Assemblies, path] }
+            : sources with { Schemas = [.. sources.Schemas, path] };
+
+    // a schema file or assembly on this computer: they are loaded by their path (not in the browser)
+    private async Task<string?> PickSource(SchemaSourceKind kind)
+    {
+        if (StorageProvider is null)
+            return null;
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = kind == SchemaSourceKind.Assembly ? "Add an assembly with schemas" : "Add a schema file",
+            FileTypeFilter = kind == SchemaSourceKind.Assembly
+                ? [new FilePickerFileType("Assembly") { Patterns = ["*.dll"] }]
+                : [new FilePickerFileType("Schema") { Patterns = ["*.xml", "*.json"] }],
+        });
+        if (files.Count == 0)
+            return null;
+        if (files[0].TryGetLocalPath() is { } path)
+            return path;
+        Report($"'{files[0].Name}'", "schemas and assemblies are loaded from a file on this computer; here the file has no path.");
+        return null;
     }
 
     /// <summary>Takes a device out of the rig; the open dashboards that use it are reported.</summary>
@@ -801,7 +941,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     partial void OnSelectedDashboardChanged(DashboardSession? value)
     {
         SelectedControl = null;
-        RefreshProblems();
+        RefreshNotifications();
     }
 
     // a panel shows another control or device with fresh fields (null first: the template is not reused), so that no
@@ -829,10 +969,14 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             OnEdited();
         }));
 
-    private void DoRigEdit(IEdit edit)
+    // an edit of the rig: the rig is opened again; when it changes the schemas, with a library built again
+    private void DoRigEdit(IEdit edit, bool rebuildsLibrary = false)
         => History.Do(new FileEdit(edit, _rigOrigin, () =>
         {
-            ReopenRig();
+            if (rebuildsLibrary)
+                RebuildRig();
+            else
+                ReopenRig();
             OnEdited();
         }));
 
@@ -885,19 +1029,38 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             return;
         }
 
+        OpenDashboards(RigSession.Open(_rig, BuildLibrary()), select);
+        var problems = Notifications.Count(notification => notification.IsProblem);
+        Status = $"{Dashboards.Count} dashboard(s) opened{(problems > 0 ? $" with {problems} problem(s)" : "")}.";
+    }
+
+    // the schema library: the built-in assemblies and the sources of the rig, its devices (and one more device, to see
+    // what its sources bring) and all open dashboards
+    private SchemaLibrary BuildLibrary(DeviceInstance? extra = null)
+    {
         var builder = new SchemaLibraryBuilder();
         foreach (var assembly in SchemaLibraryBuilder.CoreAssemblies)
             builder.AddAssembly(assembly);
         builder.AddAssembly(typeof(Jacobi.Midi.Roland.Processors.ProcessorFactory).Assembly);
         builder.AddAssembly(typeof(Jacobi.Midi.Yamaha.Processors.ProcessorFactory).Assembly);
-        builder.Add(_rig.Sources, _rigOrigin.Directory);
-        foreach (var device in _rig.Devices)
+        builder.Add(_rig!.Sources, _rigOrigin.Directory);
+        foreach (var device in extra is null ? _rig.Devices : _rig.Devices.Append(extra))
             builder.Add(device.Sources, _rigOrigin.Directory);
         foreach (var (dashboard, origin) in _dashboards)
             builder.Add(dashboard.Sources, origin.Directory);
+        return builder.Build();
+    }
 
-        OpenDashboards(RigSession.Open(_rig, builder.Build()), select);
-        Status = $"{Dashboards.Count} dashboard(s) opened{(Problems.Count > 0 ? $" with {Problems.Count} problem(s)" : "")}.";
+    // after an edit of the schemas of the rig: the library is built again and the rig opened on it (the values of
+    // the devices are reset); the selected dashboard and control stay selected
+    private void RebuildRig()
+    {
+        if (_rig is null || Rig is null)
+            return;
+        var control = SelectedControl;
+        OpenDashboards(RigSession.Open(_rig, BuildLibrary()), select: null);
+        if (control is not null && EntryOf(control).Dashboard is not null)
+            SelectedControl = control;
     }
 
     // after an edit of the rig: the rig is opened again with the same library (its devices that stay the same keep
@@ -927,7 +1090,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             AddSession(DashboardSession.Open(rig, dashboard), select: false);
         SelectedDashboard = Dashboards[Math.Min(selected, Dashboards.Count - 1)];
         RefreshRigTree();
-        RefreshProblems();
+        RefreshNotifications();
     }
 
     private void AddSession(DashboardSession session, bool select)
@@ -954,21 +1117,33 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     private void OnResolved(object? sender, EventArgs e)
     {
         if (ReferenceEquals(sender, SelectedDashboard))
-            RefreshProblems();
+            RefreshNotifications();
     }
 
-    // the problems of the rig, of the selected dashboard and of the files and dumps
-    private void RefreshProblems()
+    // the problems of the rig and of the selected dashboard, the information of the schema library (a schema that
+    // replaces another), and what was told about files, dumps and edits
+    private void RefreshNotifications()
     {
-        Problems.Clear();
-        foreach (var problem in (Rig?.Problems ?? []).Concat(SelectedDashboard?.Problems ?? []).Concat(_reports))
-            Problems.Add(problem);
+        Notifications.Clear();
+        foreach (var problem in (Rig?.Problems ?? []).Concat(SelectedDashboard?.Problems ?? []))
+            Notifications.Add(new Notification(problem, IsProblem: true));
+        foreach (var information in Rig?.Library.Problems.Where(problem => !problem.IsError) ?? [])
+            Notifications.Add(new Notification($"{information.Source}: {information.Message}", IsProblem: false));
+        foreach (var report in _reports)
+            Notifications.Add(report);
+        OnPropertyChanged(nameof(NotificationsHeader));
     }
 
-    private void Report(string what, string message)
+    // a problem: something did not work, or will not
+    private void Report(string what, string message) => Notify(what, message, isProblem: true);
+
+    // information the user should know, but not a problem
+    private void Inform(string what, string message) => Notify(what, message, isProblem: false);
+
+    private void Notify(string what, string message, bool isProblem)
     {
-        _reports.Add($"{what}: {message}");
-        RefreshProblems();
+        _reports.Add(new Notification($"{what}: {message}", isProblem));
+        RefreshNotifications();
         Status = $"{what}.";
     }
 
@@ -1033,7 +1208,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         var saved = FileOrigin.Of(file);
         // relative schema paths are read relative to the file: in another folder they point elsewhere
         if (saved.Directory != origin.Directory && sources.Any(source => source.Schemas.Any(schema => !Path.IsPathRooted(schema))))
-            Report($"'{file.Name}'", $"it refers to schema files by a relative path, which is now relative to {saved.Directory ?? "the new location"}.");
+            Inform($"'{file.Name}'", $"it refers to schema files by a relative path, which is now relative to {saved.Directory ?? "the new location"}.");
         origin.File = file;
         origin.Name = saved.Name;
         origin.Directory = saved.Directory;

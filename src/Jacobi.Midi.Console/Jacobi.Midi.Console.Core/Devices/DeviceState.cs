@@ -17,13 +17,15 @@ namespace Jacobi.Midi.Console.Core.Devices;
 /// for the controls: they read and write it, and it is synchronised with the device (the exchange receives into
 /// <see cref="CreateSink"/> and sends from <see cref="Source"/>) or loaded from and saved to a dump offline.
 /// A parameter without a value is unknown. Thread-safe; <see cref="ValueChanged"/> is raised on the thread that
-/// changed the value, after the change.
+/// changed the value, after the change. The root (<see cref="MapRoot"/>) is any root group of the schemas: its values
+/// work the same; only an address map has data messages to load, save and exchange them (the Device project decides).
 /// </summary>
 public sealed class DeviceState
 {
     private readonly Lock _lock = new();
     private readonly FieldValueStore _values = new();
     private readonly AddressMapAdapter _maps;
+    private readonly SchemaLibrary _library;
 
     /// <param name="device">The device instance of the rig: its alias, map root and device values.</param>
     /// <param name="library">The compiled schemas that hold the device's map.</param>
@@ -36,8 +38,8 @@ public sealed class DeviceState
             throw new ArgumentException("The schemas do not compile; see the problems of the library.", nameof(library));
 
         MapRoot = new SchemaName(device.MapRoot);
-        if (!library.Maps.IsMap(MapRoot))
-            throw new ArgumentException($"'{device.MapRoot}' of device '{device.Alias}' is not an address map in the schemas.", nameof(device));
+        if (!library.HasRoot(MapRoot))
+            throw new ArgumentException($"'{device.MapRoot}' of device '{device.Alias}' is not a root group of the schemas.", nameof(device));
 
         Alias = device.Alias;
         DeviceValues = new DeviceValues();
@@ -46,6 +48,7 @@ public sealed class DeviceState
         Plan = library.Serializer.GetPlan(MapRoot);
         Source = new StateSource(this);
         _maps = library.Maps;
+        _library = library;
     }
 
     public string Alias { get; }
@@ -77,7 +80,7 @@ public sealed class DeviceState
     {
         try
         {
-            return _maps.ItemCount(MapRoot, new SchemaPath(repeat));
+            return _library.ItemCount(MapRoot, repeat);
         }
         catch (AddressMapException)
         {
@@ -142,6 +145,9 @@ public sealed class DeviceState
     {
         ArgumentNullException.ThrowIfNull(dump);
         var messages = SysExSplitter.Split(dump);
+        // only an address map has data messages (the Device project decides); another root takes none of them
+        if (!_maps.IsMap(MapRoot))
+            return new DumpLoadResult(messages.Count, 0, [$"'{MapRoot}' is not an address map: no data message carries its values."]);
         var warnings = new List<string>();
         var decoded = _maps.ReadData(MapRoot, messages.Select(message => (ReadOnlyMemory<byte>)message), DeviceValues,
             CreateSink(ValueOrigin.Dump), warnings);
@@ -159,6 +165,8 @@ public sealed class DeviceState
         ArgumentNullException.ThrowIfNull(range);
         if (!ReferenceEquals(range.ExecutionPlan, Plan))
             throw new ArgumentException($"The range is not of the plan of '{MapRoot}'.", nameof(range));
+        if (!_maps.IsMap(MapRoot))
+            throw new InvalidOperationException($"'{MapRoot}' is not an address map: no data message carries its values.");
         return [.. _maps.EncodeData(range, Source, DeviceValues).SelectMany(message => message.SysEx)];
     }
 

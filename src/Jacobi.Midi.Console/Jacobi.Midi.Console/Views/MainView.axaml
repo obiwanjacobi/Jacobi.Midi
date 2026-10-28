@@ -31,6 +31,12 @@
             <Setter Property="BorderBrush" Value="#4FA3FF" />
             <Setter Property="BorderThickness" Value="1" />
         </Style>
+        <Style Selector="SelectableTextBlock.notification">
+            <Setter Property="Foreground" Value="{DynamicResource ConsoleTextBrush}" />
+        </Style>
+        <Style Selector="SelectableTextBlock.notification.problem">
+            <Setter Property="Foreground" Value="#FFB4A0" />
+        </Style>
         <Style Selector="TextBlock.device">
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
@@ -96,15 +102,18 @@
         <Border DockPanel.Dock="Bottom" Padding="20,6" Background="#40000000">
             <StackPanel Spacing="4">
                 <TextBlock Text="{Binding Status}" Foreground="{DynamicResource ConsoleTextBrush}" FontSize="12" TextWrapping="Wrap" />
-                <Expander Header="{Binding Problems.Count, StringFormat='Problems ({0})'}"
-                          IsVisible="{Binding Problems.Count}">
-                    <ItemsControl ItemsSource="{Binding Problems}" MaxHeight="160">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" Foreground="#FFB4A0" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                <Expander Header="{Binding NotificationsHeader}" IsVisible="{Binding Notifications.Count}">
+                    <!-- all notifications, scrolled when they do not fit; selectable, to copy them; a problem in its own colour -->
+                    <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding Notifications}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:Notification">
+                                    <SelectableTextBlock Text="{Binding Message}" TextWrapping="Wrap" FontSize="12" Margin="0,0,12,4"
+                                                         Classes="notification" Classes.problem="{Binding IsProblem}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
                 </Expander>
             </StackPanel>
         </Border>
@@ -122,7 +131,7 @@
             <Grid RowDefinitions="Auto,*,Auto,Auto,Auto,Auto" RowSpacing="6">
                 <Grid ColumnDefinitions="*,Auto">
                     <TextBlock Text="RIG" Classes="heading" VerticalAlignment="Center" Margin="0" />
-                    <Button Grid.Column="1" Content="+" ToolTip.Tip="Add a device to the rig" Command="{Binding AddDeviceCommand}" />
+                    <Button Grid.Column="1" Content="+" ToolTip.Tip="Add a device to the rig: for an address map of the schemas, or from a schema file or assembly" Click="OnAddDeviceClicked" />
                 </Grid>
                 <TreeView Grid.Row="1" ItemsSource="{Binding RigTree}" SelectedItem="{Binding SelectedRigItem}">
                     <TreeView.ItemTemplate>
@@ -213,6 +222,23 @@
                                         <NumericUpDown Grid.Column="1" Value="{Binding EndpointGroup}" Minimum="0" Maximum="15" Increment="1" FormatString="0"
                                                        IsEnabled="{Binding HasEndpoint}" ToolTip.Tip="UMP group (0-15)" />
                                     </Grid>
+
+                                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
+                                        <TextBlock Text="Its own schemas" Classes="heading" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="+ Schema…" FontSize="12" Padding="6,2" ToolTip.Tip="Add a schema file (.xml, .json) for this device" Command="{Binding AddSchemaFileCommand}" />
+                                        <Button Grid.Column="2" Content="+ Assembly…" FontSize="12" Padding="6,2" ToolTip.Tip="Add an assembly (.dll) with schemas and processors for this device" Command="{Binding AddAssemblyCommand}" />
+                                    </Grid>
+                                    <TextBlock Text="none: the built-in schemas" Opacity="0.6" FontSize="12" IsVisible="{Binding !Sources.Count}" />
+                                    <ItemsControl ItemsSource="{Binding Sources}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:SourceViewModel">
+                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" Margin="0,0,0,4">
+                                                    <TextBlock Text="{Binding Name}" ToolTip.Tip="{Binding Tip}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                    <Button Grid.Column="1" Content="✕" ToolTip.Tip="Take it out of the device's schemas" Command="{Binding RemoveCommand}" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
 
                                     <TextBlock Text="Colours of its controls" Classes="heading" />
                                     <Grid ColumnDefinitions="64,*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="8">

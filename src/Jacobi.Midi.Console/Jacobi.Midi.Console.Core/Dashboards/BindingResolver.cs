@@ -36,7 +36,7 @@ public static class BindingResolver
         var repeats = new Dictionary<VariableReference, string>();
 
         CheckDevices();
-        var maps = MapsOf(context.Library);
+        var library = LibraryOf(context.Library);
         Visit(dashboard.Layout, BindingScope.None);
         CheckValues();
         return new BindingResolution(bindings, itemCounts, problems) { Repeats = repeats };
@@ -54,21 +54,22 @@ public static class BindingResolver
             }
         }
 
-        AddressMapAdapter? MapsOf(SchemaLibrary? library)
+        // the library the bindings are checked against: compiled, with the roots of the devices
+        SchemaLibrary? LibraryOf(SchemaLibrary? candidate)
         {
-            if (library is null)
+            if (candidate is null)
                 return null;
-            if (library.Maps is null)
+            if (!candidate.IsCompiled)
             {
                 problems.Add(new(null, null, "The schemas do not compile; the bindings are not checked against them."));
                 return null;
             }
             foreach (var device in dashboard.Devices)
             {
-                if (!library.Maps.IsMap(new SchemaName(device.MapRoot)))
-                    problems.Add(new(null, null, $"'{device.MapRoot}' (device '{device.Alias}') is not an address map in the schemas."));
+                if (!candidate.HasRoot(new SchemaName(device.MapRoot)))
+                    problems.Add(new(null, null, $"'{device.MapRoot}' (device '{device.Alias}') is not a root group of the schemas."));
             }
-            return library.Maps;
+            return candidate;
         }
 
         void Visit(DashboardControl control, BindingScope outer)
@@ -124,7 +125,7 @@ public static class BindingResolver
 
             var variables = parsed.Variables.Select(use => scope.Variables[use.Variable]).Distinct().ToList();
             AddRepeats(parsed, scope);
-            if (maps is not null && !Check(control, slot, dashboardDevice, parsed, scope))
+            if (library is not null && !Check(control, slot, dashboardDevice, parsed, scope))
                 return;
             bindings.Add(new(control, slot, new ParameterReference(device, parsed.Path, parsed.Instance), null, variables));
         }
@@ -139,7 +140,7 @@ public static class BindingResolver
                 problems.Add(new(control, slot, $"'{parsed.Path}' must start at the map root '{mapRoot.Name}' of device '{device.Alias}'."));
                 return false;
             }
-            if (!context.Library!.Schemas!.TryFindByPath(new SchemaPath($"{mapRoot.Namespace}.{parsed.Path}"), out var node) || node is not SchemaField)
+            if (!library!.Schemas!.TryFindByPath(new SchemaPath($"{mapRoot.Namespace}.{parsed.Path}"), out var node) || node is not SchemaField)
             {
                 problems.Add(new(control, slot, $"'{parsed.Path}' is not a field of '{device.MapRoot}'."));
                 return false;
@@ -151,7 +152,7 @@ public static class BindingResolver
                 int? count;
                 try
                 {
-                    count = maps!.ItemCount(mapRoot, new SchemaPath(use.Repeat));
+                    count = library.ItemCount(mapRoot, use.Repeat);
                 }
                 catch (AddressMapException exception)
                 {
@@ -183,7 +184,7 @@ public static class BindingResolver
             }
 
             // a control that changes a variable needs its range: the item count of the repeat it indexes in a path
-            if (maps is null)
+            if (library is null)
                 return;
             foreach (var binding in bindings.Where(binding => binding.Variable is { } variable && !itemCounts.ContainsKey(variable)))
                 problems.Add(new(binding.Control, binding.Slot, $"'{SchemaPaths.VariablePrefix}{binding.Variable!.Name}' indexes no repeat in a binding path: its number of items is not known."));
