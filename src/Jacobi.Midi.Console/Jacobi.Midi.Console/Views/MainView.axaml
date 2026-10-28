@@ -110,7 +110,7 @@
         </Border>
 
         <Border DockPanel.Dock="Top" Padding="20,8" Background="#60000000" IsVisible="{Binding IsEditing}">
-            <TextBlock Text="Edit: drag parameters and groups from the rig, or controls from the palettes, onto the dashboard; drop a parameter on a control to bind it. Click a control to select it, drag it to move it (also into another grid or section), Delete deletes it, right-click it for the colour of the part under the pointer. The values are locked."
+            <TextBlock Text="Edit: drag parameters and groups from the rig, or controls from the palettes, onto the dashboard; drop a parameter on a control to bind it. Click a control to select it (Esc or a click beside the dashboard selects nothing), drag it to move it (also into another grid or section), Delete deletes it, right-click it for the colour of the part under the pointer. The values are locked."
                        Foreground="{DynamicResource ConsoleTextBrush}" FontSize="12" TextWrapping="Wrap" />
         </Border>
 
@@ -185,7 +185,9 @@
                         <TextBlock Text="Dashboard" FontSize="18" FontWeight="SemiBold" />
                         <TextBlock Text="Name" Classes="caption" />
                         <TextBox Text="{Binding DashboardName, UpdateSourceTrigger=LostFocus}" />
-                        <TextBlock Text="Select a control to see its properties, or a device in the rig." TextWrapping="Wrap" Opacity="0.7" />
+                        <TextBlock Text="Zoom (%): the whole dashboard, saved with it" Classes="caption" />
+                        <NumericUpDown Value="{Binding DashboardZoom}" Minimum="25" Maximum="400" Increment="10" FormatString="0" />
+                        <TextBlock Text="Select a control to see its properties, or a device in the rig. Esc, or a click beside the dashboard, comes back here." TextWrapping="Wrap" Opacity="0.7" />
                     </StackPanel>
 
                     <ContentControl Content="{Binding DeviceProperties}">
@@ -394,7 +396,8 @@
             </ScrollViewer>
         </Border>
 
-        <ScrollViewer Grid.Column="2" HorizontalScrollBarVisibility="Auto">
+        <!-- the room around the dashboard: a press on it selects nothing -->
+        <ScrollViewer Grid.Column="2" HorizontalScrollBarVisibility="Auto" Background="Transparent" PointerPressed="OnBesideDashboardPressed">
             <ContentControl x:Name="DashboardHost" Margin="24" HorizontalAlignment="Left" VerticalAlignment="Top" />
         </ScrollViewer>
         </Grid>

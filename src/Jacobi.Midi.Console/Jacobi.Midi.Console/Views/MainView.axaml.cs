@@ -66,13 +66,13 @@ internal partial class MainView : UserControl
         if (_viewModel is not null)
             _viewModel.StorageProvider = topLevel.StorageProvider;
         // on the window: a key reaches it wherever the focus is (also when nothing in the view has it)
-        topLevel.AddHandler(KeyDownEvent, OnKeyDownForDelete, RoutingStrategies.Bubble);
+        topLevel.AddHandler(KeyDownEvent, OnSelectionKeyDown, RoutingStrategies.Bubble);
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromVisualTree(e);
-        TopLevel.GetTopLevel(this)?.RemoveHandler(KeyDownEvent, OnKeyDownForDelete);
+        TopLevel.GetTopLevel(this)?.RemoveHandler(KeyDownEvent, OnSelectionKeyDown);
     }
 
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
@@ -141,15 +141,29 @@ internal partial class MainView : UserControl
     }
 
     // Delete deletes the selected control, unless a field has the focus (there it deletes text)
-    private void OnKeyDownForDelete(object? sender, KeyEventArgs e)
+    // Delete deletes the selected control, Esc selects nothing; not while a field has the focus (there they edit text)
+    private void OnSelectionKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Delete || e.Handled || TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is TextBox)
+        if (e.Handled || _viewModel is not { IsEditing: true } viewModel || TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is TextBox)
             return;
-        if (_viewModel?.DeleteSelectedCommand.CanExecute(null) == true && _viewModel.SelectedControl is not null)
+        switch (e.Key)
         {
-            _viewModel.DeleteSelectedCommand.Execute(null);
-            e.Handled = true;
+            case Key.Delete when viewModel.SelectedControl is not null:
+                viewModel.DeleteSelectedCommand.Execute(null);
+                e.Handled = true;
+                break;
+            case Key.Escape when viewModel.SelectedControl is not null || viewModel.SelectedRigItem is not null:
+                viewModel.ClearSelectionCommand.Execute(null);
+                e.Handled = true;
+                break;
         }
+    }
+
+    // a press beside the dashboard (the dashboard takes the presses on itself) selects nothing
+    private void OnBesideDashboardPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (_viewModel is { IsEditing: true } viewModel)
+            viewModel.ClearSelectionCommand.Execute(null);
     }
 
     // the side panes are open in Edit mode, at the width they were given with the splitters, and closed in Play mode

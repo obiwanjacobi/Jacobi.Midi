@@ -77,7 +77,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     public ObservableCollection<DashboardSession> Dashboards { get; } = [];
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Title), nameof(DashboardName))]
+    [NotifyPropertyChangedFor(nameof(Title), nameof(DashboardName), nameof(DashboardZoom))]
     [NotifyCanExecuteChangedFor(nameof(CloseDashboardCommand))]
     public partial DashboardSession? SelectedDashboard { get; set; }
 
@@ -113,6 +113,26 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
                 return;
             DoDashboardEdit(EntryOf(dashboard.Layout), edit);
             Status = $"The dashboard is named '{dashboard.Name}'. Save to keep it.";
+        }
+    }
+
+    /// <summary>
+    /// The zoom of the selected dashboard in percent: its cell size (<see cref="Dashboard.CellSize"/>) to the default
+    /// one; the whole dashboard scales with it. Changing it is an edit of the cell size, in whole pixels.
+    /// </summary>
+    public decimal? DashboardZoom
+    {
+        get => SelectedDashboard?.Dashboard.CellSize * 100m / Dashboard.DefaultCellSize;
+        set
+        {
+            if (SelectedDashboard?.Dashboard is not { } dashboard || value is not { } zoom)
+                return;
+            var cellSize = Math.Clamp((int)Math.Round(Dashboard.DefaultCellSize * zoom / 100), Dashboard.MinimumCellSize, Dashboard.MaximumCellSize);
+            var edit = new ValueEdit<int>("dashboard zoom", () => dashboard.CellSize, size => dashboard.CellSize = size, cellSize);
+            if (!edit.Changes)
+                return;
+            DoDashboardEdit(EntryOf(dashboard.Layout), edit);
+            Status = $"The dashboard is shown at {DashboardZoom:0}% (cells of {cellSize} pixels). Save to keep it.";
         }
     }
 
@@ -563,6 +583,14 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         }
     }
 
+    /// <summary>Selects nothing: no control, no device; the panel shows the dashboard (Esc, a click beside the dashboard).</summary>
+    [RelayCommand]
+    private void ClearSelection()
+    {
+        SelectedControl = null;
+        SelectedRigItem = null;
+    }
+
     /// <summary>Deletes the selected control (Delete).</summary>
     [RelayCommand]
     private void DeleteSelected()
@@ -819,6 +847,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         DeviceProperties?.Refresh();
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(DashboardName));
+        OnPropertyChanged(nameof(DashboardZoom));
     }
 
     // a dump is loaded into every device of the rig; each takes the messages that are its data

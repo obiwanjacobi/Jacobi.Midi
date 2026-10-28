@@ -12,13 +12,19 @@ public sealed class Dashboard
     /// <summary>The cell size at which the controls are shown at their own size (not scaled).</summary>
     public const int DefaultCellSize = 24;
 
+    /// <summary>The smallest cell size the console offers (a quarter of the default).</summary>
+    public const int MinimumCellSize = 6;
+
+    /// <summary>The largest cell size the console offers (four times the default).</summary>
+    public const int MaximumCellSize = 96;
+
     public required string Name { get; set; }
 
     /// <summary>
     /// The size of a cell in device independent pixels: the unit of all sizes, gaps and grid positions. The whole
     /// dashboard scales with it.
     /// </summary>
-    public int CellSize { get; init; } = DefaultCellSize;
+    public int CellSize { get; set; } = DefaultCellSize;
 
     /// <summary>The device aliases the dashboard needs, with the map root each must have.</summary>
     public IReadOnlyList<DashboardDevice> Devices { get; set; } = [];
