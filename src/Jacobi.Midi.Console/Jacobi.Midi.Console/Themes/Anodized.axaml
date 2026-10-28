@@ -59,18 +59,19 @@
         <Setter Property="Template">
             <ControlTemplate>
                 <Border Background="{DynamicResource ConsolePlateBrush}" CornerRadius="4">
-                    <StackPanel Margin="{TemplateBinding Padding}" Spacing="8" HorizontalAlignment="Center">
+                    <!-- the label, the face (the room the label and value leave: a fader stretches into it) and the value -->
+                    <Grid Margin="{TemplateBinding Padding}" RowDefinitions="Auto,*,Auto">
                         <TextBlock Text="{TemplateBinding Label, Converter={x:Static chrome:UpperCaseConverter.Instance}}"
-                                   FontFamily="{DynamicResource ConsoleLabelFont}" HorizontalAlignment="Center"
+                                   FontFamily="{DynamicResource ConsoleLabelFont}" HorizontalAlignment="Center" Margin="0,0,0,8"
                                    Foreground="{DynamicResource ConsolePlateTextBrush}" FontSize="12" LetterSpacing="1.5" />
-                        <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" HorizontalAlignment="Center" />
-                        <Border Background="{DynamicResource ConsoleDisplayBrush}" CornerRadius="3" Padding="8,2" HorizontalAlignment="Center"
+                        <ContentPresenter Grid.Row="1" Name="PART_ContentPresenter" Content="{TemplateBinding Content}" />
+                        <Border Grid.Row="2" Background="{DynamicResource ConsoleDisplayBrush}" CornerRadius="3" Padding="8,2" Margin="0,8,0,0" HorizontalAlignment="Center"
                                 BoxShadow="inset 0 1 2 0 #FF000000"
                                 IsVisible="{TemplateBinding ValueText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                             <TextBlock Text="{TemplateBinding ValueText}" Foreground="{DynamicResource ConsoleAccentDisplayBrush}"
                                        FontFamily="{DynamicResource ConsoleDisplayFont}" FontSize="13" />
                         </Border>
-                    </StackPanel>
+                    </Grid>
                 </Border>
             </ControlTemplate>
         </Setter>

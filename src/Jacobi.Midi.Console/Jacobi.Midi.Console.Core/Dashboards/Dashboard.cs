@@ -12,7 +12,7 @@ public sealed class Dashboard
     /// <summary>The cell size at which the controls are shown at their own size (not scaled).</summary>
     public const int DefaultCellSize = 24;
 
-    public required string Name { get; init; }
+    public required string Name { get; set; }
 
     /// <summary>
     /// The size of a cell in device independent pixels: the unit of all sizes, gaps and grid positions. The whole
@@ -21,7 +21,7 @@ public sealed class Dashboard
     public int CellSize { get; init; } = DefaultCellSize;
 
     /// <summary>The device aliases the dashboard needs, with the map root each must have.</summary>
-    public IReadOnlyList<DashboardDevice> Devices { get; init; } = [];
+    public IReadOnlyList<DashboardDevice> Devices { get; set; } = [];
 
     /// <summary>Assemblies and schema files for this dashboard: customisations on top of those of the rig and its devices.</summary>
     public SchemaSources Sources { get; init; } = SchemaSources.None;

@@ -1,4 +1,3 @@
-using System.Globalization;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.Midi.Console.Core.Dashboards;
 using Jacobi.Midi.Console.Core.Devices;
@@ -29,9 +28,7 @@ public sealed class ParameterValue : IControlValue, IDisposable
 
     public object? Value => _state.TryGetValue(Parameter, out var known) ? known.Value : null;
 
-    public decimal? Number => Value is { } value and not bool and not string
-        ? Convert.ToDecimal(value, CultureInfo.InvariantCulture)
-        : null;
+    public decimal? Number => Info.ToNumber(Value);
 
     public event EventHandler? Changed;
 
@@ -42,6 +39,10 @@ public sealed class ParameterValue : IControlValue, IDisposable
     }
 
     public void Dispose() => _state.ValueChanged -= OnValueChanged;
+
+    /// <summary>True when the value can point to the parameter: another item of the same field of the same device.</summary>
+    internal bool CanRetarget(ParameterReference parameter)
+        => String.Equals(parameter.Device, Parameter.Device, StringComparison.OrdinalIgnoreCase) && parameter.Path == Parameter.Path;
 
     /// <summary>Points the value to another parameter (another repeat item); <see cref="Changed"/> is raised.</summary>
     internal void Retarget(ParameterReference parameter)

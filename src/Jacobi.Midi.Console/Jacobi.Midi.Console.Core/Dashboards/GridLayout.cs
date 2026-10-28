@@ -37,6 +37,26 @@ public static class GridLayout
             _ => new(4, 4),
         };
 
+    /// <summary>The size a new, empty layout control of a kind gets: room for a few controls, or its own content.</summary>
+    public static CellSize DefaultSize(LayoutControlKind kind)
+        => kind switch
+        {
+            LayoutControlKind.Grid => new(12, 9),
+            LayoutControlKind.Section => new(12, 10),
+            LayoutControlKind.Row => new(12, 7),
+            LayoutControlKind.Column => new(5, 14),
+            LayoutControlKind.Tabs => new(12, 10),
+            LayoutControlKind.Separator => new(12, 1),
+            LayoutControlKind.Label => new(6, 2),
+            _ => new(1, 1),
+        };
+
+    /// <summary>
+    /// True when cells are wider than tall: a control with a direction (a slider, a separator) then runs horizontally,
+    /// otherwise vertically.
+    /// </summary>
+    public static bool IsWide(CellSize size) => size.Columns > size.Rows;
+
     /// <summary>The layout control the control is a child of; null for the root (or a control not in it).</summary>
     public static LayoutControl? ParentOf(LayoutControl root, DashboardControl control)
     {

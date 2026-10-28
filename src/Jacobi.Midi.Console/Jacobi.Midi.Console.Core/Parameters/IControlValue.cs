@@ -12,7 +12,7 @@ public interface IControlValue
     /// <summary>The logical value; null when it is unknown.</summary>
     object? Value { get; }
 
-    /// <summary>The value of a number as decimal; null when unknown or not a number.</summary>
+    /// <summary>The value of a number as decimal (a bool as 1 or 0); null when unknown or not a number.</summary>
     decimal? Number { get; }
 
     /// <summary>Sets the value, converted to the value type of <see cref="Info"/>.</summary>

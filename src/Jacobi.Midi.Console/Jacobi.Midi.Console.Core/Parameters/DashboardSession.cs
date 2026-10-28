@@ -1,6 +1,7 @@
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.Midi.Console.Core.Dashboards;
 using Jacobi.Midi.Console.Core.Devices;
+using Jacobi.Midi.Console.Core.Editing;
 using Jacobi.Midi.Console.Core.Palettes;
 
 namespace Jacobi.Midi.Console.Core.Parameters;
@@ -10,7 +11,9 @@ namespace Jacobi.Midi.Console.Core.Parameters;
 /// bound slot: a <see cref="ParameterValue"/> of the rig's device states, or a <see cref="VariableValue"/> for a slot
 /// bound to an index variable. The session holds the current index of each variable; when one changes, the bindings
 /// are resolved again and the parameter values that use it are pointed to the new repeat item. Everything that does
-/// not fit is collected in <see cref="Problems"/>; the control of a slot without value shows it as not bound.
+/// not fit is collected in <see cref="Problems"/>, as is a parameter its control cannot show
+/// (<see cref="ControlCatalog.Accepts"/>); the control of a slot without value shows it as not bound.
+/// After an edit of the dashboard (<see cref="Refresh"/>) the bindings are resolved again and the values follow them.
 /// </summary>
 public sealed class DashboardSession : IDisposable
 {
@@ -34,7 +37,7 @@ public sealed class DashboardSession : IDisposable
     /// <summary>The problems of the dashboard (its bindings and variables); those of the rig are in <see cref="RigSession.Problems"/>.</summary>
     public IReadOnlyList<string> Problems { get; private set; } = [];
 
-    /// <summary>The bindings were resolved again (an index variable changed); <see cref="Problems"/> may have changed.</summary>
+    /// <summary>The bindings were resolved again (an index variable changed, an edit); <see cref="Problems"/> may have changed.</summary>
     public event EventHandler? Resolved;
 
     public static DashboardSession Open(RigSession rig, Dashboard dashboard)
@@ -90,6 +93,21 @@ public sealed class DashboardSession : IDisposable
         Resolved?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// Resolves the dashboard again after it was edited: the slots get the values of their (new) bindings, a slot that
+    /// is no longer bound loses its value; the variables keep their current index while they are declared, a new one
+    /// starts at its starting value.
+    /// </summary>
+    public void Refresh()
+    {
+        _startIndices.Clear();
+        CollectStartIndices(Dashboard.Layout);
+        foreach (var variable in _indices.Keys.Where(variable => !_startIndices.ContainsKey(variable)).ToList())
+            _indices.Remove(variable);
+        Resolve();
+        Resolved?.Invoke(this, EventArgs.Empty);
+    }
+
     public void Dispose()
     {
         foreach (var value in _values.Values.OfType<ParameterValue>())
@@ -105,7 +123,8 @@ public sealed class DashboardSession : IDisposable
             CollectStartIndices(child);
     }
 
-    // resolves the bindings with the current indices; existing values are kept and pointed to their new parameter
+    // resolves the bindings with the current indices; existing values are kept and pointed to their new parameter (of
+    // the same field of the same device; otherwise the slot gets a new value), values of slots no longer bound are dropped
     private void Resolve()
     {
         var resolution = BindingResolver.Resolve(Dashboard, new BindingContext
@@ -117,26 +136,44 @@ public sealed class DashboardSession : IDisposable
         Resolution = resolution;
         var problems = resolution.Problems.Select(Describe).ToList();
 
+        var bound = resolution.Bindings.Select(binding => (binding.Control, binding.Slot)).ToHashSet();
+        foreach (var key in _values.Keys.Where(key => !bound.Contains(key)).ToList())
+            Drop(key);
+        foreach (var variable in _variables.Keys.Where(variable => !_startIndices.ContainsKey(variable)).ToList())
+            _variables.Remove(variable);
+
         foreach (var binding in resolution.Bindings)
         {
             var key = (binding.Control, binding.Slot);
             if (binding.Variable is { } variable)
             {
-                if (!_variables.TryGetValue(variable, out var variableValue))
+                int? count = resolution.ItemCounts.TryGetValue(variable, out var items) ? items : null;
+                if (!_variables.TryGetValue(variable, out var variableValue) || variableValue.Info.Range?.Maximum != count)
                 {
-                    variableValue = new VariableValue(this, variable, resolution.ItemCounts.TryGetValue(variable, out var count) ? count : null);
+                    variableValue = new VariableValue(this, variable, count);
                     _variables[variable] = variableValue;
                 }
-                _values[key] = variableValue;
+                if (ControlCatalog.RefusalOf(binding.Control.Kind, variableValue.Info) is { } refusal)
+                {
+                    Drop(key);
+                    problems.Add($"{Describe(binding.Control)}.{binding.Slot}: {refusal}");
+                    continue;
+                }
+                if (_values.GetValueOrDefault(key) != variableValue)
+                {
+                    Drop(key);
+                    _values[key] = variableValue;
+                }
                 continue;
             }
 
             var parameter = binding.Parameter!;
-            if (_values.GetValueOrDefault(key) is ParameterValue existing)
+            if (_values.GetValueOrDefault(key) is ParameterValue existing && existing.CanRetarget(parameter))
             {
                 existing.Retarget(parameter);
                 continue;
             }
+            Drop(key);
             if (DeviceOf(parameter.Device) is not { } state)
                 continue;   // the device is not in the rig: reported by the resolver
             if (state.Plan.Find(parameter.Path) is not FieldInfo field)
@@ -144,10 +181,22 @@ public sealed class DashboardSession : IDisposable
                 problems.Add($"{Describe(binding.Control)}.{binding.Slot}: '{parameter.Path}' is not a field of '{state.MapRoot}'.");
                 continue;
             }
-            _values[key] = new ParameterValue(state, parameter, ParameterInfo.From(field));
+            var info = ParameterInfo.From(field);
+            if (ControlCatalog.RefusalOf(binding.Control.Kind, info) is { } refused)
+            {
+                problems.Add($"{Describe(binding.Control)}.{binding.Slot}: {refused}");
+                continue;
+            }
+            _values[key] = new ParameterValue(state, parameter, info);
         }
 
         Problems = problems;
+    }
+
+    private void Drop((ParameterControl Control, string Slot) key)
+    {
+        if (_values.Remove(key, out var value) && value is ParameterValue parameterValue)
+            parameterValue.Dispose();
     }
 
     private static string Describe(BindingProblem problem)
@@ -155,11 +204,5 @@ public sealed class DashboardSession : IDisposable
             ? problem.Message
             : $"{Describe(problem.Control)}{(problem.Slot is null ? "" : $".{problem.Slot}")}: {problem.Message}";
 
-    private static string Describe(DashboardControl control)
-        => control.Label ?? control switch
-        {
-            ParameterControl parameter => parameter.Kind.ToString(),
-            LayoutControl layout => layout.Kind.ToString(),
-            _ => control.GetType().Name,
-        };
+    private static string Describe(DashboardControl control) => ControlCatalog.NameOf(control);
 }

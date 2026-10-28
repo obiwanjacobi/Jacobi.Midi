@@ -59,6 +59,9 @@ public sealed class AddressMapAdapter
     /// <summary>True when the schemas hold an address map; without one the reads are plain serializer reads.</summary>
     public bool HasMaps => _mapRoots.Count > 0;
 
+    /// <summary>The address map roots of the schemas: the groups a data message can carry (see <see cref="IsMap"/>).</summary>
+    public IReadOnlyList<SchemaName> MapRoots => _mapRoots;
+
     /// <summary>Reads the input with a whole plan into the sink.</summary>
     /// <param name="warnings">Receives the situations the user may not expect, also when the read fails.</param>
     /// <returns>The number of bytes read.</returns>

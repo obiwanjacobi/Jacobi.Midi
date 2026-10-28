@@ -15,6 +15,13 @@ namespace Jacobi.Midi.Console.Faces;
 /// pointer, lit LEDs) is drawn again on every change of the value. Its size is given in cells (<see cref="Cells"/>);
 /// the dashboard scales as a whole with its cell size.
 /// </para>
+/// <para>
+/// A face with a direction (<see cref="IsDirectional"/>, a fader) is drawn upright, in its <see cref="Extent"/>; when its
+/// state runs horizontally (<see cref="RangeFaceState.IsHorizontal"/>) the face turns its drawing a quarter clockwise
+/// (the bottom of the upright drawing on the left) and takes its cells the other way round. A face takes its own size,
+/// centred in the room its chrome gives it; a directional face stretches along its direction into all of it (a long
+/// fader has a long slot).
+/// </para>
 /// </summary>
 public abstract class Face : Control
 {
@@ -77,6 +84,7 @@ public abstract class Face : Control
         _value = new FaceLayer(this, isStatic: false);
         VisualChildren.Add(_static);
         VisualChildren.Add(_value);
+        UpdateAlignment();
     }
 
     public FaceState? State
@@ -151,8 +159,25 @@ public abstract class Face : Control
         set => SetValue(GlowOpacityProperty, value);
     }
 
-    /// <summary>The size the face needs, in cells; the chrome and the layout adapt to it.</summary>
+    /// <summary>The size the face needs, in cells, upright (it may follow the state); the chrome and the layout adapt to it.</summary>
     protected abstract Size Cells { get; }
+
+    // the cells the face was last measured in: other cells (another state) measure it again and draw it all again
+    private Size _measuredCells;
+
+    // the size the face was last arranged in
+    private Size _arrangedSize;
+
+    private Size CellsAsDrawn => IsTurned ? new Size(Cells.Height, Cells.Width) : Cells;
+
+    /// <summary>True for a face that runs in a direction: it is turned when its control is horizontal.</summary>
+    protected virtual bool IsDirectional => false;
+
+    /// <summary>True when the face is drawn turned: a directional face whose state runs horizontally.</summary>
+    private bool IsTurned => IsDirectional && IsHorizontal(State);
+
+    /// <summary>The size the face draws in, upright: its bounds, the other way round when it is turned.</summary>
+    protected Size Extent => IsTurned ? new Size(Bounds.Height, Bounds.Width) : Bounds.Size;
 
     /// <summary>The centre of the face.</summary>
     protected Point Center => new(Bounds.Width / 2, Bounds.Height / 2);
@@ -168,7 +193,8 @@ public abstract class Face : Control
 
     protected override Size MeasureOverride(Size availableSize)
     {
-        var size = new Size(Cells.Width * CellPixels, Cells.Height * CellPixels);
+        _measuredCells = CellsAsDrawn;
+        var size = new Size(_measuredCells.Width * CellPixels, _measuredCells.Height * CellPixels);
         _static.Measure(size);
         _value.Measure(size);
         return size;
@@ -179,8 +205,21 @@ public abstract class Face : Control
         var bounds = new Rect(finalSize);
         _static.Arrange(bounds);
         _value.Arrange(bounds);
+        // another size (a fader stretched into longer cells): both layers are drawn again for it
+        if (finalSize != _arrangedSize)
+        {
+            _arrangedSize = finalSize;
+            _static.InvalidateVisual();
+            _value.InvalidateVisual();
+        }
         return finalSize;
     }
+
+    /// <summary>
+    /// The distance the value travels over from its minimum to its maximum, in pixels of the face along its (upright)
+    /// direction: by default its whole length; a fader without the ends its cap overhangs.
+    /// </summary>
+    public virtual double TravelLength => Extent.Height;
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
@@ -188,8 +227,18 @@ public abstract class Face : Control
         if (change.Property == StateProperty)
         {
             _value.InvalidateVisual();
-            if (IsKnown(change.GetOldValue<FaceState?>()) != IsKnown(change.GetNewValue<FaceState?>()))
+            var (old, now) = (change.GetOldValue<FaceState?>(), change.GetNewValue<FaceState?>());
+            if (CellsAsDrawn != _measuredCells)
+            {
+                // turned the other way, or a state with another size (e.g. more options): measured and drawn again
+                UpdateAlignment();
+                InvalidateMeasure();
                 _static.InvalidateVisual();
+            }
+            else if (IsKnown(old) != IsKnown(now))
+            {
+                _static.InvalidateVisual();
+            }
         }
         else if (change.Property.OwnerType == typeof(Face))
         {
@@ -198,6 +247,15 @@ public abstract class Face : Control
             _value.InvalidateVisual();
         }
     }
+
+    // centred at its own size; a directional face stretched along its direction
+    private void UpdateAlignment()
+    {
+        HorizontalAlignment = IsDirectional && IsTurned ? Avalonia.Layout.HorizontalAlignment.Stretch : Avalonia.Layout.HorizontalAlignment.Center;
+        VerticalAlignment = IsDirectional && !IsTurned ? Avalonia.Layout.VerticalAlignment.Stretch : Avalonia.Layout.VerticalAlignment.Center;
+    }
+
+    private static bool IsHorizontal(FaceState? state) => state is { } known && known is RangeFaceState { IsHorizontal: true };
 
     private static bool IsKnown(FaceState? state)
         => state switch
@@ -221,6 +279,10 @@ public abstract class Face : Control
         {
             if (face.State is not { } state)
                 return;
+            // turned a quarter clockwise: the upright drawing's bottom on the left, its top on the right
+            using var turned = face.IsTurned
+                ? (DrawingContext.PushedState?)context.PushTransform(Matrix.CreateRotation(Math.PI / 2) * Matrix.CreateTranslation(Bounds.Width, 0))
+                : null;
             if (isStatic)
                 face.RenderStatic(context, state);
             else

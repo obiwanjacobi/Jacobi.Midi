@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Jacobi.Midi.Console.Core.Faces;
 using Jacobi.Midi.Console.Core.Parameters;
 
@@ -15,6 +16,7 @@ namespace Jacobi.Midi.Console.Controls;
 /// value to its default, a double-click opens an editor to type the value (for controls that can be typed into:
 /// <see cref="EditText"/>). The derived control decides the rest of the interaction and the face state. In Edit mode
 /// (<see cref="IsEditing"/>) none of it: the value is locked (<see cref="CanChange"/>), the cursor is the arrow.
+/// A control with more than one slot (an XY pad, an envelope) follows the value of each (<see cref="SlotValues"/>).
 /// </summary>
 public abstract class ParameterControlBase : TemplatedControl
 {
@@ -24,6 +26,11 @@ public abstract class ParameterControlBase : TemplatedControl
     /// <summary>The parameter the control shows and changes; null for an unbound control.</summary>
     public static readonly StyledProperty<IControlValue?> ParameterProperty =
         AvaloniaProperty.Register<ParameterControlBase, IControlValue?>(nameof(Parameter));
+
+    /// <summary>The values of the bound slots of a control with more than one slot, by slot name; empty otherwise.</summary>
+    public static readonly StyledProperty<IReadOnlyDictionary<string, IControlValue>> SlotValuesProperty =
+        AvaloniaProperty.Register<ParameterControlBase, IReadOnlyDictionary<string, IControlValue>>(nameof(SlotValues),
+            new Dictionary<string, IControlValue>());
 
     /// <summary>Edit mode: inherited from the dashboard (see <see cref="DashboardEditing"/>).</summary>
     public static readonly StyledProperty<bool> IsEditingProperty =
@@ -39,7 +46,7 @@ public abstract class ParameterControlBase : TemplatedControl
 
     private FaceState? _faceState;
     private string? _valueText;
-    private IControlValue? _subscribed;
+    private IReadOnlyList<IControlValue> _subscribed = [];
     private bool _isOnScreen;
 
     protected ParameterControlBase()
@@ -62,6 +69,12 @@ public abstract class ParameterControlBase : TemplatedControl
     {
         get => GetValue(ParameterProperty);
         set => SetValue(ParameterProperty, value);
+    }
+
+    public IReadOnlyDictionary<string, IControlValue> SlotValues
+    {
+        get => GetValue(SlotValuesProperty);
+        set => SetValue(SlotValuesProperty, value);
     }
 
     public bool IsEditing
@@ -99,6 +112,36 @@ public abstract class ParameterControlBase : TemplatedControl
         if (!IsRefreshing)
             Parameter?.Set(value);
     }
+
+    /// <summary>The value of a slot as a fraction of its range (0-1); null when it is not bound, not known or has no range.</summary>
+    protected double? FractionOf(string slot)
+        => SlotValues.GetValueOrDefault(slot) is { Info.Range: { } range, Number: { } number } ? range.ToFraction(number) : null;
+
+    /// <summary>Writes the value at a fraction of its range (0-1) to a bound slot, on a whole number of its steps.</summary>
+    protected void WriteFraction(string slot, double fraction)
+    {
+        if (!IsRefreshing && SlotValues.GetValueOrDefault(slot) is { Info.Range: { } range } value)
+            value.Set(range.FromFraction(fraction, value.Info.Step));
+    }
+
+    /// <summary>Sets the bound slots to their defaults (a reset of a control with more than one slot).</summary>
+    protected void ResetSlots()
+    {
+        foreach (var value in SlotValues.Values)
+        {
+            if (value.Info.Default is { } known)
+                value.Set(known);
+        }
+    }
+
+    /// <summary>
+    /// A position in the control in the coordinates of its face (which the chrome surrounds), with the size of the face;
+    /// null when the control has no face (yet).
+    /// </summary>
+    protected (Point Position, Size Size)? FacePoint(Point position)
+        => this.GetVisualDescendants().OfType<Faces.Face>().FirstOrDefault() is { } face && this.TranslatePoint(position, face) is { } point
+            ? (point, face.Bounds.Size)
+            : null;
 
     /// <summary>The value as the user types it; null when the control cannot be typed into.</summary>
     protected virtual string? EditText => null;
@@ -166,9 +209,9 @@ public abstract class ParameterControlBase : TemplatedControl
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == ParameterProperty)
+        if (change.Property == ParameterProperty || change.Property == SlotValuesProperty)
         {
-            Subscribe(_isOnScreen ? Parameter : null);
+            Subscribe(_isOnScreen);
             RefreshFromParameter();
         }
         else if (change.Property == IsEditingProperty)
@@ -185,7 +228,7 @@ public abstract class ParameterControlBase : TemplatedControl
     {
         base.OnAttachedToVisualTree(e);
         _isOnScreen = true;
-        Subscribe(Parameter);
+        Subscribe(true);
         RefreshFromParameter();
     }
 
@@ -194,18 +237,17 @@ public abstract class ParameterControlBase : TemplatedControl
     {
         base.OnDetachedFromVisualTree(e);
         _isOnScreen = false;
-        Subscribe(null);
+        Subscribe(false);
     }
 
-    private void Subscribe(IControlValue? parameter)
+    // follows the parameter and the values of the slots while the control is on screen
+    private void Subscribe(bool onScreen)
     {
-        if (ReferenceEquals(parameter, _subscribed))
-            return;
-        if (_subscribed is not null)
-            _subscribed.Changed -= OnParameterChanged;
-        _subscribed = parameter;
-        if (_subscribed is not null)
-            _subscribed.Changed += OnParameterChanged;
+        foreach (var value in _subscribed)
+            value.Changed -= OnParameterChanged;
+        _subscribed = onScreen ? [.. SlotValues.Values.Prepend(Parameter).OfType<IControlValue>().Distinct()] : [];
+        foreach (var value in _subscribed)
+            value.Changed += OnParameterChanged;
     }
 
     // the device state may change on another thread (the exchange)

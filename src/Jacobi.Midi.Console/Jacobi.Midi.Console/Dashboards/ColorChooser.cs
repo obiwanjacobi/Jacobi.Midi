@@ -26,8 +26,9 @@ internal interface IColorEditor
 }
 
 /// <summary>
-/// What the dashboard changes in Edit mode: besides the colours, the selection and the place of a control in its grid.
-/// Implemented by the main view model, every change an edit that can be undone.
+/// What the dashboard changes in Edit mode: besides the colours, the selection, the place of a control in its grid, the
+/// controls dropped on it and moved into another layout control. Implemented by the main view model, every change an
+/// edit that can be undone.
 /// </summary>
 internal interface IDashboardEditor : IColorEditor
 {
@@ -36,36 +37,47 @@ internal interface IDashboardEditor : IColorEditor
 
     /// <summary>Moves and sizes a control in its grid; the controls it would overlap are pushed aside.</summary>
     void Place(DashboardControl control, CellPosition at, CellSize size);
+
+    /// <summary>Adds what is dropped to a layout control: at a cell of a grid or section, at the end of the others.</summary>
+    void Drop(DragItem item, LayoutControl container, CellPosition at);
+
+    /// <summary>Binds the slot of a control to the parameter dropped on it.</summary>
+    void Bind(ParameterDragItem item, ParameterControl control);
+
+    /// <summary>Moves a control into another layout control (at a cell of a grid or section), with its bindings.</summary>
+    void Move(DashboardControl control, LayoutControl container, CellPosition at);
 }
 
 /// <summary>
 /// What a control or section shows when the user right-clicks it: picks the colour of one area (the one clicked on)
 /// for the control (and the controls inside it) or for its device. Offers the look's swatches of the area, tints and
 /// shades of the current colour and any colour; a pick applies at once. "Inherited" takes the colour away. Any colour
-/// is a flyout of its own (a popup keeps the size it opened with, so it cannot grow to show the colour view).
+/// is a flyout of its own (a popup keeps the size it opened with, so it cannot grow to show the colour view). Without a
+/// control (the device panel) the pick is the device's colour.
 /// </summary>
 internal static class ColorChooser
 {
     private const double SwatchSize = 22;
 
     /// <param name="current">The colour the area has now (own, inherited or the look's).</param>
+    /// <param name="control">The control; null to pick the colour of the device.</param>
     /// <param name="device">The device of the control; null when it has none.</param>
-    public static Flyout Create(IColorEditor editor, DashboardControl control, string name, ColorArea area, RgbColor current, string? device)
+    public static Flyout Create(IColorEditor editor, DashboardControl? control, string name, ColorArea area, RgbColor current, string? device)
     {
         var title = $"{AreaColors.NameOf(area)} of '{name}'";
         var flyout = new Flyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
         var forDevice = new CheckBox
         {
             Content = $"For all controls of device '{device}'",
-            IsVisible = device is not null,
+            IsVisible = device is not null && control is not null,
         };
 
         void Apply(RgbColor? color)
         {
             flyout.Hide();
-            if (forDevice.IsChecked == true && device is not null)
+            if ((forDevice.IsChecked == true || control is null) && device is not null)
                 editor.SetDeviceColor(device, area, color);
-            else
+            else if (control is not null)
                 editor.SetControlColor(control, area, color);
         }
 

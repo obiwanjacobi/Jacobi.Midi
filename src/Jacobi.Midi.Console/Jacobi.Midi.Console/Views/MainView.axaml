@@ -16,6 +16,35 @@
         <KeyBinding Gesture="Ctrl+Shift+Z" Command="{Binding RedoCommand}" />
     </UserControl.KeyBindings>
 
+    <UserControl.Styles>
+        <Style Selector="TextBlock.caption">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Opacity" Value="0.7" />
+        </Style>
+        <Style Selector="TextBlock.heading">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Opacity" Value="0.8" />
+            <Setter Property="Margin" Value="0,6,0,0" />
+        </Style>
+        <Style Selector="Button.current:disabled /template/ ContentPresenter">
+            <Setter Property="BorderBrush" Value="#4FA3FF" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="TextBlock.device">
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Border.paletteItem">
+            <Setter Property="Background" Value="#30FFFFFF" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="Cursor" Value="DragMove" />
+        </Style>
+        <Style Selector="Border.paletteItem:pointerover">
+            <Setter Property="Background" Value="#50FFFFFF" />
+        </Style>
+    </UserControl.Styles>
+
     <DockPanel>
         <Border DockPanel.Dock="Top" Padding="20,10" Background="#40000000">
             <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
@@ -27,7 +56,14 @@
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
-                    <Button Content="+" ToolTip.Tip="Open a dashboard next to the open ones" Command="{Binding OpenDashboardCommand}" />
+                    <Button Content="+" ToolTip.Tip="A new dashboard, or open one next to the open ones">
+                        <Button.Flyout>
+                            <MenuFlyout>
+                                <MenuItem Header="New dashboard" Command="{Binding NewDashboardCommand}" />
+                                <MenuItem Header="Open dashboard…" Command="{Binding OpenDashboardCommand}" />
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
                     <Button Content="✕" ToolTip.Tip="Close the dashboard" Command="{Binding CloseDashboardCommand}" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
@@ -59,7 +95,7 @@
 
         <Border DockPanel.Dock="Bottom" Padding="20,6" Background="#40000000">
             <StackPanel Spacing="4">
-                <TextBlock Text="{Binding Status}" Foreground="{DynamicResource ConsoleTextBrush}" FontSize="12" />
+                <TextBlock Text="{Binding Status}" Foreground="{DynamicResource ConsoleTextBrush}" FontSize="12" TextWrapping="Wrap" />
                 <Expander Header="{Binding Problems.Count, StringFormat='Problems ({0})'}"
                           IsVisible="{Binding Problems.Count}">
                     <ItemsControl ItemsSource="{Binding Problems}" MaxHeight="160">
@@ -74,84 +110,283 @@
         </Border>
 
         <Border DockPanel.Dock="Top" Padding="20,8" Background="#60000000" IsVisible="{Binding IsEditing}">
-            <TextBlock Text="Edit: click a control to select it, right-click it for the colour of the part under the pointer. The values are locked."
-                       Foreground="{DynamicResource ConsoleTextBrush}" FontSize="12" />
+            <TextBlock Text="Edit: drag parameters and groups from the rig, or controls from the palettes, onto the dashboard; drop a parameter on a control to bind it. Click a control to select it, drag it to move it (also into another grid or section), Delete deletes it, right-click it for the colour of the part under the pointer. The values are locked."
+                       Foreground="{DynamicResource ConsoleTextBrush}" FontSize="12" TextWrapping="Wrap" />
         </Border>
 
-        <!-- the properties of the selected control -->
-        <Border DockPanel.Dock="Right" Width="300" Padding="16" Background="#50000000" IsVisible="{Binding IsEditing}">
+        <!-- Edit mode: the rig and palettes, the dashboard and the properties, with a splitter between them (the side
+             columns are closed in Play mode, see MainView.axaml.cs) -->
+        <Grid x:Name="Panes" ColumnDefinitions="300,Auto,*,Auto,320">
+        <!-- the rig with the parameters of its devices, and the palettes of controls: what is dragged onto the dashboard -->
+        <Border Grid.Column="0" Padding="12" Background="#50000000" IsVisible="{Binding IsEditing}">
+            <Grid RowDefinitions="Auto,*,Auto,Auto,Auto,Auto" RowSpacing="6">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="RIG" Classes="heading" VerticalAlignment="Center" Margin="0" />
+                    <Button Grid.Column="1" Content="+" ToolTip.Tip="Add a device to the rig" Command="{Binding AddDeviceCommand}" />
+                </Grid>
+                <TreeView Grid.Row="1" ItemsSource="{Binding RigTree}" SelectedItem="{Binding SelectedRigItem}">
+                    <TreeView.ItemTemplate>
+                        <TreeDataTemplate x:DataType="vm:RigTreeItem" ItemsSource="{Binding Children}">
+                            <Border Background="Transparent" PointerPressed="OnDragSourcePressed" ToolTip.Tip="{Binding Detail}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Border Width="10" Height="10" CornerRadius="5" VerticalAlignment="Center"
+                                            Background="{Binding ColorBrush}" IsVisible="{Binding IsDevice}"
+                                            BorderBrush="#80FFFFFF" BorderThickness="1" />
+                                    <TextBlock Text="{Binding Name}" Classes.device="{Binding IsDevice}" />
+                                    <TextBlock Text="{Binding Detail}" Opacity="0.6" FontSize="11" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+                        </TreeDataTemplate>
+                    </TreeView.ItemTemplate>
+                </TreeView>
+
+                <TextBlock Grid.Row="2" Text="CONTROLS" Classes="heading" />
+                <ItemsControl Grid.Row="3" ItemsSource="{Binding ControlPalette}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel ItemSpacing="4" LineSpacing="4" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PaletteItem">
+                            <Border Classes="paletteItem" PointerPressed="OnDragSourcePressed" ToolTip.Tip="{Binding Tip}" Opacity="{Binding Opacity}">
+                                <TextBlock Text="{Binding Name}" FontSize="12" />
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock Grid.Row="4" Text="LAYOUT" Classes="heading" />
+                <ItemsControl Grid.Row="5" ItemsSource="{Binding LayoutPalette}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel ItemSpacing="4" LineSpacing="4" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PaletteItem">
+                            <Border Classes="paletteItem" PointerPressed="OnDragSourcePressed" ToolTip.Tip="{Binding Tip}">
+                                <TextBlock Text="{Binding Name}" FontSize="12" />
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </Border>
+
+        <GridSplitter Grid.Column="1" Width="5" ResizeDirection="Columns" Background="#30FFFFFF" IsVisible="{Binding IsEditing}" />
+        <GridSplitter Grid.Column="3" Width="5" ResizeDirection="Columns" Background="#30FFFFFF" IsVisible="{Binding IsEditing}" />
+
+        <!-- the selected device, the selected control, or the dashboard -->
+        <Border Grid.Column="4" Padding="16" Background="#50000000" IsVisible="{Binding IsEditing}">
             <ScrollViewer>
                 <Panel>
-                    <TextBlock Text="Select a control to see its properties." TextWrapping="Wrap" Opacity="0.7"
-                               IsVisible="{Binding Properties, Converter={x:Static ObjectConverters.IsNull}}" />
+                    <StackPanel Spacing="10" IsVisible="{Binding !ShowsSelection}">
+                        <TextBlock Text="Dashboard" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Text="Name" Classes="caption" />
+                        <TextBox Text="{Binding DashboardName, UpdateSourceTrigger=LostFocus}" />
+                        <TextBlock Text="Select a control to see its properties, or a device in the rig." TextWrapping="Wrap" Opacity="0.7" />
+                    </StackPanel>
+
+                    <ContentControl Content="{Binding DeviceProperties}">
+                        <ContentControl.ContentTemplate>
+                            <DataTemplate x:DataType="vm:DevicePropertiesViewModel">
+                                <StackPanel Spacing="10">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="Device" FontSize="18" FontWeight="SemiBold" />
+                                        <Button Grid.Column="1" Content="Remove" ToolTip.Tip="Take the device out of the rig" Command="{Binding RemoveCommand}" />
+                                    </Grid>
+
+                                    <TextBlock Text="Alias (the name dashboards use)" Classes="caption" />
+                                    <TextBox Text="{Binding Alias, UpdateSourceTrigger=LostFocus}" />
+                                    <TextBlock Text="Name" Classes="caption" />
+                                    <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" PlaceholderText="e.g. the product name" />
+                                    <TextBlock Text="Map root (the address map of the device)" Classes="caption" />
+                                    <ComboBox ItemsSource="{Binding MapRoots}" SelectedItem="{Binding MapRoot}" HorizontalAlignment="Stretch" />
+                                    <TextBlock Text="Device values" Classes="caption" />
+                                    <TextBox Text="{Binding DeviceValues, UpdateSourceTrigger=LostFocus}" PlaceholderText="name=value, … e.g. deviceId=0x10" />
+                                    <TextBlock Text="Endpoint (name, UMP group)" Classes="caption" />
+                                    <Grid ColumnDefinitions="*,80" ColumnSpacing="8">
+                                        <TextBox Text="{Binding EndpointName, UpdateSourceTrigger=LostFocus}" PlaceholderText="not connected" />
+                                        <NumericUpDown Grid.Column="1" Value="{Binding EndpointGroup}" Minimum="0" Maximum="15" Increment="1" FormatString="0"
+                                                       IsEnabled="{Binding HasEndpoint}" ToolTip.Tip="UMP group (0-15)" />
+                                    </Grid>
+
+                                    <TextBlock Text="Colours of its controls" Classes="heading" />
+                                    <Grid ColumnDefinitions="64,*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="8">
+                                        <TextBlock Text="Accent" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Tag="{x:Static palettes:ColorArea.Accent}" Click="OnDeviceColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Border Width="16" Height="16" CornerRadius="2" BorderBrush="#80FFFFFF" BorderThickness="1" Background="{Binding AccentBrush}" />
+                                                <TextBlock Text="{Binding AccentColor}" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Grid.Column="2" Content="✕" ToolTip.Tip="The look's colour" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Accent}" />
+
+                                        <TextBlock Grid.Row="1" Text="Plate" VerticalAlignment="Center" />
+                                        <Button Grid.Row="1" Grid.Column="1" Tag="{x:Static palettes:ColorArea.Plate}" Click="OnDeviceColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Border Width="16" Height="16" CornerRadius="2" BorderBrush="#80FFFFFF" BorderThickness="1" Background="{Binding PlateBrush}" />
+                                                <TextBlock Text="{Binding PlateColor}" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Grid.Row="1" Grid.Column="2" Content="✕" ToolTip.Tip="The look's colour" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Plate}" />
+
+                                        <TextBlock Grid.Row="2" Text="Panel" VerticalAlignment="Center" />
+                                        <Button Grid.Row="2" Grid.Column="1" Tag="{x:Static palettes:ColorArea.Panel}" Click="OnDeviceColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Border Width="16" Height="16" CornerRadius="2" BorderBrush="#80FFFFFF" BorderThickness="1" Background="{Binding PanelBrush}" />
+                                                <TextBlock Text="{Binding PanelColor}" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Grid.Row="2" Grid.Column="2" Content="✕" ToolTip.Tip="The look's colour" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Panel}" />
+                                    </Grid>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ContentControl.ContentTemplate>
+                    </ContentControl>
+
                     <ContentControl Content="{Binding Properties}">
                         <ContentControl.ContentTemplate>
                             <DataTemplate x:DataType="vm:ControlPropertiesViewModel">
-                    <StackPanel Spacing="10">
-                        <TextBlock Text="{Binding Kind}" FontSize="18" FontWeight="SemiBold" />
+                                <StackPanel Spacing="10">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="{Binding Kind}" FontSize="18" FontWeight="SemiBold" />
+                                        <Button Grid.Column="1" Content="Delete" ToolTip.Tip="Delete the control and the controls inside it (Delete)" Command="{Binding DeleteCommand}" />
+                                    </Grid>
+                                    <StackPanel Spacing="6" IsVisible="{Binding CanChangeKind}">
+                                        <TextBlock Text="Change to" Classes="caption" />
+                                        <ItemsControl ItemsSource="{Binding Kinds}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <WrapPanel ItemSpacing="4" LineSpacing="4" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:KindOption">
+                                                    <Button Content="{Binding Name}" Command="{Binding ChangeCommand}" IsEnabled="{Binding CanChange}"
+                                                            Classes.current="{Binding IsCurrent}" FontSize="12" Padding="8,3" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
 
-                        <TextBlock Text="Label" FontSize="12" Opacity="0.7" />
-                        <TextBox Text="{Binding Label, UpdateSourceTrigger=LostFocus}" PlaceholderText="the parameter's name" />
+                                    <TextBlock Text="Label" Classes="caption" />
+                                    <TextBox Text="{Binding Label, UpdateSourceTrigger=LostFocus}" PlaceholderText="the parameter's name" />
 
-                        <StackPanel Spacing="10" IsVisible="{Binding IsInGrid}">
-                            <TextBlock Text="Position in its grid (column, row)" FontSize="12" Opacity="0.7" />
-                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                <NumericUpDown Value="{Binding Column}" Minimum="0" Increment="1" FormatString="0" ToolTip.Tip="Column (x)" />
-                                <NumericUpDown Grid.Column="1" Value="{Binding Row}" Minimum="0" Increment="1" FormatString="0" ToolTip.Tip="Row (y)" />
-                            </Grid>
-                        </StackPanel>
-                        <TextBlock Text="Size in cells (columns × rows)" FontSize="12" Opacity="0.7" />
-                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                            <NumericUpDown Value="{Binding Columns}" Minimum="1" Increment="1" FormatString="0" ToolTip.Tip="Columns (width)" />
-                            <NumericUpDown Grid.Column="1" Value="{Binding Rows}" Minimum="1" Increment="1" FormatString="0" ToolTip.Tip="Rows (height)" />
-                        </Grid>
+                                    <StackPanel Spacing="10" IsVisible="{Binding IsInGrid}">
+                                        <TextBlock Text="Position in its grid (column, row)" Classes="caption" />
+                                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                            <NumericUpDown Value="{Binding Column}" Minimum="0" Increment="1" FormatString="0" ToolTip.Tip="Column (x)" />
+                                            <NumericUpDown Grid.Column="1" Value="{Binding Row}" Minimum="0" Increment="1" FormatString="0" ToolTip.Tip="Row (y)" />
+                                        </Grid>
+                                    </StackPanel>
+                                    <TextBlock Text="Size in cells (columns × rows)" Classes="caption" />
+                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                        <NumericUpDown Value="{Binding Columns}" Minimum="1" Increment="1" FormatString="0" ToolTip.Tip="Columns (width)" />
+                                        <NumericUpDown Grid.Column="1" Value="{Binding Rows}" Minimum="1" Increment="1" FormatString="0" ToolTip.Tip="Rows (height)" />
+                                    </Grid>
 
-                        <StackPanel Spacing="10" IsVisible="{Binding IsParameter}">
-                            <TextBlock Text="Unit" FontSize="12" Opacity="0.7" />
-                            <TextBox Text="{Binding Unit, UpdateSourceTrigger=LostFocus}" PlaceholderText="none" />
-                            <TextBlock Text="Decimals" FontSize="12" Opacity="0.7" />
-                            <TextBox Text="{Binding Decimals, UpdateSourceTrigger=LostFocus}" PlaceholderText="as many as the value has" />
-                        </StackPanel>
+                                    <StackPanel Spacing="10" IsVisible="{Binding IsParameter}">
+                                        <TextBlock Text="Unit" Classes="caption" />
+                                        <TextBox Text="{Binding Unit, UpdateSourceTrigger=LostFocus}" PlaceholderText="none" />
+                                        <TextBlock Text="Decimals" Classes="caption" />
+                                        <TextBox Text="{Binding Decimals, UpdateSourceTrigger=LostFocus}" PlaceholderText="as many as the value has" />
+                                    </StackPanel>
 
-                        <TextBlock Text="Colours" FontSize="12" Opacity="0.7" Margin="0,6,0,0" />
-                        <Grid ColumnDefinitions="64,*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="8">
-                            <TextBlock Text="Accent" VerticalAlignment="Center" />
-                            <Button Grid.Column="1" Tag="{x:Static palettes:ColorArea.Accent}" Click="OnColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <Border Width="16" Height="16" CornerRadius="2" BorderBrush="#80FFFFFF" BorderThickness="1" Background="{Binding AccentBrush}" />
-                                    <TextBlock Text="{Binding AccentColor}" />
+                                    <StackPanel Spacing="10" IsVisible="{Binding IsFlex}">
+                                        <TextBlock Text="Gap between the controls (cells)" Classes="caption" />
+                                        <NumericUpDown Value="{Binding Gap}" Minimum="0" Increment="1" FormatString="0" />
+                                        <CheckBox Content="Wrap onto more lines" IsChecked="{Binding Wrap}" />
+                                    </StackPanel>
+
+                                    <TextBlock Text="Colours" Classes="heading" />
+                                    <Grid ColumnDefinitions="64,*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="8">
+                                        <TextBlock Text="Accent" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Tag="{x:Static palettes:ColorArea.Accent}" Click="OnColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Border Width="16" Height="16" CornerRadius="2" BorderBrush="#80FFFFFF" BorderThickness="1" Background="{Binding AccentBrush}" />
+                                                <TextBlock Text="{Binding AccentColor}" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Grid.Column="2" Content="✕" ToolTip.Tip="Inherit the colour" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Accent}" />
+
+                                        <TextBlock Grid.Row="1" Text="Plate" VerticalAlignment="Center" />
+                                        <Button Grid.Row="1" Grid.Column="1" Tag="{x:Static palettes:ColorArea.Plate}" Click="OnColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Border Width="16" Height="16" CornerRadius="2" BorderBrush="#80FFFFFF" BorderThickness="1" Background="{Binding PlateBrush}" />
+                                                <TextBlock Text="{Binding PlateColor}" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Grid.Row="1" Grid.Column="2" Content="✕" ToolTip.Tip="Inherit the colour" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Plate}" />
+
+                                        <TextBlock Grid.Row="2" Text="Panel" VerticalAlignment="Center" />
+                                        <Button Grid.Row="2" Grid.Column="1" Tag="{x:Static palettes:ColorArea.Panel}" Click="OnColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Border Width="16" Height="16" CornerRadius="2" BorderBrush="#80FFFFFF" BorderThickness="1" Background="{Binding PanelBrush}" />
+                                                <TextBlock Text="{Binding PanelColor}" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Grid.Row="2" Grid.Column="2" Content="✕" ToolTip.Tip="Inherit the colour" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Panel}" />
+                                    </Grid>
+
+                                    <TextBlock Text="Device and base" Classes="heading" />
+                                    <TextBlock Text="Device (alias)" Classes="caption" />
+                                    <TextBox Text="{Binding Device, UpdateSourceTrigger=LostFocus}" PlaceholderText="{Binding InheritedDevice}" />
+                                    <TextBlock Text="Base (the path the bindings are relative to)" Classes="caption" />
+                                    <TextBox Text="{Binding Base, UpdateSourceTrigger=LostFocus}" PlaceholderText="{Binding InheritedBase}" TextWrapping="Wrap" />
+
+                                    <StackPanel Spacing="8" IsVisible="{Binding IsLayout}">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Text="Index variables (name, first item)" Classes="heading" VerticalAlignment="Center" />
+                                            <Button Grid.Column="1" Content="+" ToolTip.Tip="Declare an index variable" Command="{Binding AddVariableCommand}" />
+                                        </Grid>
+                                        <ItemsControl ItemsSource="{Binding Variables}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:VariableViewModel">
+                                                    <Grid ColumnDefinitions="*,100,Auto" ColumnSpacing="6" Margin="0,0,0,6">
+                                                        <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" />
+                                                        <NumericUpDown Grid.Column="1" Value="{Binding Value}" Minimum="0" Increment="1" FormatString="0" ToolTip.Tip="The index the dashboard starts with (0 is the first item)" />
+                                                        <Button Grid.Column="2" Content="✕" ToolTip.Tip="Remove the variable" Command="{Binding RemoveCommand}" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+
+                                    <StackPanel Spacing="8" IsVisible="{Binding IsEnvelope}">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Text="Segments" Classes="heading" VerticalAlignment="Center" />
+                                            <Button Grid.Column="1" Content="+" ToolTip.Tip="Add a segment at the end" Command="{Binding AddSegmentCommand}" />
+                                        </Grid>
+                                        <ItemsControl ItemsSource="{Binding Segments}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:SegmentViewModel">
+                                                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" Margin="0,0,0,4">
+                                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                                        <CheckBox Grid.Column="1" Content="Holds" IsChecked="{Binding Hold}" ToolTip.Tip="Holds (sustains) until note off; one segment holds at most" />
+                                                        <Button Grid.Column="2" Content="✕" ToolTip.Tip="Remove the segment with its bindings" Command="{Binding RemoveCommand}" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+
+                                    <StackPanel Spacing="8" IsVisible="{Binding IsParameter}">
+                                        <TextBlock Text="Bindings ([device:]path or $variable)" Classes="heading" />
+                                        <ItemsControl ItemsSource="{Binding Slots}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:SlotViewModel">
+                                                    <StackPanel Spacing="4" Margin="0,0,0,6">
+                                                        <TextBlock Text="{Binding Name}" Classes="caption" />
+                                                        <TextBox Text="{Binding Text, UpdateSourceTrigger=LostFocus}" PlaceholderText="not bound: drop a parameter on the control"
+                                                                 TextWrapping="Wrap" FontSize="12" FontFamily="Cascadia Mono, Consolas, monospace" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
                                 </StackPanel>
-                            </Button>
-                            <Button Grid.Column="2" Content="✕" ToolTip.Tip="Inherit the colour" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Accent}" />
-
-                            <TextBlock Grid.Row="1" Text="Plate" VerticalAlignment="Center" />
-                            <Button Grid.Row="1" Grid.Column="1" Tag="{x:Static palettes:ColorArea.Plate}" Click="OnColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <Border Width="16" Height="16" CornerRadius="2" BorderBrush="#80FFFFFF" BorderThickness="1" Background="{Binding PlateBrush}" />
-                                    <TextBlock Text="{Binding PlateColor}" />
-                                </StackPanel>
-                            </Button>
-                            <Button Grid.Row="1" Grid.Column="2" Content="✕" ToolTip.Tip="Inherit the colour" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Plate}" />
-
-                            <TextBlock Grid.Row="2" Text="Panel" VerticalAlignment="Center" />
-                            <Button Grid.Row="2" Grid.Column="1" Tag="{x:Static palettes:ColorArea.Panel}" Click="OnColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <Border Width="16" Height="16" CornerRadius="2" BorderBrush="#80FFFFFF" BorderThickness="1" Background="{Binding PanelBrush}" />
-                                    <TextBlock Text="{Binding PanelColor}" />
-                                </StackPanel>
-                            </Button>
-                            <Button Grid.Row="2" Grid.Column="2" Content="✕" ToolTip.Tip="Inherit the colour" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Panel}" />
-                        </Grid>
-
-                        <TextBlock Text="Bindings" FontSize="12" Opacity="0.7" Margin="0,6,0,0" />
-                        <ItemsControl ItemsSource="{Binding Bindings}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" FontFamily="Cascadia Mono, Consolas, monospace" />
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
                             </DataTemplate>
                         </ContentControl.ContentTemplate>
                     </ContentControl>
@@ -159,8 +394,9 @@
             </ScrollViewer>
         </Border>
 
-        <ScrollViewer HorizontalScrollBarVisibility="Auto">
+        <ScrollViewer Grid.Column="2" HorizontalScrollBarVisibility="Auto">
             <ContentControl x:Name="DashboardHost" Margin="24" HorizontalAlignment="Left" VerticalAlignment="Top" />
         </ScrollViewer>
+        </Grid>
     </DockPanel>
 </UserControl>

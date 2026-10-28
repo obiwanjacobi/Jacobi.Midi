@@ -68,6 +68,23 @@ public sealed class DeviceState
         }
     }
 
+    /// <summary>The parameter tree of the map root: the groups, repeats and fields to bind controls to.</summary>
+    public ParameterNode Parameters => _parameters ??= ParameterNode.Of(Plan, ItemCount);
+    private ParameterNode? _parameters;
+
+    // the item count of a repeat of the map; an invalid map has none (it is reported when the bindings are resolved)
+    private int? ItemCount(string repeat)
+    {
+        try
+        {
+            return _maps.ItemCount(MapRoot, new SchemaPath(repeat));
+        }
+        catch (AddressMapException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>The values as a value source, e.g. to send a range or to save a dump: a parameter without a value has none.</summary>
     public IValueSource Source { get; }
 

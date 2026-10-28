@@ -22,7 +22,7 @@ public closed class DashboardControl
     public CellPosition? At { get; set; }
 
     /// <summary>The share of the remaining space; only used inside a row or column.</summary>
-    public int? Grow { get; init; }
+    public int? Grow { get; set; }
 
     /// <summary>
     /// Other colours (accent, plate, panel) for this control and the controls inside it; the user changes them in the
@@ -31,13 +31,13 @@ public closed class DashboardControl
     public AreaColors Colors { get; set; } = AreaColors.None;
 
     /// <summary>The device alias of the bindings in and below this control; inherited by the controls inside it.</summary>
-    public string? Device { get; init; }
+    public string? Device { get; set; }
 
     /// <summary>
     /// The full schema path (from the map root, with repeat indices) that the binding paths in and below this control
     /// are relative to; inherited by the controls inside it. Bases do not stack: the nearest one is used.
     /// </summary>
-    public string? Base { get; init; }
+    public string? Base { get; set; }
 }
 
 /// <summary>
@@ -50,8 +50,11 @@ public closed class ParameterControl : DashboardControl
     /// <summary>How the values are presented: unit and decimals.</summary>
     public DisplaySettings Display { get; set; } = DisplaySettings.Default;
 
-    /// <summary>The bound slots by name; an unbound slot is left out.</summary>
-    public abstract IEnumerable<KeyValuePair<string, Binding>> Slots { get; }
+    /// <summary>
+    /// The bound slots by name; an unbound slot is left out. Setting it binds the slots anew (see
+    /// <see cref="SlotNames"/> for the names a kind has).
+    /// </summary>
+    public abstract IReadOnlyDictionary<string, Binding> Slots { get; set; }
 }
 
 /// <summary>
@@ -69,9 +72,13 @@ public sealed class ValueControl : ParameterControl
     public override ParameterControlKind Kind { get; }
 
     /// <summary>The bindings by slot name (see <see cref="SlotNames"/>).</summary>
-    public IReadOnlyDictionary<string, Binding> Bindings { get; init; } = new Dictionary<string, Binding>();
+    public IReadOnlyDictionary<string, Binding> Bindings { get; set; } = new Dictionary<string, Binding>();
 
-    public override IEnumerable<KeyValuePair<string, Binding>> Slots => Bindings;
+    public override IReadOnlyDictionary<string, Binding> Slots
+    {
+        get => Bindings;
+        set => Bindings = value;
+    }
 }
 
 /// <summary>
@@ -82,19 +89,38 @@ public sealed class EnvelopeControl : ParameterControl
 {
     public override ParameterControlKind Kind => ParameterControlKind.Envelope;
 
-    public IReadOnlyList<EnvelopeSegment> Segments { get; init; } = [];
+    public IReadOnlyList<EnvelopeSegment> Segments { get; set; } = [];
 
-    public override IEnumerable<KeyValuePair<string, Binding>> Slots
+    /// <summary>The time and level slots of the segments; setting them keeps the segments and their hold.</summary>
+    /// <exception cref="ArgumentException">A slot name is not the time or level of a segment.</exception>
+    public override IReadOnlyDictionary<string, Binding> Slots
     {
         get
         {
+            var slots = new Dictionary<string, Binding>(StringComparer.Ordinal);
             for (var index = 0; index < Segments.Count; index++)
             {
                 if (Segments[index].Time is { } time)
-                    yield return new(SlotNames.Time(index), time);
+                    slots[SlotNames.Time(index)] = time;
                 if (Segments[index].Level is { } level)
-                    yield return new(SlotNames.Level(index), level);
+                    slots[SlotNames.Level(index)] = level;
             }
+            return slots;
+        }
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            var count = Segments.Count;
+            foreach (var slot in value.Keys)
+            {
+                if (SlotNames.SegmentOf(slot) is not { } segment)
+                    throw new ArgumentException($"'{slot}' is not the time or level of a segment.", nameof(value));
+                count = Math.Max(count, segment + 1);
+            }
+            Segments = [.. Enumerable.Range(0, count).Select(index => new EnvelopeSegment(
+                value.GetValueOrDefault(SlotNames.Time(index)),
+                value.GetValueOrDefault(SlotNames.Level(index)),
+                index < Segments.Count && Segments[index].Hold))];
         }
     }
 }
@@ -113,19 +139,19 @@ public sealed class LayoutControl : DashboardControl
 {
     public required LayoutControlKind Kind { get; init; }
 
-    public IReadOnlyList<DashboardControl> Children { get; init; } = [];
+    public IReadOnlyList<DashboardControl> Children { get; set; } = [];
 
     /// <summary>
     /// The index variables of the controls inside this one (<c>Programs[$patch]</c>). A variable of a nearer layout
     /// control hides one with the same name further out.
     /// </summary>
-    public IReadOnlyList<IndexVariable> Variables { get; init; } = [];
+    public IReadOnlyList<IndexVariable> Variables { get; set; } = [];
 
     /// <summary>The space between the children, in cells.</summary>
-    public int Gap { get; init; }
+    public int Gap { get; set; }
 
     /// <summary>Whether a row or column wraps its children onto more lines.</summary>
-    public bool Wrap { get; init; }
+    public bool Wrap { get; set; }
 }
 
 /// <summary>
@@ -206,6 +232,37 @@ public static class SlotNames
 
     /// <summary>The level slot of an envelope segment (zero based index).</summary>
     public static string Level(int segment) => $"segment{segment + 1}.level";
+
+    /// <summary>The (zero based) segment of an envelope's time or level slot; null for another slot.</summary>
+    public static int? SegmentOf(string slot)
+    {
+        ArgumentNullException.ThrowIfNull(slot);
+        const string prefix = "segment";
+        var dot = slot.IndexOf('.');
+        if (!slot.StartsWith(prefix, StringComparison.Ordinal) || dot < 0
+            || !Int32.TryParse(slot.AsSpan(prefix.Length, dot - prefix.Length), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var number)
+            || number < 1)
+        {
+            return null;
+        }
+        var segment = number - 1;
+        return slot == Time(segment) || slot == Level(segment) ? segment : null;
+    }
+
+    /// <summary>
+    /// The slots a control shows, in order: <c>value</c> (a slider's <c>min</c> and <c>max</c> are not shown yet),
+    /// <c>x</c> and <c>y</c> of an XY pad, the time and level of each segment of an envelope (at least one segment).
+    /// </summary>
+    public static IReadOnlyList<string> Shown(ParameterControl control)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        return control switch
+        {
+            EnvelopeControl envelope => [.. Enumerable.Range(0, Math.Max(1, envelope.Segments.Count)).SelectMany(index => new[] { Time(index), Level(index) })],
+            { Kind: ParameterControlKind.XyPad } => [X, Y],
+            _ => [Value],
+        };
+    }
 
     /// <summary>The slots a control kind has; an envelope's slots follow from its segments (none here).</summary>
     public static IReadOnlySet<string> Of(ParameterControlKind kind)

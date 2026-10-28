@@ -12,7 +12,7 @@ public sealed class Rig
     /// <summary>Assemblies and schema files beyond the built-in ones, for all devices of the rig.</summary>
     public SchemaSources Sources { get; init; } = SchemaSources.None;
 
-    public IReadOnlyList<DeviceInstance> Devices { get; init; } = [];
+    public IReadOnlyList<DeviceInstance> Devices { get; set; } = [];
 
     /// <summary>The device instance with the alias (case-insensitive), or null.</summary>
     public DeviceInstance? Find(string alias)
@@ -26,19 +26,19 @@ public sealed class Rig
 public sealed class DeviceInstance
 {
     /// <summary>The short name dashboards use to refer to the device (e.g. <c>synth</c>).</summary>
-    public required string Alias { get; init; }
+    public required string Alias { get; set; }
 
     /// <summary>The name shown to the user (e.g. the product name).</summary>
-    public string? Name { get; init; }
+    public string? Name { get; set; }
 
     /// <summary>The map root of the device's schema (e.g. <c>Gx700.AddressMap</c>).</summary>
-    public required string MapRoot { get; init; }
+    public required string MapRoot { get; set; }
 
     /// <summary>The device values the map root does not fix (e.g. <c>deviceId</c>), by name (case-insensitive).</summary>
-    public IReadOnlyDictionary<string, long> DeviceValues { get; init; } = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlyDictionary<string, long> DeviceValues { get; set; } = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>How to reach the device; null when it is not connected.</summary>
-    public EndpointReference? Endpoint { get; init; }
+    public EndpointReference? Endpoint { get; set; }
 
     /// <summary>
     /// The colours of the device's controls (accent, plate, panel); the look's where it has none. The user changes

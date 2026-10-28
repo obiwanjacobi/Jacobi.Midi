@@ -67,9 +67,10 @@
                     <Ellipse Width="9" Height="9" Margin="6" HorizontalAlignment="Right" VerticalAlignment="Top" Fill="{DynamicResource ConsoleScrewBrush}" />
                     <Ellipse Width="9" Height="9" Margin="6" HorizontalAlignment="Left" VerticalAlignment="Bottom" Fill="{DynamicResource ConsoleScrewBrush}" />
                     <Ellipse Width="9" Height="9" Margin="6" HorizontalAlignment="Right" VerticalAlignment="Bottom" Fill="{DynamicResource ConsoleScrewBrush}" />
-                    <StackPanel Margin="{TemplateBinding Padding}" Spacing="6" HorizontalAlignment="Center">
+                    <!-- the label, the face (the room the label and value leave: a fader stretches into it) and the value -->
+                    <Grid Margin="{TemplateBinding Padding}" RowDefinitions="Auto,*,Auto">
                         <!-- engraved: a light copy one pixel lower -->
-                        <Panel HorizontalAlignment="Center">
+                        <Panel HorizontalAlignment="Center" Margin="0,0,0,6">
                             <TextBlock Text="{TemplateBinding Label, Converter={x:Static chrome:UpperCaseConverter.Instance}}"
                                        FontFamily="{DynamicResource ConsoleLabelFont}"
                                        Margin="0,1,0,0" Foreground="#A0FFFFFF" FontSize="12" FontWeight="SemiBold" LetterSpacing="1.5" />
@@ -77,14 +78,14 @@
                                        FontFamily="{DynamicResource ConsoleLabelFont}"
                                        Foreground="{DynamicResource ConsolePlateTextBrush}" FontSize="12" FontWeight="SemiBold" LetterSpacing="1.5" />
                         </Panel>
-                        <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" HorizontalAlignment="Center" />
-                        <Border Background="{DynamicResource ConsoleDisplayBrush}" CornerRadius="3" Padding="8,2" HorizontalAlignment="Center"
+                        <ContentPresenter Grid.Row="1" Name="PART_ContentPresenter" Content="{TemplateBinding Content}" />
+                        <Border Grid.Row="2" Background="{DynamicResource ConsoleDisplayBrush}" CornerRadius="3" Padding="8,2" Margin="0,6,0,0" HorizontalAlignment="Center"
                                 BoxShadow="inset 0 1 3 0 #E6000000"
                                 IsVisible="{TemplateBinding ValueText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                             <TextBlock Text="{TemplateBinding ValueText}" Foreground="{DynamicResource ConsoleDisplayTextBrush}"
                                        FontFamily="{DynamicResource ConsoleDisplayFont}" FontSize="14" />
                         </Border>
-                    </StackPanel>
+                    </Grid>
                 </Panel>
             </ControlTemplate>
         </Setter>

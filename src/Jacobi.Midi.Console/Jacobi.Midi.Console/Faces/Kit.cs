@@ -31,6 +31,9 @@ public static class Kits
         [ParameterControlKind.Switch] = () => new FoundrySwitchFace(),
         [ParameterControlKind.NumberBox] = () => new FoundryNumberBoxFace(),
         [ParameterControlKind.Text] = () => new FoundryTextFace(),
+        [ParameterControlKind.Selector] = () => new FoundrySelectorFace(),
+        [ParameterControlKind.XyPad] = () => new FoundryXyPadFace(),
+        [ParameterControlKind.Envelope] = () => new FoundryEnvelopeFace(),
     });
 
     /// <summary>Machined aluminium: LED rings and meters, machined caps and OLED displays.</summary>
@@ -41,5 +44,8 @@ public static class Kits
         [ParameterControlKind.Switch] = () => new AnodizedSwitchFace(),
         [ParameterControlKind.NumberBox] = () => new AnodizedNumberBoxFace(),
         [ParameterControlKind.Text] = () => new AnodizedTextFace(),
+        [ParameterControlKind.Selector] = () => new AnodizedSelectorFace(),
+        [ParameterControlKind.XyPad] = () => new AnodizedXyPadFace(),
+        [ParameterControlKind.Envelope] = () => new AnodizedEnvelopeFace(),
     });
 }

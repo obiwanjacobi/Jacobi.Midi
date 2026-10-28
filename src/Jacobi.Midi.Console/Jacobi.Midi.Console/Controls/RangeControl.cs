@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Input;
+using Avalonia.Layout;
 using Avalonia.VisualTree;
 using Jacobi.Midi.Console.Core.Faces;
 
@@ -8,7 +9,8 @@ namespace Jacobi.Midi.Console.Controls;
 
 /// <summary>
 /// The base of the controls of a number in a range (knob, fader): the range and step (from the parameter's data
-/// type), the value and the interaction: drag vertically, mouse wheel, arrow keys; with Shift in fine steps.
+/// type), the value and the interaction: drag vertically (along a horizontal control, see
+/// <see cref="ControlOrientation"/>: to the right), mouse wheel, arrow keys; with Shift in fine steps.
 /// </summary>
 public abstract class RangeControl : ParameterControlBase
 {
@@ -39,7 +41,7 @@ public abstract class RangeControl : ParameterControlBase
     public static readonly StyledProperty<int?> DecimalsProperty =
         AvaloniaProperty.Register<RangeControl, int?>(nameof(Decimals));
 
-    private double _dragStartY;
+    private Point _dragStart;
     private decimal _dragStartValue;
     private bool _dragged;
 
@@ -84,6 +86,8 @@ public abstract class RangeControl : ParameterControlBase
         set => SetValue(DecimalsProperty, value);
     }
 
+    private bool IsHorizontal => ControlOrientation.GetOrientation(this) == Orientation.Horizontal;
+
     // while Minimum and Maximum are set one after the other, the range may be inverted for a moment
     private ValueRange? Range => Maximum < Minimum ? null : new ValueRange(Minimum, Maximum);
 
@@ -108,6 +112,15 @@ public abstract class RangeControl : ParameterControlBase
             || change.Property == UnitProperty || change.Property == DecimalsProperty)
         {
             UpdateFace();
+        }
+        // the face runs and the pointer shows the direction to drag in; vertical is the theme's
+        if (change.Property == ControlOrientation.OrientationProperty)
+        {
+            UpdateFace();
+            if (IsHorizontal)
+                Cursor = new Cursor(StandardCursorType.SizeWestEast);
+            else
+                ClearValue(CursorProperty);
         }
         if (change.Property == ValueProperty && Value is { } value)
             Write(value);
@@ -134,7 +147,7 @@ public abstract class RangeControl : ParameterControlBase
             return;
 
         e.Pointer.Capture(this);
-        _dragStartY = e.GetPosition(this).Y;
+        _dragStart = e.GetPosition(this);
         _dragStartValue = Value ?? range.Clamp(0);
         _dragged = false;
         Focus();
@@ -147,11 +160,13 @@ public abstract class RangeControl : ParameterControlBase
         if (e.Pointer.Captured != this || Range is not { } range)
             return;
 
-        var moved = _dragStartY - e.GetPosition(this).Y;
+        // up, or to the right along a horizontal control, is more
+        var position = e.GetPosition(this);
+        var moved = IsHorizontal ? position.X - _dragStart.X : _dragStart.Y - position.Y;
         if (!_dragged && Math.Abs(moved) < DragThreshold)
             return;
         _dragged = true;
-        var distance = moved / DragRange;
+        var distance = moved / DragLength;
         if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
             distance /= FineFactor;
         Value = Snap(range, _dragStartValue + (range.Maximum - range.Minimum) * (decimal)distance);
@@ -167,6 +182,9 @@ public abstract class RangeControl : ParameterControlBase
         if (!_dragged)
             OnClick(e.GetPosition(this));
     }
+
+    /// <summary>The drag distance (in pixels of the control) that covers the whole range.</summary>
+    protected virtual double DragLength => DragRange;
 
     /// <summary>The control was clicked without dragging, at a position in the control.</summary>
     protected virtual void OnClick(Point position)
@@ -228,8 +246,9 @@ public abstract class RangeControl : ParameterControlBase
     {
         if (Range is not { } range)
             return;
-        FaceState = range.ToFaceState(Value);
-        ValueText = FormatValue() ?? "–";
+        FaceState = range.ToFaceState(Value) with { IsHorizontal = IsHorizontal };
+        // a choice shows the name of its option
+        ValueText = Parameter?.Info.OptionAt(Value) ?? FormatValue() ?? "–";
     }
 
     // the decimals of the step: 1 → 0, 0.5 → 1, 0.25 → 2
@@ -250,9 +269,17 @@ public sealed class KnobControl : RangeControl
 {
 }
 
-/// <summary>The fader: a number in a range, as a vertical slider.</summary>
+/// <summary>
+/// The fader: a number in a range, as a slider; vertical, or horizontal when its cells are wider than tall. Its slot
+/// takes all the length it is given, and dragging along the whole slot covers the whole range: a longer fader is finer.
+/// </summary>
 public sealed class FaderControl : RangeControl
 {
+    // the travel of the cap on the face: the pointer and the cap move together; at least a short drag
+    protected override double DragLength
+        => this.GetVisualDescendants().OfType<Faces.Face>().FirstOrDefault() is { } face
+            ? Math.Max(40, face.TravelLength)
+            : base.DragLength;
 }
 
 /// <summary>
@@ -262,9 +289,6 @@ public sealed class FaderControl : RangeControl
 /// </summary>
 public sealed class NumberBoxControl : RangeControl
 {
-    // the part of the width, at the right, with the arrows
-    private const double ArrowsWidth = 0.3;
-
     protected override void OnClick(Point position)
     {
         if (ArrowAt(position) is { } direction)
@@ -274,20 +298,18 @@ public sealed class NumberBoxControl : RangeControl
     // a quick second click on the arrows is another step, not a request to type the value
     protected override bool IsEditArea(Point position) => ArrowAt(position) is null;
 
-    // the arrows are in the face, which the chrome surrounds: the position is taken relative to the face;
-    // +1 for ▲, -1 for ▼, null outside the arrows
+    // the arrows are in the face, which the chrome surrounds; +1 for ▲, -1 for ▼, null outside the arrows
     private int? ArrowAt(Point position)
     {
-        var area = (Visual?)this.GetVisualDescendants().OfType<Faces.Face>().FirstOrDefault() ?? this;
-        if (this.TranslatePoint(position, area) is not { } point || point.X < area.Bounds.Width * (1 - ArrowsWidth))
+        if (FacePoint(position) is not (Point point, Size size) || point.X < size.Width * (1 - Faces.FaceDrawing.ArrowsWidth))
             return null;
-        return point.Y < area.Bounds.Height / 2 ? 1 : -1;
+        return point.Y < size.Height / 2 ? 1 : -1;
     }
 
-    // the face shows the number: the chrome has no value text
+    // the face shows the number (of a choice: the name of its option): the chrome has no value text
     protected override void UpdateFace()
     {
-        FaceState = new TextFaceState(FormatValue());
+        FaceState = new TextFaceState(Parameter?.Info.OptionAt(Value) ?? FormatValue());
         ValueText = null;
     }
 }

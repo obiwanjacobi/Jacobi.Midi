@@ -28,6 +28,15 @@ public readonly record struct ValueRange
     public double ToFraction(decimal value)
         => Maximum == Minimum ? 0 : (double)((Clamp(value) - Minimum) / (Maximum - Minimum));
 
+    /// <summary>
+    /// The value at a fraction of the range (0-1, clamped), on a whole number of steps from the minimum (no steps for 0).
+    /// </summary>
+    public decimal FromFraction(double fraction, decimal step)
+    {
+        var value = Minimum + (Maximum - Minimum) * (decimal)Math.Clamp(fraction, 0, 1);
+        return Clamp(step > 0 ? Minimum + Math.Round((value - Minimum) / step) * step : value);
+    }
+
     /// <summary>Where a value is drawn from: zero within the range, as a fraction.</summary>
     public double Origin => ToFraction(0);
 

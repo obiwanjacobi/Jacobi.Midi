@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -10,6 +11,8 @@ using Avalonia.VisualTree;
 using Jacobi.Midi.Console.Chrome;
 using Jacobi.Midi.Console.Controls;
 using Jacobi.Midi.Console.Core.Dashboards;
+using Jacobi.Midi.Console.Core.Devices;
+using Jacobi.Midi.Console.Core.Editing;
 using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Core.Parameters;
 using Jacobi.Midi.Console.Faces;
@@ -39,7 +42,14 @@ namespace Jacobi.Midi.Console.Dashboards;
 /// the area that was clicked: the face or an element of the class <c>accentArea</c> is the accent, the rest of a
 /// parameter control its plate, the rest of a layout control its panel. Dragging a control in a grid moves it,
 /// dragging the handle at its bottom right sizes it, by whole cells; the control follows the pointer and is placed
-/// (<see cref="IDashboardEditor.Place"/>) when it is let go. In Play mode a right-click does nothing.
+/// (<see cref="IDashboardEditor.Place"/>) when it is let go. A control let go over another grid, section, row, column
+/// or tabs moves into it (<see cref="IDashboardEditor.Move"/>); the cells of the grid it goes into are shown while it is
+/// dragged. A <see cref="DragItem"/> dropped on the dashboard goes into the layout control under the pointer, at the cell
+/// of the pointer (<see cref="IDashboardEditor.Drop"/>); a field dropped on a parameter control binds it
+/// (<see cref="IDashboardEditor.Bind"/>). A tab header shows its page in Edit mode too, and selects it; the page a
+/// tabs shows is kept when the dashboard is built again, and selecting a control shows the pages it is on. A label or
+/// separator has only an accent: drawn in the look's text or outline colour until it is given one. In Play mode a
+/// right-click does nothing.
 /// </para>
 /// </summary>
 internal sealed class DashboardBuilder(DashboardSession session, IDashboardEditor editor, bool isEditing)
@@ -59,9 +69,13 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     private readonly Dictionary<DashboardControl, Control> _controls = [];
     // the cells of the grids and sections: where their children are placed
     private readonly Dictionary<LayoutControl, Canvas> _grids = [];
+    // the tab controls of the tabs, and the page each shows (kept while the dashboard is built again)
+    private readonly Dictionary<LayoutControl, TabControl> _tabs = [];
+    private static readonly ConditionalWeakTable<LayoutControl, StrongBox<int>> ShownPages = [];
     private Control? _root;
     private Control? _selected;
     private Canvas? _shownGrid;
+    private Canvas? _targetGrid;
     private Drag? _drag;
 
     public Control Build()
@@ -75,9 +89,15 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         DashboardEditing.SetIsEditing(root, isEditing);
         if (isEditing)
         {
+            // it takes the focus on a press: a text being typed in a panel is taken first, and the keys (Delete) are for it
+            root.Focusable = true;
             root.AddHandler(InputElement.PointerPressedEvent, OnEditPressed, RoutingStrategies.Tunnel);
             root.AddHandler(InputElement.PointerMovedEvent, OnEditMoved, RoutingStrategies.Tunnel);
             root.AddHandler(InputElement.PointerReleasedEvent, OnEditReleased, RoutingStrategies.Tunnel);
+            DragDrop.SetAllowDrop(root, true);
+            DragDrop.AddDragOverHandler(root, OnDragOver);
+            DragDrop.AddDragLeaveHandler(root, (_, _) => ShowTarget(null));
+            DragDrop.AddDropHandler(root, OnDrop);
         }
         _root = root;
         return root;
@@ -97,6 +117,7 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         _shownGrid = null;
         if (control is null || _selected is null)
             return;
+        ShowPagesOf(control);
 
         AdornerLayer.SetAdorner(_selected, new Panel
         {
@@ -120,6 +141,17 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         }
     }
 
+    // a control on a page of tabs (of tabs on a page, ...): those pages are shown
+    private void ShowPagesOf(DashboardControl control)
+    {
+        var root = session.Dashboard.Layout;
+        for (var (child, parent) = (control, GridLayout.ParentOf(root, control)); parent is not null; (child, parent) = (parent, GridLayout.ParentOf(root, parent)))
+        {
+            if (_tabs.TryGetValue(parent, out var tabs))
+                tabs.SelectedIndex = parent.Children.ToList().IndexOf(child);
+        }
+    }
+
     /// <summary>Opens the colour chooser of an area of a control at a placement target (e.g. a button in a panel).</summary>
     public void OpenColorChooser(DashboardControl control, ColorArea area, Control placementTarget)
     {
@@ -133,8 +165,25 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     // left press on the handle starts sizing it, elsewhere moving it (in a grid)
     private void OnEditPressed(object? sender, PointerPressedEventArgs e)
     {
+        // a tab header shows its page, as in Play mode (the tabs take the press), and selects the page
+        if ((e.Source as Visual)?.GetSelfAndVisualAncestors().OfType<TabItem>().FirstOrDefault() is { Tag: DashboardControl page })
+        {
+            editor.Select(page);
+            return;
+        }
         e.Handled = true;
         var built = (e.Source as Visual)?.GetSelfAndVisualAncestors().OfType<Control>().FirstOrDefault(_built.ContainsKey);
+        // the dashboard takes the focus, for the keys (Delete); a text being typed in a panel is taken first, for the
+        // control it is of (which builds the dashboard again)
+        if (_root is { } root && !root.IsFocused)
+        {
+            root.Focus();
+            if (TopLevel.GetTopLevel(root) is null)
+            {
+                editor.Select(built is null ? null : _built[built].Control);
+                return;
+            }
+        }
         if (built is null)
         {
             editor.Select(null);
@@ -153,11 +202,17 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
             return;
 
         var isSizing = point.Position.X >= built.Bounds.Width - HandleSize * 1.5 && point.Position.Y >= built.Bounds.Height - HandleSize * 1.5;
-        var inGrid = GridLayout.ParentOf(session.Dashboard.Layout, control) is { } parent && GridLayout.IsGrid(parent);
-        if (!isSizing && !inGrid)
+        var parent = GridLayout.ParentOf(session.Dashboard.Layout, control);
+        // the root is not moved; a control outside a grid is only moved into another layout control
+        if (!isSizing && parent is null)
             return;
         var placement = new Placement(control.At ?? default, size);
-        _drag = new Drag(control, built, reference, e.GetPosition(reference), isSizing, placement) { Current = placement };
+        _drag = new Drag(control, built, reference, e.GetPosition(reference), point.Position, isSizing, parent is not null && GridLayout.IsGrid(parent), placement)
+        {
+            Current = placement,
+        };
+        // the layout control under a moved control is found through it
+        built.IsHitTestVisible = isSizing;
         e.Pointer.Capture(_root);
     }
 
@@ -177,8 +232,12 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         drag.Built.Height = drag.Current.Size.Rows * Cell;
         if (!drag.IsSizing)
         {
-            Canvas.SetLeft(drag.Built, drag.Current.At.Column * Cell);
-            Canvas.SetTop(drag.Built, drag.Current.At.Row * Cell);
+            if (drag.InGrid)
+            {
+                Canvas.SetLeft(drag.Built, drag.Current.At.Column * Cell);
+                Canvas.SetTop(drag.Built, drag.Current.At.Row * Cell);
+            }
+            ShowTarget(MoveTargetAt(drag, e) is { } target ? target.Container : null);
         }
         e.Handled = true;
     }
@@ -191,8 +250,94 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         _drag = null;
         e.Pointer.Capture(null);
         e.Handled = true;
-        if (drag.Current != drag.Original)
+        drag.Built.IsHitTestVisible = true;
+        ShowTarget(null);
+        if (!drag.IsSizing && MoveTargetAt(drag, e) is { } target)
+        {
+            // the control's top left where it was let go, in the cells of the other grid
+            var at = _grids.GetValueOrDefault(target.Container) is { } canvas ? CellAt(e.GetPosition(canvas) - drag.Grab) : default;
+            editor.Move(drag.Control, target.Container, at);
+        }
+        else if (drag.Current != drag.Original)
+        {
             editor.Place(drag.Control, drag.Current.At, drag.Current.Size);
+        }
+    }
+
+    // a moved control over another layout control than its own goes into it
+    private DropTarget? MoveTargetAt(Drag drag, PointerEventArgs e)
+    {
+        if (_root?.InputHitTest(e.GetPosition(_root)) is not Visual hit || TargetAt(hit, drag.Control) is not { } target)
+            return null;
+        return target.Container == GridLayout.ParentOf(session.Dashboard.Layout, drag.Control) ? null : target;
+    }
+
+    // a dragged item: the cells of the grid it goes into are shown
+    private void OnDragOver(object? sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        if (e.DataTransfer.TryGetValue(DragItem.Format) is not { } item || TargetAt(e.Source as Visual, null) is not { } target || IsRefused(item, target))
+        {
+            e.DragEffects = DragDropEffects.None;
+            ShowTarget(null);
+            return;
+        }
+        e.DragEffects = DragDropEffects.Copy;
+        ShowTarget(IsBinding(item, target) ? null : target.Container);
+    }
+
+    private void OnDrop(object? sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        ShowTarget(null);
+        if (e.DataTransfer.TryGetValue(DragItem.Format) is not { } item || TargetAt(e.Source as Visual, null) is not { } target || IsRefused(item, target))
+            return;
+        if (IsBinding(item, target))
+            editor.Bind((ParameterDragItem)item, target.Control!);
+        else
+            editor.Drop(item, target.Container, _grids.GetValueOrDefault(target.Container) is { } canvas ? CellAt(e.GetPosition(canvas)) : default);
+    }
+
+    // a field dropped on a parameter control binds it
+    private static bool IsBinding(DragItem item, DropTarget target)
+        => item is ParameterDragItem { Source.Node.Kind: ParameterNodeKind.Field } && target.Control is not null;
+
+    // a field the control under the pointer cannot show (a number on a switch) is not dropped on it
+    private static bool IsRefused(DragItem item, DropTarget target)
+        => IsBinding(item, target) && ((ParameterDragItem)item).Source.Node.Info is { } info && !ControlCatalog.Accepts(target.Control!.Kind, info);
+
+    // the innermost built control at the visual (not in the moved control): a layout control is the container, a
+    // parameter control is in the container of its parent
+    private DropTarget? TargetAt(Visual? visual, DashboardControl? moved)
+    {
+        for (; visual is not null; visual = visual.GetVisualParent())
+        {
+            if (visual is not Control built || !_built.TryGetValue(built, out var entry) || (moved is not null && ControlMoves.Contains(moved, entry.Control)))
+                continue;
+            return entry.Control switch
+            {
+                LayoutControl layout => new DropTarget(layout, null),
+                ParameterControl parameter when GridLayout.ParentOf(session.Dashboard.Layout, parameter) is { } parent => new DropTarget(parent, parameter),
+                _ => null,
+            };
+        }
+        return null;
+    }
+
+    private static CellPosition CellAt(Point point)
+        => new(Math.Max(0, (int)Math.Floor(point.X / Cell)), Math.Max(0, (int)Math.Floor(point.Y / Cell)));
+
+    // the cells of the grid a drop or move goes into; a visual has one adorner: the grid of the selection shows its own
+    private void ShowTarget(LayoutControl? container)
+    {
+        var canvas = container is null ? null : _grids.GetValueOrDefault(container);
+        if (canvas == _targetGrid)
+            return;
+        if (_targetGrid is not null && _targetGrid != _shownGrid)
+            AdornerLayer.SetAdorner(_targetGrid, null);
+        _targetGrid = canvas;
+        if (canvas is not null && canvas != _shownGrid && canvas != _selected)
+            AdornerLayer.SetAdorner(canvas, new CellGrid { CellSize = Cell, IsHitTestVisible = false });
     }
 
     private static RgbColor CurrentColor(ColorScope scope, ColorArea area)
@@ -204,8 +349,8 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         var built = control switch
         {
             LayoutControl layout => BuildLayout(layout, scope),
-            ValueControl value => BuildParameter(value),
-            _ => Placeholder(control, "envelope"),
+            ParameterControl parameter => BuildParameter(parameter),
+            _ => Placeholder(control, "control", null),
         };
         // a parameter control (chrome and face) is fitted to its cells
         if (control is ParameterControl)
@@ -260,9 +405,11 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     }
 
     // the area under the pointer: the face or an element in the accent, else a parameter control's plate or a layout
-    // control's panel
+    // control's panel; a label or separator has only an accent
     private static ColorArea AreaAt(DashboardControl control, Control built, object? source)
     {
+        if (control is LayoutControl { Kind: LayoutControlKind.Label or LayoutControlKind.Separator })
+            return ColorArea.Accent;
         for (var visual = source as Visual; visual is not null && visual != built; visual = visual.GetVisualParent())
         {
             if (visual is Face || (visual is StyledElement element && element.Classes.Contains(AccentAreaClass)))
@@ -301,29 +448,53 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
                 return BuildGrid(layout, scope);
 
             case LayoutControlKind.Tabs:
-                return new TabControl
+                // each child is a page; the page shown stays shown when the dashboard is built again
+                var pages = layout.Children.Select((child, index) => new TabItem
                 {
-                    ItemsSource = layout.Children.Select(child => new TabItem
-                    {
-                        Header = child.Label ?? $"Page {layout.Children.ToList().IndexOf(child) + 1}",
-                        Content = Build(child, scope),
-                    }).ToList(),
+                    Header = child.Label ?? $"Page {index + 1}",
+                    Tag = child,
+                    Content = Build(child, scope),
+                }).ToList();
+                var tabs = new TabControl
+                {
+                    ItemsSource = pages,
+                    SelectedIndex = Math.Min(ShownPages.TryGetValue(layout, out var shown) ? shown.Value : 0, pages.Count - 1),
+                    Background = isEditing ? Brushes.Transparent : null,
                 };
+                tabs.SelectionChanged += (_, e) =>
+                {
+                    // not the change of tabs on one of its pages
+                    if (e.Source == tabs && tabs.SelectedIndex >= 0)
+                        ShownPages.AddOrUpdate(layout, new StrongBox<int>(tabs.SelectedIndex));
+                };
+                _tabs[layout] = tabs;
+                return tabs;
 
             case LayoutControlKind.Spacer:
                 return new Border { Width = Cell, Height = Cell };
 
             case LayoutControlKind.Separator:
-                return new Separator();
+                // a line along the long side of its cells, in the accent when it is given one (else the look's outline)
+                var horizontal = layout.Size is not { } extent || GridLayout.IsWide(extent);
+                var line = new Border
+                {
+                    Height = horizontal ? 2 : Double.NaN,
+                    Width = horizontal ? Double.NaN : 2,
+                    HorizontalAlignment = horizontal ? HorizontalAlignment.Stretch : HorizontalAlignment.Center,
+                    VerticalAlignment = horizontal ? VerticalAlignment.Center : VerticalAlignment.Stretch,
+                };
+                line.Bind(Border.BackgroundProperty, line.GetResourceObservable(scope[ColorArea.Accent].IsGiven ? "ConsoleAccentBrush" : "ConsoleOutlineBrush"));
+                return new Border { Background = isEditing ? Brushes.Transparent : null, Child = line };
 
             case LayoutControlKind.Label:
+                // the look's text colour, the accent when it is given one
                 var label = new TextBlock { Text = layout.Label, FontSize = 16, VerticalAlignment = VerticalAlignment.Center };
-                label.Bind(TextBlock.ForegroundProperty, label.GetResourceObservable("ConsoleTextBrush"));
+                label.Bind(TextBlock.ForegroundProperty, label.GetResourceObservable(scope[ColorArea.Accent].IsGiven ? "ConsoleAccentBrush" : "ConsoleTextBrush"));
                 label.Bind(TextBlock.FontFamilyProperty, label.GetResourceObservable("ConsoleLabelFont"));
                 return label;
 
             default:
-                return Placeholder(layout, layout.Kind.ToString());
+                return Placeholder(layout, layout.Kind.ToString(), null);
         }
     }
 
@@ -331,20 +502,22 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     private Panel Arrange(LayoutControl layout, Orientation orientation, double gap, ColorScope scope)
     {
         var children = layout.Children.Select(child => Build(child, scope)).ToList();
+        // in Edit mode the space between the children is the row or column, to drop on
+        var background = isEditing ? Brushes.Transparent : null;
         if (layout.Wrap)
         {
-            var wrap = new WrapPanel { Orientation = orientation, ItemSpacing = gap, LineSpacing = gap };
+            var wrap = new WrapPanel { Orientation = orientation, ItemSpacing = gap, LineSpacing = gap, Background = background };
             wrap.Children.AddRange(children);
             return wrap;
         }
         if (layout.Children.All(child => child.Grow is null or 0))
         {
-            var stack = new StackPanel { Orientation = orientation, Spacing = gap };
+            var stack = new StackPanel { Orientation = orientation, Spacing = gap, Background = background };
             stack.Children.AddRange(children);
             return stack;
         }
 
-        var grid = new Grid();
+        var grid = new Grid { Background = background };
         for (var index = 0; index < children.Count; index++)
         {
             var grow = layout.Children[index].Grow ?? 0;
@@ -374,6 +547,9 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         var inset = GridLayout.InsetOf(layout);
         // at the top left of its frame: sizing the frame (or a frame larger than its grid) does not move the cells
         var canvas = new Canvas { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+        // in Edit mode the empty cells are the grid, to drop on
+        if (isEditing)
+            canvas.Background = Brushes.Transparent;
         if (layout.Size is { } size)
         {
             canvas.Width = (size.Columns - inset.Left - inset.Right) * Cell;
@@ -384,31 +560,55 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         return canvas;
     }
 
-    private Control BuildParameter(ValueControl control)
+    // the parameter controls that have a face; the other kinds are shown as a placeholder
+    private static readonly Dictionary<ParameterControlKind, Func<ParameterControl, ParameterControlBase>> Faced = new()
     {
-        ParameterControlBase? built = control.Kind switch
+        [ParameterControlKind.Knob] = control => new KnobControl { Unit = control.Display.Unit, Decimals = control.Display.Decimals },
+        [ParameterControlKind.Slider] = control => new FaderControl { Unit = control.Display.Unit, Decimals = control.Display.Decimals },
+        [ParameterControlKind.NumberBox] = control => new NumberBoxControl { Unit = control.Display.Unit, Decimals = control.Display.Decimals },
+        [ParameterControlKind.Switch] = _ => new SwitchControl(),
+        [ParameterControlKind.Text] = _ => new TextControl(),
+        [ParameterControlKind.Selector] = _ => new SelectorControl(),
+        [ParameterControlKind.XyPad] = _ => new XyPadControl(),
+        [ParameterControlKind.Envelope] = control => new EnvelopeCurveControl
         {
-            ParameterControlKind.Knob => new KnobControl { Unit = control.Display.Unit, Decimals = control.Display.Decimals },
-            ParameterControlKind.Slider => new FaderControl { Unit = control.Display.Unit, Decimals = control.Display.Decimals },
-            ParameterControlKind.NumberBox => new NumberBoxControl { Unit = control.Display.Unit, Decimals = control.Display.Decimals },
-            ParameterControlKind.Switch => new SwitchControl(),
-            ParameterControlKind.Text => new TextControl(),
-            _ => null,
-        };
-        if (built is null)
-            return Placeholder(control, control.Kind.ToString());
+            SegmentCount = ((EnvelopeControl)control).Segments.Count,
+            HoldSegment = ((EnvelopeControl)control).Segments.ToList().FindIndex(segment => segment.Hold) is >= 0 and var hold ? hold : null,
+        },
+    };
+
+    /// <summary>True when a kind of parameter control has its face; the others are shown as a placeholder.</summary>
+    public static bool HasFace(ParameterControlKind kind) => Faced.ContainsKey(kind);
+
+    // the control of its kind with the values of its slots: a control with one slot follows its parameter, one with
+    // more slots (an XY pad, an envelope) the value of each
+    private Control BuildParameter(ParameterControl control)
+    {
+        if (!Faced.TryGetValue(control.Kind, out var create))
+            return Placeholder(control, control.Kind.ToString(), session.ValueOf(control, SlotNames.Value)?.Info.Name);
+        var built = create(control);
+        // a slider runs along the long side of its cells
+        if (control.Kind == ParameterControlKind.Slider && control.Size is { } size && GridLayout.IsWide(size))
+            ControlOrientation.SetOrientation(built, Orientation.Horizontal);
 
         var parameter = session.ValueOf(control, SlotNames.Value);
+        var slots = control.Slots.Keys
+            .Select(slot => (Slot: slot, Value: session.ValueOf(control, slot)))
+            .Where(slot => slot.Value is not null)
+            .ToDictionary(slot => slot.Slot, slot => slot.Value!, StringComparer.Ordinal);
+        if (parameter is null)
+            built.SlotValues = slots;
         built.Parameter = parameter;
         built.Label = control.Label ?? parameter?.Info.Name ?? control.Kind.ToString();
         // an unbound control (no binding, or a problem with it) shows that it does nothing; in Edit mode it is selected
-        built.IsEnabled = parameter is not null || isEditing;
+        built.IsEnabled = slots.Count > 0 || isEditing;
         return built;
     }
 
-    private static Control Placeholder(DashboardControl control, string kind)
+    // a kind without its face yet: shown, selectable and bound, not left out
+    private static Control Placeholder(DashboardControl control, string kind, string? parameter)
     {
-        var text = new TextBlock { Text = $"{control.Label ?? kind}: {kind} is not available yet", FontSize = 11 };
+        var text = new TextBlock { Text = $"{control.Label ?? parameter ?? kind}: {kind} is not available yet", FontSize = 11, TextWrapping = TextWrapping.Wrap };
         text.Bind(TextBlock.ForegroundProperty, text.GetResourceObservable("ConsoleTextBrush"));
         text.Bind(TextBlock.FontFamilyProperty, text.GetResourceObservable("ConsoleLabelFont"));
         var border = new Border
@@ -417,6 +617,7 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(8),
             Opacity = 0.6,
+            Background = Brushes.Transparent,
             Child = text,
         };
         border.Bind(Border.BorderBrushProperty, border.GetResourceObservable("ConsoleTextBrush"));
@@ -424,13 +625,19 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     }
 
     /// <summary>
-    /// A control being dragged: what is dragged, where the pointer started (in the panel the control is in), whether it
-    /// is sized or moved, and its placement before and now.
+    /// A control being dragged: what is dragged, where the pointer started (in the panel the control is in and in the
+    /// control itself), whether it is sized or moved, whether it is in a grid, and its placement before and now.
     /// </summary>
-    private sealed record Drag(DashboardControl Control, Control Built, Visual Reference, Point Start, bool IsSizing, Placement Original)
+    private sealed record Drag(DashboardControl Control, Control Built, Visual Reference, Point Start, Point Grab, bool IsSizing, bool InGrid, Placement Original)
     {
         public Placement Current { get; set; }
     }
+
+    /// <summary>
+    /// Where a drop or move goes: the layout control, and the parameter control under the pointer (null over a layout
+    /// control).
+    /// </summary>
+    private sealed record DropTarget(LayoutControl Container, ParameterControl? Control);
 
     /// <summary>
     /// The colours of a control and the controls inside it: the device they are of and per area its colour.

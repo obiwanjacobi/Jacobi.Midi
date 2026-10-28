@@ -78,6 +78,48 @@
         </Style>
     </ControlTheme>
 
+    <ControlTheme x:Key="{x:Type controls:SelectorControl}" TargetType="controls:SelectorControl">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <chrome:ControlChrome Label="{TemplateBinding Label}" ValueText="{TemplateBinding ValueText}">
+                    <faces:FaceHost Kind="Selector" State="{TemplateBinding FaceState}" />
+                </chrome:ControlChrome>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:disabled">
+            <Setter Property="Opacity" Value="0.5" />
+        </Style>
+    </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type controls:XyPadControl}" TargetType="controls:XyPadControl">
+        <Setter Property="Cursor" Value="Cross" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <chrome:ControlChrome Label="{TemplateBinding Label}" ValueText="{TemplateBinding ValueText}">
+                    <faces:FaceHost Kind="XyPad" State="{TemplateBinding FaceState}" />
+                </chrome:ControlChrome>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:disabled">
+            <Setter Property="Opacity" Value="0.5" />
+        </Style>
+    </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type controls:EnvelopeCurveControl}" TargetType="controls:EnvelopeCurveControl">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <chrome:ControlChrome Label="{TemplateBinding Label}" ValueText="{TemplateBinding ValueText}">
+                    <faces:FaceHost Kind="Envelope" State="{TemplateBinding FaceState}" />
+                </chrome:ControlChrome>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:disabled">
+            <Setter Property="Opacity" Value="0.5" />
+        </Style>
+    </ControlTheme>
+
     <!--
         every face draws with the same keys of the palette, the typography and the finish;
         a look gives them other colours, materials, fonts and effects
@@ -106,4 +148,10 @@
     <ControlTheme x:Key="{x:Type faces:AnodizedSwitchFace}" TargetType="faces:AnodizedSwitchFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
     <ControlTheme x:Key="{x:Type faces:AnodizedNumberBoxFace}" TargetType="faces:AnodizedNumberBoxFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
     <ControlTheme x:Key="{x:Type faces:AnodizedTextFace}" TargetType="faces:AnodizedTextFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
+    <ControlTheme x:Key="{x:Type faces:FoundrySelectorFace}" TargetType="faces:FoundrySelectorFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
+    <ControlTheme x:Key="{x:Type faces:FoundryXyPadFace}" TargetType="faces:FoundryXyPadFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
+    <ControlTheme x:Key="{x:Type faces:FoundryEnvelopeFace}" TargetType="faces:FoundryEnvelopeFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
+    <ControlTheme x:Key="{x:Type faces:AnodizedSelectorFace}" TargetType="faces:AnodizedSelectorFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
+    <ControlTheme x:Key="{x:Type faces:AnodizedXyPadFace}" TargetType="faces:AnodizedXyPadFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
+    <ControlTheme x:Key="{x:Type faces:AnodizedEnvelopeFace}" TargetType="faces:AnodizedEnvelopeFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
 </ResourceDictionary>

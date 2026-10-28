@@ -59,13 +59,13 @@ dashboard; the user can change the control type afterwards.
 | Control | Slots | Suggested for |
 |---------|-------|---------------|
 | Knob | value | a number with a range (`min`/`max`) |
-| Slider (horizontal, vertical) | value | one number, or two numbers (min/max), both with a range |
-| Switch | value | a `sys.bool` (e.g. `roland.switch`) |
-| Selector | value | a data type with `options`: a row of segments, or a drop-down list when there are many options |
+| Slider (horizontal, vertical) | value | one number, or two numbers (min/max), both with a range; horizontal when its cells are wider than tall (`GridLayout.IsWide`), else vertical |
+| Switch | value | a `sys.bool` (e.g. `roland.switch`); only a bool: a switch bound to anything else is reported and not bound, a parameter that is not a bool cannot be dropped on it, and a control bound to one cannot become a switch (`ControlCatalog.Accepts`) |
+| Selector | value | a data type with `options`: a row of segments, or with more than six options (`SelectorFaceState.MaxSegments`) a display with ▲/▼ whose option opens the list on a click |
 | Number box | value | any number, when typing or stepping the exact value matters; an index variable (`$patch`) |
 | Text | value | a string (a patch name) |
-| XY pad | x, y | two numbers |
-| Envelope | per segment: time, level | a set of envelope parameters |
+| XY pad | x, y | two numbers: dragging the point sets both |
+| Envelope | per segment: time, level | a set of envelope parameters; a new one is an ADSR (`ControlCatalog.Adsr`), segments are added, removed and set to hold in the control panel |
 
 ### The envelope is a list of segments
 
@@ -73,15 +73,20 @@ Envelopes differ per device: ADSR, ADR, AR, Roland's T1-T4/L1-L3, a compressor's
 control is therefore not an ADSR control: it is a list of **segments**, each with an optional *time* slot and an
 optional *level* slot, and a flag for the segment that *holds* (sustains) until note off. ADSR, AR and the multi-stage
 envelopes are presets of that one control. Dragging a breakpoint changes the time and the level of its segment
-together; a segment without a bound level uses a fixed level (0 or the maximum) in the drawing.
+together; a segment without a bound level uses a fixed level (the maximum, 0 for the last segment) and one without a
+bound time half its share of the width (`EnvelopeShape`: each segment has an equal share, the segment that holds one
+more for the hold).
 
 ### Behaviour of all parameter controls
 
-- Drag vertically or turn the mouse wheel to change the value; with Shift in fine steps.
+- Drag vertically (a horizontal slider: horizontally) or turn the mouse wheel to change the value; with Shift in fine steps.
 - Double-click to type a value (Enter applies it, Escape cancels; an invalid value keeps the editor open). A number box steps with ▲/▼ instead, so a quick second click there is another step.
 - Ctrl+click resets to the default value: the data type's `optionsDefault`, otherwise the origin of a number (zero within its range) and off for a switch; a text has none.
 - The name and the value are always shown. The value is the logical value of the data type (after `scale` and `shift`); its unit and number of decimals are display settings of the control (see below).
 - A parameter whose value is not known yet (not received from the device, not loaded) is drawn hollow, without a value.
+- An on/off parameter (a bool) on a knob, slider or number box is a number from 0 (off) to 1 (on), and a choice the number of its option (shown by its name), in steps of 1 (`ParameterInfo`); their controls are suggested to be a switch and a selector.
+- A control only takes a parameter it can show (`ControlCatalog.Accepts`): a switch a bool, a selector a choice, a number box a number, the knob, slider, XY pad and envelope a value in a range (a number, a bool or a choice), a text anything. Another parameter is reported and not bound, cannot be dropped on it, and a control bound to one cannot become that kind.
+- A parameter dropped on a control with more slots (an XY pad, an envelope) binds the first slot it shows that is not bound yet (`SlotNames.Shown`).
 - Keyboard: Tab moves between controls, the arrow keys change the value.
 
 ### Display settings belong to the dashboard
@@ -107,7 +112,7 @@ cell is the unit of the whole dashboard and the dashboard's cell size scales it 
 every grid and section place their children at a **cell position** (`at`: column,row, zero based from the top left of
 the grid; for a section, of the grid inside its frame). A parameter control is fitted to its cells (`CellFit`): scaled
 by the side that limits it, so making it bigger makes its knob bigger, and its chrome stretched along the other side,
-so its plate fills its cells and lines up with the grid; a new control gets a default size per kind in which it fits unscaled (a knob is 5×7). A
+so its plate fills its cells and lines up with the grid (the scale follows from its size when it is first laid out, so a value text that grows does not rescale it); a new control gets a default size per kind in which it fits unscaled (a knob is 5×7). A
 section's frame and title take a fixed number of cells around its grid (`GridLayout.SectionInset`: one on the sides
 and bottom, two on top), in every look. Positions and sizes are never empty: a file that leaves them out gets them when
 it is opened (the controls side by side below those that have a position), and the console says so.
@@ -120,8 +125,8 @@ overlap, and so on); a grid or section that no longer fits its children **grows*
 | Grid | on cells, each child at its position (`at`) in its size | the root of a dashboard; exact placement, e.g. to copy a device's panel layout |
 | Section | as a grid, inside a frame with a title | a group of parameters: "Filter", "Amp", a device |
 | Row, Column | next to / below each other (flex): `gap`, `wrap`; a child's `grow` shares the remaining space; the children have no position | a strip of controls that adapts when controls are added or removed |
-| Tabs | one page at a time (the headers take two rows) | many parameters on a small screen; the sections of a patch |
-| Spacer, Separator | — | room or a line between controls |
+| Tabs | one page at a time (the headers take two rows); each child is a page, named by its label: a grid or section; any other control put on tabs gets a grid page of its own (`ControlCatalog.PageFor`) | many parameters on a small screen; the sections of a patch |
+| Spacer, Separator | — | room or a line between controls; a separator is a line along the long side of its cells (`GridLayout.IsWide`) |
 | Label | — | a text on the dashboard |
 
 A layout control can set what its children inherit:
@@ -181,13 +186,18 @@ blocks (v2, see [Looks](#looks-v2)).
 
 - the value as a fraction of its range (0-1) and the origin of the range (the minimum, or the centre for a bipolar value);
 - whether the value is unknown;
-- for a selector the option names and the selected option, for a switch on or off;
+- for a slider whether it runs horizontally; for a selector the option names and the selected option, for a switch on or off;
 - for an envelope its breakpoints (time and level per segment, the hold segment).
 
 A face draws the face state with the palette's brushes, nothing else: it never sees the device state, the schema or
 MIDI, and it has no behaviour. The interaction stays in the control, so a knob is dragged the same way whatever face
 it has. A face also tells its natural size in cells (a ring of LEDs needs more room than a flat arc); a control with
-its chrome is fitted to the cells it is given (scaled, its plate filling the cells). Sizes in cells are at a reference cell of 24 pixels
+its chrome is fitted to the cells it is given (scaled, its plate filling the cells). A face with a direction (a fader)
+is drawn upright and turned a quarter when its control is horizontal (`ControlOrientation`, set by the dashboard from
+the ratio of the cells, given to the face in its face state), so a kit has one drawing for both. A fader also stretches
+along its direction into all the room its cells give it (the chrome gives its face what the label and the value
+leave), and dragging along the whole slot covers the whole range: a long fader is finer. Other faces keep their own
+size, centred. Sizes in cells are at a reference cell of 24 pixels
 (`Face.CellPixels`); the dashboard as a whole is scaled to its own cell size, in one place, so controls, fonts, gaps
 and grids scale together.
 
@@ -274,8 +284,8 @@ Two ready-made looks, kept simple as the basis for tweaking before more controls
 
 | Look | Faces (kit) | Chrome | Palette |
 |------|-------------|--------|---------|
-| **Foundry** | knob: engraved track, bakelite body, brass cap; fader: dark slot, brass cap; switch: pilot lamp and lever; text: amber readout | a control on a brushed steel plate with four screws, an engraved label and an amber readout; a section on a cast iron panel with a tag in the device colour | iron, steel, bakelite, brass, amber |
-| **Anodized** | knob: ring of LEDs, machined cap; fader: slot with an LED meter; switch: LED bar and push button; text: OLED display | a control on the panel with a printed label and an OLED readout; a section on an aluminium panel with an LED strip and a title in the device colour | dark aluminium, LEDs and OLED in the accent |
+| **Foundry** | knob: engraved track, bakelite body, brass cap; fader: dark slot, brass cap; switch: pilot lamp and lever; text: amber readout; selector: bakelite keys with brass names, lit in the accent; XY pad and envelope: amber screen, the point or curve in the accent, brass beads | a control on a brushed steel plate with four screws, an engraved label and an amber readout; a section on a cast iron panel with a tag in the device colour | iron, steel, bakelite, brass, amber |
+| **Anodized** | knob: ring of LEDs, machined cap; fader: slot with an LED meter; switch: LED bar and push button; text: OLED display; selector: keys with an LED above each name; XY pad and envelope: OLED screen, the point or curve lit in the accent | a control on the panel with a printed label and an OLED readout; a section on an aluminium panel with an LED strip and a title in the device colour | dark aluminium, LEDs and OLED in the accent |
 
 Where things are, for tweaking (in `Jacobi.Midi.Console`):
 
@@ -356,10 +366,19 @@ What *Edit* mode does so far:
 - a click selects the control under the pointer (outlined); a right-click also opens the colour chooser for the part under the pointer (see [Colour](#colour)); in *Play* mode a right-click does nothing;
 - the right panel shows the selected control: its label, position in its grid (column, row), size (columns × rows) and display settings (unit, decimals) to change, its three colours (each opens the colour chooser, ✕ makes it inherited), and its device, base, variables and bindings as they are;
 - dragging a control in a grid or section moves it, dragging the handle at the bottom right of the selection sizes it, by whole cells; the control follows the pointer and is placed when it is let go (controls in the way are pushed down, grids grow); the cells of the grid the selected control is in are drawn over it, with the column and row numbers every five cells;
-- every change is an edit (`IEdit`) in the edit history (`EditHistory`): undo (↶, Ctrl+Z) and redo (↷, Ctrl+Y); the history is cleared when a dashboard is closed or another rig is opened. A dashboard or rig counts the edits since it was read or saved, so undoing all of them makes it unchanged again.
+- every change is an edit (`IEdit`) in the edit history (`EditHistory`): undo (↶, Ctrl+Z) and redo (↷, Ctrl+Y); the history is cleared when a dashboard is closed or another rig is opened. A dashboard or rig counts the edits since it was read or saved, so undoing all of them makes it unchanged again. After an edit the dashboard is resolved again (`DashboardSession.Refresh`: the variables keep their current item); after an edit of the rig the rig is opened again on the same library, and the devices that stay the same (alias, map root, device values) keep their state and values (`RigSession.Open` with the previous session);
+- the left and right panels are sized with the splitters between them and the dashboard (at least 180 pixels; kept while Play mode closes them);
+- the left panel shows the rig: per device its parameter tree (`ParameterNode`, from the plan of its map root; fields whose value the schema fixes are left out), with the number of items of a repeat and the range or options of a field; below it the palettes of parameter controls and layout controls (`ControlCatalog`).;
+- dragging a field onto the dashboard creates the suggested control (`ControlCatalog.Suggest`: options a selector, a `sys.bool` a switch, a string a text, a number with a range a knob, else a number box), bound to it; a group, a repeat or a device creates a section with its `device` and `base`, a control per field and a nested section per group, laid out by `GridLayout.Complete`; dropping a field on a parameter control binds its slot (`ControlDrops`). A binding is relative to the base around it when it can be (`BindingScope.BindingOf`). A repeat in the path gets the index the base around it gives, else an index variable in scope that indexes the same repeat (`BindingResolution.Repeats`), else a new variable named after the repeat: on the nearest grid or section around a dropped field, on the new section of a dropped group with a number box bound to it. A device the dashboard does not list yet is added;
+- dragging a control over another grid, section, row, column or tabs moves it into it; its bindings stay bound to the same parameters (`ControlMoves`: a moved layout control keeps the device and base it inherited, a binding that would point elsewhere is written again; a variable that is not around its new place is reported). A palette item dropped in a grid or section goes to the cell under the pointer, elsewhere after the other controls;
+- Delete (or *Delete* in the panel) deletes the selected control and the controls inside it; the root stays;
+- tabs: a click on a tab header shows its page and selects it (drop on the page to add to it, on the headers to add a page); the page shown stays shown when the dashboard is built again, and selecting a control shows the pages it is on;
+- a label or separator has only an accent: it is drawn in the look's text or outline colour until it is given a colour (right-click, or the panel);
+- the control panel changes the kind with a button per kind (one single-value control into another, a grid into a section, a row into a column: `ControlCatalog.WithKind`), the bindings of the slots as text (`[device:]path` or `$name`), the device and base (with what is inherited as the placeholder), the index variables of a layout control and the gap and wrap of a row or column. With nothing selected it shows the dashboard's name; *+* makes a new, empty dashboard on the rig. The panel is made anew for every selection, and a press on the dashboard first takes the text being typed in it, so that nothing of one control is taken for the next;
+- selecting a device in the rig shows its properties: alias, name, map root (one of the address maps of the library, `AddressMapAdapter.MapRoots`), device values, endpoint and colours; *+* adds a device, *Remove* takes it out. Open dashboards that use a renamed or removed alias are reported.
 
-Still to come: the rig and parameter tree, the palettes, dragging controls into another grid or section, and adding
-and deleting controls.
+Still to come: choosing the rig device for a dashboard alias that is not in the rig, selecting several controls, and
+copy and paste.
 
 ## Schemas
 
@@ -637,8 +656,8 @@ keep its Avalonia versions in sync with the Schema Editor's.
 
 | Project | Contents |
 |---------|----------|
-| `Jacobi.Midi.Console.Core` | The support code without UI: rig, dashboard, controls and bindings (`BindingResolver`), their XML and JSON files (`RigFile`, `DashboardFile`, `Files`), the schema library (`Schemas`), the device state with dumps (`Devices`), an open dashboard and the values its controls follow (`Parameters`), the face state (`FaceState`, `ValueRange`); later the synchronisation with the message exchange. Tested in `Jacobi.Midi.Tests` (`Console` folder). |
-| `Jacobi.Midi.Console` | The platform independent Avalonia UI (MVVM): parameter controls (`Controls`), faces and kits (`Faces`), chromes (`Chrome`), looks (`Looks`, `Themes`), the dashboard view with the layout controls (`Dashboards`), the GP-8 demo (`Assets/Demo`); later the rig and parameter tree and the edit panels. |
+| `Jacobi.Midi.Console.Core` | The support code without UI: rig, dashboard, controls and bindings (`BindingResolver`, `BindingScope`), the edits of Edit mode (`Editing`: history, catalog, drops, moves), their XML and JSON files (`RigFile`, `DashboardFile`, `Files`), the schema library (`Schemas`), the device state with dumps (`Devices`), an open dashboard and the values its controls follow (`Parameters`), the face state (`FaceState`, `ValueRange`); later the synchronisation with the message exchange. Tested in `Jacobi.Midi.Tests` (`Console` folder). |
+| `Jacobi.Midi.Console` | The platform independent Avalonia UI (MVVM): parameter controls (`Controls`), faces and kits (`Faces`), chromes (`Chrome`), looks (`Looks`, `Themes`), the dashboard view with the layout controls (`Dashboards`), the GP-8 demo (`Assets/Demo`), the rig tree, the palettes and the panels of Edit mode (`ViewModels`). |
 | `Jacobi.Midi.Console.Desktop` | The desktop host; the Windows build references the Windows MIDI backend, as the Schema Editor's desktop host does. |
 | `Jacobi.Midi.Console.Browser` | The browser (WebAssembly) host; without MIDI, so the console works offline there (see [Browser support](#browser-support-ideas-not-in-v1)). |
 
@@ -670,7 +689,7 @@ to a level above both applications.
 - [x] Dashboard canvas, done as: index variables as binding targets (`$patch`, `VariableValue`) instead of an index selector control, with the number box (▲/▼) in both kits; controls that re-bind when a variable changes; typing a value (double-click) and reset (Ctrl+click) for all controls; several dashboards on one rig sharing the device states (`RigSession`, `DashboardSession`); the Edit/Play switch (Edit not available yet); the GP-8 compare demo; tests.
 - [x] Device palettes and control colours: the palette derived from one colour with contrast (`RgbColor`, `Palette`); the colour cascade in the dashboard builder; colours per look, tints and shades and any colour in a colour chooser (right-click); control and device colours; Save and Save as for the dashboard and the rig; tests.
 - [x] *Edit* mode foundation: values locked, selecting controls, colours by right-click, the property panel (label, size, display settings, colours, bindings shown), undo and redo of every edit; tests of the edit history.
-- [ ] *Edit* mode: rig and parameter tree, drag & drop, control palettes, control panel.
+- [x] *Edit* mode: rig and parameter tree, drag & drop, control palettes, control panel: the parameter tree of a device (`ParameterNode`); the inheritance of device, base and variables in one place (`BindingScope`); dropping fields, groups and palette items with the index variables they need (`ControlDrops`, `ControlCatalog`); moving controls into another grid or section with their bindings (`ControlMoves`); deleting controls and changing their kind; editing bindings, device, base, variables and arrangement; editing the devices of the rig; the sessions following the edits; a new dashboard; tests.
 
 ## Not in v1
 
@@ -681,7 +700,7 @@ to a level above both applications.
 - MIDI learn, mapping a hardware controller onto dashboard controls.
 - Undo.
 - MIDI in the browser host (see [Browser support](#browser-support-ideas-not-in-v1)); the host itself exists and works offline.
-- Devices that only do complete dumps without an address map.
+- Devices that only do complete dumps without an address map. Note this is a job for midi.device message exchange.
 
 ## UI Design v2
 

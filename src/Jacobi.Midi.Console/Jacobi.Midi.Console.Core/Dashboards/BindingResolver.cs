@@ -10,7 +10,8 @@ namespace Jacobi.Midi.Console.Core.Dashboards;
 /// inheritance of <see cref="DashboardControl.Device"/>, <see cref="DashboardControl.Base"/> and the index variables
 /// of the layout controls:
 /// <list type="bullet">
-/// <item>the device is the binding's own, else the nearest one of the control and the layout controls around it;</item>
+/// <item>the device is the binding's own, else the nearest one of the control and the layout controls around it
+/// (<see cref="BindingScope"/>);</item>
 /// <item>a binding with its own device has a full path; otherwise its path is appended to the nearest base, if any;</item>
 /// <item>the repeat indices in the base and the path give the instance; an index variable (<c>[$patch]</c>) is the
 /// nearest declaration, with its current value (<see cref="BindingContext.Values"/>) or its starting value.</item>
@@ -32,12 +33,13 @@ public static class BindingResolver
         var problems = new List<BindingProblem>();
         var declarations = new Dictionary<VariableReference, IndexVariable>();
         var itemCounts = new Dictionary<VariableReference, int>();
+        var repeats = new Dictionary<VariableReference, string>();
 
         CheckDevices();
         var maps = MapsOf(context.Library);
-        Visit(dashboard.Layout, new Scope(null, null, new Dictionary<string, VariableReference>(StringComparer.Ordinal)));
+        Visit(dashboard.Layout, BindingScope.None);
         CheckValues();
-        return new BindingResolution(bindings, itemCounts, problems);
+        return new BindingResolution(bindings, itemCounts, problems) { Repeats = repeats };
 
         void CheckDevices()
         {
@@ -69,23 +71,17 @@ public static class BindingResolver
             return library.Maps;
         }
 
-        void Visit(DashboardControl control, Scope outer)
+        void Visit(DashboardControl control, BindingScope outer)
         {
-            var scope = new Scope(control.Device ?? outer.Device, control.Base ?? outer.Base, outer.Variables);
+            var scope = outer.Inside(control);
+            // the repeats the variables in a base index (the variables are checked with the bindings)
+            if (control.Base is { } basePath && SchemaPaths.TryParse(basePath, _ => 0, out var parsedBase, out _))
+                AddRepeats(parsedBase, scope);
             switch (control)
             {
                 case LayoutControl layout:
-                    if (layout.Variables.Count > 0)
-                    {
-                        var variables = new Dictionary<string, VariableReference>(outer.Variables, StringComparer.Ordinal);
-                        foreach (var variable in layout.Variables)
-                        {
-                            var reference = new VariableReference(layout, variable.Name);
-                            declarations[reference] = variable;
-                            variables[variable.Name] = reference;
-                        }
-                        scope = scope with { Variables = variables };
-                    }
+                    foreach (var variable in layout.Variables)
+                        declarations[new VariableReference(layout, variable.Name)] = variable;
                     foreach (var child in layout.Children)
                         Visit(child, scope);
                     break;
@@ -97,7 +93,7 @@ public static class BindingResolver
             }
         }
 
-        void ResolveSlot(ParameterControl control, string slot, Binding binding, Scope scope)
+        void ResolveSlot(ParameterControl control, string slot, Binding binding, BindingScope scope)
         {
             if (binding.Variable is { } name)
             {
@@ -108,8 +104,7 @@ public static class BindingResolver
                 return;
             }
 
-            var device = binding.Device ?? scope.Device;
-            if (device is null)
+            if (scope.FullPathOf(binding) is not (string device, string text))
             {
                 problems.Add(new(control, slot, $"'{binding.Path}' has no device: set the device on the binding, the control or a layout control around it."));
                 return;
@@ -120,9 +115,6 @@ public static class BindingResolver
                 return;
             }
 
-            var text = binding.Device is null && scope.Base is { } basePath
-                ? $"{basePath}.{binding.Path}"
-                : binding.Path;
             int? Lookup(string name) => scope.Variables.TryGetValue(name, out var reference) ? ValueOf(reference) : null;
             if (!SchemaPaths.TryParse(text, Lookup, out var parsed, out var error))
             {
@@ -131,13 +123,14 @@ public static class BindingResolver
             }
 
             var variables = parsed.Variables.Select(use => scope.Variables[use.Variable]).Distinct().ToList();
+            AddRepeats(parsed, scope);
             if (maps is not null && !Check(control, slot, dashboardDevice, parsed, scope))
                 return;
             bindings.Add(new(control, slot, new ParameterReference(device, parsed.Path, parsed.Instance), null, variables));
         }
 
         // the path must be a field of the device's map; each variable must index a repeat of the map
-        bool Check(ParameterControl control, string slot, DashboardDevice device, ParsedPath parsed, Scope scope)
+        bool Check(ParameterControl control, string slot, DashboardDevice device, ParsedPath parsed, BindingScope scope)
         {
             var mapRoot = new SchemaName(device.MapRoot);
             var root = parsed.Path.Split(SchemaPath.Separator)[0];
@@ -196,13 +189,22 @@ public static class BindingResolver
                 problems.Add(new(binding.Control, binding.Slot, $"'{SchemaPaths.VariablePrefix}{binding.Variable!.Name}' indexes no repeat in a binding path: its number of items is not known."));
         }
 
+        // the first repeat a declared variable is seen to index
+        void AddRepeats(ParsedPath parsed, BindingScope scope)
+        {
+            foreach (var use in parsed.Variables)
+            {
+                if (scope.Variables.TryGetValue(use.Variable, out var reference))
+                    repeats.TryAdd(reference, use.Repeat);
+            }
+        }
+
         int ValueOf(VariableReference reference)
             => context.Values is { } values && values.TryGetValue(reference, out var value)
                 ? value
                 : declarations[reference].Value;
     }
 
-    private readonly record struct Scope(string? Device, string? Base, IReadOnlyDictionary<string, VariableReference> Variables);
 }
 
 /// <summary>
@@ -243,4 +245,11 @@ public sealed record BindingProblem(DashboardControl? Control, string? Slot, str
 public sealed record BindingResolution(
     IReadOnlyList<SlotBinding> Bindings,
     IReadOnlyDictionary<VariableReference, int> ItemCounts,
-    IReadOnlyList<BindingProblem> Problems);
+    IReadOnlyList<BindingProblem> Problems)
+{
+    /// <summary>
+    /// The repeat each index variable indexes (the schema path of the repeat without indices, e.g.
+    /// <c>AddressMap.Memory</c>), as the bindings and bases use it; a variable that indexes nothing is left out.
+    /// </summary>
+    public IReadOnlyDictionary<VariableReference, string> Repeats { get; init; } = new Dictionary<VariableReference, string>();
+}
