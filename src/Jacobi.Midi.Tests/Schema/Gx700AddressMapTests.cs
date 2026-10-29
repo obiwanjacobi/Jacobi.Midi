@@ -183,4 +183,23 @@ public class Gx700AddressMapTests
         var map2 = Decode(map, messages[2]);
         Assert.Equal((byte)128, Value(map2, "AddressMap.System.ProgramChangeMap2.Program.Patch", 63));
     }
+
+    [Fact]
+    public void IndividualTemporary_OneParameter_RoundTrips()
+    {
+        var map = CreateMap();
+        // DT1 of the reverb time (0x02 of the reverb section 0x0D) in the individual temporary area: 2.5 s
+        byte[] scope = [0x08, 0x00, 0x0D, 0x02, 25];
+        byte[] message = [0xF0, 0x41, 0x00, 0x79, 0x12, .. scope, (byte)((128 - scope.Sum(b => b) % 128) % 128), 0xF7];
+
+        Assert.True(map.TryReadData(message, Device, out var data));
+        Assert.Equal(new AddressRange(IndividualStart + 0x0D * SectionStride + 2, 1), data.Block.Addresses);
+        Assert.Equal("AddressMap.IndividualTemporary.Reverb.Time", data.Block.Nodes.First.Path.Value);
+        var store = new FieldValueStore();
+        data.Decode(store);
+        Assert.Equal(1, store.Count);
+
+        var bytes = map.CreateData(data.Message, data.Block, store, map.Device.With(Device));
+        Assert.Equal(Convert.ToHexString(message), Convert.ToHexString(bytes));
+    }
 }

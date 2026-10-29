@@ -58,11 +58,11 @@ internal sealed class RequestReplyMachine(Transfer transfer, TransferSettings se
     {
         switch (message.Kind)
         {
-            case AddressMessageKind.Nak:
-                return new Complete(AddressBlockStatus.Rejected, $"The device rejected the request ({message.Message.Name}).");
-            case AddressMessageKind.Error:
-                return new Complete(AddressBlockStatus.Failed, $"The device reported an error for the request ({message.Message.Name}).");
-            case AddressMessageKind.Data when message.Data is { } data:
+            case ExchangeMessageKind.Nak:
+                return new Complete(BlockStatus.Rejected, $"The device rejected the request ({message.Message.Name}).");
+            case ExchangeMessageKind.Error:
+                return new Complete(BlockStatus.Failed, $"The device reported an error for the request ({message.Message.Name}).");
+            case ExchangeMessageKind.Data when message.Data is { } data:
                 var overlap = transfer.Block.Addresses.Intersect(data.Block.Addresses);
                 if (overlap.IsEmpty)
                 {
@@ -83,7 +83,7 @@ internal sealed class RequestReplyMachine(Transfer transfer, TransferSettings se
     }
 
     public ExchangeAction OnElapsed()
-        => _pausing ? new Complete(AddressBlockStatus.Completed) : new Complete(AddressBlockStatus.TimedOut);
+        => _pausing ? new Complete(BlockStatus.Completed) : new Complete(BlockStatus.TimedOut);
 
     private ExchangeAction Finish()
     {
@@ -92,7 +92,7 @@ internal sealed class RequestReplyMachine(Transfer transfer, TransferSettings se
             _pausing = true;
             return new Pause(transfer.Message.Interval);
         }
-        return new Complete(AddressBlockStatus.Completed);
+        return new Complete(BlockStatus.Completed);
     }
 }
 
@@ -106,11 +106,11 @@ internal sealed class SendOnlyMachine(Transfer transfer) : ITransferMachine
     public ExchangeAction OnSent()
         => transfer.Message.Interval > TimeSpan.Zero
             ? new Pause(transfer.Message.Interval)
-            : new Complete(AddressBlockStatus.Completed);
+            : new Complete(BlockStatus.Completed);
 
     public ExchangeAction OnMessage(ExchangeMessage message) => new Ignore();
 
-    public ExchangeAction OnElapsed() => new Complete(AddressBlockStatus.Completed);
+    public ExchangeAction OnElapsed() => new Complete(BlockStatus.Completed);
 }
 
 /// <summary>
@@ -129,17 +129,17 @@ internal sealed class AcknowledgedSendMachine(Transfer transfer, TransferSetting
     {
         switch (message.Kind)
         {
-            case AddressMessageKind.Ack:
+            case ExchangeMessageKind.Ack:
                 if (transfer.Message.Interval > TimeSpan.Zero)
                 {
                     _pausing = true;
                     return new Pause(transfer.Message.Interval);
                 }
-                return new Complete(AddressBlockStatus.Completed);
-            case AddressMessageKind.Nak:
-                return new Complete(AddressBlockStatus.Rejected, $"The device rejected the data ({message.Message.Name}).");
-            case AddressMessageKind.Error:
-                return new Complete(AddressBlockStatus.Failed, $"The device reported an error for the data ({message.Message.Name}).");
+                return new Complete(BlockStatus.Completed);
+            case ExchangeMessageKind.Nak:
+                return new Complete(BlockStatus.Rejected, $"The device rejected the data ({message.Message.Name}).");
+            case ExchangeMessageKind.Error:
+                return new Complete(BlockStatus.Failed, $"The device reported an error for the data ({message.Message.Name}).");
             default:
                 return new Ignore();
         }
@@ -147,6 +147,6 @@ internal sealed class AcknowledgedSendMachine(Transfer transfer, TransferSetting
 
     public ExchangeAction OnElapsed()
         => _pausing
-            ? new Complete(AddressBlockStatus.Completed)
-            : new Complete(AddressBlockStatus.TimedOut, "The device did not acknowledge the data.");
+            ? new Complete(BlockStatus.Completed)
+            : new Complete(BlockStatus.TimedOut, "The device did not acknowledge the data.");
 }

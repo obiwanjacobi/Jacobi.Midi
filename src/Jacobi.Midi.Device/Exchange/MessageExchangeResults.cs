@@ -23,7 +23,7 @@ public sealed record MessageExchangeOptions
 /// <summary>
 /// What happened to a block of a transfer.
 /// </summary>
-public enum AddressBlockStatus
+public enum BlockStatus
 {
     Completed,
     TimedOut,
@@ -35,7 +35,7 @@ public enum AddressBlockStatus
 /// <summary>
 /// The outcome of one block of a transfer.
 /// </summary>
-public sealed record AddressBlockResult(AddressBlock Block, AddressBlockStatus Status, Exception? Error = null)
+public sealed record BlockResult(AddressBlock Block, BlockStatus Status, Exception? Error = null)
 {
     /// <summary>Why the transfer did not complete, as reported by the exchange protocol; null when it completed.</summary>
     public string? Reason { get; init; }
@@ -44,7 +44,7 @@ public sealed record AddressBlockResult(AddressBlock Block, AddressBlockStatus S
 /// <summary>
 /// The outcome of a transfer per block.
 /// </summary>
-public sealed record AddressTransferResult(IReadOnlyList<AddressBlockResult> Blocks)
+public sealed record TransferResult(IReadOnlyList<BlockResult> Blocks)
 {
-    public bool IsComplete => Blocks.All(b => b.Status == AddressBlockStatus.Completed);
+    public bool IsComplete => Blocks.All(b => b.Status == BlockStatus.Completed);
 }

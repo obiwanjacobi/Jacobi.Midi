@@ -23,7 +23,7 @@ public class ExchangeMachineTests
         return (map, request, data, patch);
     }
 
-    private static ExchangeMessage Reply(AddressMessageKind kind, Transfer transfer)
+    private static ExchangeMessage Reply(ExchangeMessageKind kind, Transfer transfer)
         => new(kind, transfer.Message);
 
     [Fact]
@@ -35,8 +35,8 @@ public class ExchangeMachineTests
         Assert.Equal(new SendMessage(request.Message), Assert.IsType<SendMessage>(machine.Start().Value));
         Assert.Equal(new WaitForMessage(Settings.ResponseTimeout), Assert.IsType<WaitForMessage>(machine.OnSent().Value));
         // the request has no interval of its own; the data message has 20 ms
-        var done = machine.OnMessage(new ExchangeMessage(AddressMessageKind.Data, patch.Message, patch));
-        Assert.Equal(AddressBlockStatus.Completed, Assert.IsType<Complete>(done.Value).Status);
+        var done = machine.OnMessage(new ExchangeMessage(ExchangeMessageKind.Data, patch.Message, patch));
+        Assert.Equal(BlockStatus.Completed, Assert.IsType<Complete>(done.Value).Status);
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public class ExchangeMachineTests
         machine.Start();
         machine.OnSent();
 
-        Assert.IsType<Ignore>(machine.OnMessage(new ExchangeMessage(AddressMessageKind.Data, patch0.Message, patch0)).Value);
+        Assert.IsType<Ignore>(machine.OnMessage(new ExchangeMessage(ExchangeMessageKind.Data, patch0.Message, patch0)).Value);
     }
 
     [Fact]
@@ -60,12 +60,12 @@ public class ExchangeMachineTests
         var rejected = ExchangeProtocols.OneWay.Receive(request, Settings);
         rejected.Start();
         rejected.OnSent();
-        Assert.Equal(AddressBlockStatus.Rejected, Assert.IsType<Complete>(rejected.OnMessage(Reply(AddressMessageKind.Nak, request)).Value).Status);
+        Assert.Equal(BlockStatus.Rejected, Assert.IsType<Complete>(rejected.OnMessage(Reply(ExchangeMessageKind.Nak, request)).Value).Status);
 
         var silent = ExchangeProtocols.OneWay.Receive(request, Settings);
         silent.Start();
         silent.OnSent();
-        Assert.Equal(AddressBlockStatus.TimedOut, Assert.IsType<Complete>(silent.OnElapsed().Value).Status);
+        Assert.Equal(BlockStatus.TimedOut, Assert.IsType<Complete>(silent.OnElapsed().Value).Status);
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public class ExchangeMachineTests
 
         Assert.IsType<SendMessage>(machine.Start().Value);
         Assert.Equal(new Pause(TimeSpan.FromMilliseconds(20)), Assert.IsType<Pause>(machine.OnSent().Value));
-        Assert.Equal(AddressBlockStatus.Completed, Assert.IsType<Complete>(machine.OnElapsed().Value).Status);
+        Assert.Equal(BlockStatus.Completed, Assert.IsType<Complete>(machine.OnElapsed().Value).Status);
     }
 
     [Fact]
@@ -85,7 +85,7 @@ public class ExchangeMachineTests
     {
         var (_, _, data, _) = TestMap();
 
-        ExchangeAction After(AddressMessageKind? reply)
+        ExchangeAction After(ExchangeMessageKind? reply)
         {
             var machine = ExchangeProtocols.Acknowledged.Send(data, Settings);
             Assert.IsType<SendMessage>(machine.Start().Value);
@@ -93,9 +93,9 @@ public class ExchangeMachineTests
             return reply is { } kind ? machine.OnMessage(Reply(kind, data)) : machine.OnElapsed();
         }
 
-        Assert.Equal(AddressBlockStatus.Completed, Assert.IsType<Complete>(After(AddressMessageKind.Ack).Value).Status);
-        Assert.Equal(AddressBlockStatus.Rejected, Assert.IsType<Complete>(After(AddressMessageKind.Nak).Value).Status);
-        Assert.Equal(AddressBlockStatus.Failed, Assert.IsType<Complete>(After(AddressMessageKind.Error).Value).Status);
-        Assert.Equal(AddressBlockStatus.TimedOut, Assert.IsType<Complete>(After(null).Value).Status);
+        Assert.Equal(BlockStatus.Completed, Assert.IsType<Complete>(After(ExchangeMessageKind.Ack).Value).Status);
+        Assert.Equal(BlockStatus.Rejected, Assert.IsType<Complete>(After(ExchangeMessageKind.Nak).Value).Status);
+        Assert.Equal(BlockStatus.Failed, Assert.IsType<Complete>(After(ExchangeMessageKind.Error).Value).Status);
+        Assert.Equal(BlockStatus.TimedOut, Assert.IsType<Complete>(After(null).Value).Status);
     }
 }

@@ -6,7 +6,7 @@ namespace Jacobi.Midi.Device.Addressing;
 /// What a message is for (<c>midi.message</c>): it asks for data, carries data, or is the device's reply to a message
 /// it received. The exchange protocols reason in these kinds, not in message bytes.
 /// </summary>
-public enum AddressMessageKind
+public enum ExchangeMessageKind
 {
     Request,
     Data,
@@ -36,7 +36,7 @@ public sealed record AddressMessage
 {
     /// <summary>The path of the message group in the envelope plan, e.g. 'Message.DT1'.</summary>
     public required string Name { get; init; }
-    public required AddressMessageKind Kind { get; init; }
+    public required ExchangeMessageKind Kind { get; init; }
     public AddressUnit Unit { get; init; }
     /// <summary>The largest number of data bytes in one message; 0 means no limit.</summary>
     public int MaxDataSize { get; init; }

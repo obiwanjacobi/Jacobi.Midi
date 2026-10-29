@@ -14,8 +14,6 @@ namespace Jacobi.Midi.Tests.Addressing;
 /// </summary>
 public class MessageExchangeTests
 {
-    private const string EditName = "Edit    ";
-
     // the client only has the serializer and ranges of its plans: the address map is deduced from them
     private static PlanRange Range(Serializer serializer, string path, params int[] instance)
         => serializer.GetPlan(MapName).CreateRange(path, new InstancePath(instance), path, new InstancePath(instance));
@@ -86,11 +84,11 @@ public class MessageExchangeTests
         var result = await exchange.Receive(Range(serializer, "AddressMap.Edit"), new FieldValueStore(), TestContext.Current.CancellationToken);
 
         Assert.False(result.IsComplete);
-        Assert.Equal(AddressBlockStatus.TimedOut, Assert.Single(result.Blocks).Status);
+        Assert.Equal(BlockStatus.TimedOut, Assert.Single(result.Blocks).Status);
     }
 
     [Fact]
-    public async Task Send_OneParameter_WritesTheWholePatchBack()
+    public async Task Send_OneParameterOfAnAtomicGroup_WithoutTheOtherValues_Fails()
     {
         var serializer = CreateSerializer();
         var device = new FakeDevice();
@@ -100,11 +98,10 @@ public class MessageExchangeTests
 
         var result = await exchange.Send(Range(serializer, "AddressMap.Edit.Filter.Cutoff"), source, TestContext.Current.CancellationToken);
 
-        Assert.True(result.IsComplete);
-        // read first (the patch is atomic), then the whole patch is written back
-        Assert.Single(device.Requests);
-        var sent = Assert.Single(device.DataSets);
-        Assert.Equal(Convert.ToHexString(DataMessage(0, Patch(EditName, cutoff: 77))), Convert.ToHexString(sent));
+        // the exchange does not complete the patch (a session does): the source must hold the whole patch
+        Assert.Equal(BlockStatus.Failed, Assert.Single(result.Blocks).Status);
+        Assert.Empty(device.Requests);
+        Assert.Empty(device.DataSets);
     }
 
     [Fact]
@@ -126,6 +123,22 @@ public class MessageExchangeTests
     }
 
     [Fact]
+    public async Task Send_OneFieldOfANonAtomicGroup_WritesOnlyThatField()
+    {
+        var serializer = CreateSerializer();
+        var device = new FakeDevice();
+        await using var exchange = CreateExchange(serializer, device);
+        var source = new FieldValueStore();
+        source.Set("AddressMap.Global.Volume", InstancePath.Empty, new LogicalField("Volume", typeof(byte), (byte)0x33));
+
+        var result = await exchange.Send(Range(serializer, "AddressMap.Global.Volume"), source, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsComplete);
+        Assert.Empty(device.Requests);
+        Assert.Equal(Convert.ToHexString(DataMessage(GlobalStart + 9, [0x33])), Convert.ToHexString(Assert.Single(device.DataSets)));
+    }
+
+    [Fact]
     public async Task Listen_UnsolicitedData()
     {
         var serializer = CreateSerializer();
@@ -137,12 +150,32 @@ public class MessageExchangeTests
         var listening = exchange.Listen(Range(serializer, "AddressMap.Memory.Patch", 5), sink, cancel.Token);
         device.Push(FakeDevice.MemoryPatch(4));   // outside the range
         device.Push(FakeDevice.MemoryPatch(5));
-        await WaitFor(() => sink.Count > 0);
+        await FakeDevice.WaitFor(() => sink.Count > 0);
         cancel.Cancel();
         await listening;
 
         Assert.True(sink.TryGet("AddressMap.Memory.Patch.Name", new InstancePath([5]), out _));
         Assert.False(sink.TryGet("AddressMap.Memory.Patch.Name", new InstancePath([4]), out _));
+    }
+
+    [Fact]
+    public async Task Listen_OneField()
+    {
+        var serializer = CreateSerializer();
+        var device = new FakeDevice();
+        await using var exchange = CreateExchange(serializer, device);
+        var sink = new FieldValueStore();
+        using var cancel = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+
+        var listening = exchange.Listen(Range(serializer, "AddressMap.Global"), sink, cancel.Token);
+        device.Push(DataMessage(GlobalStart + 9, [0x33]));
+        await FakeDevice.WaitFor(() => sink.Count > 0);
+        cancel.Cancel();
+        await listening;
+
+        Assert.True(sink.TryGet("AddressMap.Global.Volume", InstancePath.Empty, out var volume));
+        Assert.Equal(0x33, Convert.ToInt32(volume.Value));
+        Assert.Equal(1, sink.Count);
     }
 
     [Fact]
@@ -232,64 +265,5 @@ public class MessageExchangeTests
         Assert.Contains(exception.Errors, e => e.StartsWith("AddressMap.A:", StringComparison.Ordinal));
         Assert.Contains(exception.Errors, e => e.StartsWith("AddressMap.B:", StringComparison.Ordinal));
         Assert.Contains(exception.Errors, e => e.StartsWith("AddressMap.C:", StringComparison.Ordinal));
-    }
-
-    private static async Task WaitFor(Func<bool> condition)
-    {
-        for (var i = 0; i < 100 && !condition(); i++)
-        {
-            await Task.Delay(10);
-        }
-    }
-
-    /// <summary>
-    /// A <see cref="TestDevice"/> for the tests: answers a request with the whole patches it overlaps, on a background
-    /// thread, and records the messages it receives.
-    /// </summary>
-    private sealed class FakeDevice : ISysExPort
-    {
-        private readonly Dictionary<long, byte[]> _patches = [];
-
-        public FakeDevice()
-        {
-            _patches[0] = DataMessage(0, Patch(EditName));
-            for (var i = 0; i < MemoryCount; i++)
-            {
-                _patches[PatchAddress(i)] = MemoryPatch(i);
-            }
-        }
-
-        public bool Silent { get; init; }
-        public List<byte[]> Requests { get; } = [];
-        public List<byte[]> DataSets { get; } = [];
-
-        public event SysExReceivedHandler? Received;
-
-        public static byte[] MemoryPatch(int item) => DataMessage(PatchAddress(item), Patch(PatchName(item)));
-
-        public ValueTask Send(ReadOnlyMemory<byte> sysEx, CancellationToken ct)
-        {
-            var bytes = sysEx.ToArray();
-            switch (bytes[4])
-            {
-                case 0x01:
-                    Requests.Add(bytes);
-                    var request = new AddressRange((bytes[5] << 7) | bytes[6], (bytes[7] << 7) | bytes[8]);
-                    var answers = _patches.Where(p => new AddressRange(p.Key, PatchSize).Overlaps(request)).Select(p => p.Value).ToList();
-                    if (!Silent)
-                    {
-                        _ = Task.Run(() => answers.ForEach(answer => Received?.Invoke(answer)), ct);
-                    }
-                    break;
-                case 0x02:
-                    DataSets.Add(bytes);
-                    break;
-            }
-            return ValueTask.CompletedTask;
-        }
-
-        public void Push(byte[] sysEx) => Received?.Invoke(sysEx);
-
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

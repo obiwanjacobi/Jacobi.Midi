@@ -15,6 +15,12 @@ internal interface ISysExPort : IAsyncDisposable
 
     /// <summary>Raised for each complete SysEx message received; may be raised on a background thread.</summary>
     event SysExReceivedHandler? Received;
+
+    /// <summary>The state of the connection to the device.</summary>
+    MidiConnectionState State { get; }
+
+    /// <summary>Raised when the connection state changes (e.g. the cable is pulled); may be raised on a background thread.</summary>
+    event EventHandler<MidiConnectionStateChangedArgs>? StateChanged;
 }
 
 /// <summary>
@@ -26,10 +32,33 @@ internal sealed class MidiConnectionSysExPort(byte group) : ISysExPort
 {
     private readonly SysEx7Assembler _assembler = new(group);
     private readonly Lock _lock = new();
+    private IMidiConnection? _connection;
 
-    public IMidiConnection? Connection { get; set; }
+    public IMidiConnection? Connection
+    {
+        get => _connection;
+        set
+        {
+            if (_connection is not null)
+            {
+                _connection.ConnectionStateChanged -= OnConnectionStateChanged;
+            }
+            _connection = value;
+            if (_connection is not null)
+            {
+                _connection.ConnectionStateChanged += OnConnectionStateChanged;
+            }
+        }
+    }
 
     public event SysExReceivedHandler? Received;
+
+    public MidiConnectionState State => _connection?.ConnectionState ?? MidiConnectionState.Closed;
+
+    public event EventHandler<MidiConnectionStateChangedArgs>? StateChanged;
+
+    private void OnConnectionStateChanged(object? sender, MidiConnectionStateChangedArgs args)
+        => StateChanged?.Invoke(this, args);
 
     public async ValueTask Send(ReadOnlyMemory<byte> sysEx, CancellationToken ct)
     {

@@ -11,7 +11,7 @@ public sealed record Transfer(AddressMessage Message, AddressBlock Block);
 /// A message from the device, recognised by the message exchange: its kind, the tagged message it matched, and for a
 /// data message the data it carries.
 /// </summary>
-public readonly record struct ExchangeMessage(AddressMessageKind Kind, AddressMessage Message, ReceivedData? Data = null);
+public readonly record struct ExchangeMessage(ExchangeMessageKind Kind, AddressMessage Message, ReceivedData? Data = null);
 
 /// <summary>Action: send the message of the transfer (built by the exchange from the block and the values); then <see cref="ITransferMachine.OnSent"/> is called.</summary>
 public readonly record struct SendMessage(AddressMessage Message);
@@ -26,7 +26,7 @@ public readonly record struct Pause(TimeSpan Duration);
 public readonly record struct Ignore;
 
 /// <summary>Action: the transfer is finished with this status.</summary>
-public readonly record struct Complete(AddressBlockStatus Status, string? Reason = null);
+public readonly record struct Complete(BlockStatus Status, string? Reason = null);
 
 /// <summary>
 /// What the message exchange does next for a transfer, as decided by its <see cref="ITransferMachine"/>.

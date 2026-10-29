@@ -79,10 +79,10 @@ internal sealed class AddressProtocol
                 var plan = serializer.GetPlan(new SchemaName($"{document.Name}.{root.Name}"));
                 var found = new List<AddressMessage>();
                 CollectMessages(plan, plan.Root, document.Name, contract, found, problems);
-                if (found.Any(m => m.Kind == AddressMessageKind.Data))
+                if (found.Any(m => m.Kind == ExchangeMessageKind.Data))
                 {
-                    requests.AddRange(found.Where(m => m.Kind == AddressMessageKind.Request));
-                    dataMessages.AddRange(found.Where(m => m.Kind == AddressMessageKind.Data));
+                    requests.AddRange(found.Where(m => m.Kind == ExchangeMessageKind.Request));
+                    dataMessages.AddRange(found.Where(m => m.Kind == ExchangeMessageKind.Data));
                     replies.AddRange(found.Where(m => IsReply(m.Kind)));
                     if (MidiProperties.Find(root, MidiProperties.Exchange) is { } exchange)
                     {
@@ -104,7 +104,7 @@ internal sealed class AddressProtocol
             }
         }
 
-        var inferred = replies.Any(r => r.Kind is AddressMessageKind.Ack or AddressMessageKind.Nak) ? Acknowledged : OneWay;
+        var inferred = replies.Any(r => r.Kind is ExchangeMessageKind.Ack or ExchangeMessageKind.Nak) ? Acknowledged : OneWay;
         var addressSpace = AddressSpaceOf(requests.Concat(dataMessages), problems);
         return new AddressProtocol(serializer, contract, addressSpace, exchanges.FirstOrDefault().Value ?? inferred,
             requests, dataMessages, replies, bodies);
@@ -164,8 +164,8 @@ internal sealed class AddressProtocol
         return false;
     }
 
-    private static bool IsReply(AddressMessageKind kind)
-        => kind is AddressMessageKind.Ack or AddressMessageKind.Nak or AddressMessageKind.Error;
+    private static bool IsReply(ExchangeMessageKind kind)
+        => kind is ExchangeMessageKind.Ack or ExchangeMessageKind.Nak or ExchangeMessageKind.Error;
 
     /// <summary>
     /// Selects the body group (device map) for the device values read from an envelope: of the groups that conform
@@ -190,7 +190,7 @@ internal sealed class AddressProtocol
     /// <summary>A request for the addresses, as a complete SysEx message.</summary>
     public byte[] CreateRequest(AddressMessage request, AddressRange addresses, DeviceValues device)
     {
-        if (request.Kind != AddressMessageKind.Request)
+        if (request.Kind != ExchangeMessageKind.Request)
         {
             throw new ArgumentException($"'{request.Name}' is not a request.", nameof(request));
         }
@@ -264,7 +264,7 @@ internal sealed class AddressProtocol
                 continue;
             }
 
-            if (!Enum.TryParse<AddressMessageKind>(kindText, ignoreCase: true, out var kind))
+            if (!Enum.TryParse<ExchangeMessageKind>(kindText, ignoreCase: true, out var kind))
             {
                 problems.Error(documentName, member.Path, $"'{MidiProperties.Message}' must be request, data, ack, nak or error, not '{kindText}'.");
                 continue;
@@ -273,7 +273,7 @@ internal sealed class AddressProtocol
             var roles = new Dictionary<string, NodeInfo>(StringComparer.OrdinalIgnoreCase);
             CollectRoles(documentName, member, roles, problems);
 
-            if (kind == AddressMessageKind.Data)
+            if (kind == ExchangeMessageKind.Data)
             {
                 // a data message of another contract is not ours
                 if (!roles.TryGetValue(MidiProperties.RoleData, out var data)
@@ -335,15 +335,15 @@ internal sealed class AddressProtocol
         }
 
         var hasSize = message.Roles.ContainsKey(MidiProperties.RoleSize);
-        if (message.Kind == AddressMessageKind.Request && message.Unit == AddressUnit.Range && !hasSize)
+        if (message.Kind == ExchangeMessageKind.Request && message.Unit == AddressUnit.Range && !hasSize)
         {
             problems.Error(document, path, $"a request for a range needs a field with the role '{MidiProperties.RoleSize}' (or a '{MidiProperties.Unit}').");
         }
-        if (hasSize && (message.Kind == AddressMessageKind.Data || message.Unit != AddressUnit.Range))
+        if (hasSize && (message.Kind == ExchangeMessageKind.Data || message.Unit != AddressUnit.Range))
         {
             problems.Error(document, message.Roles[MidiProperties.RoleSize].Path, $"the role '{MidiProperties.RoleSize}' is only used on a request for a range.");
         }
-        if (message.Kind == AddressMessageKind.Request && message.Roles.ContainsKey(MidiProperties.RoleData))
+        if (message.Kind == ExchangeMessageKind.Request && message.Roles.ContainsKey(MidiProperties.RoleData))
         {
             problems.Error(document, message.Roles[MidiProperties.RoleData].Path, $"a request carries no data (role '{MidiProperties.RoleData}').");
         }

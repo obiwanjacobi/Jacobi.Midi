@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Collections.Concurrent;
 using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Schema;
@@ -37,12 +38,15 @@ public sealed class AddressMatch
 /// The address layout of one address-map root: converts between schema node ranges (<see cref="PlanRange"/>) and
 /// address ranges and knows the atomic groups. Deduced from the root's <see cref="ExecutionPlan"/> and validated
 /// against it, together with the envelope messages that can carry its contract (memberNodeDef).
-/// Immutable and thread-safe; <see cref="AddressMaps"/> creates and caches one per plan.
+/// Immutable (apart from the learned overhead of the data messages, a cache) and thread-safe; <see cref="AddressMaps"/>
+/// creates and caches one per plan.
 /// </summary>
 internal sealed class AddressMap
 {
     private readonly AddressLayout _layout;
     private readonly Serializer _serializer;
+    // per data message: the bytes outside the data in the last message recognised (see Candidates)
+    private readonly ConcurrentDictionary<AddressMessage, long> _overheads = new();
 
     private AddressMap(Serializer serializer, SchemaName root, ExecutionPlan plan, AddressProtocol protocol, DeviceValues device, AddressLayout layout)
     {
@@ -123,7 +127,7 @@ internal sealed class AddressMap
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Where(name => !Device.TryGet(name, out _))];
 
-    /// <summary>A range over one node occurrence (a group with all its fields, or one field).</summary>
+    /// <summary>A range over one node occurrence (a group with all its fields, or one field; an instance without the index of a repeat around it: all its items).</summary>
     public PlanRange CreateRange(SchemaPath path, InstancePath instance = default)
         => Plan.CreateRange(path, instance, path, instance);
 
@@ -163,6 +167,9 @@ internal sealed class AddressMap
         var end = _layout.AddressOf(last, range.ToInstance, lastItem: true) + last.Size;
         return new AddressRange(start, end - start);
     }
+
+    /// <summary>The field occurrences (in address and plan order) at the addresses of a node range, with their access.</summary>
+    internal IEnumerable<AddressOccurrence> FieldsOf(PlanRange range) => _layout.Fields(GetAddressRange(range));
 
     /// <summary>Which nodes an address range targets (e.g. the address and size of a received data message).</summary>
     public AddressMatch Resolve(AddressRange range)
@@ -217,7 +224,7 @@ internal sealed class AddressMap
     {
         ArgumentNullException.ThrowIfNull(message);
         var span = GetAddressRange(range);
-        var excluded = message.Kind == AddressMessageKind.Request ? AddressAccess.Write : AddressAccess.Read;
+        var excluded = message.Kind == ExchangeMessageKind.Request ? NodeAccess.Write : NodeAccess.Read;
         var fields = _layout.Fields(span).Where(f => f.Layout.Access != excluded).ToList();
         var blocks = new List<AddressBlock>();
 
@@ -273,8 +280,9 @@ internal sealed class AddressMap
     }
 
     /// <summary>
-    /// A data message with the values of the block, as a complete SysEx message. The block must be one group
-    /// occurrence of the map (e.g. a patch): the message body is written for that group.
+    /// A data message with the values of the block, as a complete SysEx message. The block must be a contiguous
+    /// range of whole fields of the map (e.g. a patch, one parameter, or a few neighbouring groups): the message
+    /// body is written for those fields.
     /// </summary>
     /// <param name="source">The values of the map (paths and instances of the map plan).</param>
     public byte[] CreateData(AddressMessage message, AddressBlock block, IValueSource source, DeviceValues device)
@@ -287,7 +295,7 @@ internal sealed class AddressMap
     /// A data message with the values of the block, written from the client's value model of the whole message
     /// (envelope and body, e.g. the instance of an editor): the address and size are those of the block, the device
     /// values come from <paramref name="device"/> or else from the client, and the body is the client's scope for the
-    /// data open choice. The block must be one group occurrence of the map.
+    /// data open choice. The block must be a contiguous range of whole fields of the map.
     /// </summary>
     internal byte[] CreateMessage(AddressMessage message, AddressBlock block, IValueSource source, DeviceValues device)
     {
@@ -300,18 +308,23 @@ internal sealed class AddressMap
     {
         ArgumentNullException.ThrowIfNull(message);
         ArgumentNullException.ThrowIfNull(block);
-        if (message.Kind != AddressMessageKind.Data)
+        if (message.Kind != ExchangeMessageKind.Data)
         {
             throw new ArgumentException($"'{message.Name}' is not a data message.", nameof(message));
         }
 
-        var target = GroupTargets(block.Addresses.Start, block.Addresses.Size)
-            .FirstOrDefault(t => t.Block.Addresses == block.Addresses)
-            ?? throw new NotSupportedException(
-                $"The block {block.Addresses} ({block.Nodes.First.Path} to {block.Nodes.Last.Path}) is not one group of the map '{Root}'; a data message can only carry a group.");
+        if (block.Nodes.ExecutionPlan != Plan)
+        {
+            throw new ArgumentException($"The block is not a block of the map plan '{Root}'.", nameof(block));
+        }
+        if (BlockAt(block.Addresses) is null)
+        {
+            throw new ArgumentException(
+                $"The block {block.Addresses} ({block.Nodes.First.Path} to {block.Nodes.Last.Path}) is not a contiguous range of whole fields of the map '{Root}'.", nameof(block));
+        }
 
         var envelope = new EnvelopeSource(block.Addresses, device,
-            clientBody => new EnvelopeBody<IValueSource>(Root, target.Target, target.Instance, Wrap(bodySource(clientBody), target)), client);
+            clientBody => new EnvelopeBody<IValueSource>(Root, block.Nodes, WrapBody(bodySource(clientBody), block.Nodes)), client);
         var writer = new ArrayBufferWriter<byte>();
         _serializer.Serialize(message.Range, envelope, writer);
         return writer.WrittenSpan.ToArray();
@@ -383,7 +396,7 @@ internal sealed class AddressMap
     /// <summary>
     /// Recognises a data message for this map and device: the constants and checksum match, the device values read
     /// select this map (of the groups that conform to the contract) and match <paramref name="device"/>, and the data
-    /// is one group of the map. Returns false for any other message.
+    /// is a contiguous range of whole fields of the map. Returns false for any other message.
     /// </summary>
     public bool TryReadData(ReadOnlyMemory<byte> sysEx, DeviceValues device, out ReceivedData data)
     {
@@ -413,15 +426,25 @@ internal sealed class AddressMap
     }
 
     /// <summary>
-    /// Wraps the scope of a data message body (the map) that is narrowed to a target group occurrence, so the repeats
-    /// of the map, which have no count, end after the target (see <see cref="MapRepeatItems"/>).
+    /// Wraps the scope of a data message body (the map) that is narrowed to a target range of the map plan, so the
+    /// repeats of the map, which have no count, end after the target (see <see cref="MapRepeatItems"/>).
+    /// </summary>
+    internal IValueSource WrapBody(IValueSource source, PlanRange target)
+        => new MapRepeatSource(source, MapRepeatItems.Of(_layout, target));
+
+    /// <inheritdoc cref="WrapBody(IValueSource, PlanRange)"/>
+    internal IValueSink WrapBody(IValueSink sink, PlanRange target)
+        => new MapRepeatSink(sink, MapRepeatItems.Of(_layout, target));
+
+    /// <summary>
+    /// Wraps the scope of a data message body (the map) that is narrowed to one node occurrence (see <see cref="WrapBody(IValueSource, PlanRange)"/>).
     /// </summary>
     internal IValueSource WrapBody(IValueSource source, SchemaPath target, InstancePath instance)
-        => new MapRepeatSource(source, MapRepeatItems.Of(_layout, target, instance));
+        => WrapBody(source, CreateRange(target, instance));
 
     /// <inheritdoc cref="WrapBody(IValueSource, SchemaPath, InstancePath)"/>
     internal IValueSink WrapBody(IValueSink sink, SchemaPath target, InstancePath instance)
-        => new MapRepeatSink(sink, MapRepeatItems.Of(_layout, target, instance));
+        => WrapBody(sink, CreateRange(target, instance));
 
     /// <summary>
     /// Wraps the scope of a read with the map plan itself (not through a data message, e.g. a dump of the map), so the
@@ -431,76 +454,114 @@ internal sealed class AddressMap
         => new MapRepeatSink(sink, range is null ? MapRepeatItems.All(_layout) : MapRepeatItems.Of(_layout, range));
 
     /// <summary>
-    /// The group occurrence the data of a message at the address is read into when the message is not recognised
+    /// The block the data of a message at the address is read into when the message is not recognised
     /// (<see cref="TryReadData"/>): the largest group that starts at the address; null when no group starts there.
     /// </summary>
-    internal GroupTarget? LargestTargetAt(long address)
-        => GroupTargets(address, Int64.MaxValue) is [.., var largest] ? largest : null;
-
-    private IValueSource Wrap(IValueSource source, GroupTarget target) => WrapBody(source, target.Target, target.Instance);
-    private IValueSink Wrap(IValueSink sink, GroupTarget target) => WrapBody(sink, target.Target, target.Instance);
+    internal AddressBlock? LargestGroupAt(long address)
+        => GroupBlocks(address, Int64.MaxValue) is [.., var largest] ? largest : null;
 
     internal long Decode(ReceivedData data, IValueSink sink)
     {
-        var target = data.Target;
-        var envelope = new EnvelopeSink(_ => new EnvelopeBody<IValueSink>(Root, target.Target, target.Instance, Wrap(sink, target)));
+        var target = data.Block.Nodes;
+        var envelope = new EnvelopeSink(_ => new EnvelopeBody<IValueSink>(Root, target, WrapBody(sink, target)));
         return _serializer.Deserialize(data.Message.Range, new ReadOnlySequence<byte>(data.SysEx), envelope);
     }
 
-    // The length of the data is only known from the message as a whole: try the groups that start at the
-    // address, largest first. A group that is too large runs out of data, one that is too small does not end
-    // at the end of the message (checksum, end of exclusive). The trial reads discard the values.
+    // The length of the data is only known from the message as a whole: try the blocks that start at the address
+    // (see Candidates). A block that is too large runs out of data, one that is too small does not end at the end
+    // of the message (checksum, end of exclusive). The trial reads discard the values.
     private ReceivedData? TryRead(AddressMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device)
     {
-        List<GroupTarget>? candidates = null;
-        for (var attempt = 0; ; attempt++)
+        IEnumerator<AddressBlock>? candidates = null;
+        try
         {
-            var rejected = false;
-            GroupTarget? tried = null;
-
-            EnvelopeBody<IValueSink> Select(EnvelopeSink envelope)
+            while (true)
             {
-                if (envelope.Address is not { } address)
+                var rejected = false;
+                AddressBlock? tried = null;
+
+                EnvelopeBody<IValueSink> Select(EnvelopeSink envelope)
                 {
-                    rejected = true;
-                    throw new InvalidOperationException($"'{message.Name}': the data comes before the address.");
-                }
-                if (!Matches(envelope.Device, device))
-                {
-                    rejected = true;
-                    throw new InvalidOperationException("The message is for another device.");
+                    if (envelope.Address is not { } address)
+                    {
+                        rejected = true;
+                        throw new InvalidOperationException($"'{message.Name}': the data comes before the address.");
+                    }
+                    if (!Matches(envelope.Device, device))
+                    {
+                        rejected = true;
+                        throw new InvalidOperationException("The message is for another device.");
+                    }
+
+                    candidates ??= Candidates(message, address, sysEx.Length).GetEnumerator();
+                    if (!candidates.MoveNext())
+                    {
+                        rejected = true;
+                        throw new InvalidOperationException("No block of the map fits the data.");
+                    }
+                    tried = candidates.Current;
+                    return new EnvelopeBody<IValueSink>(Root, tried.Nodes, WrapBody(NullSink.Instance, tried.Nodes));
                 }
 
-                candidates ??= [.. GroupTargets(address, sysEx.Length).OrderByDescending(t => t.Block.Addresses.Size)];
-                if (attempt >= candidates.Count)
+                try
                 {
-                    rejected = true;
-                    throw new InvalidOperationException("No group of the map fits the data.");
+                    var sink = new EnvelopeSink(Select);
+                    var read = _serializer.Deserialize(message.Range, new ReadOnlySequence<byte>(sysEx), sink);
+                    if (read == sysEx.Length && tried is not null)
+                    {
+                        _overheads[message] = sysEx.Length - tried.Addresses.Size;
+                        return new ReceivedData(this, message, sysEx, sink.Address!.Value, sink.Device, tried);
+                    }
                 }
-                tried = candidates[attempt];
-                return new EnvelopeBody<IValueSink>(Root, tried.Target, tried.Instance, Wrap(NullSink.Instance, tried));
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    // not this message, not this device, or the tried block does not fit
+                }
+
+                if (rejected || candidates is null)
+                {
+                    return null;
+                }
             }
+        }
+        finally
+        {
+            candidates?.Dispose();
+        }
+    }
 
-            try
-            {
-                var sink = new EnvelopeSink(Select);
-                var read = _serializer.Deserialize(message.Range, new ReadOnlySequence<byte>(sysEx), sink);
-                if (read == sysEx.Length && tried is not null)
-                {
-                    return new ReceivedData(this, message, sysEx, sink.Address!.Value, sink.Device, tried);
-                }
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                // not this message, not this device, or the tried group does not fit
-            }
+    // The blocks a data message at the address may carry, in the order to try them. First the block whose size the
+    // overhead of the message implies (the bytes outside the data, learned from the last message recognised;
+    // one address is one data byte); then all blocks that start at the address and fit in the message, largest first.
+    private IEnumerable<AddressBlock> Candidates(AddressMessage message, long address, long length)
+    {
+        AddressBlock? expected = null;
+        if (_overheads.TryGetValue(message, out var overhead) && length - overhead > 0
+            && BlockAt(new AddressRange(address, length - overhead)) is { } block)
+        {
+            expected = block;
+            yield return block;
+        }
 
-            if (rejected || candidates is null || attempt + 1 >= candidates.Count)
+        foreach (var end in _layout.Fields(new AddressRange(address, length))
+            .Where(f => f.Range.Start >= address)
+            .Select(f => f.Range.End)
+            .Distinct()
+            .OrderDescending())
+        {
+            if (BlockAt(new AddressRange(address, end - address)) is { } candidate && candidate.Addresses != expected?.Addresses)
             {
-                return null;
+                yield return candidate;
             }
         }
     }
+
+    /// <summary>
+    /// The block of the fields an address range holds when it is a contiguous range of whole fields (starts and ends
+    /// on field boundaries, no unmapped addresses); null otherwise. Only such a block can be carried by a data message.
+    /// </summary>
+    private AddressBlock? BlockAt(AddressRange range)
+        => Resolve(range) is { Block: { } block, IsAligned: true, Unmapped.Count: 0 } ? block : null;
 
     // the device values read must agree with the device and select this map
     private bool Matches(DeviceValues read, DeviceValues device)
@@ -524,12 +585,12 @@ internal sealed class AddressMap
     }
 
     /// <summary>
-    /// The group occurrences that start at the address and are at most <paramref name="maxSize"/> addresses long,
-    /// smallest first: the targets a data message at that address can carry.
+    /// The blocks of the group occurrences that start at the address and are at most <paramref name="maxSize"/>
+    /// addresses long, smallest first.
     /// </summary>
-    internal IReadOnlyList<GroupTarget> GroupTargets(long address, long maxSize)
+    private List<AddressBlock> GroupBlocks(long address, long maxSize)
     {
-        var targets = new List<GroupTarget>();
+        var targets = new List<AddressBlock>();
         var first = _layout.Fields(new AddressRange(address, 1)).FirstOrDefault(f => f.Range.Start == address);
         if (first.Layout is null)
         {
@@ -558,7 +619,7 @@ internal sealed class AddressMap
             }
             if (Resolve(new AddressRange(address, end - address)).Block is { } block)
             {
-                targets.Add(new GroupTarget(node.Node.Path, instance, block));
+                targets.Add(block);
             }
         }
         return targets;
@@ -579,12 +640,6 @@ internal sealed class AddressMap
 }
 
 /// <summary>
-/// A group occurrence of a map that a data message can carry: the target path and instance inside the map
-/// (the open choice body) and the block of its fields.
-/// </summary>
-internal sealed record GroupTarget(SchemaPath Target, InstancePath Instance, AddressBlock Block);
-
-/// <summary>
 /// A data message that was recognised for a map: its address, the device values in it and the block of the map it
 /// carries. Call <see cref="Decode"/> to read its values into a value model.
 /// </summary>
@@ -592,14 +647,14 @@ public sealed class ReceivedData
 {
     private readonly AddressMap _map;
 
-    internal ReceivedData(AddressMap map, AddressMessage message, ReadOnlyMemory<byte> sysEx, long address, DeviceValues device, GroupTarget target)
+    internal ReceivedData(AddressMap map, AddressMessage message, ReadOnlyMemory<byte> sysEx, long address, DeviceValues device, AddressBlock block)
     {
         _map = map;
         Message = message;
         SysEx = sysEx;
         Address = address;
         Device = device;
-        Target = target;
+        Block = block;
     }
 
     public AddressMessage Message { get; }
@@ -608,9 +663,7 @@ public sealed class ReceivedData
     /// <summary>The device values read from the message.</summary>
     public DeviceValues Device { get; }
     /// <summary>The addresses and nodes of the map the message carries.</summary>
-    public AddressBlock Block => Target.Block;
-
-    internal GroupTarget Target { get; }
+    public AddressBlock Block { get; }
 
     /// <summary>Reads the values of the message into the value model (paths and instances of the map plan).</summary>
     public long Decode(IValueSink sink) => _map.Decode(this, sink);

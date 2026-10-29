@@ -2,6 +2,7 @@ using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.Core;
 using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Device.Exchange;
 using Xunit;
@@ -96,7 +97,7 @@ public class AcknowledgedExchangeTests
         var map = AddressMap.Create(CreateSerializer(), new SchemaName("Ack.Map"));
 
         Assert.Equal("acknowledged", map.Protocol.Exchange);
-        Assert.Equal([AddressMessageKind.Ack, AddressMessageKind.Nak], map.Protocol.Replies.Select(r => r.Kind));
+        Assert.Equal([ExchangeMessageKind.Ack, ExchangeMessageKind.Nak], map.Protocol.Replies.Select(r => r.Kind));
     }
 
     [Fact]
@@ -105,9 +106,9 @@ public class AcknowledgedExchangeTests
         var map = AddressMap.Create(CreateSerializer(), new SchemaName("Ack.Map"));
 
         Assert.True(map.Protocol.TryReadReply(Ack, new DeviceValues(), out var ack));
-        Assert.Equal(AddressMessageKind.Ack, ack.Kind);
+        Assert.Equal(ExchangeMessageKind.Ack, ack.Kind);
         Assert.True(map.Protocol.TryReadReply(Nak, new DeviceValues(), out var nak));
-        Assert.Equal(AddressMessageKind.Nak, nak.Kind);
+        Assert.Equal(ExchangeMessageKind.Nak, nak.Kind);
         Assert.False(map.Protocol.TryReadReply(new byte[] { 0xF0, 0x7D, 0x02, 0x10, 0x01, 0x02, 0xF7 }, new DeviceValues(), out _));
     }
 
@@ -134,7 +135,7 @@ public class AcknowledgedExchangeTests
         var result = await exchange.Send(MapRange(serializer), Values(5, 6), TestContext.Current.CancellationToken);
 
         var block = Assert.Single(result.Blocks);
-        Assert.Equal(AddressBlockStatus.Rejected, block.Status);
+        Assert.Equal(BlockStatus.Rejected, block.Status);
         Assert.NotNull(block.Reason);
     }
 
@@ -146,7 +147,7 @@ public class AcknowledgedExchangeTests
 
         var result = await exchange.Send(MapRange(serializer), Values(5, 6), TestContext.Current.CancellationToken);
 
-        Assert.Equal(AddressBlockStatus.TimedOut, Assert.Single(result.Blocks).Status);
+        Assert.Equal(BlockStatus.TimedOut, Assert.Single(result.Blocks).Status);
     }
 
     [Fact]
@@ -156,7 +157,7 @@ public class AcknowledgedExchangeTests
         var device = new FakeDevice { RequestReply = [0xF0, 0x7D, 0x02, 0x10, 0x07, 0x08, 0xF7] };
         await using var exchange = CreateExchange(serializer, device);
         var sink = new FieldValueStore();
-        var progress = new List<AddressBlockResult>();
+        var progress = new List<BlockResult>();
 
         var result = await exchange.Receive(MapRange(serializer), sink, new Progress(progress), TestContext.Current.CancellationToken);
 
@@ -164,7 +165,7 @@ public class AcknowledgedExchangeTests
         Assert.Equal("F07D011002F7", Convert.ToHexString(Assert.Single(device.Sent)));
         Assert.True(sink.TryGet("Map.B", InstancePath.Empty, out var b));
         Assert.Equal((byte)8, b.Value);
-        Assert.Equal(AddressBlockStatus.Completed, Assert.Single(progress).Status);
+        Assert.Equal(BlockStatus.Completed, Assert.Single(progress).Status);
     }
 
     [Fact]
@@ -175,7 +176,7 @@ public class AcknowledgedExchangeTests
 
         var result = await exchange.Receive(MapRange(serializer), new FieldValueStore(), TestContext.Current.CancellationToken);
 
-        Assert.Equal(AddressBlockStatus.Rejected, Assert.Single(result.Blocks).Status);
+        Assert.Equal(BlockStatus.Rejected, Assert.Single(result.Blocks).Status);
     }
 
     [Fact]
@@ -196,9 +197,9 @@ public class AcknowledgedExchangeTests
     }
 
     /// <summary>Collects progress reports synchronously (System.Progress posts them asynchronously).</summary>
-    private sealed class Progress(List<AddressBlockResult> results) : IProgress<AddressBlockResult>
+    private sealed class Progress(List<BlockResult> results) : IProgress<BlockResult>
     {
-        public void Report(AddressBlockResult value) => results.Add(value);
+        public void Report(BlockResult value) => results.Add(value);
     }
 
     /// <summary>
@@ -212,6 +213,10 @@ public class AcknowledgedExchangeTests
         public List<byte[]> Sent { get; } = [];
 
         public event SysExReceivedHandler? Received;
+
+        public MidiConnectionState State => MidiConnectionState.Open;
+
+        public event EventHandler<MidiConnectionStateChangedArgs>? StateChanged { add { } remove { } }
 
         public ValueTask Send(ReadOnlyMemory<byte> sysEx, CancellationToken ct)
         {

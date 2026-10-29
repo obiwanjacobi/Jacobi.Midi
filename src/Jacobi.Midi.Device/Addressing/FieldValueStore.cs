@@ -7,8 +7,8 @@ namespace Jacobi.Midi.Device.Addressing;
 /// <summary>
 /// A flat value model that keeps field values by schema path and instance (the paths and instances of the map plan):
 /// as a sink it stores what is read, as a source it provides what it holds (no value for anything else). Used by the
-/// message exchange to complete atomic groups (read-modify-write) and by clients that keep the values of a device
-/// (e.g. the console's device state). Not thread-safe.
+/// device session for its state of a device and by clients that keep the values of a device (e.g. the console's
+/// device state). Not thread-safe.
 /// </summary>
 public sealed class FieldValueStore : IValueSink, IValueSource
 {
@@ -21,6 +21,17 @@ public sealed class FieldValueStore : IValueSink, IValueSource
 
     public void Set(string path, InstancePath instance, LogicalField value)
         => _values[(path, instance)] = value;
+
+    /// <summary>Forgets the value of a field; false when the store has none.</summary>
+    public bool Remove(string path, InstancePath instance)
+        => _values.Remove((path, instance));
+
+    /// <summary>Forgets all values.</summary>
+    public void Clear() => _values.Clear();
+
+    /// <summary>The values the store holds, by path and instance.</summary>
+    public IEnumerable<(string Path, InstancePath Instance, LogicalField Value)> Values
+        => _values.Select(entry => (entry.Key.Path, entry.Key.Instance, entry.Value));
 
     public void SetField(FieldContext context, LogicalField value)
         => _values[(context.Path, context.Instance)] = value;

@@ -7,10 +7,16 @@ using Jacobi.BinarySerializer.Schema;
 namespace Jacobi.Midi.Device.Addressing;
 
 /// <summary>
-/// The body of a data message: the selected group (the device map), the group occurrence inside it that is written
-/// or read, and the value model scope for its values.
+/// The body of a data message: the selected group (the device map), the nodes inside it that are written or read
+/// (a range of the map plan; null: the whole map), and the value model scope for their values.
 /// </summary>
-internal readonly record struct EnvelopeBody<TScope>(SchemaName Group, SchemaPath Target, InstancePath TargetInstance, TScope Scope);
+internal readonly record struct EnvelopeBody<TScope>(SchemaName Group, PlanRange? Target, TScope Scope)
+{
+    public SchemaPath FromTarget => Target?.First.Path ?? default;
+    public InstancePath FromInstance => Target?.FromInstance ?? default;
+    public SchemaPath ToTarget => Target?.Last.Path ?? default;
+    public InstancePath ToInstance => Target?.ToInstance ?? default;
+}
 
 /// <summary>
 /// The value source for writing an envelope message: answers the fields by their <c>midi.role</c>
@@ -64,7 +70,7 @@ internal sealed class EnvelopeSource(AddressRange addresses, DeviceValues device
         }
         var clientBody = client is IOpenChoiceSource openChoice ? openChoice.EnterOpenChoice(context).Scope : null;
         var selected = body(clientBody);
-        return new OpenChoiceSourceResult(selected.Scope, selected.Group, selected.Target, selected.TargetInstance);
+        return new OpenChoiceSourceResult(selected.Scope, selected.Group, selected.FromTarget, selected.FromInstance, selected.ToTarget, selected.ToInstance);
     }
 
     public IValueSource EnterGroup(GroupContext context) => Scope(client?.EnterGroup(context));
@@ -115,7 +121,7 @@ internal sealed class EnvelopeSink(Func<EnvelopeSink, EnvelopeBody<IValueSink>> 
     public OpenChoiceSinkResult EnterOpenChoice(OpenChoiceContext context)
     {
         var body = selectBody(this);
-        return new OpenChoiceSinkResult(body.Scope, body.Group, body.Target, body.TargetInstance);
+        return new OpenChoiceSinkResult(body.Scope, body.Group, body.FromTarget, body.FromInstance, body.ToTarget, body.ToInstance);
     }
 
     public IValueSink EnterGroup(GroupContext context) => this;

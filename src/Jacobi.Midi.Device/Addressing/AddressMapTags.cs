@@ -75,11 +75,11 @@ public static class AddressMapTags
                 => value is not null && (MidiProperties.IsTrue(value) || value == "0" || String.Equals(value, "false", StringComparison.OrdinalIgnoreCase))
                     ? null : $"'{name}' must be true or false, not '{value}'.",
             MidiProperties.Access
-                => Enum.TryParse<AddressAccess>(value, ignoreCase: true, out _) ? null : $"'{name}' must be readwrite, read or write, not '{value}'.",
+                => Enum.TryParse<NodeAccess>(value, ignoreCase: true, out _) ? null : $"'{name}' must be readwrite, read or write, not '{value}'.",
             MidiProperties.Unit
                 => Enum.TryParse<AddressUnit>(value, ignoreCase: true, out _) ? null : $"'{name}' must be range, field or atomic, not '{value}'.",
             MidiProperties.Message
-                => Enum.TryParse<AddressMessageKind>(value, ignoreCase: true, out _) ? null : $"'{name}' must be request, data, ack, nak or error, not '{value}'.",
+                => Enum.TryParse<ExchangeMessageKind>(value, ignoreCase: true, out _) ? null : $"'{name}' must be request, data, ack, nak or error, not '{value}'.",
             MidiProperties.Exchange
                 => String.Equals(value, AddressProtocol.OneWay, StringComparison.OrdinalIgnoreCase)
                     || String.Equals(value, AddressProtocol.Acknowledged, StringComparison.OrdinalIgnoreCase)

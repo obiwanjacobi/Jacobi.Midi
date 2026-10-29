@@ -549,7 +549,7 @@ builds SysEx messages itself.
 3. **Follow.** The exchange listens (`Listen`) on the same ranges, so changes made on the device show up on the dashboard.
 4. **Change.** A control writes the device state, which queues a `Send` of the parameter's range. While a knob is dragged, only the latest value per parameter is kept in the queue, so the device gets as many messages as it can take (paced by `midi.messageInterval`), not one per mouse move.
 5. **Select.** When the user changes an index variable, the bindings are resolved again; the controls that use it get the new instance, and its ranges are received (step 2) and followed (step 3) instead of those of the previous one.
-6. **Failure.** A block that times out or is rejected (`AddressBlockStatus`) is shown on the controls of its parameters and in the status bar; nothing fails silently.
+6. **Failure.** A block that times out or is rejected (`BlockStatus`) is shown on the controls of its parameters and in the status bar; nothing fails silently.
 
 Each device has its own exchange: a control whose slots are bound to different devices sends to each device
 separately. There is no transaction across devices.

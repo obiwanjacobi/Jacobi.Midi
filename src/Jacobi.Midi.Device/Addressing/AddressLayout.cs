@@ -6,7 +6,7 @@ namespace Jacobi.Midi.Device.Addressing;
 /// <summary>
 /// Which way data may be transferred for an addressed node (<c>midi.access</c>).
 /// </summary>
-public enum AddressAccess
+public enum NodeAccess
 {
     ReadWrite,
     /// <summary>The device only transmits the data (e.g. Yamaha System Information).</summary>
@@ -39,7 +39,7 @@ internal sealed class AddressLayoutNode
     public bool IsRepeat => Node is RepeatInfo;
     public bool IsField => Node is FieldInfo;
     public bool IsAtomic { get; init; }
-    public AddressAccess Access { get; init; }
+    public NodeAccess Access { get; init; }
 
     public AddressRange RangeIn(long frameBase) => new(frameBase + Offset, Size);
 }
@@ -76,7 +76,7 @@ internal sealed class AddressLayout
     public static AddressLayout Build(string document, GroupInfo root, int bitsPerByte, AddressMapProblems problems)
     {
         var builder = new Builder(document, bitsPerByte, problems);
-        var layout = builder.Node(root, parent: null, cursor: 0, inRepeat: false, inAtomic: false, AddressAccess.ReadWrite)!;
+        var layout = builder.Node(root, parent: null, cursor: 0, inRepeat: false, inAtomic: false, NodeAccess.ReadWrite)!;
         var result = new AddressLayout(layout);
         result.Index(layout);
         return result;
@@ -217,7 +217,7 @@ internal sealed class AddressLayout
 
     private sealed class Builder(string document, int bitsPerByte, AddressMapProblems problems)
     {
-        public AddressLayoutNode? Node(NodeInfo node, AddressLayoutNode? parent, long cursor, bool inRepeat, bool inAtomic, AddressAccess inheritedAccess)
+        public AddressLayoutNode? Node(NodeInfo node, AddressLayoutNode? parent, long cursor, bool inRepeat, bool inAtomic, NodeAccess inheritedAccess)
         {
             var start = cursor;
             if (Address(node, MidiProperties.Address) is { } explicitStart)
@@ -421,14 +421,14 @@ internal sealed class AddressLayout
             return address;
         }
 
-        private AddressAccess Access(NodeInfo node, AddressAccess inherited)
+        private NodeAccess Access(NodeInfo node, NodeAccess inherited)
         {
             var text = MidiProperties.Find(node, MidiProperties.Access);
             if (text is null)
             {
                 return inherited;
             }
-            if (Enum.TryParse<AddressAccess>(text, ignoreCase: true, out var access))
+            if (Enum.TryParse<NodeAccess>(text, ignoreCase: true, out var access))
             {
                 return access;
             }

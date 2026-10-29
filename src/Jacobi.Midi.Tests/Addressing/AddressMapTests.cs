@@ -1,4 +1,5 @@
 using Jacobi.BinarySerializer.Execution;
+using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Device.Addressing;
 using Xunit;
@@ -329,14 +330,107 @@ public class AddressMapTests
     }
 
     [Fact]
-    public void CreateData_NotOneGroup_Throws()
+    public void CreateData_FieldsOfAGroup_RoundTrip()
+    {
+        var map = CreateMap();
+        var device = map.Device.With(Device0);
+        var item = new InstancePath([2]);
+        var store = new FieldValueStore();
+        store.Set("AddressMap.Memory.Patch.Filter.Cutoff", item, new LogicalField("Cutoff", typeof(byte), (byte)99));
+        store.Set("AddressMap.Memory.Patch.Filter.Resonance", item, new LogicalField("Resonance", typeof(byte), (byte)5));
+
+        // Cutoff and Resonance of the filter: two of its three fields
+        var block = map.Resolve(new AddressRange(PatchAddress(2) + 1, 2)).Block!;
+        var bytes = map.CreateData(map.Protocol.DataMessages[0], block, store, device);
+
+        Assert.Equal(Convert.ToHexString(DataMessage(PatchAddress(2) + 1, [99, 5])), Convert.ToHexString(bytes));
+        Assert.True(map.TryReadData(bytes, device, out var data));
+        Assert.Equal(block.Addresses, data.Block.Addresses);
+        var read = new FieldValueStore();
+        data.Decode(read);
+        Assert.Equal(2, read.Count);
+        Assert.True(read.TryGet("AddressMap.Memory.Patch.Filter.Resonance", item, out var resonance));
+        Assert.Equal(5, Convert.ToInt32(resonance.Value));
+    }
+
+    [Fact]
+    public void CreateData_BlockWithUnmappedAddresses_Throws()
     {
         var map = CreateMap();
         var device = map.Device.With(Device0);
 
-        // Cutoff and Resonance of the filter: two of its three fields
-        var block = map.Resolve(new AddressRange(0x01, 2)).Block!;
+        // the edit patch, its reserved addresses and the first field of Global
+        var block = map.Resolve(new AddressRange(0, GlobalStart + 1)).Block!;
 
-        Assert.Throws<NotSupportedException>(() => map.CreateData(map.Protocol.DataMessages[0], block, new FieldValueStore(), device));
+        Assert.Throws<ArgumentException>(() => map.CreateData(map.Protocol.DataMessages[0], block, new FieldValueStore(), device));
+    }
+
+    [Fact]
+    public void TryReadData_OneField()
+    {
+        var map = CreateMap();
+
+        Assert.True(map.TryReadData(DataMessage(GlobalStart + 9, [0x33]), Device0, out var data));
+
+        Assert.Equal(new AddressRange(GlobalStart + 9, 1), data.Block.Addresses);
+        var store = new FieldValueStore();
+        data.Decode(store);
+        Assert.True(store.TryGet("AddressMap.Global.Volume", InstancePath.Empty, out var volume));
+        Assert.Equal(0x33, Convert.ToInt32(volume.Value));
+        Assert.Equal(1, store.Count);
+    }
+
+    [Fact]
+    public void TryReadData_BitPackedByte_HoldsAllItsFields()
+    {
+        var map = CreateMap();
+
+        Assert.True(map.TryReadData(DataMessage(PatchAddress(1), [0x05]), Device0, out var data));
+
+        var store = new FieldValueStore();
+        data.Decode(store);
+        Assert.Equal(4, store.Count);
+        Assert.True(store.TryGet("AddressMap.Memory.Patch.Switches.A", new InstancePath([1]), out var a));
+        Assert.Equal(true, a.Value);
+        Assert.True(store.TryGet("AddressMap.Memory.Patch.Switches.B", new InstancePath([1]), out var b));
+        Assert.Equal(false, b.Value);
+    }
+
+    [Fact]
+    public void TryReadData_AGroupAndAField()
+    {
+        var map = CreateMap();
+
+        // the filter, the time and the level of patch 3
+        Assert.True(map.TryReadData(DataMessage(PatchAddress(3) + 1, [10, 20, 1, 2, 44, 100]), Device0, out var data));
+
+        Assert.Equal(new AddressRange(PatchAddress(3) + 1, 6), data.Block.Addresses);
+        Assert.Equal("AddressMap.Memory.Patch.Filter.Cutoff", data.Block.Nodes.First.Path.Value);
+        Assert.Equal("AddressMap.Memory.Patch.Level", data.Block.Nodes.Last.Path.Value);
+    }
+
+    [Fact]
+    public void TryReadData_MessagesOfAnotherSize_AreStillRecognised()
+    {
+        var map = CreateMap();
+        var channelAndText = DataMessage(GlobalStart, [3, .. System.Text.Encoding.ASCII.GetBytes("Text 123")]);
+
+        // the first message teaches the size outside the data; the next ones have other sizes
+        Assert.True(map.TryReadData(DataMessage(GlobalStart + 9, [0x33]), Device0, out var volume));
+        Assert.True(map.TryReadData(channelAndText, Device0, out var global));
+        Assert.True(map.TryReadData(DataMessage(PatchAddress(0), Patch("Patch  0")), Device0, out var patch));
+
+        Assert.Equal(new AddressRange(GlobalStart + 9, 1), volume.Block.Addresses);
+        Assert.Equal(new AddressRange(GlobalStart, 9), global.Block.Addresses);
+        Assert.Equal(new AddressRange(PatchAddress(0), PatchSize), patch.Block.Addresses);
+    }
+
+    [Fact]
+    public void TryReadData_EndsInsideAField_IsNotRecognised()
+    {
+        var map = CreateMap();
+
+        // the first byte of the 2 byte time
+        Assert.False(map.TryReadData(DataMessage(PatchAddress(0) + 4, [0x02]), Device0, out _));
     }
 }

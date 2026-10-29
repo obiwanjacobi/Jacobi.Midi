@@ -34,7 +34,7 @@ public sealed record EncodedDataMessage(AddressMessage Message, AddressBlock Blo
 /// <item>A read with the plan of a map root (e.g. a dump of the map) ends the repeats of the map after the items of the
 /// address space, or at the end of the data.</item>
 /// <item>A read of a message whose open choice gets a map root as its body (selected by the client's value model) reads the
-/// group occurrence the message carries, recognised as <see cref="AddressMap.TryReadData"/> does (with any device id).
+/// block of the map the message carries, recognised as <see cref="AddressMap.TryReadData"/> does (with any device id).
 /// When the message is not recognised, the largest group that starts at the address is read as far as the data goes,
 /// with a warning.</item>
 /// <item>A write of a selection (<see cref="WriteData"/>) is split into blocks as the message exchange does
@@ -128,7 +128,6 @@ public sealed class AddressMapAdapter
     /// <param name="warnings">Receives the situations the user may not expect.</param>
     /// <exception cref="AddressMapException">The map is not valid.</exception>
     /// <exception cref="InvalidOperationException">The open choice is not the data of a message that can carry the map, or a value is missing.</exception>
-    /// <exception cref="NotSupportedException">A block is not one group of the map (a data message can only carry a group).</exception>
     public IReadOnlyList<EncodedDataMessage> WriteData(SchemaName envelope, SchemaPath dataChoice, SchemaName map,
         IEnumerable<MapOccurrence> selection, IValueSource source, ICollection<string> warnings)
     {
@@ -187,7 +186,6 @@ public sealed class AddressMapAdapter
     /// <param name="device">The device values the map root does not fix (e.g. <c>deviceId</c>).</param>
     /// <exception cref="AddressMapException">The map is not valid.</exception>
     /// <exception cref="InvalidOperationException">A device value the messages need is not given, or the source has no value for a field.</exception>
-    /// <exception cref="NotSupportedException">A block is not one group of the map (a data message can only carry a group).</exception>
     public IReadOnlyList<EncodedDataMessage> EncodeData(PlanRange range, IValueSource source, DeviceValues device)
     {
         ArgumentNullException.ThrowIfNull(range);
@@ -268,7 +266,7 @@ public sealed class AddressMapAdapter
         => _mapRoots.Any(root => String.Equals(root.FullName, name.FullName, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// Narrows the body of an open choice that the client selected to the group occurrence of the map the message carries,
+    /// Narrows the body of an open choice that the client selected to the block of the map the message carries,
     /// and wraps its scope so the repeats of the map end after it.
     /// </summary>
     private sealed class BodySelector(AddressMapAdapter reader, byte[] message, ICollection<string> warnings)
@@ -281,18 +279,22 @@ public sealed class AddressMapAdapter
             }
 
             var map = reader._maps.Get(reader._serializer.GetPlan(selected.Group));
-            if (!selected.Target.IsEmpty)
+            if (!selected.FromTarget.IsEmpty)
             {
                 // the client narrowed the body itself
-                return selected with { Scope = map.WrapBody(selected.Scope, selected.Target, selected.TargetInstance) };
+                var narrowed = selected.ToTarget.IsEmpty
+                    ? map.CreateRange(selected.FromTarget, selected.FromInstance)
+                    : map.CreateRange(selected.FromTarget, selected.FromInstance, selected.ToTarget, selected.ToInstance);
+                return selected with { Scope = map.WrapBody(selected.Scope, narrowed) };
             }
 
-            var target = Recognize(map, context) ?? Fallback(map, context, envelope);
-            return new OpenChoiceSinkResult(map.WrapBody(selected.Scope, target.Target, target.Instance), selected.Group, target.Target, target.Instance);
+            var target = (Recognize(map, context) ?? Fallback(map, context, envelope)).Nodes;
+            return new OpenChoiceSinkResult(map.WrapBody(selected.Scope, target), selected.Group,
+                target.First.Path, target.FromInstance, target.Last.Path, target.ToInstance);
         }
 
-        // the group the message carries, when it is a data message of the map and this open choice is its data
-        private GroupTarget? Recognize(AddressMap map, OpenChoiceContext context)
+        // the block the message carries, when it is a data message of the map and this open choice is its data
+        private AddressBlock? Recognize(AddressMap map, OpenChoiceContext context)
         {
             // [TODO] any device id is accepted for now; only the device values the map root fixes (model id) select it
             if (!map.TryReadData(message, new DeviceValues(), out var data)
@@ -301,22 +303,22 @@ public sealed class AddressMapAdapter
             {
                 return null;
             }
-            return data.Target;
+            return data.Block;
         }
 
         // read as much as possible: the largest group at the address, until the data runs out
-        private GroupTarget Fallback(AddressMap map, OpenChoiceContext context, EnvelopeSink envelope)
+        private AddressBlock Fallback(AddressMap map, OpenChoiceContext context, EnvelopeSink envelope)
         {
             if (envelope.Address is not { } address)
             {
                 throw new InvalidOperationException(
                     $"'{context.Path}': no address was read before the data, so the data cannot be placed in the map '{map.Root}'.");
             }
-            var target = map.LargestTargetAt(address) ?? throw new InvalidOperationException(
+            var target = map.LargestGroupAt(address) ?? throw new InvalidOperationException(
                 $"'{context.Path}': no group of the map '{map.Root}' starts at the address {map.Protocol.AddressSpace.Format(address)}.");
-            warnings.Add($"'{context.Path}': the message is not recognised as one whole group of the map '{map.Root}' " +
-                $"(another device model, or the data is incomplete or spans more than one group). " +
-                $"It is read into '{target.Target}' at {map.Protocol.AddressSpace.Format(address)} as far as the data goes.");
+            warnings.Add($"'{context.Path}': the message is not recognised as data of the map '{map.Root}' " +
+                $"(another device model, or the data is incomplete or does not end on a field boundary). " +
+                $"It is read into '{target.Nodes.First.Path}' to '{target.Nodes.Last.Path}' at {map.Protocol.AddressSpace.Format(address)} as far as the data goes.");
             return target;
         }
     }
