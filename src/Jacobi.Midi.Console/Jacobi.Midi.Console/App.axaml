@@ -3,7 +3,7 @@
              x:Class="Jacobi.Midi.Console.App"
              RequestedThemeVariant="Dark">
 
-    <!-- the look (palette, chrome, kit) is added in code: see Looks.Apply -->
+    <!-- the look (palette, chrome, kit) is added in code: see ConsoleLooks.Apply -->
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>

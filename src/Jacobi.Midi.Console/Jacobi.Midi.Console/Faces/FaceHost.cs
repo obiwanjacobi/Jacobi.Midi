@@ -7,7 +7,7 @@ using Jacobi.Midi.Console.Core.Faces;
 namespace Jacobi.Midi.Console.Faces;
 
 /// <summary>
-/// Places the face for a control kind, taken from the kit of the current look (the <see cref="Kits.ResourceKey"/>
+/// Places the face for a control kind, taken from the kit of the current look (the <see cref="Kit.ResourceKey"/>
 /// resource), and passes the control's face state on to it. Used in the templates of the parameter controls, so a
 /// control does not know which face draws it. A missing kit or face is shown as a text, not hidden.
 /// </summary>
@@ -48,9 +48,9 @@ public sealed class FaceHost : Decorator
 
     private void PlaceFace()
     {
-        if (!this.TryFindResource(Kits.ResourceKey, out var resource) || resource is not Kit kit)
+        if (!this.TryFindResource(Kit.ResourceKey, out var resource) || resource is not Kit kit)
         {
-            Child = new TextBlock { Text = $"No kit ('{Kits.ResourceKey}' resource)" };
+            Child = new TextBlock { Text = $"No kit ('{Kit.ResourceKey}' resource)" };
             return;
         }
         if (kit.Create(Kind) is not { } face)

@@ -28,6 +28,9 @@ public abstract class Face : Control
     /// <summary>The size of a cell in pixels when a dashboard is not scaled: the unit of the faces' sizes.</summary>
     public const double CellPixels = 24;
 
+    // every face takes the one face theme (the palette keys), whatever its kit: a new face needs no theme of its own
+    protected override Type StyleKeyOverride => typeof(Face);
+
     public static readonly StyledProperty<FaceState?> StateProperty =
         AvaloniaProperty.Register<Face, FaceState?>(nameof(State));
 

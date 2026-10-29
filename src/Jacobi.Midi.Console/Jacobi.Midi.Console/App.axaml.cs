@@ -24,7 +24,7 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
-        ConsoleLooks.Apply(this, ConsoleLooks.Foundry);
+        ConsoleLooks.Apply(this, ConsoleLooks.Default);
 #if DEBUG
         this.AttachDeveloperTools();
 #endif

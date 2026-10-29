@@ -1,7 +1,7 @@
 <!--
     The parts all looks share: the templates of the parameter controls (the chrome around a face host, which takes
     the face from the kit of the look) and the brushes of the faces (the palette keys). A look supplies the palette,
-    the kit and the chrome themes (see Foundry.axaml, Anodized.axaml).
+    the kit and the chrome themes, in its module (a folder under Looks).
 -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -122,9 +122,9 @@
 
     <!--
         every face draws with the same keys of the palette, the typography and the finish;
-        a look gives them other colours, materials, fonts and effects
+        a look gives them other colours, materials, fonts and effects; every face takes this theme (Face.StyleKeyOverride)
     -->
-    <ControlTheme x:Key="ConsoleFaceTheme" TargetType="faces:Face">
+    <ControlTheme x:Key="{x:Type faces:Face}" TargetType="faces:Face">
         <Setter Property="AccentBrush" Value="{DynamicResource ConsoleAccentBrush}" />
         <Setter Property="AccentDisplayBrush" Value="{DynamicResource ConsoleAccentDisplayBrush}" />
         <Setter Property="TrackBrush" Value="{DynamicResource ConsoleTrackBrush}" />
@@ -138,20 +138,4 @@
         <Setter Property="GlowOpacity" Value="{DynamicResource ConsoleGlowOpacity}" />
     </ControlTheme>
 
-    <ControlTheme x:Key="{x:Type faces:FoundryKnobFace}" TargetType="faces:FoundryKnobFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
-    <ControlTheme x:Key="{x:Type faces:FoundryFaderFace}" TargetType="faces:FoundryFaderFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
-    <ControlTheme x:Key="{x:Type faces:FoundrySwitchFace}" TargetType="faces:FoundrySwitchFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
-    <ControlTheme x:Key="{x:Type faces:FoundryNumberBoxFace}" TargetType="faces:FoundryNumberBoxFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
-    <ControlTheme x:Key="{x:Type faces:FoundryTextFace}" TargetType="faces:FoundryTextFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
-    <ControlTheme x:Key="{x:Type faces:AnodizedKnobFace}" TargetType="faces:AnodizedKnobFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
-    <ControlTheme x:Key="{x:Type faces:AnodizedFaderFace}" TargetType="faces:AnodizedFaderFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
-    <ControlTheme x:Key="{x:Type faces:AnodizedSwitchFace}" TargetType="faces:AnodizedSwitchFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
-    <ControlTheme x:Key="{x:Type faces:AnodizedNumberBoxFace}" TargetType="faces:AnodizedNumberBoxFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
-    <ControlTheme x:Key="{x:Type faces:AnodizedTextFace}" TargetType="faces:AnodizedTextFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
-    <ControlTheme x:Key="{x:Type faces:FoundrySelectorFace}" TargetType="faces:FoundrySelectorFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
-    <ControlTheme x:Key="{x:Type faces:FoundryXyPadFace}" TargetType="faces:FoundryXyPadFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
-    <ControlTheme x:Key="{x:Type faces:FoundryEnvelopeFace}" TargetType="faces:FoundryEnvelopeFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
-    <ControlTheme x:Key="{x:Type faces:AnodizedSelectorFace}" TargetType="faces:AnodizedSelectorFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
-    <ControlTheme x:Key="{x:Type faces:AnodizedXyPadFace}" TargetType="faces:AnodizedXyPadFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
-    <ControlTheme x:Key="{x:Type faces:AnodizedEnvelopeFace}" TargetType="faces:AnodizedEnvelopeFace" BasedOn="{StaticResource ConsoleFaceTheme}" />
 </ResourceDictionary>

@@ -267,7 +267,7 @@ the area under the pointer, named in its title: on the face or on a section's ta
 chrome with the class `accentArea`) the accent, elsewhere on a parameter control its plate, elsewhere on a layout
 control its panel. The property panel opens the same chooser for each area of the selected control. It offers:
 
-- the colours of the look for the area: a few colours designed to suit it (in `ConsoleLooks`; Foundry has metals and patina, steel and enamel plates, iron and painted panels; Anodized LED colours and anodized aluminium);
+- the colours of the look for the area: a few colours designed to suit it (in the module of the look; Foundry has metals and patina, steel and enamel plates, iron and painted panels; Anodized LED colours and anodized aluminium);
 - tints and shades of the current colour;
 - any colour (a colour view in a flyout of its own, applied with *Apply*);
 - *Inherited*: takes the colour away, so the control has the colour of the cascade again;
@@ -289,11 +289,12 @@ Two ready-made looks, kept simple as the basis for tweaking before more controls
 
 Where things are, for tweaking (in `Jacobi.Midi.Console`):
 
-- **Shapes**: the faces in `Faces/FoundryFaces.cs` and `Faces/AnodizedFaces.cs` (drawn in code; shared drawing code in `FaceDrawing`), collected per look in `Kits`.
-- **Colours, materials, fonts and glow**: the palette, typography and finish in `Themes/Foundry.axaml` and `Themes/Anodized.axaml`: the same keys in both (see [Composable controls](#composable-controls)), solid colours or gradients.
-- **Chrome**: the `ControlChrome` and `SectionFrame` control themes in the same two files.
-- **Templates**: `Themes/Controls.axaml` puts a chrome around a face host for each control and gives every face its brushes from the palette keys; it is shared by the looks.
-- **Looks**: `ConsoleLooks` (in `Looks/Look.cs`) lists them; applying one replaces the look's resources and kit and rebuilds the dashboard.
+- **Modules**: each kit and the looks built on it are a **module**, a folder of its own under `Looks` (`Looks/Foundry`, `Looks/Anodized`), changed in isolation. A module has everything it offers: its faces (a file per face), its kit and its looks with their accent and swatches (`FoundryLooks`, `AnodizedLooks`), and the resources of its looks (`Foundry.axaml`). Modules need not offer the same: one may have more looks (other palettes on the same kit) or resources of its own (e.g. Foundry's `ConsoleScrewBrush`). A module finds its resources through its own assembly (`Look.ThemeOf`), so it can move to an assembly of its own later.
+- **Shapes**: the faces of a module (drawn in code; shared drawing code in `Faces/FaceDrawing`), collected in the kit of the module.
+- **Colours, materials, fonts and glow**: the palette, typography and finish in the resources of a look: the same keys in every look (see [Composable controls](#composable-controls)), solid colours or gradients.
+- **Chrome**: the `ControlChrome` and `SectionFrame` control themes in the same resources.
+- **Templates**: `Themes/Controls.axaml` puts a chrome around a face host for each control and gives every face its brushes from the palette keys (one theme for all faces, `Face.StyleKeyOverride`); it is shared by the looks.
+- **Looks**: `ConsoleLooks` (in `Looks/Look.cs`) lists the looks of the modules; applying one replaces the look's resources and kit and rebuilds the dashboard. A new module is added to that list.
 
 The accent is the device colour of the rig (or the dashboard); a look's own accent is used for controls without a
 device. The look is chosen in the toolbar and not saved yet.

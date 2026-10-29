@@ -6,10 +6,10 @@ public enum ColorArea
     /// <summary>What shows the value and the device: arcs, LEDs, a section's tag or strip.</summary>
     Accent,
 
-    /// <summary>The material the control is mounted on (Foundry's steel plate).</summary>
+    /// <summary>The material the control is mounted on (e.g. a steel plate).</summary>
     Plate,
 
-    /// <summary>The material of a section (Foundry's cast iron, Anodized's aluminium).</summary>
+    /// <summary>The material of a section (e.g. cast iron, aluminium).</summary>
     Panel,
 }
 

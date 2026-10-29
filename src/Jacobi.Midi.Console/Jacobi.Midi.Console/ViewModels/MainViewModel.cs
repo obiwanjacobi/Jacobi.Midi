@@ -68,7 +68,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     public IReadOnlyList<Look> Looks => ConsoleLooks.All;
 
     [ObservableProperty]
-    public partial Look SelectedLook { get; set; } = ConsoleLooks.Foundry;
+    public partial Look SelectedLook { get; set; } = ConsoleLooks.Default;
 
     /// <summary>The open rig; null until a rig and a dashboard are open.</summary>
     [ObservableProperty]
