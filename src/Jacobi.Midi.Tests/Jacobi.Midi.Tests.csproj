@@ -21,7 +21,6 @@
     <ProjectReference Include="..\..\src\Jacobi.Midi.Device\Jacobi.Midi.Device.csproj" />
     <ProjectReference Include="..\Jacobi.Midi.Console\Jacobi.Midi.Console.Core\Jacobi.Midi.Console.Core.csproj" />
     <ProjectReference Include="..\Jacobi.Midi.Core\Jacobi.Midi.Core.csproj" />
-    <ProjectReference Include="..\Jacobi.Midi.File\Jacobi.Midi.File.csproj" />
     <ProjectReference Include="..\Jacobi.Midi.Messages\Jacobi.Midi.Messages.csproj" />
     <ProjectReference Include="..\Jacobi.Midi.Roland\Jacobi.Midi.Roland.csproj" />
     <ProjectReference Include="..\Jacobi.Midi.Yamaha\Jacobi.Midi.Yamaha.csproj" />
