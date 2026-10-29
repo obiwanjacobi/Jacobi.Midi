@@ -105,7 +105,7 @@ internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, Dev
         {
             // the list is refreshed when the endpoints change: the selection is lost then, the endpoint is not
             if (!String.IsNullOrWhiteSpace(value))
-                SetEndpoint(new EndpointReference(value.Trim(), device.Endpoint?.Group ?? 0));
+                SetEndpoint(new EndpointReference(value.Trim(), device.Endpoint?.Groups ?? default));
         }
     }
 
@@ -113,24 +113,44 @@ internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, Dev
     [RelayCommand]
     private void ClearEndpoint() => SetEndpoint(null);
 
-    /// <summary>The 16 UMP groups, one-based, with the names the device's endpoint gives them.</summary>
-    public IReadOnlyList<string> GroupNames
+    /// <summary>The 16 UMP groups, one-based, with the names the device's endpoint gives them for sending.</summary>
+    public IReadOnlyList<string> SendGroupNames => GroupNames(MidiDirections.Send);
+
+    /// <summary>The 16 UMP groups, one-based, with the names the device's endpoint gives them for receiving.</summary>
+    public IReadOnlyList<string> ReceiveGroupNames => GroupNames(MidiDirections.Receive);
+
+    private IReadOnlyList<string> GroupNames(MidiDirections direction)
     {
-        get
-        {
-            var capabilities = owner.Midi.Endpoints.FirstOrDefault(endpoint => String.Equals(endpoint.Name, device.Endpoint?.Name, StringComparison.OrdinalIgnoreCase))?.Capabilities;
-            return [.. Enumerable.Range(0, 16).Select(group => capabilities?.GetGroupName(new MidiGroup((byte)group)) is { } name ? $"{group + 1} · {name}" : $"{group + 1}")];
-        }
+        var capabilities = owner.Midi.Endpoints.FirstOrDefault(endpoint => String.Equals(endpoint.Name, device.Endpoint?.Name, StringComparison.OrdinalIgnoreCase))?.Capabilities;
+        return [.. Enumerable.Range(0, 16).Select(group => capabilities?.GetGroupName(new MidiGroup((byte)group), direction) is { } name ? $"{group + 1} · {name}" : $"{group + 1}")];
     }
 
-    /// <summary>The UMP group of the endpoint (0-15), the index in <see cref="GroupNames"/>; -1 without an endpoint.</summary>
-    public int EndpointGroup
+    /// <summary>
+    /// The UMP group to send to the device on (0-15), the index in <see cref="SendGroupNames"/>; -1 without an endpoint.
+    /// The receive group follows as long as it is the same.
+    /// </summary>
+    public int EndpointSendGroup
     {
-        get => device.Endpoint?.Group ?? -1;
+        get => device.Endpoint?.Groups.Send.Value ?? -1;
         set
         {
             if (value is >= 0 and < 16 && device.Endpoint is { } endpoint)
-                SetEndpoint(endpoint with { Group = value });
+            {
+                var send = new MidiGroup((byte)value);
+                var receive = endpoint.Groups.IsSplit ? endpoint.Groups.Receive : send;
+                SetEndpoint(endpoint with { Groups = new MidiGroupPair(send, receive) });
+            }
+        }
+    }
+
+    /// <summary>The UMP group to receive from the device on (0-15), the index in <see cref="ReceiveGroupNames"/>; -1 without an endpoint.</summary>
+    public int EndpointReceiveGroup
+    {
+        get => device.Endpoint?.Groups.Receive.Value ?? -1;
+        set
+        {
+            if (value is >= 0 and < 16 && device.Endpoint is { } endpoint)
+                SetEndpoint(endpoint with { Groups = endpoint.Groups with { Receive = new MidiGroup((byte)value) } });
         }
     }
 
@@ -155,7 +175,7 @@ internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, Dev
 
     private bool CanRequestIdentity() => Connection?.EndpointInfo is not null;
 
-    /// <summary>Asks the devices on the endpoint and group to identify themselves (universal Identity Request); changes nothing.</summary>
+    /// <summary>Asks the devices on the endpoint and groups to identify themselves (universal Identity Request); changes nothing.</summary>
     [RelayCommand(CanExecute = nameof(CanRequestIdentity))]
     private async Task RequestIdentity()
     {
@@ -178,8 +198,10 @@ internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, Dev
     {
         OnPropertyChanged(nameof(EndpointNames));
         OnPropertyChanged(nameof(EndpointName));
-        OnPropertyChanged(nameof(GroupNames));
-        OnPropertyChanged(nameof(EndpointGroup));
+        OnPropertyChanged(nameof(SendGroupNames));
+        OnPropertyChanged(nameof(ReceiveGroupNames));
+        OnPropertyChanged(nameof(EndpointSendGroup));
+        OnPropertyChanged(nameof(EndpointReceiveGroup));
         OnPropertyChanged(nameof(IsConnected));
         OnPropertyChanged(nameof(Connection));
         OnPropertyChanged(nameof(ConnectionText));
@@ -222,7 +244,7 @@ internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, Dev
     public void Refresh() => OnPropertyChanged(String.Empty);
 
     private void SetEndpoint(EndpointReference? endpoint)
-        => owner.EditDevice(device, "endpoint", () => device.Endpoint, value => device.Endpoint = value, endpoint, endpoint is null ? "not connected" : $"{endpoint.Name} (group {endpoint.Group})");
+        => owner.EditDevice(device, "endpoint", () => device.Endpoint, value => device.Endpoint = value, endpoint, endpoint is null ? "not connected" : $"{endpoint.Name} ({endpoint.GroupsText})");
 
     private static string DeviceValuesText(IReadOnlyDictionary<string, long> values)
         => values.Count == 0 ? "none" : String.Join(", ", values.Select(value => $"{value.Key}={value.Value}"));

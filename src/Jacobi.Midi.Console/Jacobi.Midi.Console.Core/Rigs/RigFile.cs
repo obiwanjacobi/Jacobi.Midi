@@ -1,6 +1,7 @@
 using System.Globalization;
 using Jacobi.Midi.Console.Core.Files;
 using Jacobi.Midi.Console.Core.Schemas;
+using Jacobi.Midi.Core;
 using Jacobi.Midi.Device.Addressing;
 
 namespace Jacobi.Midi.Console.Core.Rigs;
@@ -51,7 +52,8 @@ public static class RigFile
             {
                 element.Add(new FileElement(FileRoles.Endpoint.ElementName!, FileRoles.Endpoint)
                     .Set("name", endpoint.Name)
-                    .Set("group", endpoint.Group));
+                    .Set("sendGroup", endpoint.Groups.Send.Value)
+                    .Set("receiveGroup", endpoint.Groups.Receive.Value));
             }
         }
         return root;
@@ -116,10 +118,9 @@ public static class RigFile
             {
                 if (endpoint is not null)
                     throw child.Error("a device has one endpoint.");
-                var group = ConsoleFile.GetInt(child, "group", minimum: 0) ?? 0;
-                if (group > 15)
-                    throw child.Error($"'group': {group} is not a UMP group (0-15).");
-                endpoint = new EndpointReference(child.GetRequired("name"), group);
+                var send = ReadGroup(child, "sendGroup") ?? new MidiGroup(0);
+                var receive = ReadGroup(child, "receiveGroup") ?? send;
+                endpoint = new EndpointReference(child.GetRequired("name"), new MidiGroupPair(send, receive));
             }
             else
             {
@@ -140,6 +141,17 @@ public static class RigFile
         };
         element.EnsureAllRead();
         return device;
+    }
+
+    private static MidiGroup? ReadGroup(FileElement element, string attribute)
+    {
+        var group = ConsoleFile.GetInt(element, attribute, minimum: 0);
+        return group switch
+        {
+            null => null,
+            > 15 => throw element.Error($"'{attribute}': {group} is not a UMP group (0-15)."),
+            _ => new MidiGroup((byte)group.Value),
+        };
     }
 
     private static long ReadNumber(FileElement element, string attribute)

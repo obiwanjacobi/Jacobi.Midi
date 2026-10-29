@@ -24,13 +24,13 @@ internal interface ISysExPort : IAsyncDisposable
 }
 
 /// <summary>
-/// A SysEx port over a MIDI 2.0 connection: splits outgoing messages into SysEx7 packets on one UMP group and
-/// assembles the incoming packets of that group into complete messages. <see cref="OnPacketsReceived"/> is the
+/// A SysEx port over a MIDI 2.0 connection: splits outgoing messages into SysEx7 packets on the send group of
+/// <paramref name="groups"/> and assembles the incoming packets of its receive group into complete messages. <see cref="OnPacketsReceived"/> is the
 /// receive handler of the connection; the connection is attached once it is open.
 /// </summary>
-internal sealed class MidiConnectionSysExPort(byte group) : ISysExPort
+internal sealed class MidiConnectionSysExPort(MidiGroupPair groups) : ISysExPort
 {
-    private readonly SysEx7Assembler _assembler = new(group);
+    private readonly SysEx7Assembler _assembler = new(groups.Receive.Value);
     private readonly Lock _lock = new();
     private IMidiConnection? _connection;
 
@@ -63,7 +63,7 @@ internal sealed class MidiConnectionSysExPort(byte group) : ISysExPort
     public async ValueTask Send(ReadOnlyMemory<byte> sysEx, CancellationToken ct)
     {
         var connection = Connection ?? throw new InvalidOperationException("The port has no connection.");
-        var packets = SysEx7Message.FromSystemExclusive(group, sysEx.Span)
+        var packets = SysEx7Message.FromSystemExclusive(groups.Send.Value, sysEx.Span)
             .Select(packet => new UniversalPacket([packet[0], packet[1]]))
             .ToArray();
         await connection.Send(packets, ct);

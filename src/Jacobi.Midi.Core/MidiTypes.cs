@@ -4,6 +4,20 @@ public readonly record struct MidiChannel(byte Value);
 
 public readonly record struct MidiGroup(byte Value);
 
+/// <summary>
+/// The UMP groups a device is reached on: the group the application sends on and the group it receives on.
+/// Usually the same group, but they can differ: a MIDI 1.0 DIN in/out pair is two independent cables
+/// and a MIDI 2.0 function block can be one-way.
+/// </summary>
+public readonly record struct MidiGroupPair(MidiGroup Send, MidiGroup Receive)
+{
+    /// <summary>Sends and receives on the same <paramref name="group"/>.</summary>
+    public static MidiGroupPair Same(MidiGroup group) => new(group, group);
+
+    /// <summary>True when the send and receive groups differ.</summary>
+    public bool IsSplit => Send != Receive;
+}
+
 public readonly record struct MidiTimestamp(ulong Value);
 
 public enum PacketKind

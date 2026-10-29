@@ -259,15 +259,18 @@
                                                   PlaceholderText="not connected" />
                                         <Button Grid.Column="1" Content="✕" ToolTip.Tip="Not connected to MIDI" Command="{Binding ClearEndpointCommand}" IsEnabled="{Binding HasEndpoint}" />
                                     </Grid>
-                                    <TextBlock Text="UMP group" Classes="caption" />
-                                    <ComboBox ItemsSource="{Binding GroupNames}" SelectedIndex="{Binding EndpointGroup}" HorizontalAlignment="Stretch" IsEnabled="{Binding HasEndpoint}" />
+                                    <TextBlock Text="UMP group to send on" Classes="caption" />
+                                    <ComboBox ItemsSource="{Binding SendGroupNames}" SelectedIndex="{Binding EndpointSendGroup}" HorizontalAlignment="Stretch" IsEnabled="{Binding HasEndpoint}" />
+                                    <TextBlock Text="UMP group to receive on" Classes="caption" />
+                                    <ComboBox ItemsSource="{Binding ReceiveGroupNames}" SelectedIndex="{Binding EndpointReceiveGroup}" HorizontalAlignment="Stretch" IsEnabled="{Binding HasEndpoint}"
+                                              ToolTip.Tip="Usually the same group as for sending; differs when the device is cabled to ports of different groups" />
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <Ellipse Width="10" Height="10" VerticalAlignment="Center" Fill="{Binding ConnectionBrush}" />
                                         <TextBlock Text="{Binding ConnectionText}" TextWrapping="Wrap" FontSize="12" VerticalAlignment="Center" MaxWidth="250" />
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsConnected}">
                                         <Button Content="Identity request" FontSize="12" Padding="6,2" Command="{Binding RequestIdentityCommand}"
-                                                ToolTip.Tip="Ask the devices on the endpoint and group to identify themselves (universal Identity Request); older devices do not answer it. Changes no values." />
+                                                ToolTip.Tip="Ask the devices on the endpoint and groups to identify themselves (universal Identity Request); older devices do not answer it. Changes no values." />
                                         <Button Content="Request data" FontSize="12" Padding="6,2" Command="{Binding ProbeDataCommand}"
                                                 ToolTip.Tip="Check that the device answers a request of the first parameter of its map, with its schema and device values. The values are not kept." />
                                     </StackPanel>

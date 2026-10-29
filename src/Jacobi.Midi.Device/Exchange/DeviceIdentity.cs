@@ -4,7 +4,7 @@ using Jacobi.Midi.Messages;
 namespace Jacobi.Midi.Device.Exchange;
 
 /// <summary>
-/// Asks the devices on an endpoint to identify themselves: a universal Identity Request on one UMP group, over a
+/// Asks the devices on an endpoint to identify themselves: a universal Identity Request on the send group, the replies on the receive group, over a
 /// connection of its own, and the Identity Replies that come back. Independent of the schemas, so it also works for a
 /// device without an address map; older devices do not answer it.
 /// </summary>
@@ -17,14 +17,14 @@ public static class DeviceIdentity
     /// Sends an Identity Request and collects the replies that arrive within <paramref name="wait"/>; several devices
     /// can answer (with <see cref="AllDevices"/>). No reply is an empty list.
     /// </summary>
-    public static async Task<IReadOnlyList<IdentityReplyMessage>> Request(IMidiSession session, string endpointId, byte group, byte deviceId,
+    public static async Task<IReadOnlyList<IdentityReplyMessage>> Request(IMidiSession session, string endpointId, MidiGroupPair groups, byte deviceId,
         TimeSpan wait, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentException.ThrowIfNullOrEmpty(endpointId);
 
         var replies = new List<IdentityReplyMessage>();
-        await using var port = new MidiConnectionSysExPort(group);
+        await using var port = new MidiConnectionSysExPort(groups);
         port.Received += sysEx =>
         {
             if (TryReadReply(sysEx, out var reply))

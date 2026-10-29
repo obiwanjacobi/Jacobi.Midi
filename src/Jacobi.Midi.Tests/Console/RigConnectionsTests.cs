@@ -1,6 +1,7 @@
 using Jacobi.Midi.Console.Core.Connections;
 using Jacobi.Midi.Console.Core.Parameters;
 using Jacobi.Midi.Console.Core.Rigs;
+using Jacobi.Midi.Core;
 using Jacobi.Midi.Device.Exchange;
 using Xunit;
 
@@ -15,6 +16,8 @@ public class RigConnectionsTests
 {
     private const string Port = "GP-8 Port";
     private static readonly byte[] Dump = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Schema", "gp8-sysex.syx"));
+
+    private static MidiGroupPair Group(byte group) => MidiGroupPair.Same(new MidiGroup(group));
 
     private static DeviceInstance Gp8(string alias = "gp8", EndpointReference? endpoint = null)
         => new()
@@ -50,7 +53,7 @@ public class RigConnectionsTests
         var api = new FakeMidiApi();
         api.Endpoints.Add(FakeMidiApi.Endpoint(Port));
         await using var connections = await Start(api, Open(
-            Gp8("gp8", new EndpointReference(Port, 2)),
+            Gp8("gp8", new EndpointReference(Port, Group(2))),
             Gp8("spare"),
             Gp8("away", new EndpointReference("Elsewhere"))));
 
@@ -116,13 +119,13 @@ public class RigConnectionsTests
         await connections.Update(RigSession.Open(rig.Rig, rig.Library, rig), TestContext.Current.CancellationToken);
         Assert.Single(api.Connections);
 
-        device.Endpoint = new EndpointReference(Port, 3);
+        device.Endpoint = new EndpointReference(Port, Group(3));
         await connections.Update(RigSession.Open(rig.Rig, rig.Library, rig), TestContext.Current.CancellationToken);
 
         Assert.Equal(2, api.Connections.Count);
         Assert.True(api.Connections[0].IsDisposed);
         Assert.Equal(DeviceConnectionStatus.Online, connections.Find("gp8")!.Status);
-        Assert.Equal(3, connections.Find("gp8")!.Endpoint!.Group);
+        Assert.Equal(Group(3), connections.Find("gp8")!.Endpoint!.Groups);
     }
 
     [Fact]
@@ -151,7 +154,7 @@ public class RigConnectionsTests
         api.Responder = (_, group, sysEx) => group == 2 && sysEx is [0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7]
             ? [0xF0, 0x7E, 0x10, 0x06, 0x02, 0x41, 0x13, 0x00, 0x02, 0x00, 0x01, 0x00, 0x00, 0x00, 0xF7]
             : null;
-        await using var connections = await Start(api, Open(Gp8(endpoint: new EndpointReference(Port, 2))));
+        await using var connections = await Start(api, Open(Gp8(endpoint: new EndpointReference(Port, Group(2)))));
 
         var replies = await connections.RequestIdentity("gp8", TestContext.Current.CancellationToken);
 
@@ -159,6 +162,26 @@ public class RigConnectionsTests
         Assert.Equal(0x41, reply.ManufacturerId);
         Assert.Equal(0x13, reply.DeviceFamily);
         Assert.Equal(0x10, reply.DeviceId);
+    }
+
+    [Theory]
+    [InlineData(1, 2, 1)]
+    [InlineData(1, 1, 0)]
+    public async Task RequestIdentity_DeviceCabledToDifferentGroups_RepliesOnTheReceiveGroup(byte send, byte receive, int expected)
+    {
+        var api = new FakeMidiApi();
+        api.Endpoints.Add(FakeMidiApi.Endpoint(Port));
+        api.Responder = (_, group, sysEx) => group == 1 && sysEx is [0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7]
+            ? [0xF0, 0x7E, 0x10, 0x06, 0x02, 0x41, 0x13, 0x00, 0x02, 0x00, 0x01, 0x00, 0x00, 0x00, 0xF7]
+            : null;
+        api.ReplyGroup = _ => 2;
+        var groups = new MidiGroupPair(new MidiGroup(send), new MidiGroup(receive));
+        await using var connections = await Start(api, Open(Gp8(endpoint: new EndpointReference(Port, groups))));
+
+        var replies = await connections.RequestIdentity("gp8", TestContext.Current.CancellationToken);
+
+        Assert.Equal(expected, replies.Count);
+        Assert.Equal(send, Assert.Single(api.Connections[^1].Sent).Group);
     }
 
     [Fact]

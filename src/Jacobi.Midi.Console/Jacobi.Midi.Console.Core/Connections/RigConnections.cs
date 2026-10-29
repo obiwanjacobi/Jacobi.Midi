@@ -150,7 +150,7 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
     }
 
     /// <summary>
-    /// Sends a universal Identity Request (to all devices) on the endpoint and group of the device, over a connection of
+    /// Sends a universal Identity Request (to all devices) on the endpoint and groups of the device, over a connection of
     /// its own, and returns the replies that arrive within <see cref="IdentityWait"/>. Needs the endpoint, not the
     /// device's schemas.
     /// </summary>
@@ -159,15 +159,15 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
     {
         IMidiSession session;
         MidiEndpointInfo endpoint;
-        byte group;
+        MidiGroupPair groups;
         lock (_lock)
         {
             session = _session ?? throw new InvalidOperationException("MIDI is not started.");
             var connection = _links.GetValueOrDefault(alias)?.Connection;
             endpoint = connection?.EndpointInfo ?? throw new InvalidOperationException($"The endpoint of '{alias}' is not found.");
-            group = (byte)connection.Endpoint!.Group;
+            groups = connection.Endpoint!.Groups;
         }
-        return await DeviceIdentity.Request(session, endpoint.Id, group, DeviceIdentity.AllDevices, IdentityWait, ct);
+        return await DeviceIdentity.Request(session, endpoint.Id, groups, DeviceIdentity.AllDevices, IdentityWait, ct);
     }
 
     /// <summary>
@@ -277,7 +277,7 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
         {
             if (_factory is null || _factorySerializer != serializer)
                 (_factory, _factorySerializer) = (new MessageExchangeFactory(_session, serializer), serializer);
-            var options = new MessageExchangeOptions { Group = (byte)reference.Group };
+            var options = new MessageExchangeOptions { Groups = reference.Groups };
             var session = await _factory.CreateSession(endpoint.Id, link.DeviceValues, options, null, ct);
             link.Session = session;
             session.Disconnected += (_, args) => _ = OnDisconnected(link, session, args);

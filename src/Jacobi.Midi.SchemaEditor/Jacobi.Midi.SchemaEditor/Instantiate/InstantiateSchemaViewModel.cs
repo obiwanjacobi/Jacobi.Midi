@@ -250,7 +250,7 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
             for (var index = 0; index < messages.Count; index++)
             {
                 var message = messages[index];
-                var packets = SysEx7Message.FromSystemExclusive(_midi.Group.Value, message.Bytes)
+                var packets = SysEx7Message.FromSystemExclusive(_midi.Groups.Send.Value, message.Bytes)
                     .Select(packet => new UniversalPacket([packet[0], packet[1]]))
                     .ToArray();
                 await connection.Send(packets, CancellationToken.None);

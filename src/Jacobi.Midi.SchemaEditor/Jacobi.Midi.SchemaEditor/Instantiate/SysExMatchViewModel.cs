@@ -250,10 +250,10 @@ internal sealed partial class SysExMatchViewModel : ObservableObject
             return;
         }
 
-        _assembler = new SysEx7Assembler(_midi.Group.Value);
+        _assembler = new SysEx7Assembler(_midi.Groups.Receive.Value);
         _midi.PacketsReceived += OnPacketsReceived;
         IsReceiving = true;
-        Status = $"Waiting for a SysEx message on group {_midi.Group.Value + 1}…";
+        Status = $"Waiting for a SysEx message on group {_midi.Groups.Receive.Value + 1}…";
     }
 
     /// <summary>Stops receiving; called when the dialog closes.</summary>

@@ -797,10 +797,10 @@ internal sealed partial class WorkbenchViewModel : ViewModelBase
         }
 
         _received.Clear();
-        _assembler = new SysEx7Assembler(_midi.Group.Value);
+        _assembler = new SysEx7Assembler(_midi.Groups.Receive.Value);
         _midi.PacketsReceived += OnPacketsReceived;
         IsReceiving = true;
-        Status = $"Waiting for a dump on group {_midi.Group.Value + 1}… Send it from the device.";
+        Status = $"Waiting for a dump on group {_midi.Groups.Receive.Value + 1}… Send it from the device.";
     }
 
     // on the UI thread

@@ -1,12 +1,13 @@
 using Jacobi.Midi.Console.Core.Files;
 using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Core.Rigs;
+using Jacobi.Midi.Core;
 using Xunit;
 
 namespace Jacobi.Midi.Tests.Console;
 
 /// <summary>
-/// Reading and writing rigs as XML and JSON: device values in the schema notation, endpoints by name and group,
+/// Reading and writing rigs as XML and JSON: device values in the schema notation, endpoints by name and groups,
 /// and content that does not fit reported with its location.
 /// </summary>
 public class RigFileTests
@@ -19,7 +20,7 @@ public class RigFileTests
             <schema path="Schemas/AcmeCustom.xml" />
             <deviceValue name="deviceId" value="0x10" />
             <deviceValue name="groupId" value="7F1CH" />
-            <endpoint name="USB MIDI Interface" group="2" />
+            <endpoint name="USB MIDI Interface" sendGroup="2" receiveGroup="3" />
           </device>
           <device alias="pedalboard" mapRoot="Gx700.AddressMap" />
         </rig>
@@ -35,7 +36,7 @@ public class RigFileTests
               "alias": "synth", "name": "Acme S-1", "mapRoot": "Acme.AddressMap", "color": "#3D8BFD",
               "schemas": [ "Schemas/AcmeCustom.xml" ],
               "deviceValues": { "deviceId": "0x10", "groupId": 32540 },
-              "endpoint": { "name": "USB MIDI Interface", "group": 2 }
+              "endpoint": { "name": "USB MIDI Interface", "sendGroup": 2, "receiveGroup": 3 }
             },
             { "alias": "pedalboard", "mapRoot": "Gx700.AddressMap" }
           ]
@@ -57,7 +58,7 @@ public class RigFileTests
         Assert.Equal(("Acme S-1", "Acme.AddressMap", "#3D8BFD"), (synth.Name, synth.MapRoot, synth.Colors.Accent));
         Assert.Equal(0x10, synth.DeviceValues["deviceId"]);
         Assert.Equal(0x7F1C, synth.DeviceValues["GROUPID"]);
-        Assert.Equal(new EndpointReference("USB MIDI Interface", 2), synth.Endpoint);
+        Assert.Equal(new EndpointReference("USB MIDI Interface", new MidiGroupPair(new MidiGroup(2), new MidiGroup(3))), synth.Endpoint);
 
         var pedalboard = rig.Find("pedalboard")!;
         Assert.Null(pedalboard.Endpoint);
@@ -97,6 +98,18 @@ public class RigFileTests
         Assert.Equal(AreaColors.None, read.Find("pedalboard")!.Colors);
     }
 
+    [Theory]
+    [InlineData("""<endpoint name="Port" sendGroup="4" />""", 4)]
+    [InlineData("""<endpoint name="Port" />""", 0)]
+    public void Read_EndpointWithoutReceiveGroup_ReceivesOnTheSendGroup(string content, byte group)
+    {
+        var xml = $"""<rig format="jacobi.midi.rig/1"><device alias="synth" mapRoot="Acme.AddressMap">{content}</device></rig>""";
+
+        var rig = RigFile.Read(xml, FileFormat.Xml);
+
+        Assert.Equal(MidiGroupPair.Same(new MidiGroup(group)), rig.Find("synth")!.Endpoint!.Groups);
+    }
+
     [Fact]
     public void Write_DeviceValues_InHex()
     {
@@ -121,9 +134,11 @@ public class RigFileTests
     [Theory]
     [InlineData("""<deviceValue name="deviceId" value="ten" />""", "'value': 'ten' is not a number")]
     [InlineData("""<deviceValue name="deviceId" value="1" /><deviceValue name="DeviceId" value="2" />""", "given more than once")]
-    [InlineData("""<endpoint name="Port" group="16" />""", "is not a UMP group")]
+    [InlineData("""<endpoint name="Port" sendGroup="16" />""", "'sendGroup': 16 is not a UMP group")]
+    [InlineData("""<endpoint name="Port" receiveGroup="16" />""", "'receiveGroup': 16 is not a UMP group")]
+    [InlineData("""<endpoint name="Port" group="1" />""", "'group'")]
     [InlineData("""<endpoint name="Port" /><endpoint name="Other" />""", "one endpoint")]
-    [InlineData("""<endpoint group="1" />""", "'name' is required")]
+    [InlineData("""<endpoint sendGroup="1" />""", "'name' is required")]
     [InlineData("""<port name="Port" />""", "a device cannot contain 'port'")]
     public void Read_ReportsWhatDoesNotFit(string content, string message)
     {

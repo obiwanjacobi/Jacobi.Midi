@@ -4,7 +4,8 @@ using Xunit;
 namespace Jacobi.Midi.Tests.Core;
 
 /// <summary>
-/// Verifies how <see cref="MidiEndpointCapabilities.GetGroupName"/> resolves a group name from function blocks and group terminal blocks.
+/// Verifies how <see cref="MidiEndpointCapabilities"/> resolves the names, groups and directions of groups from function blocks
+/// and group terminal blocks.
 /// </summary>
 public class MidiEndpointCapabilitiesTests
 {
@@ -89,5 +90,61 @@ public class MidiEndpointCapabilitiesTests
 
         Assert.Equal("Synth", capabilities.GetGroupName(new MidiGroup(1)));
         Assert.Null(capabilities.GetGroupName(new MidiGroup(2)));
+    }
+
+    // one-way function blocks on different groups: send to the device on group 1, receive from it on group 2
+    private static readonly MidiEndpointCapabilities OneWay = new()
+    {
+        FunctionBlocks =
+        [
+            new(0, "To device", true, MidiDirections.Send, new MidiGroup(0), 1),
+            new(1, "From device", true, MidiDirections.Receive, new MidiGroup(1), 1),
+        ]
+    };
+
+    [Fact]
+    public void GetGroupDirections_GroupTerminalBlocks_BothDirectionsPerGroup()
+    {
+        Assert.Equal(MidiDirections.Duplex, TwoPorts.GetGroupDirections(new MidiGroup(0)));
+        Assert.Equal(MidiDirections.Duplex, TwoPorts.GetGroupDirections(new MidiGroup(1)));
+        Assert.Equal(MidiDirections.None, TwoPorts.GetGroupDirections(new MidiGroup(2)));
+    }
+
+    [Fact]
+    public void GetGroupDirections_OneWayFunctionBlocks_OneDirectionPerGroup()
+    {
+        Assert.Equal(MidiDirections.Send, OneWay.GetGroupDirections(new MidiGroup(0)));
+        Assert.Equal(MidiDirections.Receive, OneWay.GetGroupDirections(new MidiGroup(1)));
+    }
+
+    [Fact]
+    public void GetGroupDirections_NoBlocks_Unknown()
+    {
+        Assert.Null(new MidiEndpointCapabilities().GetGroupDirections(new MidiGroup(0)));
+    }
+
+    [Fact]
+    public void GetDeclaredGroups_PerDirection_OnlyTheGroupsOfThatDirection()
+    {
+        Assert.Equal([new MidiGroup(0)], OneWay.GetDeclaredGroups(MidiDirections.Send));
+        Assert.Equal([new MidiGroup(1)], OneWay.GetDeclaredGroups(MidiDirections.Receive));
+        Assert.Equal([new MidiGroup(0), new MidiGroup(1)], OneWay.GetDeclaredGroups());
+    }
+
+    [Fact]
+    public void GetGroupName_PerDirection_OnlyTheNamesOfThatDirection()
+    {
+        var capabilities = new MidiEndpointCapabilities
+        {
+            GroupTerminalBlocks =
+            [
+                new(1, "In A", MidiDirections.Receive, new MidiGroup(0), 1),
+                new(2, "Out A", MidiDirections.Send, new MidiGroup(0), 1),
+            ]
+        };
+
+        Assert.Equal("Out A", capabilities.GetGroupName(new MidiGroup(0), MidiDirections.Send));
+        Assert.Equal("In A", capabilities.GetGroupName(new MidiGroup(0), MidiDirections.Receive));
+        Assert.Null(OneWay.GetGroupName(new MidiGroup(0), MidiDirections.Receive));
     }
 }

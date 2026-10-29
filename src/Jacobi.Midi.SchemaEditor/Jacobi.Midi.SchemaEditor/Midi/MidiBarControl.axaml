@@ -14,7 +14,18 @@
         </Style>
     </UserControl.Styles>
 
-    <Grid ColumnDefinitions="Auto,320,Auto,Auto,Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="2">
+    <UserControl.DataTemplates>
+        <!-- the items of the send and receive group lists -->
+        <DataTemplate x:DataType="midi:MidiGroupItem">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="{Binding Number}" MinWidth="14" />
+                <TextBlock Text="{Binding Name}" IsVisible="{Binding HasName}"
+                           TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextSecondaryBrush}" />
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <Grid ColumnDefinitions="Auto,320,Auto,Auto,Auto,Auto,Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="2">
         <TextBlock Grid.Column="0" Text="MIDI" VerticalAlignment="Center"
                    FontSize="11" FontWeight="Bold" LetterSpacing="1.4" Foreground="{DynamicResource AppTextLabelBrush}" />
 
@@ -30,30 +41,26 @@
             </ComboBox.ItemTemplate>
         </ComboBox>
 
-        <TextBlock Grid.Column="2" Text="Group" VerticalAlignment="Center" Foreground="{DynamicResource AppTextLabelBrush}" />
-        <ComboBox Grid.Column="3" MinWidth="72" MaxWidth="240"
-                  ItemsSource="{Binding Groups}"
-                  SelectedItem="{Binding SelectedGroup, Mode=TwoWay}"
-                  IsEnabled="{Binding IsAvailable}">
-            <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="midi:MidiGroupItem">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBlock Text="{Binding Number}" MinWidth="14" />
-                        <TextBlock Text="{Binding Name}" IsVisible="{Binding HasName}"
-                                   TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextSecondaryBrush}" />
-                    </StackPanel>
-                </DataTemplate>
-            </ComboBox.ItemTemplate>
-        </ComboBox>
+        <TextBlock Grid.Column="2" Text="Send" VerticalAlignment="Center" Foreground="{DynamicResource AppTextLabelBrush}" />
+        <ComboBox Grid.Column="3" ToolTip.Tip="The UMP group to send to the device on" MinWidth="72" MaxWidth="240"
+                  ItemsSource="{Binding SendGroups}"
+                  SelectedItem="{Binding SelectedSendGroup, Mode=TwoWay}"
+                  IsEnabled="{Binding IsAvailable}" />
 
-        <Button Grid.Column="4" MinWidth="72" HorizontalContentAlignment="Center"
+        <TextBlock Grid.Column="4" Text="Receive" VerticalAlignment="Center" Foreground="{DynamicResource AppTextLabelBrush}" />
+        <ComboBox Grid.Column="5" ToolTip.Tip="The UMP group to receive from the device on" MinWidth="72" MaxWidth="240"
+                  ItemsSource="{Binding ReceiveGroups}"
+                  SelectedItem="{Binding SelectedReceiveGroup, Mode=TwoWay}"
+                  IsEnabled="{Binding IsAvailable}" />
+
+        <Button Grid.Column="6" MinWidth="72" HorizontalContentAlignment="Center"
                 Content="{Binding ConnectButtonText}"
                 Command="{Binding ToggleConnectionCommand}" />
 
-        <Ellipse Grid.Column="5" Width="10" Height="10" VerticalAlignment="Center"
+        <Ellipse Grid.Column="7" Width="10" Height="10" VerticalAlignment="Center"
                  Classes="indicator" Classes.connected="{Binding IsConnected}" />
 
-        <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="5" Text="{Binding StatusText}"
+        <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="7" Text="{Binding StatusText}"
                    TextTrimming="CharacterEllipsis" FontSize="10" Foreground="{DynamicResource AppTextSecondaryBrush}" />
     </Grid>
 </UserControl>

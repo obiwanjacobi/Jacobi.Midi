@@ -30,7 +30,7 @@ public sealed class MessageExchangeFactory(IMidiSession session, Serializer seri
     {
         options ??= new MessageExchangeOptions();
 
-        var port = new MidiConnectionSysExPort(options.Group);
+        var port = new MidiConnectionSysExPort(options.Groups);
         port.Connection = await session.Connect(endpointId, new MidiConnectionOptions(), port.OnPacketsReceived, ct);
         return new MessageExchange(_maps, port, device, options);
     }

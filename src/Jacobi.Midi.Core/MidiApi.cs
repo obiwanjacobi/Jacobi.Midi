@@ -77,6 +77,10 @@ public sealed record MidiEndpointInfo(
 
 public sealed record MidiEndpointCapabilities
 {
+    /// <summary>
+    /// The directions of the endpoint as a whole: the union over its groups. A group can still be one-way
+    /// (see <see cref="GetGroupDirections"/>).
+    /// </summary>
     public MidiDirections? Directions { get; init; }
     public bool? SupportsMidi1 { get; init; }
     public bool? SupportsMidi2 { get; init; }
@@ -86,32 +90,49 @@ public sealed record MidiEndpointCapabilities
     public ImmutableArray<MidiGroupTerminalBlockInfo> GroupTerminalBlocks { get; init; } = [];
 
     /// <summary>
-    /// The name of the blocks that include <paramref name="group"/>: the active function blocks when the endpoint
-    /// declares function blocks, otherwise its group terminal blocks. Distinct names are joined with " / ".
-    /// Null when no block includes the group.
+    /// The name of the blocks that include <paramref name="group"/> in one of <paramref name="directions"/>: the active
+    /// function blocks when the endpoint declares function blocks, otherwise its group terminal blocks.
+    /// Distinct names are joined with " / ". Null when no such block includes the group.
     /// </summary>
-    public string? GetGroupName(MidiGroup group)
+    public string? GetGroupName(MidiGroup group, MidiDirections directions = MidiDirections.Duplex)
     {
-        var distinct = DeclaringBlocks()
+        var distinct = DeclaringBlocks(directions)
             .Where(block => block.Includes(group) && !String.IsNullOrWhiteSpace(block.Name))
             .Select(block => block.Name).Distinct().ToArray();
         return distinct.Length > 0 ? String.Join(" / ", distinct) : null;
     }
 
     /// <summary>
-    /// The groups the endpoint declares: those of its active function blocks when the endpoint declares function blocks,
-    /// otherwise those of its group terminal blocks. In ascending order; empty when the endpoint declares no blocks.
+    /// The groups the endpoint declares in one of <paramref name="directions"/>: those of its active function blocks when
+    /// the endpoint declares function blocks, otherwise those of its group terminal blocks. In ascending order; empty when
+    /// the endpoint declares no such blocks.
     /// </summary>
-    public ImmutableArray<MidiGroup> GetDeclaredGroups()
+    public ImmutableArray<MidiGroup> GetDeclaredGroups(MidiDirections directions = MidiDirections.Duplex)
         => [.. Enumerable.Range(0, 16)
             .Select(value => new MidiGroup((byte)value))
-            .Where(group => DeclaringBlocks().Any(block => block.Includes(group)))];
+            .Where(group => DeclaringBlocks(directions).Any(block => block.Includes(group)))];
 
-    // function blocks supersede group terminal blocks
-    private IEnumerable<(string Name, Func<MidiGroup, bool> Includes)> DeclaringBlocks()
-        => FunctionBlocks.Length > 0
-            ? FunctionBlocks.Where(block => block.IsActive).Select(block => (block.Name, (Func<MidiGroup, bool>)block.IncludesGroup))
-            : GroupTerminalBlocks.Select(block => (block.Name, (Func<MidiGroup, bool>)block.IncludesGroup));
+    /// <summary>
+    /// The directions of the blocks that include <paramref name="group"/>: the active function blocks when the endpoint
+    /// declares function blocks, otherwise its group terminal blocks. <see cref="MidiDirections.None"/> when no block
+    /// includes the group; null when the endpoint declares no blocks (the directions are unknown).
+    /// </summary>
+    public MidiDirections? GetGroupDirections(MidiGroup group)
+    {
+        var blocks = DeclaringBlocks(MidiDirections.Duplex).ToArray();
+        if (blocks.Length == 0)
+            return null;
+        return blocks.Where(block => block.Includes(group))
+            .Aggregate(MidiDirections.None, (value, block) => value | block.Directions);
+    }
+
+    // function blocks supersede group terminal blocks; only the blocks with one of the directions
+    // (Duplex selects all blocks, also those with an unknown direction)
+    private IEnumerable<(string Name, MidiDirections Directions, Func<MidiGroup, bool> Includes)> DeclaringBlocks(MidiDirections directions)
+        => (FunctionBlocks.Length > 0
+            ? FunctionBlocks.Where(block => block.IsActive).Select(block => (block.Name, block.Directions, (Func<MidiGroup, bool>)block.IncludesGroup))
+            : GroupTerminalBlocks.Select(block => (block.Name, block.Directions, (Func<MidiGroup, bool>)block.IncludesGroup)))
+            .Where(block => directions == MidiDirections.Duplex || (block.Directions & directions) != 0);
 }
 
 /// <summary>

@@ -1,5 +1,6 @@
 using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Core.Schemas;
+using Jacobi.Midi.Core;
 
 namespace Jacobi.Midi.Console.Core.Rigs;
 
@@ -51,7 +52,14 @@ public sealed class DeviceInstance
 }
 
 /// <summary>
-/// The endpoint of a device, matched by name and UMP group: endpoint ids are not portable and do not identify an
-/// instrument behind a DIN port.
+/// The endpoint of a device, matched by name, and the UMP groups to send to and receive from the device on: endpoint
+/// ids are not portable and do not identify an instrument behind a DIN port. The groups usually are the same, but can
+/// differ (e.g. a DIN in/out pair of a MIDI interface where the device is cabled to ports of different groups).
 /// </summary>
-public sealed record EndpointReference(string Name, int Group = 0);
+public sealed record EndpointReference(string Name, MidiGroupPair Groups = default)
+{
+    /// <summary>The groups as shown to the user (one-based): "group 1", or "send group 1, receive group 2" when they differ.</summary>
+    public string GroupsText => Groups.IsSplit
+        ? $"send group {Groups.Send.Value + 1}, receive group {Groups.Receive.Value + 1}"
+        : $"group {Groups.Send.Value + 1}";
+}

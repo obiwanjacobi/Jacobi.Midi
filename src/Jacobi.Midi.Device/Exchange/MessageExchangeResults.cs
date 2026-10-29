@@ -1,3 +1,4 @@
+using Jacobi.Midi.Core;
 using Jacobi.Midi.Device.Addressing;
 
 namespace Jacobi.Midi.Device.Exchange;
@@ -7,8 +8,8 @@ namespace Jacobi.Midi.Device.Exchange;
 /// </summary>
 public sealed record MessageExchangeOptions
 {
-    /// <summary>The UMP group the device is on.</summary>
-    public byte Group { get; init; }
+    /// <summary>The UMP groups the device is on: the group to send on and the group to receive on.</summary>
+    public MidiGroupPair Groups { get; init; }
 
     /// <summary>How long to wait for a message from the device (a reply to a request, an acknowledgement).</summary>
     public TimeSpan ResponseTimeout { get; init; } = TimeSpan.FromSeconds(1);

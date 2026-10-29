@@ -7,30 +7,15 @@ devices are described by the MIDI schemas made with the Schema Editor; the conso
 The users of the console are musicians, not developers: they never see schemas, processors or .NET. They see their
 devices, the parameters of those devices (named as in the manual) and the dashboards they build from them.
 
-This document is the design of the first version (v1), with the ideas for v2 where they influence v1. The application
-is not built yet.
-
-## Goals of v1
-
-- Set up the devices you own (the **rig**) once: which device it is, how it is connected, its device id.
-- Build any number of dashboards: one per device, or one for a purpose that combines parameters of several devices.
-- Add standard controls and bind them to device parameters. A control manages one parameter (a knob) or several (an envelope).
-- Arrange the controls with layout controls (rows, columns, grids, sections) that have no MIDI function.
-- Play the dashboard: a control shows the current value of the device and sends a change to the device; changes made on the device itself show up on the dashboard.
-- See at a glance which device a control belongs to: every device has its own colour palette; single controls can be given another colour.
-- Save and load rigs and dashboards as XML or JSON.
-- Work offline: edit a dashboard and its values without a device, load values from and save them to a SysEx dump.
-- A stylized look: a control shows its function, not a photo of hardware.
-- An Avalonia desktop application, like the Schema Editor.
-
-Not in v1: see [Not in v1](#not-in-v1).
+This document describes what the console does now. What is planned (among which the synchronisation of the values with
+the devices) is in the [todo list](todo.md).
 
 ## Concepts
 
 | Term | Meaning |
 |------|---------|
 | **Rig** | The devices of the user: a list of device instances, and the assemblies and schema files they need. Saved in its own file, so the same rig serves all dashboards. |
-| **Device instance** | One device of the rig: an **alias** (`synth`, `pedalboard`), a display name, the **map root**: the root group of its schema (any root group; usually an address map, e.g. `Gx700.AddressMap`), the `DeviceValues` the map root does not fix (e.g. `deviceId`), how to reach it (the endpoint by name and the UMP group), its colour, and its own assemblies and schema files. |
+| **Device instance** | One device of the rig: an **alias** (`synth`, `pedalboard`), a display name, the **map root**: the root group of its schema (any root group; usually an address map, e.g. `Gx700.AddressMap`), the `DeviceValues` the map root does not fix (e.g. `deviceId`), how to reach it (the endpoint by name and the UMP groups to send and receive on; usually the same group), its colour, and its own assemblies and schema files. |
 | **Schema library** | The schemas and processors the console works with, compiled into one `SchemaSet` and `Serializer`: the built-in assemblies plus the assemblies and schema files of the rig, its devices and the dashboard (see [Schemas](#schemas)). |
 | **Index variable** | A repeat index the user changes in the UI, e.g. the patch number: declared on a layout control and used in binding paths as `Programs[$patch]`. Changed by a control bound to `$patch`. |
 | **Parameter** | One field of the root group of a device (usually its address map), identified by its schema path and `InstancePath` (e.g. the `Rate` of the phaser in the temporary patch). The display name, value range, steps and option names come from the schema's data type (`min`, `max`, `scale`, `shift`, `options`). |
@@ -41,20 +26,19 @@ Not in v1: see [Not in v1](#not-in-v1).
 | **Face** | The inner part of a parameter control: how its value is drawn (an arc, a ring of LEDs, a schematic symbol). Faces of one style for all control types form a **kit**. |
 | **Chrome** | The outer part of a control or section: the plate or frame around it, with the label and the value text. |
 | **Palette** | The colours a control is drawn with. Each device has its own palette, derived from the device's colour. |
-| **Look** | A named combination of chrome, a kit of faces, a neutral palette, typography and a finish: the style of all controls. v1 has two ready-made looks to choose from (Foundry, Anodized); composing looks is v2. |
+| **Look** | A named combination of chrome, a kit of faces, a neutral palette, typography and a finish: the style of all controls. There are two ready-made looks to choose from (Foundry, Anodized). |
 | **Edit / Play** | The two modes of a dashboard: in *Edit* the layout and bindings are changed, in *Play* the controls are used. |
 
 ### Single place of truth
 
-Controls never send MIDI. A parameter control reads and writes the **device state**; the device state is synchronised
-with the device. This keeps the UI independent of how a parameter reaches its device (see
-[Parameter sources and targets](#parameter-sources-and-targets)), lets several controls share a parameter, and makes
-offline use the same as online use minus the synchronisation.
+Controls never send MIDI. A parameter control reads and writes the **device state**. This keeps the UI independent of
+how a parameter reaches its device, lets several controls share a parameter, and makes offline use the same as online
+use minus the synchronisation.
 
 ## Parameter controls
 
-The v1 catalog. The *suggested for* column is how the console picks a control when a parameter is dropped on a
-dashboard; the user can change the control type afterwards.
+The *suggested for* column is how the console picks a control when a parameter is dropped on a dashboard; the user can
+change the control type afterwards.
 
 | Control | Slots | Suggested for |
 |---------|-------|---------------|
@@ -99,23 +83,22 @@ steps, option names), the dashboard says how it is *shown*. Per control:
 - `label`: the name shown; default the parameter's field name.
 - `color`, `plateColor`, `panelColor`: other colours for this control's accent, plate and (for a section) panel (see [Colour](#colour)).
 
-Should units turn out to be the same for every dashboard of a device, a schema property can be added later as the
-default; the dashboard setting stays the override.
-
 ## Layout controls
 
 Layout controls have no MIDI function: they arrange, group and label. The root of a dashboard is a layout control, so
 a dashboard is a tree.
 
 **Everything is on a grid of cells** (`GridLayout`). Every control has a **size in cells** (`size`: columns,rows); the
-cell is the unit of the whole dashboard and the dashboard's cell size scales it as a whole. The root (usually a grid) and
-every grid and section place their children at a **cell position** (`at`: column,row, zero based from the top left of
-the grid; for a section, of the grid inside its frame). A parameter control is fitted to its cells (`CellFit`): scaled
-by the side that limits it, so making it bigger makes its knob bigger, and its chrome stretched along the other side,
-so its plate fills its cells and lines up with the grid (the scale follows from its size when it is first laid out, so a value text that grows does not rescale it); a new control gets a default size per kind in which it fits unscaled (a knob is 5×7). A
-section's frame and title take a fixed number of cells around its grid (`GridLayout.SectionInset`: one on the sides
-and bottom, two on top), in every look. Positions and sizes are never empty: a file that leaves them out gets them when
-it is opened (the controls side by side below those that have a position), and the console says so.
+cell is the unit of the whole dashboard and the dashboard's cell size scales it as a whole. The root (usually a grid)
+and every grid and section place their children at a **cell position** (`at`: column,row, zero based from the top left
+of the grid; for a section, of the grid inside its frame). A parameter control is fitted to its cells (`CellFit`):
+scaled by the side that limits it, so making it bigger makes its knob bigger, and its chrome stretched along the other
+side, so its plate fills its cells and lines up with the grid (the scale follows from its size when it is first laid
+out, so a value text that grows does not rescale it); a new control gets a default size per kind in which it fits
+unscaled (a knob is 5×7). A section's frame and title take a fixed number of cells around its grid
+(`GridLayout.SectionInset`: one on the sides and bottom, two on top), in every look. Positions and sizes are never
+empty: a file that leaves them out gets them when it is opened (the controls side by side below those that have a
+position), and the console says so.
 
 When a control is moved or sized onto other controls, these are **pushed down** below it (and the controls they then
 overlap, and so on); a grid or section that no longer fits its children **grows**, and pushes in its own grid in turn.
@@ -133,7 +116,7 @@ A layout control can set what its children inherit:
 
 - `device` and `base`: the device alias and the schema path that the bindings inside it are relative to. A section "Filter" with the base `AddressMap.Edit.Filter` holds knobs bound to `Cutoff` and `Resonance`. This is the same `base` a multi-slot control (the envelope) uses for its slots: one mechanism. A `base` is always a full path from the map root; bases do not stack.
 - index variables: see below.
-- the palette: by default the palette of its `device` (see below).
+- the palette: by default the palette of its `device` (see [Colour](#colour)).
 
 Moving a section moves its controls; copying a section and changing its `base` (e.g. from the first to the second
 oscillator) copies all its bindings.
@@ -153,8 +136,7 @@ There is no special selector control: a variable is a binding target like a devi
 the patch: typically a number box, but a knob or a fader works too.
 
 - A control sees the variable as the item number: the index + 1, from 1 to the number of items of the repeat it indexes, from the address map, or the repeat's own count in a schema without one (`SchemaLibrary.ItemCount`). A variable used on repeats with different item counts is reported; a variable that indexes no repeat in a binding path has no range and is reported too.
-- Changing the variable resolves the bindings again: the controls that use it are pointed to the newly selected item (`ParameterValue` is re-targeted) and show its values (offline: unknown, or from a loaded dump; online: received from the device, see [Synchronisation](#synchronisation-with-the-device)).
-- Showing the number as a device's own patch name (U01-1, A-11, ...) is a display setting still to be designed.
+- Changing the variable resolves the bindings again: the controls that use it are pointed to the newly selected item (`ParameterValue` is re-targeted) and show its values (unknown, or from a loaded dump).
 - The dashboard file holds the starting value; the selected value is state of the open dashboard.
 
 ## Visual style
@@ -170,8 +152,7 @@ These rules hold for every look; a look only decides how they are drawn.
 ### Composable controls
 
 A control is not drawn as one piece: it is composed of layers, each with one responsibility and a narrow contract.
-This keeps the control logic independent of the look and lets the user compose a look from ready-made building
-blocks (v2, see [Looks](#looks-v2)).
+This keeps the control logic independent of the look.
 
 | Layer | Decides | Knows about |
 |-------|---------|-------------|
@@ -197,15 +178,15 @@ is drawn upright and turned a quarter when its control is horizontal (`ControlOr
 the ratio of the cells, given to the face in its face state), so a kit has one drawing for both. A fader also stretches
 along its direction into all the room its cells give it (the chrome gives its face what the label and the value
 leave), and dragging along the whole slot covers the whole range: a long fader is finer. Other faces keep their own
-size, centred. Sizes in cells are at a reference cell of 24 pixels
-(`Face.CellPixels`); the dashboard as a whole is scaled to its own cell size, in one place, so controls, fonts, gaps
-and grids scale together.
+size, centred. Sizes in cells are at a reference cell of 24 pixels (`Face.CellPixels`); the dashboard as a whole is
+scaled to its own cell size, in one place, so controls, fonts, gaps and grids scale together.
 
 In Avalonia a control is one class per control type, a face a small control that draws itself, chosen by key from
 the look, a chrome a `ControlTheme` of the frame control (also used by sections), and the palette, typography and
 finish are resources. A face draws on two layers: the static parts (a track, a body, a slot: `RenderStatic`) are only
 drawn again when the brushes change or the value becomes known or unknown; the value (an arc, a pointer, lit LEDs:
-`RenderValue`) is drawn again on every change of the value.
+`RenderValue`) is drawn again on every change of the value. No control has a colour, size, font or shape of its own in
+code: everything is drawn through named resources.
 
 The resource keys every look provides (the face themes take them; the chrome templates use them too):
 
@@ -218,8 +199,8 @@ The resource keys every look provides (the face themes take them; the chrome tem
 **Kits.** A face is needed per control type: knob, slider, switch, selector, number box, text, XY pad and envelope.
 Faces that belong together form a kit; a look picks a kit and may override the face of a single control type. Faces of
 different kits share their drawing code where they can (one arc renderer, drawn with different strokes). The number
-of faces is the real cost of this design, and it grows with the number of kits that are made, not with the number of
-looks: a look is only a combination.
+of faces is the real cost of this design, and it grows with the number of kits, not with the number of looks: a look
+is only a combination.
 
 **Glow and other effects** belong to the finish and the palette (e.g. a glow radius), not to a face: effects are
 expensive while values change, so they are applied in one place and can be reduced in one place.
@@ -262,10 +243,10 @@ one dashboard). On a dashboard that combines devices, the colour shows which dev
 **A colour per control.** The user can give a single control or section another colour. Use it to make a control
 stand out, not to show the device: that is what the device colour does.
 
-**Picking a colour.** In *Edit* mode, a right-click on a control opens the colour chooser for
-the area under the pointer, named in its title: on the face or on a section's tag or strip (the elements of a look's
-chrome with the class `accentArea`) the accent, elsewhere on a parameter control its plate, elsewhere on a layout
-control its panel. The property panel opens the same chooser for each area of the selected control. It offers:
+**Picking a colour.** In *Edit* mode, a right-click on a control opens the colour chooser for the area under the
+pointer, named in its title: on the face or on a section's tag or strip (the elements of a look's chrome with the
+class `accentArea`) the accent, elsewhere on a parameter control its plate, elsewhere on a layout control its panel.
+The property panel opens the same chooser for each area of the selected control. It offers:
 
 - the colours of the look for the area: a few colours designed to suit it (in the module of the look; Foundry has metals and patina, steel and enamel plates, iron and painted panels; Anodized LED colours and anodized aluminium);
 - tints and shades of the current colour;
@@ -278,9 +259,9 @@ they changed, *Save as...* writes one of them to another file (XML or JSON by it
 read from disk (the demo) is saved with a file picker. When the dashboard gives a device a colour of its own, a new rig
 colour does not show on it; the console says so.
 
-### Looks in v1
+### Looks
 
-Two ready-made looks, kept simple as the basis for tweaking before more controls are added:
+Two ready-made looks, kept simple as the basis for tweaking:
 
 | Look | Faces (kit) | Chrome | Palette |
 |------|-------------|--------|---------|
@@ -297,91 +278,115 @@ Where things are, for tweaking (in `Jacobi.Midi.Console`):
 - **Looks**: `ConsoleLooks` (in `Looks/Look.cs`) lists the looks of the modules; applying one replaces the look's resources and kit and rebuilds the dashboard. A new module is added to that list.
 
 The accent is the device colour of the rig (or the dashboard); a look's own accent is used for controls without a
-device. The look is chosen in the toolbar and not saved yet.
+device. The look is chosen in the toolbar and is not saved.
 
-### Looks (v2)
+## Edit and Play
 
-In v2 the user chooses a look, or composes one from the building blocks: a chrome for the controls and one for the
-sections, a kit of faces (with an override per control type), a neutral palette, typography and a finish, each with
-its parameters (colours, corner radius, screws or not). The building blocks themselves are made in code; the user
-combines them, the way the schemas combine processors. A few ready-made looks are the starting point; free
-composition is for users who want it, and not every combination will look good.
+Several dashboards can be open on one rig; the toolbar switches between them, opens another (+: a new dashboard, or
+one from a file) and closes one (✕). They share the rig's device states (`RigSession`), so a parameter has one value on
+every dashboard; each dashboard (`DashboardSession`) has its own index variables. A dashboard that brings its own
+schemas rebuilds the schema library, and with it the device states (their values are reset; this is reported). The
+console starts with the GP-8 demo (`Assets/Demo`): its rig, two dashboards and a bulk dump.
 
-A look is a setting of the user, not of the dashboard: a shared dashboard looks the way its user likes it. The device
-palettes and control colours stay; the look only decides how they are used. A look is saved as a file, in XML or JSON
-like the rig and the dashboards. A made-up example (the names are not final):
-
-```json
-{
-  "format": "jacobi.midi.look/1",
-  "name": "Workshop",
-  "chrome": "plate.screwed",
-  "sectionChrome": "panel.riveted",
-  "kit": "machined",
-  "faces": { "switch": "toggle" },
-  "palette": "steel",
-  "typography": "condensed",
-  "finish": "grain"
-}
-```
-
-To make that possible later, v1 already builds the [composable controls](#composable-controls) and draws everything
-through named resources: no control has a colour, size, font or shape of its own in code. A v2 look then only
-selects other faces, chromes and resources.
-
-### Edit and Play
-
-```text
-┌───────────────────────────────────────────────────────────────────────────────────────┐
-│ ☰  Dashboards: [Lead sound ▾] [+]     [Edit | Play]                    MIDI ● Sync ⟳ │
-├──────────────────────┬───────────────────────────────────────────┬────────────────────┤
-│ RIG                  │  ┌ Filter (synth) ────────────────────┐   │ CONTROL            │
-│ ▾ synth  (Acme)  ●   │  │ ◜◝      ◜◝   ╱╲___               │   │ Knob · 2×2         │
-│   ▸ Edit             │  │ Cutoff  Reso  ╱    ╲  Amp env      │   │ Label  Cutoff      │
-│     ▸ Filter         │  │  64      12   A D  S R             │   │ Unit   -  Dec. 0   │
-│ ▸ pedalboard (GX) ○  │  └────────────────────────────────────┘   │ Color  ■ device    │
-│ CONTROLS             │  ┌ pedalboard ──────────────┐             │ BINDING            │
-│ Knob Slider Switch … │  │ [On] Drive ◜◝ Level ◜◝ │             │ synth ·            │
-│ LAYOUT               │  └──────────────────────────┘             │  Edit.Filter.Cutoff│
-│ Row Column Grid …    │                                           │                    │
-└──────────────────────┴───────────────────────────────────────────┴────────────────────┘
-```
+In *Play* mode the layout is locked and only the values change. Where the values come from is chosen in the MIDI bar
+(see [MIDI](#midi)).
 
 In *Edit* mode:
 
-- the left panel shows the rig: the devices and their parameters as a tree (the groups and fields of the map root, with the names of the schema), and the palettes of parameter and layout controls;
-- dragging a parameter onto the dashboard creates the suggested control, already bound; dragging a group creates a section with its `device` and `base` set and a control per field;
-- dragging a control from the palette creates an unbound control; its slots are bound in the right panel, or by dropping a parameter on the slot;
-- the right panel edits the selected control: type, size, display settings, colour and bindings; for a layout control its arrangement (`gap`, alignment, ...) and what its children inherit.
-
-In *Play* mode the layout is locked and only the values change.
-
-Several dashboards can be open on one rig; the toolbar switches between them (`Dashboards: [name ▾]`), opens another
-(+) and closes one (✕). They share the rig's device states (`RigSession`), so a parameter has one value on every
-dashboard; each dashboard (`DashboardSession`) has its own index variables. A dashboard that brings its own schemas
-rebuilds the schema library, and with it the device states (their values are reset; this is reported).
-
-What *Edit* mode does so far:
-
 - the values are locked: the controls do not change them (`DashboardEditing.IsEditing`, inherited by all controls of the dashboard), the cursor is the arrow;
 - a click selects the control under the pointer (outlined); a right-click also opens the colour chooser for the part under the pointer (see [Colour](#colour)); in *Play* mode a right-click does nothing;
-- the right panel shows the selected control: its label, position in its grid (column, row), size (columns × rows) and display settings (unit, decimals) to change, its three colours (each opens the colour chooser, ✕ makes it inherited), and its device, base, variables and bindings as they are;
+- Esc, or a click beside the dashboard, selects nothing: the panel shows the dashboard (its name and zoom);
 - dragging a control in a grid or section moves it, dragging the handle at the bottom right of the selection sizes it, by whole cells; the control follows the pointer and is placed when it is let go (controls in the way are pushed down, grids grow); the cells of the grid the selected control is in are drawn over it, with the column and row numbers every five cells;
-- every change is an edit (`IEdit`) in the edit history (`EditHistory`): undo (↶, Ctrl+Z) and redo (↷, Ctrl+Y); the history is cleared when a dashboard is closed or another rig is opened. A dashboard or rig counts the edits since it was read or saved, so undoing all of them makes it unchanged again. After an edit the dashboard is resolved again (`DashboardSession.Refresh`: the variables keep their current item); after an edit of the rig the rig is opened again on the same library, and the devices that stay the same (alias, map root, device values) keep their state and values (`RigSession.Open` with the previous session);
-- the left and right panels are sized with the splitters between them and the dashboard (at least 180 pixels; kept while Play mode closes them);
-- the left panel shows the rig: per device its parameter tree (`ParameterNode`, from the plan of its map root; fields whose value the schema fixes are left out), with the number of items of a repeat and the range or options of a field; below it the palettes of parameter controls and layout controls (`ControlCatalog`).;
-- dragging a field onto the dashboard creates the suggested control (`ControlCatalog.Suggest`: options a selector, a `sys.bool` a switch, a string a text, a number with a range a knob, else a number box), bound to it; a group, a repeat or a device creates a section with its `device` and `base`, a control per field and a nested section per group, laid out by `GridLayout.Complete`; dropping a field on a parameter control binds its slot (`ControlDrops`). A binding is relative to the base around it when it can be (`BindingScope.BindingOf`). A repeat in the path gets the index the base around it gives, else an index variable in scope that indexes the same repeat (`BindingResolution.Repeats`), else a new variable named after the repeat: on the nearest grid or section around a dropped field, on the new section of a dropped group with a number box bound to it. A device the dashboard does not list yet is added;
 - dragging a control over another grid, section, row, column or tabs moves it into it; its bindings stay bound to the same parameters (`ControlMoves`: a moved layout control keeps the device and base it inherited, a binding that would point elsewhere is written again; a variable that is not around its new place is reported). A palette item dropped in a grid or section goes to the cell under the pointer, elsewhere after the other controls;
 - Delete (or *Delete* in the panel) deletes the selected control and the controls inside it; the root stays;
-- the notifications (below the status) list what the console tells: problems (files, schemas, devices, bindings, dumps) in their own colour, and information (a schema that replaces a built-in one, sizes given to a file); the header counts both;
-- Esc, or a click beside the dashboard, selects nothing: the panel shows the dashboard (its name and zoom);
 - tabs: a click on a tab header shows its page and selects it (drop on the page to add to it, on the headers to add a page); the page shown stays shown when the dashboard is built again, and selecting a control shows the pages it is on;
 - a label or separator has only an accent: it is drawn in the look's text or outline colour until it is given a colour (right-click, or the panel);
-- the control panel changes the kind with a button per kind (one single-value control into another, a grid into a section, a row into a column: `ControlCatalog.WithKind`), the bindings of the slots as text (`[device:]path` or `$name`), the device and base (with what is inherited as the placeholder), the index variables of a layout control and the gap and wrap of a row or column. With nothing selected it shows the dashboard's name and zoom (its `cellSize` as a percentage of the default 24 pixels, 25-400%: the whole dashboard scales with it and it is saved with the dashboard); *+* makes a new, empty dashboard on the rig. The panel is made anew for every selection, and a press on the dashboard first takes the text being typed in it, so that nothing of one control is taken for the next;
-- selecting a device in the rig shows its properties: alias, name, map root (one of the root groups of the library, `SchemaLibrary.Roots`, address maps first), device values, endpoint, colours and its own schemas (schema files and assemblies, added and removed there); *Remove* takes it out. The *+* of the rig adds a device for an address map of the library (the other root groups in a submenu; named after it: `Gp8.AddressMap` is `gp8`), or from a schema file or an assembly the user picks: it becomes a schema source of the new device, which gets a root group of the documents the file brings (`SchemaLibrary.RootsFromFile`, an address map first), also when such a document replaces a built-in one of the same name; that replacement holds for all devices of the rig, and is shown as information. A change of the schemas builds the library again, which resets the values of the devices (reported); schema files and assemblies are loaded by their path, so not in the browser. Open dashboards that use a renamed or removed alias are reported.
+- the left and right panels are sized with the splitters between them and the dashboard (at least 180 pixels; kept while Play mode closes them).
 
-Still to come: choosing the rig device for a dashboard alias that is not in the rig, selecting several controls, and
-copy and paste.
+**The rig and the palettes** (left panel). Per device of the rig its parameter tree (`ParameterNode`, from the plan of
+its map root; fields whose value the schema fixes are left out), with the number of items of a repeat and the range or
+options of a field, and the device's MIDI connection (a dot, see [MIDI](#midi)); below it the palettes of parameter
+controls and layout controls (`ControlCatalog`).
+
+- Dragging a field onto the dashboard creates the suggested control (`ControlCatalog.Suggest`: options a selector, a `sys.bool` a switch, a string a text, a number with a range a knob, else a number box), bound to it.
+- Dragging a group, a repeat or a device creates a section with its `device` and `base`, a control per field and a nested section per group, laid out by `GridLayout.Complete`.
+- Dropping a field on a parameter control binds its slot (`ControlDrops`). A binding is relative to the base around it when it can be (`BindingScope.BindingOf`).
+- A repeat in the path gets the index the base around it gives, else an index variable in scope that indexes the same repeat (`BindingResolution.Repeats`), else a new variable named after the repeat: on the nearest grid or section around a dropped field, on the new section of a dropped group with a number box bound to it.
+- A device the dashboard does not list yet is added.
+- Dragging a control from a palette creates an unbound control.
+
+**The control panel** (right panel) edits the selected control:
+
+- its label, position in its grid (column, row), size (columns × rows) and display settings (unit, decimals);
+- its three colours (each opens the colour chooser, ✕ makes it inherited);
+- its kind, with a button per kind (one single-value control into another, a grid into a section, a row into a column: `ControlCatalog.WithKind`);
+- the bindings of the slots as text (`[device:]path` or `$name`), the device and base (with what is inherited as the placeholder), the index variables of a layout control, the gap and wrap of a row or column, and the segments of an envelope.
+
+With nothing selected it shows the dashboard's name and zoom (its `cellSize` as a percentage of the default 24 pixels,
+25-400%: the whole dashboard scales with it and it is saved with the dashboard). The panel is made anew for every
+selection, and a press on the dashboard first takes the text being typed in it, so that nothing of one control is
+taken for the next.
+
+**The device panel** (right panel, when a device is selected in the rig): alias, name, map root (one of the root groups
+of the library, `SchemaLibrary.Roots`, address maps first), device values, the MIDI endpoint and UMP groups with the
+device's connection and its tests (see [MIDI](#midi)), colours and its own schemas (schema files and assemblies, added
+and removed there); *Remove* takes it out. The *+* of the rig adds a device for an address map of the library (the
+other root groups in a submenu; named after it: `Gp8.AddressMap` is `gp8`), or from a schema file or an assembly the
+user picks: it becomes a schema source of the new device, which gets a root group of the documents the file brings
+(`SchemaLibrary.RootsFromFile`, an address map first), also when such a document replaces a built-in one of the same
+name; that replacement holds for all devices of the rig, and is shown as information. A change of the schemas builds
+the library again, which resets the values of the devices (reported); schema files and assemblies are loaded by their
+path, so not in the browser. Open dashboards that use a renamed or removed alias are reported.
+
+**Undo.** Every change is an edit (`IEdit`) in the edit history (`EditHistory`): undo (↶, Ctrl+Z) and redo (↷,
+Ctrl+Y); the history is cleared when a dashboard is closed or another rig is opened. A dashboard or rig counts the
+edits since it was read or saved, so undoing all of them makes it unchanged again. After an edit the dashboard is
+resolved again (`DashboardSession.Refresh`: the variables keep their current item); after an edit of the rig the rig is
+opened again on the same library, and the devices that stay the same (alias, map root, device values) keep their state
+and values (`RigSession.Open` with the previous session).
+
+**Notifications** (below the status) list what the console tells: problems (files, schemas, devices, bindings, dumps,
+MIDI) in their own colour, and information (a schema that replaces a built-in one, sizes given to a file); the header
+counts both.
+
+## MIDI
+
+The MIDI bar (in the toolbar) shows whether the devices of the rig are connected: a dot (green: all devices online,
+amber: some, red: none) with a summary; a click opens the list of the devices with the status of each.
+
+- **Edit mode is always connected**, to choose the endpoints and test the devices.
+- **Play mode** has an explicit choice of where the values come from: **Offline** (dump files: *Load dump…*) or **MIDI** (the devices). With MIDI, the controls of a device that is not online are disabled; *Load dump…* is only available offline.
+- Without a MIDI backend (the browser host) the console stays offline; the bar says so.
+
+The values are not exchanged with the devices yet: a connected device can be tested, but its values still come from
+dumps (the synchronisation is on the [todo list](todo.md)).
+
+**Connections** (`RigConnections` in Console.Core). One MIDI session and the endpoints it reaches (watched, so the list
+follows the endpoints that come and go), and a `DeviceSession` of the [message exchange](../Jacobi.Midi.Device/Exchange/readme.md)
+per device of the rig with an endpoint (`MessageExchangeFactory.CreateSession`, with the device's `DeviceValues` and
+UMP groups). The endpoint is found by its name (see [Rig](#rig)). The status of a device (`DeviceConnection`):
+
+| Status | Meaning |
+|--------|---------|
+| No endpoint | the device has no endpoint in the rig |
+| Endpoint not found | no endpoint has its name; the device connects when it appears |
+| Connecting | the connection is being opened |
+| Online | connected |
+| Lost | the connection was lost (e.g. the cable was pulled); the device connects again when its endpoint comes back |
+| Failed | the connection could not be opened, or the schemas do not compile; tried again when the endpoint is added or updated |
+
+The connections follow the rig: a device whose endpoint, groups, device values or schemas changed connects again, a
+device that left the rig is disconnected. Problems are shown with the device and in the notifications; nothing is
+thrown at the user.
+
+**The device panel** picks the endpoint from the endpoints MIDI reaches (the device's own endpoint is listed too when it
+is not there; ✕ disconnects the device from MIDI) and the UMP groups to send and receive on (1-16, with the names the endpoint gives its groups in that direction; the
+receive group follows the send group as long as they are the same). They differ when the device is cabled to ports of
+different groups, e.g. a DIN in/out pair of a MIDI 1.0 interface, or a MIDI 2.0 device with one-way function blocks. It shows the device's connection and offers two tests, which check whether a connection can be made and the
+right device answers. **A test changes no value anywhere**:
+
+- **Identity request**: a universal Identity Request to all devices on the endpoint and groups, over a connection of its own (`DeviceIdentity` in Midi.Device); the replies within a second are shown (manufacturer, family, member, revision, device id). Independent of the schemas; older devices (the GP-8) do not answer it.
+- **Request data**: a request of the first parameter of the device's map, with its schemas and device values (the device sends the atomic group it is in). The data is discarded (`DeviceSession.Probe`): not the device state, not the session's state, and no listener gets it. Only when the device is online.
 
 ## Schemas
 
@@ -396,21 +401,33 @@ them, in this order:
 
 An assembly brings its embedded schemas (`.xml`, `.json` resources) and its processor factories. A schema document of a
 later source replaces an earlier one with the same name, so a device or a dashboard can customise a built-in schema;
-the replacement is shown as information in the notifications. A source that cannot be loaded (a missing file, an assembly that does not
-load, an invalid schema) is reported and the others are still used; schemas that do not compile are reported and the
-library then has no serializer.
+the replacement is shown as information in the notifications. A source that cannot be loaded (a missing file, an
+assembly that does not load, an invalid schema) is reported and the others are still used; schemas that do not compile
+are reported and the library then has no serializer.
 
 With the library, `BindingResolver` checks a dashboard against the schemas: every device's map root must be a root
 group of the schemas (an address map or not: a plain schema of groups and fields works the same; whether its values can
-be sent and received is up to the Device project, not the console), every binding a field of its device's root (the path
-starts at the root, e.g. `AddressMap.…`), every index variable must index a repeat of it and stay below its item count. With the rig it also checks that the rig has the
-dashboard's devices with the same map roots. All problems are reported together.
+be sent and received is up to the Device project, not the console), every binding a field of its device's root (the
+path starts at the root, e.g. `AddressMap.…`), every index variable must index a repeat of it and stay below its item
+count. With the rig it also checks that the rig has the dashboard's devices with the same map roots. All problems are
+reported together.
+
+## Device state
+
+`DeviceState` keeps the values of one device instance in a `FieldValueStore` of the Device project, by the path and
+instance of the device's map plan: the identity of a resolved binding (`ParameterReference`). A parameter without a
+value is unknown.
+
+- **Reading and writing.** Controls use `TryGetValue` and `SetValue`; a value sink (`CreateSink`) and a value source (`Source`) give the values to and take them from the serializer and the message exchange.
+- **Changes.** `ValueChanged` reports every value that changed, with its origin: `User`, `Device` or `Dump`. Setting the known value again reports nothing. The event is raised on the thread that changed the value; the UI marshals it.
+- **Dumps.** `LoadDump` splits a dump into its SysEx messages (`SysExSplitter` of the Messages project) and decodes the data messages of the device's map for this device (`AddressMapAdapter.ReadData`); other messages are skipped and reported. *Load dump…* loads a `.syx` file into every device of the rig: each takes the messages that are its data. `SaveDump` writes a range of the map as the data messages the exchange would send (`AddressMapAdapter.EncodeData`): widened to atomic groups, all their values must be known.
+- **Lossy values.** A value of a dump that the schema does not describe (a physical value that is not one of the options of its data type) is read as the data type's `optionsDefault` and saved as that: such bytes are not reproduced. The GP-8 bulk dump in the tests has four patches like that (`DynamicFilter.UpDown`, `Compressor.Turbo`).
 
 ## Files
 
 The rig and the dashboards are separate files, in XML or JSON (the format follows the file extension, as with the
-schemas). The examples below are made up (the device `Acme` does not exist); they show the shape of the files, not
-the final names.
+schemas). The examples below are made up (the device `Acme` does not exist); the GP-8 demo in `Assets/Demo` is a real
+one.
 
 ### Rig
 
@@ -426,7 +443,7 @@ the final names.
       "mapRoot": "Acme.AddressMap",
       "schemas": [ "AcmeS1Custom.xml" ],
       "deviceValues": { "deviceId": "0x10" },
-      "endpoint": { "name": "USB MIDI Interface", "group": 0 },
+      "endpoint": { "name": "USB MIDI Interface", "sendGroup": 0, "receiveGroup": 0 },
       "color": "#3D8BFD"
     }
   ]
@@ -449,7 +466,7 @@ The same rig in XML:
 
 - `assemblies`, `schemas`: on the rig for all its devices, on a device for that device only (see [Schemas](#schemas)); a relative path is relative to the rig file. A dashboard has them too.
 - `deviceValues`: in the notation of the schemas (`0x10`, `10H` or decimal); written in hex.
-- `endpoint`: the endpoint is matched by its **name** and UMP group. Endpoint ids are not portable (native Windows ids) and do not identify an instrument behind a DIN port. When no endpoint with that name is found, the device is shown as not connected and the user picks another endpoint.
+- `endpoint`: the endpoint is matched by its **name** and UMP group (0-15 in the file, shown as 1-16). Endpoint ids are not portable (native Windows ids) and do not identify an instrument behind a DIN port. When no endpoint with that name is found, the device is shown as not connected and the user can pick another endpoint.
 - `color`, `plateColor`, `panelColor`: the colours of the device's controls (see [Colour](#colour)).
 
 ### Dashboard
@@ -520,7 +537,7 @@ The same dashboard in XML:
 </dashboard>
 ```
 
-- `devices` lists the aliases the dashboard needs with the map root they must have, and optionally colours (`color`, `plateColor`, `panelColor`) that override the rig's on this dashboard. Opening a dashboard whose alias is not in the rig asks the user to pick a rig device with the same map root.
+- `devices` lists the aliases the dashboard needs with the map root they must have, and optionally colours (`color`, `plateColor`, `panelColor`) that override the rig's on this dashboard. An alias that is not in the rig, or has another map root there, is reported.
 - A binding is written as `[device:]path`. The path is a schema path in the notation of the serializer's node references: a repeat item is given by its index (`Programs[5].Program.Level`) or by an index variable (`Programs[$patch].Program.Level`), so the instance is part of the path. The device and the start of the path may come from the `device` and `base` of the control or of a layout control around it; a binding with its own device (`pedalboard:AddressMap.Temporary.Compressor.Attack`) has a full path.
 - `variables` of a layout control: the index variables with their starting value (zero based); see [Index variables](#index-variables).
 - `size` (columns,rows) and, inside a grid or section, `at` (column,row) are written for every control; a file without them gets them when it is opened (see [Layout controls](#layout-controls)). `grow` is only used inside a row or column.
@@ -539,120 +556,6 @@ Reading is strict: an unknown attribute or element, a missing required value, an
 a size) or a duplicate (a device alias, a slot) is reported with its location in the file, e.g.
 `dashboard/row[0]/knob[1]: unknown attribute 'colour'.` Nothing is ignored silently.
 
-## Synchronisation with the device
-
-The console uses the [message exchange](../Jacobi.Midi.Device/Exchange/readme.md) of the Device project; it never
-builds SysEx messages itself.
-
-1. **Connect.** *Edit* mode is always connected (to choose the endpoints and test the devices). *Play* mode has an explicit choice in the MIDI bar of where the values come from: **Offline** (dump files) or **MIDI** (the devices). When connected, every device of the rig with an endpoint gets a `DeviceSession` (`MessageExchangeFactory.CreateSession` on one MIDI session), with its `DeviceValues`, its endpoint (found by name) and UMP group: `RigConnections`. A device whose endpoint is not there connects when it appears; a lost connection waits for its endpoint to come back. The MIDI bar lists the connection of each device, the rig tree marks it, and in Play mode with MIDI the controls of a device that is not online are disabled. The device panel tests whether the connection can be made and the right device answers, without changing any value: a universal Identity Request (`DeviceIdentity`), or a request of the first parameter of the device's map that is discarded (`DeviceSession.Probe`).
-2. **Sync.** The ranges (`PlanRange`) that cover the bound parameters are received (`Receive`) into the device state. The exchange widens a range to the atomic groups it overlaps, so a sync usually delivers more values than are bound; the device state keeps them all.
-3. **Follow.** The exchange listens (`Listen`) on the same ranges, so changes made on the device show up on the dashboard.
-4. **Change.** A control writes the device state, which queues a `Send` of the parameter's range. While a knob is dragged, only the latest value per parameter is kept in the queue, so the device gets as many messages as it can take (paced by `midi.messageInterval`), not one per mouse move.
-5. **Select.** When the user changes an index variable, the bindings are resolved again; the controls that use it get the new instance, and its ranges are received (step 2) and followed (step 3) instead of those of the previous one.
-6. **Failure.** A block that times out or is rejected (`BlockStatus`) is shown on the controls of its parameters and in the status bar; nothing fails silently.
-
-Each device has its own exchange: a control whose slots are bound to different devices sends to each device
-separately. There is no transaction across devices.
-
-**Offline**, the device state is filled from a `.syx` dump (the data messages are recognised with the address map,
-as with `ReceivedData`) and can be written to a dump again. Synchronisation is the only difference between offline
-and online.
-
-### Device state
-
-`DeviceState` keeps the values of one device instance in a `FieldValueStore` of the Device project, by the path and
-instance of the device's map plan: the identity of a resolved binding (`ParameterReference`). A parameter without a
-value is unknown.
-
-- **Reading and writing.** Controls use `TryGetValue` and `SetValue`; the exchange receives into a sink (`CreateSink`) and sends from `Source`.
-- **Changes.** `ValueChanged` reports every value that changed, with its origin: `User`, `Device` or `Dump`. Setting the known value again reports nothing. The event is raised on the thread that changed the value; the UI marshals it.
-- **Dumps.** `LoadDump` splits a dump into its SysEx messages (`SysExSplitter` of the Messages project) and decodes the data messages of the device's map for this device (`AddressMapAdapter.ReadData`); other messages are skipped and reported. `SaveDump` writes a range of the map as the data messages the exchange would send (`AddressMapAdapter.EncodeData`): widened to atomic groups, all their values must be known.
-- **Lossy values.** A value of a dump that the schema does not describe (a physical value that is not one of the options of its data type) is read as the data type's `optionsDefault` and saved as that: such bytes are not reproduced. The GP-8 bulk dump in the tests has four patches like that (`DynamicFilter.UpDown`, `Compressor.Turbo`).
-
-### Exchange patterns the console does not support (v2)
-
-Some devices need a message exchange pattern that the exchange does not have (see the
-[Device todo](../Jacobi.Midi.Device/todo.md): the Roland handshake, Yamaha Bulk Header/Footer, write/store requests,
-device modes, a manual operation on the device), and some need one that is specific to that device and of no use to
-any other. The console must not assume that every device in a rig can be synchronised:
-
-- **Detect it, show it.** When the exchange cannot handle a device (an unknown `midi.exchange`, a message it cannot use), the device is marked in the rig and on its controls with the reason. Its dashboards still open and work offline; nothing fails silently.
-- **Partial use.** A device that can be written but not read (no usable request) is used write-only: its parameters stay *unknown* until set, as for the parameters that cannot be read back (see [Parameter sources and targets](#parameter-sources-and-targets)).
-- **Generic first.** A pattern that more devices use becomes a built-in protocol (`ExchangeProtocols`) or, later, a configurable state machine (an `ITransferMachine`) described in the schema.
-- **Device specific as a plug-in.** A pattern that only one device uses comes with that device's assembly, the way processors do: a factory per assembly with its own namespace prefix, selected by name in the schema (e.g. `midi.exchange="acme.handshake"`). The console registers device assemblies already (for their processors and schemas), so it finds these protocols the same way, and the machines stay inside the existing `IExchangeProtocol` model.
-- **The user in the loop.** Patterns that need the user ("press the bulk dump key", "switch the device to edit mode") need a prompt from the console: the exchange asks, the console shows the request with a *Cancel*, the exchange waits. The console supplies this prompt for every device; the request text comes from the schema or the protocol.
-
-## Parameter sources and targets
-
-v1 only supports parameters in an address map (SysEx data messages through the message exchange). Devices use other
-ways too, and the console is designed so that they can be added without changing the dashboards, the controls or the
-device state.
-
-### The ways a device exposes a parameter
-
-| Kind | Identification | Read back | Notes |
-|------|----------------|-----------|-------|
-| Address map (SysEx) | address, via the schema path | yes: request (RQ1, Dump Request) | value range in the schema; atomic groups; v1 |
-| Control Change | channel + controller number | no; only what the device sends | 7-bit; 14-bit as an MSB/LSB pair (CC 0-31 + 32-63) |
-| RPN / NRPN | channel + 14-bit parameter number | no | a sequence of CCs (99/98 or 101/100, then 6/38); data entry increments |
-| Program Change / Bank Select | channel | no | a selector rather than a value |
-| MIDI 2.0 controllers | group + channel (+ note) + index | no | 32-bit values: registered/assignable controllers, per-note controllers |
-| MIDI 2.0 Property Exchange | resource name + JSON pointer | yes: Get, Subscribe | JSON resources over MIDI-CI; the device describes itself |
-
-### One abstraction: the parameter port
-
-Each device instance gets a **parameter port** per kind of parameter it uses. A port does one thing: it moves the
-values of parameters between the device state and the device. Its operations, and what a port tells about its
-capabilities:
-
-| Operation | Meaning | Not every port can |
-|-----------|---------|--------------------|
-| Read | ask the device for the current values of parameters | CC, NRPN and Program Change cannot be read back |
-| Write | send new values | `midi.access="read"` parameters cannot be written |
-| Observe | report values the device sends on its own | a device may not echo its front panel |
-| Group | the smallest set of parameters that is transferred together | atomic groups in an address map; an MSB/LSB pair |
-
-The device state and the controls only see **logical values with a value domain** (range, steps, options), as the
-schema's data types define them. Turning a logical value into bytes is the port's job: the serializer for the address
-map, the CC encoding for controllers. A control therefore does not know or care whether its knob ends up in a DT1, a
-CC or a Property Exchange Set.
-
-The capabilities matter for the UI: a parameter that cannot be read back stays *unknown* (hollow) until the user sets
-it or the device sends it, and a sync skips it. The same holds for a device whose exchange pattern is not supported
-(see [above](#exchange-patterns-the-console-does-not-support-v2)): its port reports what it can do.
-
-### Keep the schema the source of truth
-
-Every parameter, of every kind, is identified by a **schema path** of the device's schema. For the address map this
-already holds. For CC, NRPN and MIDI 2.0 controllers the idea is to describe them in the device schema as well: fields
-with their data type (range, options, as for SysEx parameters) and `midi.*` tags that say how they are transferred
-(e.g. a controller number), in the spirit of the address map tags. Then:
-
-- a binding is always device alias + schema path + instance, whatever the kind;
-- the parameter tree in *Edit* mode shows all parameters of a device in one place;
-- the port for a parameter is chosen by the tags of its field, data-driven, without device specific code;
-- the same parameter may be reachable in two ways (a filter cutoff as CC 74 and as a SysEx address): one field, two transfers, and the port is chosen by capability (e.g. CC for fast changes while dragging, SysEx to read back).
-
-Property Exchange is different: the device describes its own resources at run time. A port for it would build its
-parameters from the device's resource list instead of a schema; the bindings would still be paths, but into the
-device's resources. This is the furthest away and needs its own design.
-
-## Browser support (ideas, not in v1)
-
-The Schema Editor already has a browser (WebAssembly) host without live MIDI. For the console a browser host would be
-attractive (nothing to install, the same dashboards on any computer), but it has pitfalls:
-
-- **MIDI in the browser is Web MIDI.** A browser `IMidiApi` (the Core contract) would be implemented with JavaScript interop on the Web MIDI API. Web MIDI is MIDI 1.0 bytes, not UMP: the adapter converts SysEx to and from SysEx7 packets, and the UMP group is always 0.
-- **SysEx needs permission.** SysEx access is requested explicitly (`requestMIDIAccess({ sysex: true })`), only on a secure (HTTPS) page, and the user must allow it. The console is useless without SysEx, so the UI must explain the permission prompt and handle a refusal.
-- **Not all browsers have Web MIDI.** At the time of writing Chromium based browsers support it, Firefox only with an extra site permission step, and Safari not at all. The host needs a clear message when MIDI is not available, and offline use must still work.
-- **No file system.** Rigs, dashboards and schemas are opened with file pickers and saved as downloads, or kept in browser storage (which the user or the browser can clear). Loading device assemblies (DLLs) the way the desktop does is not an option; only the schemas, processors and exchange protocols built into the application and uploaded schema files would be available.
-- **One thread.** WebAssembly .NET runs on the browser's thread: blocking waits deadlock, and the exchange's timeouts and message intervals depend on a busy UI thread. The exchange and the Core contracts must stay fully asynchronous for this to work.
-- **Trimming.** A published WebAssembly app is trimmed; the discovery of processor factories and anything else found by reflection must be preserved explicitly, or it disappears at run time.
-- **Timing.** Web MIDI timestamps are in milliseconds (`performance.now()`), not the native MIDI clock; `send` takes such a timestamp for scheduling.
-
-A browser host could also serve the [remote MIDI access](../readme.md#remote-midi-access) of the vision: the device
-stays at home, the dashboard runs anywhere.
-
 ## Projects
 
 The projects are in this folder, laid out like the Schema Editor's. The folder has its own `Directory.Packages.props`;
@@ -660,52 +563,10 @@ keep its Avalonia versions in sync with the Schema Editor's.
 
 | Project | Contents |
 |---------|----------|
-| `Jacobi.Midi.Console.Core` | The support code without UI: rig, dashboard, controls and bindings (`BindingResolver`, `BindingScope`), the edits of Edit mode (`Editing`: history, catalog, drops, moves), their XML and JSON files (`RigFile`, `DashboardFile`, `Files`), the schema library (`Schemas`), the device state with dumps (`Devices`), an open dashboard and the values its controls follow (`Parameters`), the face state (`FaceState`, `ValueRange`); later the synchronisation with the message exchange. Tested in `Jacobi.Midi.Tests` (`Console` folder). |
-| `Jacobi.Midi.Console` | The platform independent Avalonia UI (MVVM): parameter controls (`Controls`), faces and kits (`Faces`), chromes (`Chrome`), looks (`Looks`, `Themes`), the dashboard view with the layout controls (`Dashboards`), the GP-8 demo (`Assets/Demo`), the rig tree, the palettes and the panels of Edit mode (`ViewModels`). |
+| `Jacobi.Midi.Console.Core` | The support code without UI: rig, dashboard, controls and bindings (`BindingResolver`, `BindingScope`), the edits of Edit mode (`Editing`: history, catalog, drops, moves), their XML and JSON files (`RigFile`, `DashboardFile`, `Files`), the schema library (`Schemas`), the device state with dumps (`Devices`), an open dashboard and the values its controls follow (`Parameters`), the MIDI connections of the rig (`Connections`), the face state (`FaceState`, `ValueRange`). Tested in `Jacobi.Midi.Tests` (`Console` folder; `FakeMidi` is a MIDI backend for the tests). |
+| `Jacobi.Midi.Console` | The platform independent Avalonia UI (MVVM): parameter controls (`Controls`), faces and kits (`Faces`), chromes (`Chrome`), looks (`Looks`, `Themes`), the dashboard view with the layout controls (`Dashboards`), the GP-8 demo (`Assets/Demo`), the rig tree, the palettes, the panels of Edit mode and the MIDI bar (`ViewModels`). |
 | `Jacobi.Midi.Console.Desktop` | The desktop host; the Windows build references the Windows MIDI backend, as the Schema Editor's desktop host does. |
-| `Jacobi.Midi.Console.Browser` | The browser (WebAssembly) host; without MIDI, so the console works offline there (see [Browser support](#browser-support-ideas-not-in-v1)). |
+| `Jacobi.Midi.Console.Browser` | The browser (WebAssembly) host; without MIDI, so the console works offline there. |
 
 The namespace `Jacobi.Midi.Console` hides `System.Console` in code in a `Jacobi.Midi.*` namespace that references
 these projects (e.g. the tests): write `System.Console` there.
-
-UI parts that the Schema Editor already has and the console needs too are moved to a shared library, so that both
-applications use the same code: the MIDI bar and its connection service, the themes and palette, and the registration
-of device assemblies and their processors. The central package versions (`Directory.Packages.props`) move with them
-to a level above both applications.
-
-## Prerequisites in the existing code
-
-- [ ] **Sending one parameter.** A data message only carries one whole group occurrence (see [Device todo](../Jacobi.Midi.Device/todo.md)): one field of a non-atomic group, such as a parameter in the GX-700's individual temporary area, cannot be sent yet (`NotSupportedException`). The console sends one parameter per change, so this has to be solved first: an open choice that targets a range in Jacobi.BinarySerializer, and `CreateData`/`Decode` that accept any aligned block.
-- [ ] **The message interval as the pause on the wire** (see [Device todo](../Jacobi.Midi.Device/todo.md)). Dragging a knob streams messages; over a DIN connection the transmission time must be part of the pause.
-- [x] **A public value store.** The device state needs a value model by path and instance, as the internal `FieldValueStore` of the addressing code is. Make one public implementation and use it in both places.
-
-## Milestones
-
-- [x] Skeleton: the four projects in the solution; the model types; binding resolution with `device`/`base` inheritance; the face state; the layers proven with one knob (`KnobControl`, `ArcKnobFace` in the flat kit, `ControlChrome`, palette resources); tests.
-- [x] Model: rig, dashboard, parameter and layout controls, bindings with `device`/`base` inheritance; XML and JSON reading and writing; tests.
-- [x] Schemas and index variables: the schema library (built-in assemblies plus the assemblies and schema files of rig, device and dashboard, compiled with the serializer's objects); bindings checked against it; index variables on layout controls with the index selector, their item counts from the address maps; tests with the GP-8 schema.
-- [x] Device state: values by parameter, offline loading from and saving to a dump; tests with the test device of the addressing tests.
-- [ ] Synchronisation: exchanges per device instance, sync, follow and change with the latest-value queue; unsupported devices marked; tests with a fake port.
-- [ ] Shared UI library extracted from the Schema Editor.
-- [x] Composable controls: control, face, chrome and palette as separate layers with the face state; one kit and one look; all styling through named resources.
-- [x] First controls and dashboard view (before the synchronisation, which is postponed): the layers (control, face, chrome, palette) with two looks, Foundry and Anodized, to tweak; knob, fader, switch and text; the layout controls; a dashboard is opened with its rig and schema library (`DashboardSession`), the controls follow the device state (`ParameterValue`), with ranges, steps and value types from the data types (`ParameterInfo`); values from dumps; the GP-8 demo; tests of the session.
-- [x] Dashboard canvas with the layout controls and the parameter controls in *Play* mode.
-- [x] Dashboard canvas, done as: index variables as binding targets (`$patch`, `VariableValue`) instead of an index selector control, with the number box (▲/▼) in both kits; controls that re-bind when a variable changes; typing a value (double-click) and reset (Ctrl+click) for all controls; several dashboards on one rig sharing the device states (`RigSession`, `DashboardSession`); the Edit/Play switch (Edit not available yet); the GP-8 compare demo; tests.
-- [x] Device palettes and control colours: the palette derived from one colour with contrast (`RgbColor`, `Palette`); the colour cascade in the dashboard builder; colours per look, tints and shades and any colour in a colour chooser (right-click); control and device colours; Save and Save as for the dashboard and the rig; tests.
-- [x] *Edit* mode foundation: values locked, selecting controls, colours by right-click, the property panel (label, size, display settings, colours, bindings shown), undo and redo of every edit; tests of the edit history.
-- [x] *Edit* mode: rig and parameter tree, drag & drop, control palettes, control panel: the parameter tree of a device (`ParameterNode`); the inheritance of device, base and variables in one place (`BindingScope`); dropping fields, groups and palette items with the index variables they need (`ControlDrops`, `ControlCatalog`); moving controls into another grid or section with their bindings (`ControlMoves`); deleting controls and changing their kind; editing bindings, device, base, variables and arrangement; editing the devices of the rig; the sessions following the edits; a new dashboard; tests.
-
-## Not in v1
-
-- Choosing and composing looks; more kits, chromes and finishes (see [Looks](#looks-v2)).
-- Exchange patterns the message exchange does not have, generic or device specific (see [Exchange patterns the console does not support](#exchange-patterns-the-console-does-not-support-v2)).
-- Parameters that are not in an address map: CC, NRPN, Program Change, MIDI 2.0 controllers and Property Exchange (see [Parameter sources and targets](#parameter-sources-and-targets)).
-- The patch librarian (it will build on device state snapshots).
-- MIDI learn, mapping a hardware controller onto dashboard controls.
-- Undo.
-- MIDI in the browser host (see [Browser support](#browser-support-ideas-not-in-v1)); the host itself exists and works offline.
-- Devices that only do complete dumps without an address map. Note this is a job for midi.device message exchange.
-
-## UI Design v2
-
-https://claude.ai/artifact/M1HGkZK6yVEYUJKhEVzoNZ?sk=d8ie2DI0HEzm8BEo40qjnQ#play-15dd8cd198dd

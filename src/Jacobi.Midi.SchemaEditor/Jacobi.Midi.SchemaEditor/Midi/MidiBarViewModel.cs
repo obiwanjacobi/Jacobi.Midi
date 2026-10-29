@@ -8,7 +8,7 @@ namespace Jacobi.Midi.SchemaEditor.Midi;
 
 /// <summary>
 /// View model behind <see cref="MidiBarControl"/>.
-/// Lists the available MIDI endpoints, holds the selected endpoint and UMP group
+/// Lists the available MIDI endpoints, holds the selected endpoint and its UMP groups (to send on and to receive on)
 /// and starts/stops the connection to the selected endpoint.
 /// </summary>
 /// <remarks>
@@ -40,10 +40,16 @@ internal sealed partial class MidiBarViewModel : ObservableObject, IAsyncDisposa
     public ObservableCollection<MidiEndpointInfo> Endpoints { get; } = [];
 
     /// <summary>
-    /// The UMP groups the selected endpoint declares, with their names.
-    /// All 16 groups (without names) when no endpoint is selected or the endpoint declares no blocks.
+    /// The UMP groups the selected endpoint declares for sending, with their names.
+    /// All 16 groups (without names) when no endpoint is selected or the endpoint declares no blocks for sending.
     /// </summary>
-    public ObservableCollection<MidiGroupItem> Groups { get; } = [];
+    public ObservableCollection<MidiGroupItem> SendGroups { get; } = [];
+
+    /// <summary>
+    /// The UMP groups the selected endpoint declares for receiving, with their names.
+    /// All 16 groups (without names) when no endpoint is selected or the endpoint declares no blocks for receiving.
+    /// </summary>
+    public ObservableCollection<MidiGroupItem> ReceiveGroups { get; } = [];
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ToggleConnectionCommand))]
@@ -52,27 +58,45 @@ internal sealed partial class MidiBarViewModel : ObservableObject, IAsyncDisposa
     partial void OnSelectedEndpointChanged(MidiEndpointInfo? value) => UpdateGroups(value);
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Group))]
-    public partial MidiGroupItem? SelectedGroup { get; set; }
+    [NotifyPropertyChangedFor(nameof(Groups))]
+    public partial MidiGroupItem? SelectedSendGroup { get; set; }
+
+    // the receive group follows the send group as long as they are the same
+    partial void OnSelectedSendGroupChanged(MidiGroupItem? oldValue, MidiGroupItem? newValue)
+    {
+        if (newValue is not null && oldValue?.Group == SelectedReceiveGroup?.Group
+            && ReceiveGroups.FirstOrDefault(item => item.Group == newValue.Group) is { } receive)
+            SelectedReceiveGroup = receive;
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Groups))]
+    public partial MidiGroupItem? SelectedReceiveGroup { get; set; }
 
     /// <summary>
-    /// The selected UMP group (value 0-15).
+    /// The selected UMP groups to send on and to receive on (values 0-15).
     /// </summary>
-    public MidiGroup Group => SelectedGroup?.Group ?? default;
+    public MidiGroupPair Groups => new(SelectedSendGroup?.Group ?? default, SelectedReceiveGroup?.Group ?? default);
 
-    // keeps the selected group when the new endpoint declares it, otherwise selects its first group
+    // keeps the selected groups when the new endpoint declares them, otherwise selects its first groups
     private void UpdateGroups(MidiEndpointInfo? endpoint)
     {
-        var current = Group;
-        var groups = endpoint?.Capabilities.GetDeclaredGroups() ?? [];
+        var current = Groups;
+        Fill(SendGroups, endpoint, MidiDirections.Send);
+        Fill(ReceiveGroups, endpoint, MidiDirections.Receive);
+        SelectedSendGroup = SendGroups.FirstOrDefault(item => item.Group == current.Send) ?? SendGroups[0];
+        SelectedReceiveGroup = ReceiveGroups.FirstOrDefault(item => item.Group == current.Receive) ?? ReceiveGroups[0];
+    }
+
+    private static void Fill(ObservableCollection<MidiGroupItem> items, MidiEndpointInfo? endpoint, MidiDirections direction)
+    {
+        var groups = endpoint?.Capabilities.GetDeclaredGroups(direction) ?? [];
         if (groups.IsEmpty)
             groups = [.. Enumerable.Range(0, 16).Select(value => new MidiGroup((byte)value))];
 
-        Groups.Clear();
+        items.Clear();
         foreach (var group in groups)
-            Groups.Add(new MidiGroupItem(group, endpoint?.Capabilities.GetGroupName(group)));
-
-        SelectedGroup = Groups.FirstOrDefault(item => item.Group == current) ?? Groups[0];
+            items.Add(new MidiGroupItem(group, endpoint?.Capabilities.GetGroupName(group, direction)));
     }
 
     [ObservableProperty]

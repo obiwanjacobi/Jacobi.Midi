@@ -22,6 +22,12 @@ internal sealed class FakeMidiApi : IMidiApi
     /// <summary>Answers a SysEx message sent on a connection (endpoint id, group, message); null: no answer.</summary>
     public Func<string, byte, byte[], byte[]?>? Responder { get; set; }
 
+    /// <summary>
+    /// The group the responder's answer comes back on, for the group the message was sent on: the cabling of the device.
+    /// The same group by default.
+    /// </summary>
+    public Func<byte, byte> ReplyGroup { get; set; } = group => group;
+
     public FakeEndpointObserver? Observer { get; private set; }
 
     public ulong TimestampFrequency => 1_000_000;
@@ -110,7 +116,7 @@ internal sealed class FakeMidiSession(FakeMidiApi api) : IMidiSession
 
 /// <summary>
 /// A connection of the <see cref="FakeMidiApi"/>: assembles the SysEx messages sent per group, records them, and
-/// sends the responder's answer back on the same group.
+/// sends the responder's answer back on the <see cref="FakeMidiApi.ReplyGroup"/>.
 /// </summary>
 internal sealed class FakeMidiConnection(FakeMidiApi api, MidiEndpointInfo endpoint, MidiPacketReceivedHandler? receiver) : IMidiConnection
 {
@@ -151,7 +157,7 @@ internal sealed class FakeMidiConnection(FakeMidiApi api, MidiEndpointInfo endpo
                 lock (Sent)
                     Sent.Add((group, sysEx));
                 if (api.Responder?.Invoke(endpoint.Id, group, sysEx) is { } answer)
-                    Receive(group, answer);
+                    Receive(api.ReplyGroup(group), answer);
             }
         }
         return ValueTask.CompletedTask;
