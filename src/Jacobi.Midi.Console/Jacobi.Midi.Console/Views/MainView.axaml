@@ -81,6 +81,39 @@
                         <Button Content="↶" ToolTip.Tip="{Binding UndoTip}" Command="{Binding UndoCommand}" />
                         <Button Content="↷" ToolTip.Tip="{Binding RedoTip}" Command="{Binding RedoCommand}" />
                     </StackPanel>
+                    <!-- the MIDI bar: in Play mode where the values come from, Offline (dump files) or MIDI (the devices of
+                         the rig); Edit mode is always connected. And the connection of each device. -->
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <StackPanel Orientation="Horizontal" IsEnabled="{Binding Midi.IsAvailable}" IsVisible="{Binding IsPlaying}">
+                            <ToggleButton Content="Offline" IsChecked="{Binding Midi.IsOffline}" CornerRadius="4,0,0,4" ToolTip.Tip="The values come from dump files (Load dump…)" />
+                            <ToggleButton Content="MIDI" IsChecked="{Binding Midi.IsMidi}" CornerRadius="0,4,4,0" ToolTip.Tip="Connect the devices of the rig to their MIDI endpoints" />
+                        </StackPanel>
+                        <Button ToolTip.Tip="The connections of the devices">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Ellipse Width="10" Height="10" VerticalAlignment="Center" Fill="{Binding Midi.SummaryBrush}" />
+                                <TextBlock Text="{Binding Midi.Summary}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <Button.Flyout>
+                                <Flyout Placement="BottomEdgeAlignedLeft">
+                                    <StackPanel Spacing="6" MinWidth="300" MaxWidth="480">
+                                        <TextBlock Text="Devices" FontWeight="SemiBold" />
+                                        <TextBlock Text="Not connected: in Play mode the values come from dump files; switch to MIDI to connect the devices of the rig." IsVisible="{Binding !Midi.IsConnected}" Opacity="0.7" TextWrapping="Wrap" />
+                                        <ItemsControl ItemsSource="{Binding Midi.Rows}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:ConnectionRow">
+                                                    <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8" Margin="0,2">
+                                                        <Ellipse Width="10" Height="10" VerticalAlignment="Center" Fill="{Binding Brush}" />
+                                                        <TextBlock Grid.Column="1" Text="{Binding Alias}" FontWeight="SemiBold" />
+                                                        <TextBlock Grid.Column="2" Text="{Binding Description}" TextWrapping="Wrap" Opacity="0.8" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Flyout>
+                            </Button.Flyout>
+                        </Button>
+                    </StackPanel>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
                     <Button Content="Save" ToolTip.Tip="Save the dashboard and the rig when they changed" Command="{Binding SaveCommand}" />
@@ -142,6 +175,9 @@
                                             Background="{Binding ColorBrush}" IsVisible="{Binding IsDevice}"
                                             BorderBrush="#80FFFFFF" BorderThickness="1" />
                                     <TextBlock Text="{Binding Name}" Classes.device="{Binding IsDevice}" />
+                                    <!-- the device's MIDI connection, in MIDI mode -->
+                                    <Ellipse Width="8" Height="8" VerticalAlignment="Center" Fill="{Binding ConnectionBrush}"
+                                             IsVisible="{Binding HasConnection}" ToolTip.Tip="{Binding ConnectionTip}" />
                                     <TextBlock Text="{Binding Detail}" Opacity="0.6" FontSize="11" VerticalAlignment="Center" />
                                 </StackPanel>
                             </Border>
@@ -216,12 +252,27 @@
                                     <ComboBox ItemsSource="{Binding MapRoots}" SelectedItem="{Binding MapRoot}" HorizontalAlignment="Stretch" />
                                     <TextBlock Text="Device values" Classes="caption" />
                                     <TextBox Text="{Binding DeviceValues, UpdateSourceTrigger=LostFocus}" PlaceholderText="name=value, … e.g. deviceId=0x10" />
-                                    <TextBlock Text="Endpoint (name, UMP group)" Classes="caption" />
-                                    <Grid ColumnDefinitions="*,80" ColumnSpacing="8">
-                                        <TextBox Text="{Binding EndpointName, UpdateSourceTrigger=LostFocus}" PlaceholderText="not connected" />
-                                        <NumericUpDown Grid.Column="1" Value="{Binding EndpointGroup}" Minimum="0" Maximum="15" Increment="1" FormatString="0"
-                                                       IsEnabled="{Binding HasEndpoint}" ToolTip.Tip="UMP group (0-15)" />
+                                    <TextBlock Text="MIDI" Classes="heading" />
+                                    <TextBlock Text="Endpoint" Classes="caption" />
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                                        <ComboBox ItemsSource="{Binding EndpointNames}" SelectedItem="{Binding EndpointName}" HorizontalAlignment="Stretch"
+                                                  PlaceholderText="not connected" />
+                                        <Button Grid.Column="1" Content="✕" ToolTip.Tip="Not connected to MIDI" Command="{Binding ClearEndpointCommand}" IsEnabled="{Binding HasEndpoint}" />
                                     </Grid>
+                                    <TextBlock Text="UMP group" Classes="caption" />
+                                    <ComboBox ItemsSource="{Binding GroupNames}" SelectedIndex="{Binding EndpointGroup}" HorizontalAlignment="Stretch" IsEnabled="{Binding HasEndpoint}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Ellipse Width="10" Height="10" VerticalAlignment="Center" Fill="{Binding ConnectionBrush}" />
+                                        <TextBlock Text="{Binding ConnectionText}" TextWrapping="Wrap" FontSize="12" VerticalAlignment="Center" MaxWidth="250" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsConnected}">
+                                        <Button Content="Identity request" FontSize="12" Padding="6,2" Command="{Binding RequestIdentityCommand}"
+                                                ToolTip.Tip="Ask the devices on the endpoint and group to identify themselves (universal Identity Request); older devices do not answer it. Changes no values." />
+                                        <Button Content="Request data" FontSize="12" Padding="6,2" Command="{Binding ProbeDataCommand}"
+                                                ToolTip.Tip="Check that the device answers a request of the first parameter of its map, with its schema and device values. The values are not kept." />
+                                    </StackPanel>
+                                    <SelectableTextBlock Text="{Binding TestResult}" IsVisible="{Binding TestResult, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                         TextWrapping="Wrap" FontSize="12" FontFamily="Cascadia Mono, Consolas, monospace" />
 
                                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
                                         <TextBlock Text="Its own schemas" Classes="heading" VerticalAlignment="Center" />

@@ -61,13 +61,14 @@ Namespace `Jacobi.Midi.Device.Exchange`.
 | Type | Purpose |
 |------|---------|
 | `MessageExchangeFactory` | Creates sessions (`CreateSession`) and exchanges (`Create`) on an `IMidiSession` with the serializer whose schemas describe the devices; each gets its own connection. `Prepare(root)` / `PrepareAll()` build and validate address maps up front (`PrepareAll` finds the roots a data message can carry and throws an `AddressMapException` for the first invalid one, like `Serializer.PrepareAll`). |
-| `DeviceSession` | `Receive`, `Send`, `Invalidate` and `Clear` for one connected device, with the state of the device kept between calls (see below). `IsConnected`, `Disconnected` and `StateChanged`. Lives as long as its connection; disposing it closes the connection. |
+| `DeviceSession` | `Receive`, `Send`, `Invalidate` and `Clear` for one connected device, with the state of the device kept between calls (see below); `Probe` requests a range and discards it (a check that the device answers, without changing anything). `IsConnected`, `Disconnected` and `StateChanged`. Lives as long as its connection; disposing it closes the connection. |
 | `DeviceSessionOptions`, `SessionData`, `DeviceStateChangedEventArgs`, `DeviceStateChange` | Where a transfer takes the values the client does not give (`Session`: the state, `Device`: always a fresh copy), and what changed in the state. |
 | `MessageExchange` | The transport of a session: `Receive`, `Send` and `Listen` for one device (connection and device values), without state; a device with several map roots works through one exchange. `ConnectionState` and `ConnectionStateChanged`. Disposing it closes the connection. |
 | `MessageExchangeOptions` | Runtime settings that do not belong in the schema: the UMP `Group`, the `ResponseTimeout`, and a `Protocol` that replaces the one the schemas select. |
 | `TransferResult`, `BlockResult`, `BlockStatus` | The outcome per block: `Completed`, `TimedOut`, `Rejected` (a nak) or `Failed`, with the `Reason` the protocol gives and the exception, if any. `Receive` and `Send` also report each block to an optional `IProgress<BlockResult>`. |
 | `IExchangeProtocol`, `ITransferMachine`, `ExchangeAction`, `Transfer`, `ExchangeMessage`, `TransferSettings` | The exchange protocol model (see below). |
 | `ExchangeProtocols` | The built-in protocols. |
+| `DeviceIdentity` | A universal Identity Request on an endpoint and UMP group, over a connection of its own, and the Identity Replies that arrive within a wait. Independent of the schemas (a test whether a device is there); older devices do not answer it. |
 
 ## How a range is transferred
 

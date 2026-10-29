@@ -67,6 +67,8 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     // the built controls with what they show and their colours, both ways
     private readonly Dictionary<Control, (DashboardControl Control, ColorScope Scope)> _built = [];
     private readonly Dictionary<DashboardControl, Control> _controls = [];
+    // Play mode: the bound parameter controls with the devices (aliases) of their values
+    private readonly Dictionary<ParameterControlBase, string[]> _devices = [];
     // the cells of the grids and sections: where their children are placed
     private readonly Dictionary<LayoutControl, Canvas> _grids = [];
     // the tab controls of the tabs, and the page each shows (kept while the dashboard is built again)
@@ -602,7 +604,19 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         built.Label = control.Label ?? parameter?.Info.Name ?? control.Kind.ToString();
         // an unbound control (no binding, or a problem with it) shows that it does nothing; in Edit mode it is selected
         built.IsEnabled = slots.Count > 0 || isEditing;
+        if (built.IsEnabled && !isEditing)
+            _devices[built] = [.. slots.Values.OfType<ParameterValue>().Select(value => value.Parameter.Device).Distinct(StringComparer.OrdinalIgnoreCase)];
         return built;
+    }
+
+    /// <summary>
+    /// Play mode: a bound control can be used when all the devices it is bound to can be (in MIDI mode: are online);
+    /// the others are disabled. A control bound to index variables only is always used.
+    /// </summary>
+    public void ShowUsable(Func<string, bool> isUsable)
+    {
+        foreach (var (built, devices) in _devices)
+            built.IsEnabled = devices.All(isUsable);
     }
 
     // a kind without its face yet: shown, selectable and bound, not left out

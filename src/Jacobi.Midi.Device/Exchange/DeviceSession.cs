@@ -138,6 +138,19 @@ public sealed class DeviceSession : IAsyncDisposable
         return new TransferResult(results);
     }
 
+    /// <summary>
+    /// Requests the range (widened to the atomic groups it overlaps) from the device and discards the values: a check
+    /// that the device answers (endpoint, group, device values and schemas). Nothing changes: not the session's state,
+    /// and no listener gets the data (it belongs to the transfer).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The session is disconnected, or no request of the map can ask for the range.</exception>
+    public Task<TransferResult> Probe(PlanRange range, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(range);
+        ThrowIfNotConnected();
+        return _exchange.Receive(range, NullSink.Instance, ct);
+    }
+
     /// <inheritdoc cref="Send(PlanRange, IValueSource, SessionData?, IProgress{BlockResult}?, CancellationToken)"/>
     public Task<TransferResult> Send(PlanRange range, IValueSource source, CancellationToken ct)
         => Send(range, source, null, null, ct);

@@ -609,6 +609,10 @@ public readonly record struct IdentityRequestMessage
         => UniversalSysExMessage.TryValidate(data, RealTime, SubId1, SubId2, 0, 0, out _, out _);
 
     public byte DeviceId => _body.Span[1];
+
+    /// <summary>The bytes (F0 … F7) of an Identity Request to a device; 0x7F asks all devices.</summary>
+    public static byte[] Encode(byte deviceId)
+        => [SysEx.Start, SysEx.NonRealTimeId, deviceId, SubId1, SubId2, SysEx.End];
 }
 
 /// <summary>Identity Reply (7E, 06 02): the manufacturer, device family, member and software revision of a device.</summary>

@@ -65,6 +65,21 @@ public class DeviceSessionTests
     }
 
     [Fact]
+    public async Task Probe_RequestsFromTheDevice_TheStateIsNotChanged()
+    {
+        var serializer = CreateSerializer();
+        var device = new FakeDevice();
+        await using var session = CreateSession(serializer, device);
+        var patch = Range(serializer, "AddressMap.Memory.Patch", 1);
+
+        Assert.True((await session.Probe(patch, Ct)).IsComplete);
+        await session.Receive(patch, new FieldValueStore(), Ct);
+
+        // the probe was not kept: the receive requests the patch again
+        Assert.Equal(2, device.Requests.Count);
+    }
+
+    [Fact]
     public async Task Send_OneParameterOfAnAtomicGroup_ReadsTheGroupOnce()
     {
         var serializer = CreateSerializer();

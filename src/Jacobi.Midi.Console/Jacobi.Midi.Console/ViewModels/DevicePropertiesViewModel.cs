@@ -2,7 +2,9 @@ using System.Globalization;
 using Avalonia.Data;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.Input;
+using Jacobi.Midi.Console.Core.Connections;
 using Jacobi.Midi.Console.Core.Dashboards;
+using Jacobi.Midi.Core;
 using Binding = Jacobi.Midi.Console.Core.Dashboards.Binding;
 using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Core.Rigs;
@@ -15,7 +17,8 @@ namespace Jacobi.Midi.Console.ViewModels;
 /// The properties of the device selected in the rig tree, for the panel of Edit mode: its alias, name, map root (one of
 /// the address maps of the schema library), device values, endpoint and colours. The user changes them, each change an
 /// edit of the rig (see <see cref="MainViewModel.EditDevice"/>). A value that cannot be taken is a validation error of
-/// the field.
+/// the field. It shows the device's connection (Edit mode is always connected), and tests it with an Identity Request or
+/// a request of data; a test changes no values.
 /// </summary>
 internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, DeviceInstance device) : ViewModelBase
 {
@@ -79,25 +82,111 @@ internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, Dev
         }
     }
 
-    /// <summary>The name of the endpoint the device is connected to; empty when it is not connected.</summary>
+    /// <summary>
+    /// The names to choose the endpoint from: the endpoints MIDI reaches (in MIDI mode), and the device's own endpoint
+    /// when it is not one of them.
+    /// </summary>
+    public IReadOnlyList<string> EndpointNames
+    {
+        get
+        {
+            var names = owner.Midi.Endpoints.Select(endpoint => endpoint.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (device.Endpoint is { } endpoint && !names.Contains(endpoint.Name, StringComparer.OrdinalIgnoreCase))
+                names.Insert(0, endpoint.Name);
+            return names;
+        }
+    }
+
+    /// <summary>The name of the endpoint the device is connected to; null when it has none (see <see cref="ClearEndpoint"/>).</summary>
     public string? EndpointName
     {
         get => device.Endpoint?.Name;
-        set => SetEndpoint(String.IsNullOrWhiteSpace(value) ? null : new EndpointReference(value.Trim(), device.Endpoint?.Group ?? 0));
-    }
-
-    /// <summary>The UMP group of the endpoint (0-15).</summary>
-    public decimal? EndpointGroup
-    {
-        get => device.Endpoint?.Group;
         set
         {
-            if (value is not null && device.Endpoint is { } endpoint)
-                SetEndpoint(endpoint with { Group = Math.Clamp((int)Math.Round(value.Value), 0, 15) });
+            // the list is refreshed when the endpoints change: the selection is lost then, the endpoint is not
+            if (!String.IsNullOrWhiteSpace(value))
+                SetEndpoint(new EndpointReference(value.Trim(), device.Endpoint?.Group ?? 0));
+        }
+    }
+
+    /// <summary>The device is not connected to MIDI any more.</summary>
+    [RelayCommand]
+    private void ClearEndpoint() => SetEndpoint(null);
+
+    /// <summary>The 16 UMP groups, one-based, with the names the device's endpoint gives them.</summary>
+    public IReadOnlyList<string> GroupNames
+    {
+        get
+        {
+            var capabilities = owner.Midi.Endpoints.FirstOrDefault(endpoint => String.Equals(endpoint.Name, device.Endpoint?.Name, StringComparison.OrdinalIgnoreCase))?.Capabilities;
+            return [.. Enumerable.Range(0, 16).Select(group => capabilities?.GetGroupName(new MidiGroup((byte)group)) is { } name ? $"{group + 1} · {name}" : $"{group + 1}")];
+        }
+    }
+
+    /// <summary>The UMP group of the endpoint (0-15), the index in <see cref="GroupNames"/>; -1 without an endpoint.</summary>
+    public int EndpointGroup
+    {
+        get => device.Endpoint?.Group ?? -1;
+        set
+        {
+            if (value is >= 0 and < 16 && device.Endpoint is { } endpoint)
+                SetEndpoint(endpoint with { Group = value });
         }
     }
 
     public bool HasEndpoint => device.Endpoint is not null;
+
+    /// <summary>MIDI is connected (Edit mode is): the endpoints are listed, the device's connection is shown and can be tested.</summary>
+    public bool IsConnected => owner.Midi.IsConnected;
+
+    /// <summary>The connection of the device; null when MIDI is not connected.</summary>
+    public DeviceConnection? Connection => owner.Midi.ConnectionOf(device.Alias);
+
+    public string ConnectionText => Connection?.Description ?? (owner.Midi.IsAvailable ? "MIDI is not started (see the notifications)." : "MIDI is not available on this platform.");
+
+    public IBrush ConnectionBrush => MidiViewModel.BrushOf(Connection);
+
+    /// <summary>The outcome of the last test of the connection.</summary>
+    public string? TestResult
+    {
+        get;
+        private set => SetProperty(ref field, value);
+    }
+
+    private bool CanRequestIdentity() => Connection?.EndpointInfo is not null;
+
+    /// <summary>Asks the devices on the endpoint and group to identify themselves (universal Identity Request); changes nothing.</summary>
+    [RelayCommand(CanExecute = nameof(CanRequestIdentity))]
+    private async Task RequestIdentity()
+    {
+        TestResult = "Identity Request sent; waiting for replies…";
+        TestResult = await owner.Midi.RequestIdentity(device.Alias);
+    }
+
+    private bool CanProbeData() => Connection?.IsOnline == true;
+
+    /// <summary>Checks that the device answers a request of the first parameter of its map; the values are not kept.</summary>
+    [RelayCommand(CanExecute = nameof(CanProbeData))]
+    private async Task ProbeData()
+    {
+        TestResult = "Data requested; waiting for the device…";
+        TestResult = await owner.Midi.ProbeData(device.Alias);
+    }
+
+    /// <summary>Shows the connection as it is now: MIDI started or stopped, the endpoints or the connection changed.</summary>
+    public void RefreshConnection()
+    {
+        OnPropertyChanged(nameof(EndpointNames));
+        OnPropertyChanged(nameof(EndpointName));
+        OnPropertyChanged(nameof(GroupNames));
+        OnPropertyChanged(nameof(EndpointGroup));
+        OnPropertyChanged(nameof(IsConnected));
+        OnPropertyChanged(nameof(Connection));
+        OnPropertyChanged(nameof(ConnectionText));
+        OnPropertyChanged(nameof(ConnectionBrush));
+        RequestIdentityCommand.NotifyCanExecuteChanged();
+        ProbeDataCommand.NotifyCanExecuteChanged();
+    }
 
     public string AccentColor => ColorText(ColorArea.Accent);
 

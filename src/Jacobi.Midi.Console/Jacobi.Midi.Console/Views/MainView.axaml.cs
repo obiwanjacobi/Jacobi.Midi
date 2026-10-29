@@ -47,12 +47,14 @@ internal partial class MainView : UserControl
         {
             _viewModel.PropertyChanged -= OnViewModelChanged;
             _viewModel.DashboardChanged -= OnDashboardChanged;
+            _viewModel.Midi.Changed -= OnMidiChanged;
         }
         _viewModel = DataContext as MainViewModel;
         if (_viewModel is not null)
         {
             _viewModel.PropertyChanged += OnViewModelChanged;
             _viewModel.DashboardChanged += OnDashboardChanged;
+            _viewModel.Midi.Changed += OnMidiChanged;
         }
         UpdatePanes();
         Rebuild();
@@ -94,6 +96,13 @@ internal partial class MainView : UserControl
     }
 
     private void OnDashboardChanged(object? sender, EventArgs e) => Rebuild();
+
+    // in MIDI mode the controls of a device that is not online cannot be used
+    private void OnMidiChanged(object? sender, EventArgs e)
+    {
+        if (_viewModel is not null)
+            _builder?.ShowUsable(_viewModel.Midi.IsUsable);
+    }
 
     // a colour button of the control panel: the colour chooser of that area of the selected control
     private void OnColorClicked(object? sender, RoutedEventArgs e)
@@ -225,6 +234,7 @@ internal partial class MainView : UserControl
         _builder = new DashboardBuilder(session, viewModel, viewModel.IsEditing);
         DashboardHost.Content = _builder.Build();
         _builder.ShowSelection(viewModel.IsEditing ? viewModel.SelectedControl : null);
+        _builder.ShowUsable(viewModel.Midi.IsUsable);
     }
 
     /// <summary>A press on a drag source that becomes a drag when the pointer moves far enough.</summary>

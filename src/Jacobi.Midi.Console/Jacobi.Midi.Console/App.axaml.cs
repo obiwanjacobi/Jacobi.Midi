@@ -16,8 +16,7 @@ public partial class App : Application
     /// <summary>
     /// The platform MIDI backend, supplied by the host, e.g.
     /// <c>AppBuilder.Configure(() => new App { MidiApi = new WindowsMidiApi() })</c>.
-    /// Null when the platform has none; the console then works offline. Not used yet: synchronisation with the
-    /// devices is a later milestone.
+    /// Null when the platform has none; the console then works offline only.
     /// </summary>
     public IMidiApi? MidiApi { get; init; }
 
@@ -55,9 +54,9 @@ public partial class App : Application
     }
 
     // until there are recent files, the console starts with the GP-8 demo
-    private static MainViewModel CreateMainViewModel()
+    private MainViewModel CreateMainViewModel()
     {
-        var viewModel = new MainViewModel();
+        var viewModel = new MainViewModel(MidiApi);
         viewModel.OpenDemo();
         return viewModel;
     }

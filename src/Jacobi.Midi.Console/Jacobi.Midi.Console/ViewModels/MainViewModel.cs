@@ -12,6 +12,7 @@ using Jacobi.Midi.Console.Core.Rigs;
 using Jacobi.Midi.Console.Core.Schemas;
 using Jacobi.Midi.Console.Dashboards;
 using Jacobi.Midi.Console.Looks;
+using Jacobi.Midi.Core;
 
 namespace Jacobi.Midi.Console.ViewModels;
 
@@ -44,8 +45,11 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     // the dashboards in the order they were opened (the order of Dashboards), with where they were read from
     private readonly List<(Dashboard Dashboard, FileOrigin Origin)> _dashboards = [];
 
-    public MainViewModel()
+    /// <param name="midiApi">The platform's MIDI backend; null when it has none (the console stays offline).</param>
+    public MainViewModel(IMidiApi? midiApi = null)
     {
+        Midi = new MidiViewModel(midiApi, Notify);
+        Midi.Changed += (_, _) => OnMidiChanged();
         History.Changed += (_, _) =>
         {
             UndoCommand.NotifyCanExecuteChanged();
@@ -57,6 +61,9 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
 
     /// <summary>The edits of the open dashboards and rig.</summary>
     public EditHistory History { get; } = new();
+
+    /// <summary>The mode (Offline or MIDI) and the MIDI connections of the devices of the rig.</summary>
+    public MidiViewModel Midi { get; }
 
     public string UndoTip => History.NextUndo is { } edit ? $"Undo {edit.Description} (Ctrl+Z)" : "Nothing to undo";
 
@@ -322,7 +329,10 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
 
     private bool CanCloseDashboard() => SelectedDashboard is not null;
 
-    [RelayCommand]
+    // a dump is the source of the values offline; in MIDI mode the devices are
+    private bool CanLoadDump() => Midi.IsOffline;
+
+    [RelayCommand(CanExecute = nameof(CanLoadDump))]
     private async Task LoadDump()
     {
         if (StorageProvider is null || Rig is null)
@@ -936,6 +946,22 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     {
         foreach (var session in Dashboards)
             session.Dispose();
+        _ = Midi.DisposeAsync().AsTask();
+    }
+
+    // every rig session that is opened is connected, when MIDI is
+    partial void OnRigChanged(RigSession? value) => Midi.SetRig(value);
+
+    // Edit mode is always connected; Play mode as chosen
+    partial void OnIsEditingChanged(bool value) => Midi.SetEditing(value);
+
+    // the connections changed or the mode switched: the rig tree and the device panel show them
+    private void OnMidiChanged()
+    {
+        foreach (var item in RigTree.Where(item => item.Instance is not null))
+            item.Connection = Midi.ConnectionOf(item.Instance!.Alias);
+        DeviceProperties?.RefreshConnection();
+        LoadDumpCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnSelectedDashboardChanged(DashboardSession? value)
@@ -1107,7 +1133,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         var shown = DeviceProperties?.Device;
         RigTree.Clear();
         foreach (var device in _rig?.Devices ?? [])
-            RigTree.Add(RigTreeItem.Of(device, Rig?.Devices.GetValueOrDefault(device.Alias)));
+            RigTree.Add(RigTreeItem.Of(device, Rig?.Devices.GetValueOrDefault(device.Alias), Midi.ConnectionOf(device.Alias)));
         OnPropertyChanged(nameof(MapRoots));
         if (shown is not null)
             SelectedRigItem = RigTree.FirstOrDefault(item => item.Instance == shown);

@@ -1,5 +1,6 @@
 using System.Globalization;
 using Avalonia.Media;
+using Jacobi.Midi.Console.Core.Connections;
 using Jacobi.Midi.Console.Core.Devices;
 using Jacobi.Midi.Console.Core.Editing;
 using Jacobi.Midi.Console.Core.Palettes;
@@ -12,9 +13,10 @@ namespace Jacobi.Midi.Console.ViewModels;
 /// <summary>
 /// An item of the rig tree in Edit mode: a device of the rig (<see cref="Instance"/>) with its parameter tree, or a
 /// group, repeat or field of it (<see cref="Node"/>). Every item can be dragged onto a dashboard
-/// (<see cref="Source"/>): a device or group becomes a section, a field a control.
+/// (<see cref="Source"/>): a device or group becomes a section, a field a control. A device shows its MIDI
+/// connection in MIDI mode (<see cref="Connection"/>).
 /// </summary>
-internal sealed class RigTreeItem
+internal sealed class RigTreeItem : ViewModelBase
 {
     private RigTreeItem(string name, string detail)
     {
@@ -43,8 +45,29 @@ internal sealed class RigTreeItem
 
     public bool IsDevice => Instance is not null;
 
+    /// <summary>The MIDI connection of the device in MIDI mode; null offline, and for a node.</summary>
+    public DeviceConnection? Connection
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(HasConnection));
+                OnPropertyChanged(nameof(ConnectionBrush));
+                OnPropertyChanged(nameof(ConnectionTip));
+            }
+        }
+    }
+
+    public bool HasConnection => Connection is not null;
+
+    public IBrush ConnectionBrush => MidiViewModel.BrushOf(Connection);
+
+    public string? ConnectionTip => Connection?.Description;
+
     /// <summary>The item of a device, with its parameters when it has a state (its schemas compile).</summary>
-    public static RigTreeItem Of(DeviceInstance device, DeviceState? state)
+    public static RigTreeItem Of(DeviceInstance device, DeviceState? state, DeviceConnection? connection)
     {
         ArgumentNullException.ThrowIfNull(device);
         var detail = state is null ? $"{device.MapRoot}: not available, see the problems" : device.Name is { } name ? $"{name} · {device.MapRoot}" : device.MapRoot;
@@ -56,6 +79,7 @@ internal sealed class RigTreeItem
             Source = source,
             ColorBrush = RgbColor.TryParse(device.Colors[ColorArea.Accent], out var color) ? new SolidColorBrush(PaletteBrushes.ToColor(color.Value)) : null,
             Children = source is null ? [] : [.. source.Node.Children.Select(child => Of(source, child))],
+            Connection = connection,
         };
     }
 

@@ -15,11 +15,10 @@ I've read Midi.Device's exchange (its readme, todo list and MessageExchange itse
   Sending one parameter of a non-atomic group throws NotSupportedException (first item of the Device todo). A data message can only carry one whole group occurrence. The GP-8 isn't affected, because its patch is atomic. The GX-700's individual temporary area is, and with it any device that addresses parameters one by one. This is the main blocker, and the fix starts in Jacobi.BinarySerializer (an open choice that targets a range).
 
 - **Done:** a `DeviceSession` (one per connection) keeps the state of the device; Send completes atomic groups from it and only reads what it does not hold (`SessionData.Device` always reads). The session also reports a lost connection (`IsConnected`, `Disconnected`; the exchange has `ConnectionState`/`ConnectionStateChanged`), which covers the connection state item below. What follows is the original analysis.
-  Every send to an atomic group first reads that whole group from the device. When a range only partly covers an atomic group, Send receives the group, copies your values over it, and sends it back. For one knob step on the GP-8 that's a request, a reply, then the data, every time. The console already has those values (DeviceState.Source). What's missing is a way for Send to take the rest of the group from the source and only read what the source doesn't know.
 
-- The pause between messages ignores the transmission time on a DIN cable (second Device todo item). Dragging a knob streams messages, so on a slow (DIN) port the device may not get the pause it needs.
+- **Done:**  Every send to an atomic group first reads that whole group from the device. When a range only partly covers an atomic group, Send receives the group, copies your values over it, and sends it back. For one knob step on the GP-8 that's a request, a reply, then the data, every time. The console already has those values (DeviceState.Source). What's missing is a way for Send to take the rest of the group from the source and only read what the source doesn't know.
 
-- No connection state on the exchange. MessageExchange hides its IMidiConnection, so nobody hears when the cable is pulled or the connection faults. The console can't show a device as disconnected or offer a reconnect. It needs a state or event on the exchange (the connection already has ConnectionStateChanged).
+- **Done:** No connection state on the exchange. MessageExchange hides its IMidiConnection, so nobody hears when the cable is pulled or the connection faults. The console can't show a device as disconnected or offer a reconnect. It needs a state or event on the exchange (the connection already has ConnectionStateChanged). On DeviceSession.
 
 - No way to ask up front whether a device can be exchanged at all. Today you only find out at the first transfer, from three different exceptions:
   - an unknown midi.exchange protocol;
@@ -34,8 +33,10 @@ Core needs nothing new. IMidiApi.WatchMidiEndpoints lists endpoints by name, and
 
 ## What the console still has to build (not Midi.Device's job)
 
-- A MIDI session and the endpoint list. The desktop host already hands the console an IMidiApi, but nothing uses it. The Schema Editor's connection service holds a single connection, while exchanges open their own, so it doesn't fit as is. The "shared UI library" milestone could still share the MIDI bar.
-- Picking an endpoint for a device: a list of available endpoints and a group in the device panel (today it's a free-text name), and a connected/disconnected mark in the rig tree.
+- **Done:** `RigConnections` (Console.Core, `Connections/`) holds the MIDI session, the endpoints and a `DeviceSession` per device of the rig; Edit mode is always connected; Play mode has an explicit choice in the MIDI bar, Offline (dump files) or MIDI, and the bar shows the connection of each device. In Play mode with MIDI the controls of a device that is not online are disabled. What follows is the original analysis.
+  A MIDI session and the endpoint list. The desktop host already hands the console an IMidiApi, but nothing uses it. The Schema Editor's connection service holds a single connection, while exchanges open their own, so it doesn't fit as is. The "shared UI library" milestone could still share the MIDI bar.
+- **Done:** the device panel picks the endpoint from the endpoints MIDI reaches and the UMP group (with the names the endpoint gives them), shows the device's connection and tests it without changing any value (Identity Request, `DeviceIdentity` in Midi.Device; or a request of the first parameter of its map that is discarded, `DeviceSession.Probe`); the rig tree shows the connection per device. What follows is the original analysis.
+  Picking an endpoint for a device: a list of available endpoints and a group in the device panel (today it's a free-text name), and a connected/disconnected mark in the rig tree.
 - The synchronisation per device:
   - Create the exchange.
   - Work out the ranges that cover the bound parameters, merged so that each atomic group is requested once.
