@@ -258,7 +258,7 @@ A pick applies at once. The dashboard or the rig is then changed. The file menu 
 *Open* (*Rig…*, *Dashboard…*, *Dump…*), *Save*, *Save as* and *Close dashboard*: *Save › Dashboard* or *Rig* writes
 that one, *Save › All* writes the selected dashboard and the rig when they changed, *Save as* writes one of them to
 another file (XML or JSON by its extension). A file that was not
-read from disk (the demo) is saved with a file picker. A changed marker (●) shows unsaved changes: of each open
+read from disk (a new dashboard) is saved with a file picker. A changed marker (●) shows unsaved changes: of each open
 dashboard next to its name in the list of dashboards, of the rig next to the RIG heading (Edit mode), of the rig or the
 selected dashboard on the file menu, and on the items of *Save*. Unsaved changes are not discarded silently: *Open › Rig…* (in place of a changed rig) and *Close
 dashboard* (of a changed dashboard) ask the user to confirm first. When the dashboard gives a device a colour of its own, a new rig
@@ -291,7 +291,9 @@ Several dashboards can be open on one rig; the toolbar switches between them, op
 one from a file, in the file menu) and closes one (file menu; a dashboard with unsaved changes only after the user confirms discarding them). They share the rig's device states (`RigSession`), so a parameter has one value on
 every dashboard; each dashboard (`DashboardSession`) has its own index variables. A dashboard that brings its own
 schemas rebuilds the schema library, and with it the device states (their values are reset; this is reported). The
-console starts with the GP-8 demo (`Assets/Demo`): its rig, two dashboards and a bulk dump.
+console starts empty: open a rig and its dashboards (*Open*), or make a new dashboard. A GP-8 example (a rig and two
+dashboards) is in `docs/examples/console` of the repository; its values come from the bulk dump of the tests
+(`src/Jacobi.Midi.Tests/Schema/gp8-sysex.syx`, *Open › Dump…*).
 
 In *Play* mode the layout is locked and only the values change. Where the values come from is chosen in the MIDI bar
 (see [MIDI](#midi)).
@@ -311,7 +313,9 @@ In *Edit* mode:
 **The rig and the palettes** (left panel). Per device of the rig its parameter tree (`ParameterNode`, from the plan of
 its map root; fields whose value the schema fixes are left out), with the number of items of a repeat and the range or
 options of a field, and the device's MIDI connection (a dot, see [MIDI](#midi)); below it the palettes of parameter
-controls and layout controls (`ControlCatalog`).
+controls and layout controls (`ControlCatalog`). The dot before a device is its accent colour (empty without one). A
+usage mark (◆) shows what the controls of the selected dashboard are bound to (`DashboardSession.UsedPaths`): a field
+any of its repeat items is bound to, and fainter, a device, group or repeat with such fields inside it.
 
 - Dragging a field onto the dashboard creates the suggested control (`ControlCatalog.Suggest`: options a selector, a `sys.bool` a switch, a string a text, a number with a range a knob, else a number box), bound to it.
 - Dragging a group, a repeat or a device creates a section with its `device` and `base`, a control per field and a nested section per group, laid out by `GridLayout.Complete`.
@@ -436,7 +440,7 @@ value is unknown.
 ## Files
 
 The rig and the dashboards are separate files, in XML or JSON (the format follows the file extension, as with the
-schemas). The examples below are made up (the device `Acme` does not exist); the GP-8 demo in `Assets/Demo` is a real
+schemas). The examples below are made up (the device `Acme` does not exist); the GP-8 example in `docs/examples/console` is a real
 one.
 
 ### Rig
@@ -574,7 +578,7 @@ keep its Avalonia versions in sync with the Schema Editor's.
 | Project | Contents |
 |---------|----------|
 | `Jacobi.Midi.Console.Core` | The support code without UI: rig, dashboard, controls and bindings (`BindingResolver`, `BindingScope`), the edits of Edit mode (`Editing`: history, catalog, drops, moves), their XML and JSON files (`RigFile`, `DashboardFile`, `Files`), the schema library (`Schemas`), the device state with dumps (`Devices`), an open dashboard and the values its controls follow (`Parameters`), the MIDI connections of the rig (`Connections`), the face state (`FaceState`, `ValueRange`). Tested in `Jacobi.Midi.Tests` (`Console` folder; `FakeMidi` is a MIDI backend for the tests). |
-| `Jacobi.Midi.Console` | The platform independent Avalonia UI (MVVM): parameter controls (`Controls`), faces and kits (`Faces`), chromes (`Chrome`), looks (`Looks`, `Themes`), the dashboard view with the layout controls (`Dashboards`), the GP-8 demo (`Assets/Demo`), the rig tree, the palettes, the panels of Edit mode and the MIDI bar (`ViewModels`). |
+| `Jacobi.Midi.Console` | The platform independent Avalonia UI (MVVM): parameter controls (`Controls`), faces and kits (`Faces`), chromes (`Chrome`), looks (`Looks`, `Themes`), the dashboard view with the layout controls (`Dashboards`), the rig tree, the palettes, the panels of Edit mode and the MIDI bar (`ViewModels`). |
 | `Jacobi.Midi.Console.Desktop` | The desktop host; the Windows build references the Windows MIDI backend, as the Schema Editor's desktop host does. |
 | `Jacobi.Midi.Console.Browser` | The browser (WebAssembly) host; without MIDI, so the console works offline there. |
 

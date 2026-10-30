@@ -75,6 +75,19 @@ public class DashboardSessionTests
     }
 
     [Fact]
+    public void UsedPaths_AreTheBoundParameters_WithoutIndicesAndVariables()
+    {
+        using var session = Open();
+
+        var used = session.UsedPaths("GP8");
+
+        // five parameters; the number box is bound to the variable
+        Assert.Equal(5, used.Count);
+        Assert.Contains("AddressMap.Memory.Patch.DynamicFilter.Sens", used);
+        Assert.Empty(session.UsedPaths("other"));
+    }
+
+    [Fact]
     public void Open_GivesAValuePerBoundSlot()
     {
         using var session = Open();

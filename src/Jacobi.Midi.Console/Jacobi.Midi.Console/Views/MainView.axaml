@@ -215,6 +215,9 @@
                                             Background="{Binding ColorBrush}" IsVisible="{Binding IsDevice}"
                                             BorderBrush="#80FFFFFF" BorderThickness="1" />
                                     <TextBlock Text="{Binding Name}" Classes.device="{Binding IsDevice}" />
+                                    <!-- the usage mark: a control of the dashboard is bound to the field (fainter: to a field inside it) -->
+                                    <TextBlock Text="◆" FontSize="9" Foreground="#8BD17C" VerticalAlignment="Center"
+                                               IsVisible="{Binding IsUsed}" Opacity="{Binding UsageOpacity}" ToolTip.Tip="{Binding UsageTip}" />
                                     <!-- the device's MIDI connection, in MIDI mode -->
                                     <Ellipse Width="8" Height="8" VerticalAlignment="Center" Fill="{Binding ConnectionBrush}"
                                              IsVisible="{Binding HasConnection}" ToolTip.Tip="{Binding ConnectionTip}" />

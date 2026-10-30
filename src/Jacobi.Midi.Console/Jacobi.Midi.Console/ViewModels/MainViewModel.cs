@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -33,8 +32,6 @@ namespace Jacobi.Midi.Console.ViewModels;
 /// </summary>
 internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, IDisposable
 {
-    private const string DemoFolder = "avares://Jacobi.Midi.Console/Assets/Demo/";
-
     /// <summary>The size of the root grid of a new dashboard.</summary>
     private static readonly CellSize NewDashboardSize = new(48, 30);
 
@@ -57,6 +54,8 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             OnPropertyChanged(nameof(UndoTip));
             OnPropertyChanged(nameof(RedoTip));
         };
+        // the console starts empty
+        Status = "Open a rig (☰ › Open › Rig…), then open its dashboards or make a new one (+ in Edit mode).";
     }
 
     /// <summary>The edits of the open dashboards and rig.</summary>
@@ -77,7 +76,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     [ObservableProperty]
     public partial Look SelectedLook { get; set; } = ConsoleLooks.Default;
 
-    /// <summary>The open rig; null until a rig and a dashboard are open.</summary>
+    /// <summary>The open rig; null until a rig is open.</summary>
     [ObservableProperty]
     public partial RigSession? Rig { get; private set; }
 
@@ -221,40 +220,6 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
 
     /// <summary>The selected dashboard must be built again: an edit was done or undone.</summary>
     public event EventHandler? DashboardChanged;
-
-    /// <summary>
-    /// Opens the GP-8 demo: its rig, two dashboards (one patch; two patches side by side) and the bulk dump of 128
-    /// patches.
-    /// </summary>
-    public void OpenDemo()
-    {
-        try
-        {
-            // the demo files are part of the application: they are saved with Save as
-            _rig = RigFile.Read(ReadAsset("Gp8.rig.xml"), FileFormat.Xml);
-            RigOrigin = new FileOrigin { Name = "Gp8.rig.xml" };
-            History.Clear();
-            _reports.Clear();
-            foreach (var entry in Dashboards)
-                CloseSession(entry);
-            Dashboards.Clear();
-            SelectedDashboard = null;
-            foreach (var name in new[] { "Gp8.dashboard.xml", "Gp8Compare.dashboard.xml" })
-            {
-                var origin = new FileOrigin { Name = name };
-                Dashboards.Add(new DashboardEntry(Complete(DashboardFile.Read(ReadAsset(name), FileFormat.Xml), origin), origin));
-            }
-            OpenSessions();
-            using var dump = AssetLoader.Open(new Uri(DemoFolder + "gp8-sysex.syx"));
-            using var bytes = new MemoryStream();
-            dump.CopyTo(bytes);
-            LoadDump("gp8-sysex.syx", bytes.ToArray());
-        }
-        catch (FileFormatException exception)
-        {
-            Report("The demo cannot be opened", exception.Message);
-        }
-    }
 
     /// <summary>Opens another rig in place of the open one; when that changed since it was saved, after the user confirmed discarding the changes.</summary>
     [RelayCommand]
@@ -1034,6 +999,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         SelectedControl = null;
         RefreshNotifications();
         RefreshDashboardAliases();
+        RefreshUsage();
     }
 
     // the selected dashboard has a new session: shown as a newly selected dashboard
@@ -1129,19 +1095,22 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             Status = $"'{name}': {String.Join("; ", loaded)}.";
     }
 
-    // the rig session needs a rig and a dashboard; the library is built from the built-in assemblies and the sources
-    // of the rig, its devices and all open dashboards; the dashboard sessions are opened on it again
+    // the rig session needs a rig (dashboards are optional); the library is built from the built-in assemblies and the
+    // sources of the rig, its devices and all open dashboards; the dashboard sessions are opened on it again
     private void OpenSessions(DashboardEntry? select = null)
     {
-        if (_rig is null || Dashboards.Count == 0)
+        if (_rig is null)
         {
-            Status = _rig is null ? "Open a rig." : "Open a dashboard, or make a new one.";
+            Status = "Open a rig.";
             return;
         }
 
         OpenDashboards(RigSession.Open(_rig, BuildLibrary()), select);
         var problems = Notifications.Count(notification => notification.IsProblem);
-        Status = $"{Dashboards.Count} dashboard(s) opened{(problems > 0 ? $" with {problems} problem(s)" : "")}.";
+        var with = problems > 0 ? $" with {problems} problem(s)" : "";
+        Status = Dashboards.Count == 0
+            ? $"'{RigOrigin.Name}' opened{with}: open its dashboards, or make a new one (+ in Edit mode)."
+            : $"{Dashboards.Count} dashboard(s) opened{with}.";
     }
 
     // the schema library: the built-in assemblies and the sources of the rig, its devices (and one more device, to see
@@ -1189,7 +1158,8 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     // a new selection even when it stays the same dashboard
     private void OpenDashboards(RigSession rig, DashboardEntry? select)
     {
-        var selected = select ?? (SelectedDashboard is { } current && Dashboards.Contains(current) ? current : Dashboards[0]);
+        // none without dashboards: the rig alone is open
+        var selected = select ?? (SelectedDashboard is { } current && Dashboards.Contains(current) ? current : Dashboards.FirstOrDefault());
         foreach (var entry in Dashboards)
             CloseSession(entry);
 
@@ -1231,13 +1201,25 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         OnPropertyChanged(nameof(MapRoots));
         if (shown is not null)
             SelectedRigItem = RigTree.FirstOrDefault(item => item.Instance == shown);
+        RefreshUsage();
     }
 
-    // an index variable changed or the dashboard was edited: the problems of the dashboard may have changed
+    // the usage marks of the rig tree: what the controls of the selected dashboard are bound to
+    private void RefreshUsage()
+    {
+        foreach (var item in RigTree.Where(item => item.Instance is not null))
+            item.MarkUsage(SelectedSession?.UsedPaths(item.Instance!.Alias) ?? new HashSet<string>());
+    }
+
+    // an index variable changed or the dashboard was edited: the problems of the dashboard and the parameters its
+    // controls are bound to may have changed
     private void OnResolved(object? sender, EventArgs e)
     {
         if (ReferenceEquals(sender, SelectedSession))
+        {
             RefreshNotifications();
+            RefreshUsage();
+        }
     }
 
     // the problems of the rig and of the selected dashboard, the information of the schema library (a schema that
@@ -1366,13 +1348,6 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
                 new FilePickerFileType($"{kind} (JSON)") { Patterns = ["*.json"] },
             ],
         });
-    }
-
-    private static string ReadAsset(string name)
-    {
-        using var stream = AssetLoader.Open(new Uri(DemoFolder + name));
-        using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
     }
 
     /// <summary>

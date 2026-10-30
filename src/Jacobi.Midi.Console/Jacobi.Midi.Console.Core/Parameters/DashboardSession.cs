@@ -69,6 +69,17 @@ public sealed class DashboardSession : IDisposable
     public string? SlotDeviceOf(ParameterControl control)
         => Resolution.Bindings.FirstOrDefault(binding => binding.Control == control && binding.Parameter is not null)?.Parameter!.Device;
 
+    /// <summary>
+    /// The parameters of a device the controls are bound to: their schema paths from the map root without repeat
+    /// indices (as <see cref="ParameterNode.Path"/>), so a parameter counts for every repeat item.
+    /// </summary>
+    public IReadOnlySet<string> UsedPaths(string alias)
+        => Resolution.Bindings
+            .Select(binding => binding.Parameter)
+            .Where(parameter => parameter is not null && String.Equals(parameter.Device, alias, StringComparison.OrdinalIgnoreCase))
+            .Select(parameter => parameter!.Path)
+            .ToHashSet(StringComparer.Ordinal);
+
     /// <summary>The current (zero based) index of a variable.</summary>
     public int IndexOf(VariableReference variable)
         => _indices.TryGetValue(variable, out var index) ? index : _startIndices.GetValueOrDefault(variable);

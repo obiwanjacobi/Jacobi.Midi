@@ -8,8 +8,6 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
-    <!-- the GP-8 bulk dump of the tests, for the demo dashboard -->
-    <AvaloniaResource Include="..\..\Jacobi.Midi.Tests\Schema\gp8-sysex.syx" Link="Assets\Demo\gp8-sysex.syx" />
   </ItemGroup>
 
   <ItemGroup>

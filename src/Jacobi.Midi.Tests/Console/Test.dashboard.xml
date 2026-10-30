@@ -1,0 +1,67 @@
+<dashboard format="jacobi.midi.dashboard/1" name="GP-8 patch" cellSize="24">
+  <device alias="gp8" mapRoot="Gp8.AddressMap" />
+  <grid size="43,34" device="gp8" base="AddressMap.Memory[$patch].Patch">
+    <variable name="patch" value="0" />
+    <section label="Patch" size="17,7" at="0,0">
+      <numberBox label="Patch" size="6,4" at="0,0">
+        <bind slot="value" parameter="$patch" />
+      </numberBox>
+      <text label="Name" size="9,4" at="6,0">
+        <bind slot="value" parameter="Name" />
+      </text>
+    </section>
+    <section label="Output" size="7,10" at="18,0">
+      <knob label="Volume" size="5,7" at="0,0">
+        <bind slot="value" parameter="MasterVolume" />
+      </knob>
+    </section>
+    <section label="Dynamic filter" size="27,10" at="0,11">
+      <switch label="On" size="4,7" at="0,0">
+        <bind slot="value" parameter="EffectSwiches2.DynamicFilterOn" />
+      </switch>
+      <knob label="Sens" size="5,7" at="4,0">
+        <bind slot="value" parameter="DynamicFilter.Sens" />
+      </knob>
+      <knob label="Cutoff" size="5,7" at="9,0">
+        <bind slot="value" parameter="DynamicFilter.CutoffFreq" />
+      </knob>
+      <knob label="Q" size="5,7" at="14,0">
+        <bind slot="value" parameter="DynamicFilter.Q" />
+      </knob>
+      <selector size="6,7" at="19,0">
+        <bind slot="value" parameter="DynamicFilter.UpDown" />
+      </selector>
+    </section>
+    <section label="Delay" size="21,10" at="22,21">
+      <switch label="On" size="4,7" at="0,0">
+        <bind slot="value" parameter="EffectSwiches1.DelayOn" />
+      </switch>
+      <knob label="Level" size="5,7" at="4,0">
+        <bind slot="value" parameter="DigitalDelay.ELevel" />
+      </knob>
+      <knob label="Time" size="5,7" at="9,0" unit="ms">
+        <bind slot="value" parameter="DigitalDelay.DTime" />
+      </knob>
+      <knob label="Feedback" size="5,7" at="14,0">
+        <bind slot="value" parameter="DigitalDelay.Feedback" />
+      </knob>
+    </section>
+    <section label="Equalizer" size="22,12" at="0,22">
+      <switch label="On" size="4,7" at="0,0">
+        <bind slot="value" parameter="EffectSwiches1.EqualizerOn" />
+      </switch>
+      <slider label="High" size="4,9" at="4,0">
+        <bind slot="value" parameter="Equalizer.HiLevel" />
+      </slider>
+      <slider label="Mid" size="4,9" at="8,0">
+        <bind slot="value" parameter="Equalizer.MidLevel" />
+      </slider>
+      <slider label="Low" size="4,9" at="12,0">
+        <bind slot="value" parameter="Equalizer.LoLevel" />
+      </slider>
+      <slider label="Out" size="4,9" at="16,0">
+        <bind slot="value" parameter="Equalizer.OutLevel" />
+      </slider>
+    </section>
+  </grid>
+</dashboard>

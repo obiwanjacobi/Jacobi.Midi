@@ -4,7 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 namespace Jacobi.Midi.Console.ViewModels;
 
 /// <summary>
-/// Where an open rig or dashboard was read from: the file to save it to (null when it has none, as the demo), its
+/// Where an open rig or dashboard was read from: the file to save it to (null when it has none, as a new dashboard), its
 /// folder (the relative paths in it are relative to; null in the browser), and whether it changed since (observable,
 /// for the changed markers).
 /// </summary>

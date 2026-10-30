@@ -60,6 +60,48 @@ internal sealed class RigTreeItem : ViewModelBase
         }
     }
 
+    /// <summary>Whether a control of the selected dashboard is bound to the field, or to a field inside the item.</summary>
+    public ParameterUsage Usage
+    {
+        get;
+        private set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(IsUsed));
+                OnPropertyChanged(nameof(UsageOpacity));
+                OnPropertyChanged(nameof(UsageTip));
+            }
+        }
+    }
+
+    public bool IsUsed => Usage != ParameterUsage.None;
+
+    // a field that is used has the full mark, an item with used fields inside it a fainter one
+    public double UsageOpacity => Usage == ParameterUsage.Used ? 1 : 0.4;
+
+    public string? UsageTip => Usage switch
+    {
+        ParameterUsage.Used => "A control of the dashboard is bound to it",
+        ParameterUsage.Inside => "Controls of the dashboard are bound to parameters in it",
+        _ => null,
+    };
+
+    /// <summary>
+    /// Marks the item and those inside it with the paths of the device's parameters the dashboard's controls are bound to
+    /// (<see cref="DashboardSession.UsedPaths"/>); none without a dashboard. True when a field in or of it is used.
+    /// </summary>
+    public bool MarkUsage(IReadOnlySet<string> usedPaths)
+    {
+        ArgumentNullException.ThrowIfNull(usedPaths);
+        // every child is marked, also after the first used one
+        var inside = Children.Aggregate(false, (any, child) => child.MarkUsage(usedPaths) | any);
+        Usage = Node is { Kind: ParameterNodeKind.Field } node && usedPaths.Contains(node.Path) ? ParameterUsage.Used
+            : inside ? ParameterUsage.Inside
+            : ParameterUsage.None;
+        return Usage != ParameterUsage.None;
+    }
+
     public bool HasConnection => Connection is not null;
 
     public IBrush ConnectionBrush => MidiViewModel.BrushOf(Connection);
@@ -105,6 +147,17 @@ internal sealed class RigTreeItem : ViewModelBase
             },
             _ => String.Empty,
         };
+}
+
+/// <summary>
+/// Whether the controls of the selected dashboard use an item of the rig tree: a field they are bound to, or a device,
+/// group or repeat with such fields inside it.
+/// </summary>
+internal enum ParameterUsage
+{
+    None,
+    Inside,
+    Used,
 }
 
 /// <summary>

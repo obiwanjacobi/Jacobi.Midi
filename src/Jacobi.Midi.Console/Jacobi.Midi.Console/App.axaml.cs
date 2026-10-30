@@ -53,11 +53,6 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    // until there are recent files, the console starts with the GP-8 demo
-    private MainViewModel CreateMainViewModel()
-    {
-        var viewModel = new MainViewModel(MidiApi);
-        viewModel.OpenDemo();
-        return viewModel;
-    }
+    // the console starts empty: the user opens a rig and dashboards
+    private MainViewModel CreateMainViewModel() => new(MidiApi);
 }
