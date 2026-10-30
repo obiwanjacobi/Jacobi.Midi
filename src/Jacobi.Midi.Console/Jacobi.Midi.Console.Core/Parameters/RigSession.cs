@@ -10,8 +10,8 @@ namespace Jacobi.Midi.Console.Core.Parameters;
 /// An open rig: its schema library and a device state per device. The open dashboards share it, so a parameter has
 /// one value, whichever dashboard shows it. Devices whose state cannot be created (a map root that is not an address
 /// map, schemas that do not compile) are reported in <see cref="Problems"/>. After an edit of the rig it is opened
-/// again on the previous session: the devices that are still the same (alias, map root and device values) keep their
-/// state, and with it their values.
+/// again on the previous session: the devices that are still the same (the same device instance, also by another
+/// alias, with the same map root and device values) keep their state, and with it their values.
 /// </summary>
 public sealed class RigSession
 {
@@ -45,7 +45,9 @@ public sealed class RigSession
         {
             foreach (var device in rig.Devices)
             {
-                if (previous is not null && previous.Library == library && previous.Devices.GetValueOrDefault(device.Alias) is { } kept && IsSame(kept, device))
+                // the same device (also by another alias) with the same map root and device values keeps its state
+                if (previous is not null && previous.Library == library
+                    && previous.Devices.Values.FirstOrDefault(state => state.Device == device) is { } kept && IsSame(kept, device))
                 {
                     devices[device.Alias] = kept;
                     continue;
@@ -64,8 +66,7 @@ public sealed class RigSession
     }
 
     private static bool IsSame(DeviceState state, DeviceInstance device)
-        => state.Alias == device.Alias
-            && state.MapRoot.Equals(new SchemaName(device.MapRoot))
+        => state.MapRoot.Equals(new SchemaName(device.MapRoot))
             && state.DeviceValues.Count == device.DeviceValues.Count
             && device.DeviceValues.All(value => state.DeviceValues.TryGet(value.Key, out var known) && known == value.Value);
 

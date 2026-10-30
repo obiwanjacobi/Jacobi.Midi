@@ -84,7 +84,7 @@ internal partial class MainView : UserControl
             ConsoleLooks.Apply(application, _viewModel.SelectedLook);
             Rebuild();
         }
-        else if (e.PropertyName is nameof(MainViewModel.SelectedDashboard) or nameof(MainViewModel.IsEditing))
+        else if (e.PropertyName is nameof(MainViewModel.SelectedSession) or nameof(MainViewModel.IsEditing))
         {
             UpdatePanes();
             Rebuild();
@@ -224,7 +224,7 @@ internal partial class MainView : UserControl
     // a change builds the controls again
     private void Rebuild()
     {
-        if (_viewModel?.SelectedDashboard is not { } session)
+        if (_viewModel?.SelectedSession is not { } session)
         {
             _builder = null;
             DashboardHost.Content = null;

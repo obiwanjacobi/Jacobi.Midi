@@ -3,7 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:Jacobi.Midi.Console.ViewModels"
-             xmlns:parameters="using:Jacobi.Midi.Console.Core.Parameters"
+             xmlns:local="using:Jacobi.Midi.Console.Views"
              xmlns:palettes="using:Jacobi.Midi.Console.Core.Palettes"
              mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
              x:Class="Jacobi.Midi.Console.Views.MainView"
@@ -46,46 +46,94 @@
             <Setter Property="Padding" Value="8,4" />
             <Setter Property="Cursor" Value="DragMove" />
         </Style>
+        <!-- the changed marker: the rig or the dashboard has unsaved changes -->
+        <Style Selector="TextBlock.changed">
+            <Setter Property="Text" Value="●" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="Foreground" Value="#4FA3FF" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="ToolTip.Tip" Value="Unsaved changes" />
+        </Style>
         <Style Selector="Border.paletteItem:pointerover">
             <Setter Property="Background" Value="#50FFFFFF" />
         </Style>
     </UserControl.Styles>
 
+    <Panel>
     <DockPanel>
         <Border DockPanel.Dock="Top" Padding="20,10" Background="#40000000">
             <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <ComboBox ItemsSource="{Binding Dashboards}" SelectedItem="{Binding SelectedDashboard}" MinWidth="220" FontSize="16">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate x:DataType="parameters:DashboardSession">
-                                <TextBlock Text="{Binding Dashboard.Name}" />
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                    <Button Content="+" ToolTip.Tip="A new dashboard, or open one next to the open ones">
+                    <!-- the file operations of the rig and the dashboard -->
+                    <Button ToolTip.Tip="Save, open a rig or a dashboard, load a dump">
+                        <Panel>
+                            <TextBlock Text="☰" />
+                            <TextBlock Classes="changed" FontSize="8" Margin="0,-6,-8,0" HorizontalAlignment="Right" VerticalAlignment="Top">
+                                <TextBlock.IsVisible>
+                                    <MultiBinding Converter="{x:Static BoolConverters.Or}">
+                                        <Binding Path="RigOrigin.IsChanged" />
+                                        <Binding Path="SelectedDashboard.Origin.IsChanged" FallbackValue="{x:False}" />
+                                    </MultiBinding>
+                                </TextBlock.IsVisible>
+                            </TextBlock>
+                        </Panel>
                         <Button.Flyout>
-                            <MenuFlyout>
-                                <MenuItem Header="New dashboard" Command="{Binding NewDashboardCommand}" />
-                                <MenuItem Header="Open dashboard…" Command="{Binding OpenDashboardCommand}" />
+                            <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                                <MenuItem Header="Open">
+                                    <MenuItem Header="Rig…" Command="{Binding OpenRigCommand}" />
+                                    <MenuItem Header="Dashboard…" ToolTip.Tip="Open a dashboard next to the open ones" Command="{Binding OpenDashboardCommand}" />
+                                    <MenuItem Header="Dump…" ToolTip.Tip="Load the values of the devices from a dump file (offline)" Command="{Binding LoadDumpCommand}" />
+                                </MenuItem>
+                                <MenuItem Header="Save">
+                                    <MenuItem Header="Dashboard" Command="{Binding SaveDashboardCommand}">
+                                        <MenuItem.Icon>
+                                            <TextBlock Classes="changed" IsVisible="{Binding SelectedDashboard.Origin.IsChanged, FallbackValue={x:False}}" />
+                                        </MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Header="Rig" Command="{Binding SaveRigCommand}">
+                                        <MenuItem.Icon>
+                                            <TextBlock Classes="changed" IsVisible="{Binding RigOrigin.IsChanged}" />
+                                        </MenuItem.Icon>
+                                    </MenuItem>
+                                    <Separator />
+                                    <MenuItem Header="All" ToolTip.Tip="Save the dashboard and the rig when they changed" Command="{Binding SaveCommand}" />
+                                </MenuItem>
+                                <MenuItem Header="Save as">
+                                    <MenuItem Header="Dashboard…" Command="{Binding SaveDashboardAsCommand}" />
+                                    <MenuItem Header="Rig…" Command="{Binding SaveRigAsCommand}" />
+                                </MenuItem>
+                                <MenuItem Header="Close dashboard" Command="{Binding CloseDashboardCommand}" />
                             </MenuFlyout>
                         </Button.Flyout>
                     </Button>
-                    <Button Content="✕" ToolTip.Tip="Close the dashboard" Command="{Binding CloseDashboardCommand}" />
-                </StackPanel>
+                    <ComboBox ItemsSource="{Binding Dashboards}" SelectedItem="{Binding SelectedDashboard}" MinWidth="220" FontSize="16">
+                        <ComboBox.ItemTemplate>
+                            <!-- each dashboard with its changed marker (also the selected one, in the box) -->
+                            <DataTemplate x:DataType="vm:DashboardEntry">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="{Binding Dashboard.Name}" />
+                                    <TextBlock Classes="changed" IsVisible="{Binding Origin.IsChanged}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <!-- a new dashboard is built in Edit mode -->
+                    <Button Content="+" ToolTip.Tip="A new dashboard" Command="{Binding NewDashboardCommand}" IsVisible="{Binding IsEditing}" />                </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
-                    <StackPanel Orientation="Horizontal">
-                        <ToggleButton Content="Edit" IsChecked="{Binding IsEditing}" CornerRadius="4,0,0,4" />
-                        <ToggleButton Content="Play" IsChecked="{Binding IsPlaying}" CornerRadius="0,4,4,0" />
-                    </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsEditing}">
                         <Button Content="↶" ToolTip.Tip="{Binding UndoTip}" Command="{Binding UndoCommand}" />
                         <Button Content="↷" ToolTip.Tip="{Binding RedoTip}" Command="{Binding RedoCommand}" />
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal">
+                        <ToggleButton Content="Edit" IsChecked="{Binding IsEditing}" CornerRadius="4,0,0,4" />
+                        <ToggleButton Content="Play" IsChecked="{Binding IsPlaying}" CornerRadius="0,4,4,0" />
                     </StackPanel>
                     <!-- the MIDI bar: in Play mode where the values come from, Offline (dump files) or MIDI (the devices of
                          the rig); Edit mode is always connected. And the connection of each device. -->
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <StackPanel Orientation="Horizontal" IsEnabled="{Binding Midi.IsAvailable}" IsVisible="{Binding IsPlaying}">
-                            <ToggleButton Content="Offline" IsChecked="{Binding Midi.IsOffline}" CornerRadius="4,0,0,4" ToolTip.Tip="The values come from dump files (Load dump…)" />
+                            <ToggleButton Content="Offline" IsChecked="{Binding Midi.IsOffline}" CornerRadius="4,0,0,4" ToolTip.Tip="The values come from dump files (Open › Dump…)" />
                             <ToggleButton Content="MIDI" IsChecked="{Binding Midi.IsMidi}" CornerRadius="0,4,4,0" ToolTip.Tip="Connect the devices of the rig to their MIDI endpoints" />
                         </StackPanel>
                         <Button ToolTip.Tip="The connections of the devices">
@@ -116,17 +164,6 @@
                     </StackPanel>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
-                    <Button Content="Save" ToolTip.Tip="Save the dashboard and the rig when they changed" Command="{Binding SaveCommand}" />
-                    <Button Content="Save as…">
-                        <Button.Flyout>
-                            <MenuFlyout>
-                                <MenuItem Header="Dashboard…" Command="{Binding SaveDashboardAsCommand}" />
-                                <MenuItem Header="Rig…" Command="{Binding SaveRigAsCommand}" />
-                            </MenuFlyout>
-                        </Button.Flyout>
-                    </Button>
-                    <Button Content="Open rig…" Command="{Binding OpenRigCommand}" />
-                    <Button Content="Load dump…" Command="{Binding LoadDumpCommand}" />
                     <ComboBox ItemsSource="{Binding Looks}" SelectedItem="{Binding SelectedLook}" MinWidth="120" />
                 </StackPanel>
             </Grid>
@@ -163,7 +200,10 @@
         <Border Grid.Column="0" Padding="12" Background="#50000000" IsVisible="{Binding IsEditing}">
             <Grid RowDefinitions="Auto,*,Auto,Auto,Auto,Auto" RowSpacing="6">
                 <Grid ColumnDefinitions="*,Auto">
-                    <TextBlock Text="RIG" Classes="heading" VerticalAlignment="Center" Margin="0" />
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="RIG" Classes="heading" VerticalAlignment="Center" Margin="0" />
+                        <TextBlock Classes="changed" IsVisible="{Binding RigOrigin.IsChanged}" />
+                    </StackPanel>
                     <Button Grid.Column="1" Content="+" ToolTip.Tip="Add a device to the rig: for an address map of the schemas, or from a schema file or assembly" Click="OnAddDeviceClicked" />
                 </Grid>
                 <TreeView Grid.Row="1" ItemsSource="{Binding RigTree}" SelectedItem="{Binding SelectedRigItem}">
@@ -232,6 +272,20 @@
                         <TextBox Text="{Binding DashboardName, UpdateSourceTrigger=LostFocus}" />
                         <TextBlock Text="Zoom (%): the whole dashboard, saved with it" Classes="caption" />
                         <NumericUpDown Value="{Binding DashboardZoom}" Minimum="25" Maximum="400" Increment="10" FormatString="0" />
+                        <!-- the device aliases the dashboard uses: renaming one renames it throughout the dashboard -->
+                        <TextBlock Text="Devices (aliases): renaming one renames it on all controls of the dashboard" Classes="caption" TextWrapping="Wrap"
+                                   IsVisible="{Binding DashboardAliases.Count}" />
+                        <ItemsControl ItemsSource="{Binding DashboardAliases}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:DashboardAliasViewModel">
+                                    <StackPanel Spacing="2" Margin="0,0,0,6">
+                                        <TextBox Text="{Binding Alias, UpdateSourceTrigger=LostFocus}" />
+                                        <TextBlock Text="The rig has no device with this alias: its controls do not work." FontSize="12" TextWrapping="Wrap"
+                                                   Foreground="#FFB4A0" IsVisible="{Binding !IsInRig}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                         <TextBlock Text="Select a control to see its properties, or a device in the rig. Esc, or a click beside the dashboard, comes back here." TextWrapping="Wrap" Opacity="0.7" />
                     </StackPanel>
 
@@ -482,4 +536,10 @@
         </ScrollViewer>
         </Grid>
     </DockPanel>
+
+    <!-- modal overlay of a confirmation (e.g. closing a changed dashboard) -->
+    <Panel IsVisible="{Binding ConfirmDialog, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <local:ConfirmView DataContext="{Binding ConfirmDialog}" />
+    </Panel>
+    </Panel>
 </UserControl>

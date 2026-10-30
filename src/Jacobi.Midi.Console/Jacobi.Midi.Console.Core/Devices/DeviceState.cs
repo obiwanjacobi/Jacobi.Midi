@@ -41,7 +41,7 @@ public sealed class DeviceState
         if (!library.HasRoot(MapRoot))
             throw new ArgumentException($"'{device.MapRoot}' of device '{device.Alias}' is not a root group of the schemas.", nameof(device));
 
-        Alias = device.Alias;
+        Device = device;
         DeviceValues = new DeviceValues();
         foreach (var (name, value) in device.DeviceValues)
             DeviceValues[name] = value;
@@ -51,7 +51,11 @@ public sealed class DeviceState
         _library = library;
     }
 
-    public string Alias { get; }
+    /// <summary>The device instance of the rig the state is of; it keeps its state when it gets another alias.</summary>
+    public DeviceInstance Device { get; }
+
+    /// <summary>The alias of the device: follows the device when it gets another one.</summary>
+    public string Alias => Device.Alias;
 
     public SchemaName MapRoot { get; }
 

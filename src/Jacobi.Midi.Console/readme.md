@@ -254,9 +254,14 @@ The property panel opens the same chooser for each area of the selected control.
 - *Inherited*: takes the colour away, so the control has the colour of the cascade again;
 - *For all controls of device ...*: the pick becomes the device's colour in the rig instead of the control's.
 
-A pick applies at once. The dashboard or the rig is then changed: *Save* writes the selected dashboard and the rig when
-they changed, *Save as...* writes one of them to another file (XML or JSON by its extension). A file that was not
-read from disk (the demo) is saved with a file picker. When the dashboard gives a device a colour of its own, a new rig
+A pick applies at once. The dashboard or the rig is then changed. The file menu (☰ at the left of the toolbar) has
+*Open* (*Rig…*, *Dashboard…*, *Dump…*), *Save*, *Save as* and *Close dashboard*: *Save › Dashboard* or *Rig* writes
+that one, *Save › All* writes the selected dashboard and the rig when they changed, *Save as* writes one of them to
+another file (XML or JSON by its extension). A file that was not
+read from disk (the demo) is saved with a file picker. A changed marker (●) shows unsaved changes: of each open
+dashboard next to its name in the list of dashboards, of the rig next to the RIG heading (Edit mode), of the rig or the
+selected dashboard on the file menu, and on the items of *Save*. Unsaved changes are not discarded silently: *Open › Rig…* (in place of a changed rig) and *Close
+dashboard* (of a changed dashboard) ask the user to confirm first. When the dashboard gives a device a colour of its own, a new rig
 colour does not show on it; the console says so.
 
 ### Looks
@@ -282,8 +287,8 @@ device. The look is chosen in the toolbar and is not saved.
 
 ## Edit and Play
 
-Several dashboards can be open on one rig; the toolbar switches between them, opens another (+: a new dashboard, or
-one from a file) and closes one (✕). They share the rig's device states (`RigSession`), so a parameter has one value on
+Several dashboards can be open on one rig; the toolbar switches between them, opens another (+ in Edit mode: a new dashboard; or
+one from a file, in the file menu) and closes one (file menu; a dashboard with unsaved changes only after the user confirms discarding them). They share the rig's device states (`RigSession`), so a parameter has one value on
 every dashboard; each dashboard (`DashboardSession`) has its own index variables. A dashboard that brings its own
 schemas rebuilds the schema library, and with it the device states (their values are reset; this is reported). The
 console starts with the GP-8 demo (`Assets/Demo`): its rig, two dashboards and a bulk dump.
@@ -323,7 +328,11 @@ controls and layout controls (`ControlCatalog`).
 - the bindings of the slots as text (`[device:]path` or `$name`), the device and base (with what is inherited as the placeholder), the index variables of a layout control, the gap and wrap of a row or column, and the segments of an envelope.
 
 With nothing selected it shows the dashboard's name and zoom (its `cellSize` as a percentage of the default 24 pixels,
-25-400%: the whole dashboard scales with it and it is saved with the dashboard). The panel is made anew for every
+25-400%: the whole dashboard scales with it and it is saved with the dashboard), and the device aliases the dashboard
+uses (`DeviceAliases.Of`: its `devices`, the `device` of its controls and of their bindings), each with whether the rig
+has it. Renaming an alias there renames it everywhere in the dashboard, as one edit (`DeviceAliases.Rename`): after a
+device got another alias in the rig, its controls work again. Dashboards are not changed automatically when the rig
+renames a device: dashboard files that are not open would need the same change anyway. The panel is made anew for every
 selection, and a press on the dashboard first takes the text being typed in it, so that nothing of one control is
 taken for the next.
 
@@ -336,13 +345,14 @@ user picks: it becomes a schema source of the new device, which gets a root grou
 (`SchemaLibrary.RootsFromFile`, an address map first), also when such a document replaces a built-in one of the same
 name; that replacement holds for all devices of the rig, and is shown as information. A change of the schemas builds
 the library again, which resets the values of the devices (reported); schema files and assemblies are loaded by their
-path, so not in the browser. Open dashboards that use a renamed or removed alias are reported.
+path, so not in the browser. Open dashboards that use a renamed or removed alias are reported (a renamed one is
+renamed in the dashboard's properties).
 
 **Undo.** Every change is an edit (`IEdit`) in the edit history (`EditHistory`): undo (↶, Ctrl+Z) and redo (↷,
 Ctrl+Y); the history is cleared when a dashboard is closed or another rig is opened. A dashboard or rig counts the
 edits since it was read or saved, so undoing all of them makes it unchanged again. After an edit the dashboard is
 resolved again (`DashboardSession.Refresh`: the variables keep their current item); after an edit of the rig the rig is
-opened again on the same library, and the devices that stay the same (alias, map root, device values) keep their state
+opened again on the same library, and the devices that stay the same (the same device, also by another alias; map root, device values) keep their state
 and values (`RigSession.Open` with the previous session).
 
 **Notifications** (below the status) list what the console tells: problems (files, schemas, devices, bindings, dumps,
@@ -355,7 +365,7 @@ The MIDI bar (in the toolbar) shows whether the devices of the rig are connected
 amber: some, red: none) with a summary; a click opens the list of the devices with the status of each.
 
 - **Edit mode is always connected**, to choose the endpoints and test the devices.
-- **Play mode** has an explicit choice of where the values come from: **Offline** (dump files: *Load dump…*) or **MIDI** (the devices). With MIDI, the controls of a device that is not online are disabled; *Load dump…* is only available offline.
+- **Play mode** has an explicit choice of where the values come from: **Offline** (dump files: *Open › Dump…*) or **MIDI** (the devices). With MIDI, the controls of a device that is not online are disabled; *Open › Dump…* is only available offline.
 - Without a MIDI backend (the browser host) the console stays offline; the bar says so.
 
 The values are not exchanged with the devices yet: a connected device can be tested, but its values still come from
@@ -420,7 +430,7 @@ value is unknown.
 
 - **Reading and writing.** Controls use `TryGetValue` and `SetValue`; a value sink (`CreateSink`) and a value source (`Source`) give the values to and take them from the serializer and the message exchange.
 - **Changes.** `ValueChanged` reports every value that changed, with its origin: `User`, `Device` or `Dump`. Setting the known value again reports nothing. The event is raised on the thread that changed the value; the UI marshals it.
-- **Dumps.** `LoadDump` splits a dump into its SysEx messages (`SysExSplitter` of the Messages project) and decodes the data messages of the device's map for this device (`AddressMapAdapter.ReadData`); other messages are skipped and reported. *Load dump…* loads a `.syx` file into every device of the rig: each takes the messages that are its data. `SaveDump` writes a range of the map as the data messages the exchange would send (`AddressMapAdapter.EncodeData`): widened to atomic groups, all their values must be known.
+- **Dumps.** `LoadDump` splits a dump into its SysEx messages (`SysExSplitter` of the Messages project) and decodes the data messages of the device's map for this device (`AddressMapAdapter.ReadData`); other messages are skipped and reported. *Open › Dump…* loads a `.syx` file into every device of the rig: each takes the messages that are its data. `SaveDump` writes a range of the map as the data messages the exchange would send (`AddressMapAdapter.EncodeData`): widened to atomic groups, all their values must be known.
 - **Lossy values.** A value of a dump that the schema does not describe (a physical value that is not one of the options of its data type) is read as the data type's `optionsDefault` and saved as that: such bytes are not reproduced. The GP-8 bulk dump in the tests has four patches like that (`DynamicFilter.UpDown`, `Compressor.Turbo`).
 
 ## Files
@@ -570,3 +580,7 @@ keep its Avalonia versions in sync with the Schema Editor's.
 
 The namespace `Jacobi.Midi.Console` hides `System.Console` in code in a `Jacobi.Midi.*` namespace that references
 these projects (e.g. the tests): write `System.Console` there.
+
+## UI Design v2
+
+https://claude.ai/artifact/M1HGkZK6yVEYUJKhEVzoNZ?sk=d8ie2DI0HEzm8BEo40qjnQ#play-15dd8cd198dd

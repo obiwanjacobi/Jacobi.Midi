@@ -1,6 +1,7 @@
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.Midi.Console.Core.Dashboards;
 using Jacobi.Midi.Console.Core.Devices;
+using Jacobi.Midi.Console.Core.Editing;
 using Jacobi.Midi.Console.Core.Files;
 using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Core.Parameters;
@@ -51,6 +52,27 @@ public class DashboardSessionTests
 
     private static IControlValue ValueOf(DashboardSession session, int index)
         => session.ValueOf((ParameterControl)session.Dashboard.Layout.Children[index], SlotNames.Value)!;
+
+    [Fact]
+    public void RenamedAlias_InTheRigAndThenInTheDashboard_BindsTheControlsAgain()
+    {
+        var rig = RigFile.Read(Rig, FileFormat.Xml);
+        var before = RigSession.Open(rig, ConsoleLibrary.BuiltInLibrary);
+        before.Devices["gp8"].LoadDump(Dump);
+        var dashboard = DashboardFile.Read(Dashboard, FileFormat.Xml);
+
+        // the rig calls the device otherwise, and is opened again (as the console does after an edit of the rig)
+        rig.Devices[0].Alias = "pedal";
+        using var session = DashboardSession.Open(RigSession.Open(rig, before.Library, before), dashboard);
+        Assert.Null(session.ValueOf((ParameterControl)dashboard.Layout.Children[Sens], SlotNames.Value));
+
+        new EditGroup("rename", DeviceAliases.Rename(dashboard, "gp8", "pedal")).Apply();
+        session.Refresh();
+
+        Assert.Empty(session.Problems);
+        // the device kept its values: it is the same device by another alias
+        Assert.Equal(" Dig Chorus", ValueOf(session, Name).Value);
+    }
 
     [Fact]
     public void Open_GivesAValuePerBoundSlot()

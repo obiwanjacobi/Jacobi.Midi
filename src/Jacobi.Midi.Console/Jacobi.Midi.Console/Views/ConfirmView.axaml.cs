@@ -1,0 +1,14 @@
+using Avalonia.Controls;
+
+namespace Jacobi.Midi.Console.Views;
+
+/// <summary>
+/// The overlay view of a confirmation dialog; all behavior is in <see cref="ViewModels.ConfirmViewModel"/>.
+/// </summary>
+internal partial class ConfirmView : UserControl
+{
+    public ConfirmView()
+    {
+        InitializeComponent();
+    }
+}

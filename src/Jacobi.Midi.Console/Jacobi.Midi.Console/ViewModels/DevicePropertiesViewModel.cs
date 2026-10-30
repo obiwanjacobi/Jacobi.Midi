@@ -4,6 +4,7 @@ using Avalonia.Media;
 using CommunityToolkit.Mvvm.Input;
 using Jacobi.Midi.Console.Core.Connections;
 using Jacobi.Midi.Console.Core.Dashboards;
+using Jacobi.Midi.Console.Core.Editing;
 using Jacobi.Midi.Core;
 using Binding = Jacobi.Midi.Console.Core.Dashboards.Binding;
 using Jacobi.Midi.Console.Core.Palettes;
@@ -31,7 +32,7 @@ internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, Dev
         set
         {
             var alias = value?.Trim() ?? String.Empty;
-            if (alias.Length == 0 || alias.Contains(Binding.DeviceSeparator, StringComparison.Ordinal))
+            if (!DeviceAliases.IsValid(alias))
                 throw new DataValidationException($"An alias is not empty and has no '{Binding.DeviceSeparator}'.");
             if (owner.FindDevice(alias) is { } other && other != device)
                 throw new DataValidationException($"The rig has a device '{alias}' already.");

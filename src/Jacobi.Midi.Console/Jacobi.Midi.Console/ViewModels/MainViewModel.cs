@@ -41,9 +41,9 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     // what the console said about files, dumps and edits, besides the problems of the rig and the dashboard
     private readonly List<Notification> _reports = [];
     private Rig? _rig;
-    private FileOrigin _rigOrigin = new();
-    // the dashboards in the order they were opened (the order of Dashboards), with where they were read from
-    private readonly List<(Dashboard Dashboard, FileOrigin Origin)> _dashboards = [];
+    /// <summary>Where the rig was read from, and whether it changed since.</summary>
+    [ObservableProperty]
+    public partial FileOrigin RigOrigin { get; private set; } = new();
 
     /// <param name="midiApi">The platform's MIDI backend; null when it has none (the console stays offline).</param>
     public MainViewModel(IMidiApi? midiApi = null)
@@ -81,13 +81,19 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     [ObservableProperty]
     public partial RigSession? Rig { get; private set; }
 
-    /// <summary>The open dashboards, all on <see cref="Rig"/>.</summary>
-    public ObservableCollection<DashboardSession> Dashboards { get; } = [];
+    /// <summary>The open dashboards in the order they were opened, each with where it was read from and its session on <see cref="Rig"/>.</summary>
+    public ObservableCollection<DashboardEntry> Dashboards { get; } = [];
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Title), nameof(DashboardName), nameof(DashboardZoom))]
+    [NotifyPropertyChangedFor(nameof(Title), nameof(DashboardName), nameof(DashboardZoom), nameof(SelectedSession))]
     [NotifyCanExecuteChangedFor(nameof(CloseDashboardCommand))]
-    public partial DashboardSession? SelectedDashboard { get; set; }
+    public partial DashboardEntry? SelectedDashboard { get; set; }
+
+    /// <summary>
+    /// The session of the selected dashboard: what is shown. A change is notified also when the dashboard stays
+    /// selected but has a new session (the rig was opened again).
+    /// </summary>
+    public DashboardSession? SelectedSession => SelectedDashboard?.Session;
 
     /// <summary>Edit mode: controls are selected and changed, the values are locked; otherwise Play.</summary>
     [ObservableProperty]
@@ -103,6 +109,12 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
 
     [ObservableProperty]
     public partial string Status { get; private set; } = String.Empty;
+
+    /// <summary>
+    /// The confirmation dialog while it is shown (e.g. to confirm closing a changed dashboard); null otherwise.
+    /// </summary>
+    [ObservableProperty]
+    public partial ConfirmViewModel? ConfirmDialog { get; private set; }
 
     /// <summary>
     /// What the console tells the user: the problems (of files, schemas, devices, bindings, dumps) and information (a
@@ -129,12 +141,12 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         get => SelectedDashboard?.Dashboard.Name;
         set
         {
-            if (SelectedDashboard?.Dashboard is not { } dashboard || String.IsNullOrWhiteSpace(value))
+            if (SelectedDashboard is not { Dashboard: var dashboard } entry || String.IsNullOrWhiteSpace(value))
                 return;
             var edit = new ValueEdit<string>("dashboard name", () => dashboard.Name, name => dashboard.Name = name, value.Trim());
             if (!edit.Changes)
                 return;
-            DoDashboardEdit(EntryOf(dashboard.Layout), edit);
+            DoDashboardEdit(entry, edit);
             Status = $"The dashboard is named '{dashboard.Name}'. Save to keep it.";
         }
     }
@@ -148,19 +160,25 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         get => SelectedDashboard?.Dashboard.CellSize * 100m / Dashboard.DefaultCellSize;
         set
         {
-            if (SelectedDashboard?.Dashboard is not { } dashboard || value is not { } zoom)
+            if (SelectedDashboard is not { Dashboard: var dashboard } entry || value is not { } zoom)
                 return;
             var cellSize = Math.Clamp((int)Math.Round(Dashboard.DefaultCellSize * zoom / 100), Dashboard.MinimumCellSize, Dashboard.MaximumCellSize);
             var edit = new ValueEdit<int>("dashboard zoom", () => dashboard.CellSize, size => dashboard.CellSize = size, cellSize);
             if (!edit.Changes)
                 return;
-            DoDashboardEdit(EntryOf(dashboard.Layout), edit);
+            DoDashboardEdit(entry, edit);
             Status = $"The dashboard is shown at {DashboardZoom:0}% (cells of {cellSize} pixels). Save to keep it.";
         }
     }
 
     /// <summary>The devices of the rig with their parameters, for the left panel of Edit mode.</summary>
     public ObservableCollection<RigTreeItem> RigTree { get; } = [];
+
+    /// <summary>
+    /// The device aliases the selected dashboard uses, for its properties in Edit mode: renaming one renames it
+    /// throughout the dashboard (<see cref="RenameDashboardAlias"/>).
+    /// </summary>
+    public ObservableCollection<DashboardAliasViewModel> DashboardAliases { get; } = [];
 
     /// <summary>The item selected in the rig tree; a device shows its <see cref="DeviceProperties"/>.</summary>
     [ObservableProperty]
@@ -214,14 +232,17 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         {
             // the demo files are part of the application: they are saved with Save as
             _rig = RigFile.Read(ReadAsset("Gp8.rig.xml"), FileFormat.Xml);
-            _rigOrigin = new FileOrigin { Name = "Gp8.rig.xml" };
+            RigOrigin = new FileOrigin { Name = "Gp8.rig.xml" };
             History.Clear();
             _reports.Clear();
-            _dashboards.Clear();
+            foreach (var entry in Dashboards)
+                CloseSession(entry);
+            Dashboards.Clear();
+            SelectedDashboard = null;
             foreach (var name in new[] { "Gp8.dashboard.xml", "Gp8Compare.dashboard.xml" })
             {
                 var origin = new FileOrigin { Name = name };
-                _dashboards.Add((Complete(DashboardFile.Read(ReadAsset(name), FileFormat.Xml), origin), origin));
+                Dashboards.Add(new DashboardEntry(Complete(DashboardFile.Read(ReadAsset(name), FileFormat.Xml), origin), origin));
             }
             OpenSessions();
             using var dump = AssetLoader.Open(new Uri(DemoFolder + "gp8-sysex.syx"));
@@ -235,15 +256,18 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         }
     }
 
+    /// <summary>Opens another rig in place of the open one; when that changed since it was saved, after the user confirmed discarding the changes.</summary>
     [RelayCommand]
     private async Task OpenRig()
     {
+        if (!await ConfirmDiscard(RigOrigin, "Open another rig", $"The rig '{RigOrigin.Name}' has unsaved changes. Opening another rig discards them.", "Open"))
+            return;
         if (await PickFile("Open rig", "Rig", "*.xml", "*.json") is not { } file)
             return;
         try
         {
             _rig = RigFile.Read(file.Text, FileFormats.FromPath(file.Name));
-            _rigOrigin = file.Origin;
+            RigOrigin = file.Origin;
             // the edits and reports may be of the rig that was open
             History.Clear();
             _reports.Clear();
@@ -272,16 +296,18 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             return;
         }
 
-        _dashboards.Add((Complete(dashboard, file.Origin), file.Origin));
+        var entry = new DashboardEntry(Complete(dashboard, file.Origin), file.Origin);
+        Dashboards.Add(entry);
         if (Rig is not null && dashboard.Sources.IsEmpty)
         {
-            AddSession(DashboardSession.Open(Rig, dashboard), select: true);
+            OpenSession(entry, Rig);
+            SelectedDashboard = entry;
             Status = $"'{dashboard.Name}' opened.";
         }
         else
         {
             // the dashboard brings its own schemas: the library is built again, and with it the device states
-            OpenSessions(select: _dashboards.Count - 1);
+            OpenSessions(select: entry);
             if (Rig is not null && !dashboard.Sources.IsEmpty)
                 Status = $"'{dashboard.Name}' opened; its schemas were added, so the values of the devices were reset.";
         }
@@ -298,33 +324,45 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             return;
         }
         var name = "New dashboard";
-        for (var number = 2; _dashboards.Any(entry => entry.Dashboard.Name == name); number++)
+        for (var number = 2; Dashboards.Any(entry => entry.Dashboard.Name == name); number++)
             name = $"New dashboard {number}";
         var dashboard = new Dashboard { Name = name, Layout = new LayoutControl { Kind = LayoutControlKind.Grid, Size = NewDashboardSize } };
         // not saved yet: it counts as changed
-        _dashboards.Add((dashboard, new FileOrigin { Name = $"{name}.dashboard.xml", Changes = 1 }));
+        var entry = new DashboardEntry(dashboard, new FileOrigin { Name = $"{name}.dashboard.xml", Changes = 1 });
+        Dashboards.Add(entry);
         if (Rig is null)
-            OpenSessions(select: _dashboards.Count - 1);
+            OpenSessions(select: entry);
         else
-            AddSession(DashboardSession.Open(Rig, dashboard), select: true);
+        {
+            OpenSession(entry, Rig);
+            SelectedDashboard = entry;
+        }
         IsEditing = true;
         Status = $"'{name}' opened: drag parameters from the rig or controls from the palettes onto it.";
     }
 
+    /// <summary>Closes the selected dashboard; when it changed since it was saved, after the user confirmed discarding the changes.</summary>
     [RelayCommand(CanExecute = nameof(CanCloseDashboard))]
-    private void CloseDashboard()
+    private async Task CloseDashboard()
     {
-        if (SelectedDashboard is not { } session)
+        if (SelectedDashboard is not { } entry)
             return;
-        var index = Dashboards.IndexOf(session);
-        _dashboards.RemoveAt(index);
+        if (!await ConfirmDiscard(entry.Origin, $"Close '{entry.Dashboard.Name}'", "The dashboard has unsaved changes. Closing it discards them.", "Close"))
+            return;
+        // the dashboard may be closed meanwhile
+        if (Dashboards.Contains(entry))
+            CloseDashboard(entry);
+    }
+
+    private void CloseDashboard(DashboardEntry entry)
+    {
+        var index = Dashboards.IndexOf(entry);
         Dashboards.RemoveAt(index);
         // the edits may be of the closed dashboard
         History.Clear();
-        session.Resolved -= OnResolved;
-        session.Dispose();
+        CloseSession(entry);
         SelectedDashboard = Dashboards.Count == 0 ? null : Dashboards[Math.Min(index, Dashboards.Count - 1)];
-        Status = $"'{session.Dashboard.Name}' closed.";
+        Status = $"'{entry.Dashboard.Name}' closed.";
     }
 
     private bool CanCloseDashboard() => SelectedDashboard is not null;
@@ -355,28 +393,40 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     private async Task Save()
     {
         var saved = new List<string>();
-        if (_rig is not null && _rigOrigin.IsChanged && await SaveRig(saveAs: false))
-            saved.Add(_rigOrigin.Name);
-        if (SelectedDashboard is not null && _dashboards[Dashboards.IndexOf(SelectedDashboard)] is { Origin.IsChanged: true } && await SaveDashboard(saveAs: false))
-            saved.Add(_dashboards[Dashboards.IndexOf(SelectedDashboard)].Origin.Name);
+        if (_rig is not null && RigOrigin.IsChanged && await WriteRig(saveAs: false))
+            saved.Add(RigOrigin.Name);
+        if (SelectedDashboard is { Origin.IsChanged: true } entry && await WriteDashboard(saveAs: false))
+            saved.Add(entry.Origin.Name);
         if (saved.Count > 0)
             Status = $"Saved {String.Join(" and ", saved.Select(name => $"'{name}'"))}.";
-        else if (!_rigOrigin.IsChanged && _dashboards.All(entry => !entry.Origin.IsChanged))
+        else if (!RigOrigin.IsChanged && Dashboards.All(entry => !entry.Origin.IsChanged))
             Status = "Nothing changed.";
     }
 
+    /// <summary>Writes the selected dashboard; asks where for a file not saved before.</summary>
     [RelayCommand]
-    private async Task SaveDashboardAs()
-    {
-        if (await SaveDashboard(saveAs: true))
-            Status = $"Saved '{_dashboards[Dashboards.IndexOf(SelectedDashboard!)].Origin.Name}'.";
-    }
+    private Task SaveDashboard() => SaveDashboard(saveAs: false);
 
     [RelayCommand]
-    private async Task SaveRigAs()
+    private Task SaveDashboardAs() => SaveDashboard(saveAs: true);
+
+    /// <summary>Writes the rig; asks where for a file not saved before.</summary>
+    [RelayCommand]
+    private Task SaveRig() => SaveRig(saveAs: false);
+
+    [RelayCommand]
+    private Task SaveRigAs() => SaveRig(saveAs: true);
+
+    private async Task SaveDashboard(bool saveAs)
     {
-        if (await SaveRig(saveAs: true))
-            Status = $"Saved '{_rigOrigin.Name}'.";
+        if (await WriteDashboard(saveAs))
+            Status = $"Saved '{SelectedDashboard!.Origin.Name}'.";
+    }
+
+    private async Task SaveRig(bool saveAs)
+    {
+        if (await WriteRig(saveAs))
+            Status = $"Saved '{RigOrigin.Name}'.";
     }
 
     [RelayCommand(CanExecute = nameof(CanUndo))]
@@ -429,7 +479,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     {
         ArgumentNullException.ThrowIfNull(control);
         var entry = EntryOf(control);
-        if (entry.Dashboard is null)
+        if (entry is null)
             return;
         var edit = new ValueEdit<T>($"{what} of '{ControlCatalog.NameOf(control)}'", get, set, value);
         if (!edit.Changes)
@@ -443,7 +493,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     {
         ArgumentNullException.ThrowIfNull(control);
         var entry = EntryOf(control);
-        if (entry.Dashboard is null || control.Slots.GetValueOrDefault(slot) == binding)
+        if (entry is null || control.Slots.GetValueOrDefault(slot) == binding)
             return;
         var slots = new Dictionary<string, Binding>(control.Slots, StringComparer.Ordinal);
         if (binding is null)
@@ -463,7 +513,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     {
         ArgumentNullException.ThrowIfNull(control);
         var entry = EntryOf(control);
-        if (entry.Dashboard is null || String.Equals(control.Device, alias, StringComparison.Ordinal))
+        if (entry is null || String.Equals(control.Device, alias, StringComparison.Ordinal))
             return;
         var edits = new List<IEdit>();
         if (alias is not null && DeviceEdit(entry.Dashboard, alias) is { } addDevice)
@@ -493,7 +543,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     {
         ArgumentNullException.ThrowIfNull(control);
         var entry = EntryOf(control);
-        if (entry.Dashboard is null)
+        if (entry is null)
             return;
         var (edits, moved) = PlacementEdits(entry.Dashboard.Layout, control, at, size);
         if (edits.Count == 0)
@@ -515,7 +565,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(container);
         var entry = EntryOf(container);
-        if (entry.Dashboard is null || Session(entry.Dashboard) is not { } session)
+        if (entry is null || entry.Session is not { } session)
             return;
         var plan = item switch
         {
@@ -547,7 +597,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(control);
         var entry = EntryOf(control);
-        if (entry.Dashboard is null || Session(entry.Dashboard) is not { } session)
+        if (entry is null || entry.Session is not { } session)
             return;
         if (item.Source.Node.Info is { } info && ControlCatalog.RefusalOf(control.Kind, info) is { } refusal)
         {
@@ -572,7 +622,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         ArgumentNullException.ThrowIfNull(control);
         ArgumentNullException.ThrowIfNull(container);
         var entry = EntryOf(control);
-        if (entry.Dashboard is null || control.Size is not { } size || GridLayout.ParentOf(entry.Dashboard.Layout, control) is not { } parent)
+        if (entry is null || control.Size is not { } size || GridLayout.ParentOf(entry.Dashboard.Layout, control) is not { } parent)
             return;
         if (parent == container)
         {
@@ -633,7 +683,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     {
         ArgumentNullException.ThrowIfNull(control);
         var entry = EntryOf(control);
-        if (entry.Dashboard is null)
+        if (entry is null)
             return;
         if (GridLayout.ParentOf(entry.Dashboard.Layout, control) is not { } parent)
         {
@@ -650,7 +700,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     {
         ArgumentNullException.ThrowIfNull(control);
         var entry = EntryOf(control);
-        if (entry.Dashboard is null || GridLayout.ParentOf(entry.Dashboard.Layout, control) is not { } parent)
+        if (entry is null || GridLayout.ParentOf(entry.Dashboard.Layout, control) is not { } parent)
             return;
         if (kind is ParameterControlKind other && control is ParameterControl parameter && !Accepts(parameter, other))
         {
@@ -667,7 +717,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
 
     /// <summary>True when the control is in a grid or section: it has a position.</summary>
     public bool IsInGrid(DashboardControl control)
-        => EntryOf(control).Dashboard is { } dashboard && IsInGrid(dashboard.Layout, control);
+        => EntryOf(control)?.Dashboard is { } dashboard && IsInGrid(dashboard.Layout, control);
 
     /// <summary>
     /// True when a control of the kind can show what the slots of the control are bound to (see
@@ -676,16 +726,16 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     public bool Accepts(ParameterControl control, ParameterControlKind kind)
     {
         ArgumentNullException.ThrowIfNull(control);
-        var session = EntryOf(control).Dashboard is { } dashboard ? Session(dashboard) : null;
+        var session = EntryOf(control)?.Session;
         return control.Slots.Keys.All(slot => session?.ValueOf(control, slot)?.Info is not { } info || ControlCatalog.Accepts(kind, info));
     }
 
     /// <summary>True when the control is the root of its dashboard.</summary>
-    public bool IsRoot(DashboardControl control) => _dashboards.Any(entry => entry.Dashboard.Layout == control);
+    public bool IsRoot(DashboardControl control) => Dashboards.Any(entry => entry.Dashboard.Layout == control);
 
     /// <summary>The device, base and variables a control inherits from the layout controls around it.</summary>
     public BindingScope ScopeAround(DashboardControl control)
-        => EntryOf(control).Dashboard is { } dashboard && GridLayout.ParentOf(dashboard.Layout, control) is { } parent
+        => EntryOf(control)?.Dashboard is { } dashboard && GridLayout.ParentOf(dashboard.Layout, control) is { } parent
             ? BindingScope.Of(dashboard.Layout, parent) ?? BindingScope.None
             : BindingScope.None;
 
@@ -713,8 +763,25 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         ArgumentNullException.ThrowIfNull(device);
         var old = device.Alias;
         EditDevice(device, "alias", () => device.Alias, value => device.Alias = value, alias);
-        foreach (var (dashboard, _) in _dashboards.Where(entry => entry.Dashboard.FindDevice(old) is not null))
-            Report($"'{dashboard.Name}'", $"it uses device '{old}', which the rig now calls '{alias}'.");
+        foreach (var dashboard in Dashboards.Select(entry => entry.Dashboard).Where(dashboard => DeviceAliases.Of(dashboard).Contains(old, StringComparer.OrdinalIgnoreCase)))
+            Report($"'{dashboard.Name}'", $"it uses device '{old}', which the rig now calls '{alias}'; rename it in the properties of the dashboard.");
+    }
+
+    /// <summary>
+    /// Renames a device alias wherever the dashboard uses it (its devices, controls and bindings), as one edit of the
+    /// dashboard; e.g. after the device got another alias in the rig. The dashboard files that are not open are not changed.
+    /// </summary>
+    /// <exception cref="ArgumentException">The new alias cannot be taken (see <see cref="DeviceAliases.ProblemOf"/>).</exception>
+    public void RenameDashboardAlias(Dashboard dashboard, string alias, string newAlias)
+    {
+        if (Dashboards.FirstOrDefault(entry => entry.Dashboard == dashboard) is not { } entry)
+            return;
+        var edits = DeviceAliases.Rename(dashboard, alias, newAlias);
+        if (edits.Count == 0)
+            return;
+        DoDashboardEdit(entry, new EditGroup($"device alias '{alias}'", edits));
+        Status = $"Device '{alias}' is renamed to '{newAlias}' in '{dashboard.Name}'"
+            + (IsDeviceOfRig(newAlias) ? "" : $"; the rig has no device '{newAlias}'") + ". Save to keep it.";
     }
 
     /// <summary>
@@ -823,7 +890,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     private string AliasFor(string mapRoot)
     {
         var name = mapRoot.Split('.')[0].ToLowerInvariant();
-        if (String.IsNullOrEmpty(name) || name.Contains(Binding.DeviceSeparator, StringComparison.Ordinal))
+        if (!DeviceAliases.IsValid(name))
             name = "device";
         var alias = name;
         for (var number = 2; _rig?.Find(alias) is not null; number++)
@@ -865,17 +932,15 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         DoRigEdit(new ValueEdit<IReadOnlyList<DeviceInstance>>($"remove device '{device.Alias}'", () => rig.Devices, value => rig.Devices = value, [.. rig.Devices.Where(other => other != device)]));
         DeviceProperties = null;
         Status = $"Device '{device.Alias}' removed (Ctrl+Z brings it back). Save to keep it in the rig.";
-        foreach (var (dashboard, _) in _dashboards.Where(entry => entry.Dashboard.FindDevice(device.Alias) is not null))
+        foreach (var dashboard in Dashboards.Select(entry => entry.Dashboard).Where(dashboard => DeviceAliases.Of(dashboard).Contains(device.Alias, StringComparer.OrdinalIgnoreCase)))
             Report($"'{dashboard.Name}'", $"it uses device '{device.Alias}', which is no longer in the rig.");
     }
 
     private static bool IsInGrid(LayoutControl root, DashboardControl control)
         => GridLayout.ParentOf(root, control) is { } parent && GridLayout.IsGrid(parent);
 
-    private (Dashboard Dashboard, FileOrigin Origin) EntryOf(DashboardControl control)
-        => _dashboards.FirstOrDefault(entry => ControlMoves.Contains(entry.Dashboard.Layout, control));
-
-    private DashboardSession? Session(Dashboard dashboard) => Dashboards.FirstOrDefault(session => session.Dashboard == dashboard);
+    private DashboardEntry? EntryOf(DashboardControl control)
+        => Dashboards.FirstOrDefault(entry => ControlMoves.Contains(entry.Dashboard.Layout, control));
 
     // the position and size edits of placing a control: its own and those of the controls it pushes aside and the
     // grids that grow (a control outside a grid keeps no position); and how many other controls change
@@ -944,8 +1009,8 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
 
     public void Dispose()
     {
-        foreach (var session in Dashboards)
-            session.Dispose();
+        foreach (var entry in Dashboards)
+            entry.Session?.Dispose();
         _ = Midi.DisposeAsync().AsTask();
     }
 
@@ -964,10 +1029,18 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         LoadDumpCommand.NotifyCanExecuteChanged();
     }
 
-    partial void OnSelectedDashboardChanged(DashboardSession? value)
+    partial void OnSelectedDashboardChanged(DashboardEntry? value)
     {
         SelectedControl = null;
         RefreshNotifications();
+        RefreshDashboardAliases();
+    }
+
+    // the selected dashboard has a new session: shown as a newly selected dashboard
+    private void OnSelectedSessionChanged()
+    {
+        SelectedControl = null;
+        OnPropertyChanged(nameof(SelectedSession));
     }
 
     // a panel shows another control or device with fresh fields (null first: the template is not reused), so that no
@@ -988,16 +1061,16 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             SelectedControl = null;
     }
 
-    private void DoDashboardEdit((Dashboard Dashboard, FileOrigin Origin) entry, IEdit edit)
+    private void DoDashboardEdit(DashboardEntry entry, IEdit edit)
         => History.Do(new FileEdit(edit, entry.Origin, () =>
         {
-            Session(entry.Dashboard)?.Refresh();
+            entry.Session?.Refresh();
             OnEdited();
         }));
 
     // an edit of the rig: the rig is opened again; when it changes the schemas, with a library built again
     private void DoRigEdit(IEdit edit, bool rebuildsLibrary = false)
-        => History.Do(new FileEdit(edit, _rigOrigin, () =>
+        => History.Do(new FileEdit(edit, RigOrigin, () =>
         {
             if (rebuildsLibrary)
                 RebuildRig();
@@ -1010,7 +1083,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     // longer in its dashboard is not selected
     private void OnEdited()
     {
-        if (SelectedControl is { } control && EntryOf(control).Dashboard is null)
+        if (SelectedControl is { } control && EntryOf(control)?.Dashboard is null)
             SelectedControl = null;
         DashboardChanged?.Invoke(this, EventArgs.Empty);
         Properties?.Refresh();
@@ -1018,6 +1091,17 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(DashboardName));
         OnPropertyChanged(nameof(DashboardZoom));
+        RefreshDashboardAliases();
+    }
+
+    // the device aliases of the selected dashboard, each with whether the rig has it
+    private void RefreshDashboardAliases()
+    {
+        DashboardAliases.Clear();
+        if (SelectedDashboard is not { Dashboard: var dashboard })
+            return;
+        foreach (var alias in DeviceAliases.Of(dashboard))
+            DashboardAliases.Add(new DashboardAliasViewModel(this, dashboard, alias));
     }
 
     // a dump is loaded into every device of the rig; each takes the messages that are its data
@@ -1047,9 +1131,9 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
 
     // the rig session needs a rig and a dashboard; the library is built from the built-in assemblies and the sources
     // of the rig, its devices and all open dashboards; the dashboard sessions are opened on it again
-    private void OpenSessions(int? select = null)
+    private void OpenSessions(DashboardEntry? select = null)
     {
-        if (_rig is null || _dashboards.Count == 0)
+        if (_rig is null || Dashboards.Count == 0)
         {
             Status = _rig is null ? "Open a rig." : "Open a dashboard, or make a new one.";
             return;
@@ -1069,10 +1153,10 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             builder.AddAssembly(assembly);
         builder.AddAssembly(typeof(Jacobi.Midi.Roland.Processors.ProcessorFactory).Assembly);
         builder.AddAssembly(typeof(Jacobi.Midi.Yamaha.Processors.ProcessorFactory).Assembly);
-        builder.Add(_rig!.Sources, _rigOrigin.Directory);
+        builder.Add(_rig!.Sources, RigOrigin.Directory);
         foreach (var device in extra is null ? _rig.Devices : _rig.Devices.Append(extra))
-            builder.Add(device.Sources, _rigOrigin.Directory);
-        foreach (var (dashboard, origin) in _dashboards)
+            builder.Add(device.Sources, RigOrigin.Directory);
+        foreach (var (dashboard, origin) in Dashboards.Select(entry => (entry.Dashboard, entry.Origin)))
             builder.Add(dashboard.Sources, origin.Directory);
         return builder.Build();
     }
@@ -1085,7 +1169,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             return;
         var control = SelectedControl;
         OpenDashboards(RigSession.Open(_rig, BuildLibrary()), select: null);
-        if (control is not null && EntryOf(control).Dashboard is not null)
+        if (control is not null && EntryOf(control)?.Dashboard is not null)
             SelectedControl = control;
     }
 
@@ -1097,34 +1181,44 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             return;
         var control = SelectedControl;
         OpenDashboards(RigSession.Open(_rig, Rig.Library, Rig), select: null);
-        if (control is not null && EntryOf(control).Dashboard is not null)
+        if (control is not null && EntryOf(control)?.Dashboard is not null)
             SelectedControl = control;
     }
 
-    private void OpenDashboards(RigSession rig, int? select)
+    // every open dashboard gets a new session on the rig; the selected one (or the one to select) is selected, which is
+    // a new selection even when it stays the same dashboard
+    private void OpenDashboards(RigSession rig, DashboardEntry? select)
     {
-        var selected = select ?? Math.Max(0, SelectedDashboard is null ? 0 : Dashboards.IndexOf(SelectedDashboard));
-        foreach (var session in Dashboards)
-        {
-            session.Resolved -= OnResolved;
-            session.Dispose();
-        }
-        Dashboards.Clear();
+        var selected = select ?? (SelectedDashboard is { } current && Dashboards.Contains(current) ? current : Dashboards[0]);
+        foreach (var entry in Dashboards)
+            CloseSession(entry);
 
         Rig = rig;
-        foreach (var (dashboard, _) in _dashboards)
-            AddSession(DashboardSession.Open(rig, dashboard), select: false);
-        SelectedDashboard = Dashboards[Math.Min(selected, Dashboards.Count - 1)];
+        foreach (var entry in Dashboards)
+            OpenSession(entry, rig);
+        if (ReferenceEquals(SelectedDashboard, selected))
+            OnSelectedSessionChanged();
+        else
+            SelectedDashboard = selected;
         RefreshRigTree();
+        // another rig may have other devices
+        RefreshDashboardAliases();
         RefreshNotifications();
     }
 
-    private void AddSession(DashboardSession session, bool select)
+    private void OpenSession(DashboardEntry entry, RigSession rig)
     {
-        session.Resolved += OnResolved;
-        Dashboards.Add(session);
-        if (select)
-            SelectedDashboard = session;
+        entry.Session = DashboardSession.Open(rig, entry.Dashboard);
+        entry.Session.Resolved += OnResolved;
+    }
+
+    private void CloseSession(DashboardEntry entry)
+    {
+        if (entry.Session is not { } session)
+            return;
+        session.Resolved -= OnResolved;
+        session.Dispose();
+        entry.Session = null;
     }
 
     // the devices of the rig and their parameters; the device whose properties are shown stays selected
@@ -1142,7 +1236,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     // an index variable changed or the dashboard was edited: the problems of the dashboard may have changed
     private void OnResolved(object? sender, EventArgs e)
     {
-        if (ReferenceEquals(sender, SelectedDashboard))
+        if (ReferenceEquals(sender, SelectedSession))
             RefreshNotifications();
     }
 
@@ -1151,7 +1245,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     private void RefreshNotifications()
     {
         Notifications.Clear();
-        foreach (var problem in (Rig?.Problems ?? []).Concat(SelectedDashboard?.Problems ?? []))
+        foreach (var problem in (Rig?.Problems ?? []).Concat(SelectedSession?.Problems ?? []))
             Notifications.Add(new Notification(problem, IsProblem: true));
         foreach (var information in Rig?.Library.Problems.Where(problem => !problem.IsError) ?? [])
             Notifications.Add(new Notification($"{information.Source}: {information.Message}", IsProblem: false));
@@ -1191,20 +1285,35 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         return new PickedFile(file.Name, await reader.ReadToEndAsync(), FileOrigin.Of(file));
     }
 
-    private async Task<bool> SaveDashboard(bool saveAs)
+    // asks the user to confirm discarding the unsaved changes of a file; true when it has none
+    private async Task<bool> ConfirmDiscard(FileOrigin origin, string title, string message, string confirmText)
+        => !origin.IsChanged || await Confirm("UNSAVED CHANGES", title, $"{message} Continue?", confirmText);
+
+    // shows the confirmation dialog; true when the user confirmed
+    private Task<bool> Confirm(string caption, string title, string message, string confirmText)
     {
-        if (SelectedDashboard is not { } session)
+        var answer = new TaskCompletionSource<bool>();
+        ConfirmDialog = new ConfirmViewModel(caption, title, message, confirmText, confirmed =>
+        {
+            ConfirmDialog = null;
+            answer.SetResult(confirmed);
+        });
+        return answer.Task;
+    }
+
+    private async Task<bool> WriteDashboard(bool saveAs)
+    {
+        if (SelectedDashboard is not { Dashboard: var dashboard, Origin: var origin })
             return false;
-        var (dashboard, origin) = _dashboards[Dashboards.IndexOf(session)];
         return await SaveFile("Dashboard", origin, saveAs, [dashboard.Sources], format => DashboardFile.Write(dashboard, format));
     }
 
-    private async Task<bool> SaveRig(bool saveAs)
+    private async Task<bool> WriteRig(bool saveAs)
     {
         if (_rig is not { } rig)
             return false;
         var sources = rig.Devices.Select(device => device.Sources).Prepend(rig.Sources);
-        return await SaveFile("Rig", _rigOrigin, saveAs, [.. sources], format => RigFile.Write(rig, format));
+        return await SaveFile("Rig", RigOrigin, saveAs, [.. sources], format => RigFile.Write(rig, format));
     }
 
     // writes a file to where it was read from, or where the user picks (Save as, or a file not saved before);
@@ -1291,30 +1400,4 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
 
     /// <summary>A file the user picked: its name, its text and where it is.</summary>
     private sealed record PickedFile(string Name, string Text, FileOrigin Origin);
-
-    /// <summary>
-    /// Where an open rig or dashboard was read from: the file to save it to (null when it has none, as the demo), its
-    /// folder (the relative paths in it are relative to; null in the browser), and whether it changed since.
-    /// </summary>
-    private sealed class FileOrigin
-    {
-        public string Name { get; set; } = "untitled.xml";
-
-        public IStorageFile? File { get; set; }
-
-        public string? Directory { get; set; }
-
-        /// <summary>The edits done since it was read or saved, less those undone; undone edits of before count as well.</summary>
-        public int Changes { get; set; }
-
-        public bool IsChanged => Changes != 0;
-
-        public static FileOrigin Of(IStorageFile file)
-            => new()
-            {
-                Name = file.Name,
-                File = file,
-                Directory = file.TryGetLocalPath() is { } path ? Path.GetDirectoryName(path) : null,
-            };
-    }
 }
