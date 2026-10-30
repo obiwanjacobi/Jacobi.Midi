@@ -14,6 +14,7 @@
         <KeyBinding Gesture="Ctrl+Z" Command="{Binding UndoCommand}" />
         <KeyBinding Gesture="Ctrl+Y" Command="{Binding RedoCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+Z" Command="{Binding RedoCommand}" />
+        <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
     </UserControl.KeyBindings>
 
     <UserControl.Styles>
@@ -96,7 +97,7 @@
                                         </MenuItem.Icon>
                                     </MenuItem>
                                     <Separator />
-                                    <MenuItem Header="All" ToolTip.Tip="Save the dashboard and the rig when they changed" Command="{Binding SaveCommand}" />
+                                    <MenuItem Header="All" InputGesture="Ctrl+S" ToolTip.Tip="Save the dashboard and the rig when they changed (Ctrl+S)" Command="{Binding SaveCommand}" />
                                 </MenuItem>
                                 <MenuItem Header="Save as">
                                     <MenuItem Header="Dashboard…" Command="{Binding SaveDashboardAsCommand}" />

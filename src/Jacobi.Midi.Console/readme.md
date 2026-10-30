@@ -256,7 +256,7 @@ The property panel opens the same chooser for each area of the selected control.
 
 A pick applies at once. The dashboard or the rig is then changed. The file menu (☰ at the left of the toolbar) has
 *Open* (*Rig…*, *Dashboard…*, *Dump…*), *Save*, *Save as* and *Close dashboard*: *Save › Dashboard* or *Rig* writes
-that one, *Save › All* writes the selected dashboard and the rig when they changed, *Save as* writes one of them to
+that one, *Save › All* (Ctrl+S) writes the selected dashboard and the rig when they changed, *Save as* writes one of them to
 another file (XML or JSON by its extension). A file that was not
 read from disk (a new dashboard) is saved with a file picker. A changed marker (●) shows unsaved changes: of each open
 dashboard next to its name in the list of dashboards, of the rig next to the RIG heading (Edit mode), of the rig or the
