@@ -163,9 +163,10 @@
                         </Button>
                     </StackPanel>
                 </StackPanel>
-                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
-                    <ComboBox ItemsSource="{Binding Looks}" SelectedItem="{Binding SelectedLook}" MinWidth="120" />
-                </StackPanel>
+                <!-- Play mode: the look of the dashboard (in Edit mode it is in the dashboard's properties) -->
+                <ComboBox Grid.Column="2" ItemsSource="{Binding Looks}" SelectedItem="{Binding DashboardLook}" MinWidth="120"
+                          VerticalAlignment="Center" IsVisible="{Binding IsPlaying}" IsEnabled="{Binding SelectedDashboard, Converter={x:Static ObjectConverters.IsNotNull}}"
+                          ToolTip.Tip="The look of the dashboard: saved with it" />
             </Grid>
         </Border>
 
@@ -275,6 +276,8 @@
                         <TextBox Text="{Binding DashboardName, UpdateSourceTrigger=LostFocus}" />
                         <TextBlock Text="Zoom (%): the whole dashboard, saved with it" Classes="caption" />
                         <NumericUpDown Value="{Binding DashboardZoom}" Minimum="25" Maximum="400" Increment="10" FormatString="0" />
+                        <TextBlock Text="Look: the dashboard is shown with it, saved with it" Classes="caption" TextWrapping="Wrap" />
+                        <ComboBox ItemsSource="{Binding Looks}" SelectedItem="{Binding DashboardLook}" HorizontalAlignment="Stretch" />
                         <!-- the device aliases the dashboard uses: renaming one renames it throughout the dashboard -->
                         <TextBlock Text="Devices (aliases): renaming one renames it on all controls of the dashboard" Classes="caption" TextWrapping="Wrap"
                                    IsVisible="{Binding DashboardAliases.Count}" />

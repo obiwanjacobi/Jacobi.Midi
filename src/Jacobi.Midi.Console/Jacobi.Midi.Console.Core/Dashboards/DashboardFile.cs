@@ -33,7 +33,8 @@ public static class DashboardFile
         var root = new FileElement(RootName)
             .Set(ConsoleFile.FormatAttribute, Format)
             .Set("name", dashboard.Name)
-            .Set("cellSize", dashboard.CellSize);
+            .Set("cellSize", dashboard.CellSize)
+            .Set("look", dashboard.Look);
         foreach (var device in dashboard.Devices)
         {
             root.Add(ConsoleFile.SetColors(new FileElement(DeviceName, FileRoles.Devices)
@@ -151,6 +152,7 @@ public static class DashboardFile
         {
             Name = root.GetRequired("name"),
             CellSize = ConsoleFile.GetInt(root, "cellSize", minimum: 1) ?? Dashboard.DefaultCellSize,
+            Look = root.Get("look"),
             Devices = devices,
             Sources = new SchemaSources { Assemblies = assemblies, Schemas = schemas },
             Layout = layout ?? throw root.Error("the dashboard has no layout control."),

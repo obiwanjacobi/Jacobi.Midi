@@ -48,6 +48,10 @@ public static class ConsoleLooks
     /// <summary>The look the console starts with.</summary>
     public static Look Default => All[0];
 
+    /// <summary>The look with the name (case-insensitive), as a dashboard gives it; null when there is none.</summary>
+    public static Look? Find(string? name)
+        => All.FirstOrDefault(look => String.Equals(look.Name, name, StringComparison.OrdinalIgnoreCase));
+
     private static ResourceInclude? _applied;
 
     /// <summary>

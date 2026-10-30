@@ -26,6 +26,12 @@ public sealed class Dashboard
     /// </summary>
     public int CellSize { get; set; } = DefaultCellSize;
 
+    /// <summary>
+    /// The name of the look the dashboard is shown with when it is selected; null when it has none. The console knows
+    /// the looks; the user can show the dashboard with another one without changing it.
+    /// </summary>
+    public string? Look { get; set; }
+
     /// <summary>The device aliases the dashboard needs, with the map root each must have.</summary>
     public IReadOnlyList<DashboardDevice> Devices { get; set; } = [];
 

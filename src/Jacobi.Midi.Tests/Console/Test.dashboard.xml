@@ -1,6 +1,6 @@
-<dashboard format="jacobi.midi.dashboard/1" name="GP-8 patch" cellSize="24">
+<dashboard format="jacobi.midi.dashboard/1" name="GP-8 patch" cellSize="24" look="Anodized">
   <device alias="gp8" mapRoot="Gp8.AddressMap" />
-  <grid size="43,34" device="gp8" base="AddressMap.Memory[$patch].Patch">
+  <grid size="44,34" device="gp8" base="AddressMap.Memory[$patch].Patch">
     <variable name="patch" value="0" />
     <section label="Patch" size="17,7" at="0,0">
       <numberBox label="Patch" size="6,4" at="0,0">
@@ -32,7 +32,7 @@
         <bind slot="value" parameter="DynamicFilter.UpDown" />
       </selector>
     </section>
-    <section label="Delay" size="21,10" at="22,21">
+    <section label="Delay" size="21,10" at="23,22">
       <switch label="On" size="4,7" at="0,0">
         <bind slot="value" parameter="EffectSwiches1.DelayOn" />
       </switch>

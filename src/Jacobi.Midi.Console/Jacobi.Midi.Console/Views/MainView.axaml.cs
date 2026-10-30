@@ -79,9 +79,9 @@ internal partial class MainView : UserControl
 
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MainViewModel.SelectedLook) && _viewModel is not null && Application.Current is { } application)
+        if (e.PropertyName == nameof(MainViewModel.ShownLook) && _viewModel is not null && Application.Current is { } application)
         {
-            ConsoleLooks.Apply(application, _viewModel.SelectedLook);
+            ConsoleLooks.Apply(application, _viewModel.ShownLook);
             Rebuild();
         }
         else if (e.PropertyName is nameof(MainViewModel.SelectedSession) or nameof(MainViewModel.IsEditing))

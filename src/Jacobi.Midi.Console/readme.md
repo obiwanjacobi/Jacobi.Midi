@@ -283,7 +283,10 @@ Where things are, for tweaking (in `Jacobi.Midi.Console`):
 - **Looks**: `ConsoleLooks` (in `Looks/Look.cs`) lists the looks of the modules; applying one replaces the look's resources and kit and rebuilds the dashboard. A new module is added to that list.
 
 The accent is the device colour of the rig (or the dashboard); a look's own accent is used for controls without a
-device. The look is chosen in the toolbar and is not saved.
+device. A dashboard has its look (`look`, by name): the console shows the selected dashboard with that look. It is
+changed in the dashboard's properties in Edit mode, or in the toolbar in Play mode: both are the same edit of the
+dashboard, saved with it. A dashboard without a look is shown with the first look, and gets it in Edit mode (it then changes,
+which is told); a look the console does not know is told when the dashboard is opened.
 
 ## Edit and Play
 
@@ -332,7 +335,7 @@ any of its repeat items is bound to, and fainter, a device, group or repeat with
 - the bindings of the slots as text (`[device:]path` or `$name`), the device and base (with what is inherited as the placeholder), the index variables of a layout control, the gap and wrap of a row or column, and the segments of an envelope.
 
 With nothing selected it shows the dashboard's name and zoom (its `cellSize` as a percentage of the default 24 pixels,
-25-400%: the whole dashboard scales with it and it is saved with the dashboard), and the device aliases the dashboard
+25-400%: the whole dashboard scales with it and it is saved with the dashboard), its look, and the device aliases the dashboard
 uses (`DeviceAliases.Of`: its `devices`, the `device` of its controls and of their bindings), each with whether the rig
 has it. Renaming an alias there renames it everywhere in the dashboard, as one edit (`DeviceAliases.Rename`): after a
 device got another alias in the rig, its controls work again. Dashboards are not changed automatically when the rig
@@ -490,6 +493,7 @@ The same rig in XML:
   "format": "jacobi.midi.dashboard/1",
   "name": "Lead sound",
   "cellSize": 24,
+  "look": "Foundry",
   "devices": [ { "alias": "synth", "mapRoot": "Acme.AddressMap" } ],
   "layout": {
     "type": "grid", "size": [37, 10],
@@ -522,7 +526,7 @@ The same rig in XML:
 The same dashboard in XML:
 
 ```xml
-<dashboard format="jacobi.midi.dashboard/1" name="Lead sound" cellSize="24">
+<dashboard format="jacobi.midi.dashboard/1" name="Lead sound" cellSize="24" look="Foundry">
   <device alias="synth" mapRoot="Acme.AddressMap" />
   <grid size="37,10">
     <section label="Filter" at="0,0" size="12,10" device="synth" base="AddressMap.Edit.Filter">

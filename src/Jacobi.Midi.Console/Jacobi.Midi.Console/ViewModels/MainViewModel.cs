@@ -71,10 +71,12 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     /// <summary>The storage provider of the window or browser, for the file pickers; set by the view.</summary>
     public IStorageProvider? StorageProvider { get; set; }
 
+    /// <summary>The looks to choose the look of the dashboard from (<see cref="DashboardLook"/>: in its properties in Edit mode, the toolbar in Play mode).</summary>
     public IReadOnlyList<Look> Looks => ConsoleLooks.All;
 
+    /// <summary>The look the console shows: that of the selected dashboard (the default look for one without).</summary>
     [ObservableProperty]
-    public partial Look SelectedLook { get; set; } = ConsoleLooks.Default;
+    public partial Look ShownLook { get; private set; } = ConsoleLooks.Default;
 
     /// <summary>The open rig; null until a rig is open.</summary>
     [ObservableProperty]
@@ -84,7 +86,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     public ObservableCollection<DashboardEntry> Dashboards { get; } = [];
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Title), nameof(DashboardName), nameof(DashboardZoom), nameof(SelectedSession))]
+    [NotifyPropertyChangedFor(nameof(Title), nameof(DashboardName), nameof(DashboardZoom), nameof(DashboardLook), nameof(SelectedSession))]
     [NotifyCanExecuteChangedFor(nameof(CloseDashboardCommand))]
     public partial DashboardEntry? SelectedDashboard { get; set; }
 
@@ -170,6 +172,58 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         }
     }
 
+    /// <summary>
+    /// The look of the selected dashboard (<see cref="Dashboard.Look"/>): changing it is an edit, and shows it. Null
+    /// when the dashboard has none, or one the console does not know.
+    /// </summary>
+    public Look? DashboardLook
+    {
+        get => ConsoleLooks.Find(SelectedDashboard?.Dashboard.Look);
+        set
+        {
+            if (SelectedDashboard is not { Dashboard: var dashboard } entry || value is null)
+                return;
+            // done and undone, the look is shown
+            var edit = new ValueEdit<string?>("dashboard look", () => dashboard.Look, look =>
+            {
+                dashboard.Look = look;
+                ShownLook = ConsoleLooks.Find(look) ?? ConsoleLooks.Default;
+            }, value.Name);
+            if (!edit.Changes)
+                return;
+            DoDashboardEdit(entry, edit);
+            Status = $"The dashboard has the look '{value.Name}'. Save to keep it.";
+        }
+    }
+
+    // the selected dashboard is shown with its look; one without a look with the default look, which it gets in Edit
+    // mode (it changes)
+    private void ShowDashboardLook()
+    {
+        if (SelectedDashboard is not { Dashboard: var dashboard })
+            return;
+        GiveLook();
+        ShownLook = ConsoleLooks.Find(dashboard.Look) ?? ConsoleLooks.Default;
+    }
+
+    // Edit mode: the selected dashboard without a look gets the default look
+    private void GiveLook()
+    {
+        if (!IsEditing || SelectedDashboard is not { Dashboard: { Look: null } dashboard, Origin: var origin })
+            return;
+        dashboard.Look = ConsoleLooks.Default.Name;
+        origin.Changes++;
+        Inform($"'{origin.Name}'", $"it had no look and is given '{dashboard.Look}'; save it to keep it.");
+        OnPropertyChanged(nameof(DashboardLook));
+    }
+
+    // a look the console does not know is told once, when the dashboard is opened
+    private void CheckLook(Dashboard dashboard, FileOrigin origin)
+    {
+        if (dashboard.Look is { } look && ConsoleLooks.Find(look) is null)
+            Inform($"'{origin.Name}'", $"its look '{look}' is not known; it is shown with '{ConsoleLooks.Default.Name}'.");
+    }
+
     /// <summary>The devices of the rig with their parameters, for the left panel of Edit mode.</summary>
     public ObservableCollection<RigTreeItem> RigTree { get; } = [];
 
@@ -214,7 +268,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     [NotifyPropertyChangedFor(nameof(ShowsSelection))]
     public partial ControlPropertiesViewModel? Properties { get; private set; }
 
-    Look IColorEditor.Look => SelectedLook;
+    Look IColorEditor.Look => ShownLook;
 
     void IDashboardEditor.Select(DashboardControl? control) => SelectedControl = control;
 
@@ -261,6 +315,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             return;
         }
 
+        CheckLook(dashboard, file.Origin);
         var entry = new DashboardEntry(Complete(dashboard, file.Origin), file.Origin);
         Dashboards.Add(entry);
         if (Rig is not null && dashboard.Sources.IsEmpty)
@@ -291,7 +346,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         var name = "New dashboard";
         for (var number = 2; Dashboards.Any(entry => entry.Dashboard.Name == name); number++)
             name = $"New dashboard {number}";
-        var dashboard = new Dashboard { Name = name, Layout = new LayoutControl { Kind = LayoutControlKind.Grid, Size = NewDashboardSize } };
+        var dashboard = new Dashboard { Name = name, Look = ConsoleLooks.Default.Name, Layout = new LayoutControl { Kind = LayoutControlKind.Grid, Size = NewDashboardSize } };
         // not saved yet: it counts as changed
         var entry = new DashboardEntry(dashboard, new FileOrigin { Name = $"{name}.dashboard.xml", Changes = 1 });
         Dashboards.Add(entry);
@@ -983,7 +1038,12 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     partial void OnRigChanged(RigSession? value) => Midi.SetRig(value);
 
     // Edit mode is always connected; Play mode as chosen
-    partial void OnIsEditingChanged(bool value) => Midi.SetEditing(value);
+    // a dashboard without a look gets one in Edit mode
+    partial void OnIsEditingChanged(bool value)
+    {
+        Midi.SetEditing(value);
+        GiveLook();
+    }
 
     // the connections changed or the mode switched: the rig tree and the device panel show them
     private void OnMidiChanged()
@@ -1000,6 +1060,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         RefreshNotifications();
         RefreshDashboardAliases();
         RefreshUsage();
+        ShowDashboardLook();
     }
 
     // the selected dashboard has a new session: shown as a newly selected dashboard
@@ -1057,6 +1118,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(DashboardName));
         OnPropertyChanged(nameof(DashboardZoom));
+        OnPropertyChanged(nameof(DashboardLook));
         RefreshDashboardAliases();
     }
 
