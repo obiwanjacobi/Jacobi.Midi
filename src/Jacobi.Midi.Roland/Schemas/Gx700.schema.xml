@@ -1526,7 +1526,7 @@
   </dataTypeDefs>
 
   <members>
-    <group name="AddressMap" nodeDef="roland.messageBody32" midi.device.modelId="0x79" midi.messageInterval="60">
+    <group name="AddressMap" nodeDef="roland.messageBody32" midi.device.modelId="0x79">
       <members>
         <!-- Patch 1-100. -->
         <repeat name="Memory" midi.address="0x00-00-00-00" midi.stride="0x00-01-00-00" midi.repeat="100">

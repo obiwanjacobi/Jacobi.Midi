@@ -21,13 +21,10 @@ internal abstract partial class EditNode : ObservableObject
     public EditGroup? Parent { get; set; }
 
     /// <summary>
-    /// The address map tag that marks the node in the schema tree: its role (<c>midi.role</c>, e.g. 'address') or the kind
-    /// of message it is (<c>midi.message</c>, e.g. 'message: request'); null when it has neither.
+    /// The address map tag that marks the node in the schema tree: its role (<c>midi.role</c>, e.g. 'address'); null when
+    /// it has none.
     /// </summary>
-    public string? AddressTag
-        => FindProperty(AddressMapTags.Role) is { } role ? role
-        : FindProperty(AddressMapTags.Message) is { } message ? $"message: {message}"
-        : null;
+    public string? AddressTag => FindProperty(AddressMapTags.Role);
 
     private string? FindProperty(string name)
         => Properties?.FirstOrDefault(property => String.Equals(property.Name?.Trim(), name, StringComparison.OrdinalIgnoreCase))?.Value?.Trim() is { Length: > 0 } value

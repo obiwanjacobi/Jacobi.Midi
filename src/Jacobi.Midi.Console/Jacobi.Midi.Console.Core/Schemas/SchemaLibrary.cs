@@ -4,6 +4,7 @@ using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Device.Addressing;
+using Jacobi.Midi.Device.Exchange;
 
 namespace Jacobi.Midi.Console.Core.Schemas;
 
@@ -15,10 +16,11 @@ namespace Jacobi.Midi.Console.Core.Schemas;
 /// </summary>
 public sealed class SchemaLibrary
 {
-    internal SchemaLibrary(ProcessorManager processors, SchemaSet? schemas, Serializer? serializer, IReadOnlyList<SchemaLibraryProblem> problems,
-        IReadOnlyDictionary<string, string> documentSources)
+    internal SchemaLibrary(ProcessorManager processors, ExchangeDefinitions exchanges, SchemaSet? schemas, Serializer? serializer,
+        IReadOnlyList<SchemaLibraryProblem> problems, IReadOnlyDictionary<string, string> documentSources)
     {
         Processors = processors;
+        Exchanges = exchanges;
         Schemas = schemas;
         Serializer = serializer;
         Maps = serializer is null ? null : new AddressMapAdapter(serializer);
@@ -90,6 +92,12 @@ public sealed class SchemaLibrary
 
     public ProcessorManager Processors { get; }
 
+    /// <summary>
+    /// The exchange files of the assemblies: how the message exchange patterns (e.g. <see cref="ExchangeNames.RequestData"/>)
+    /// go for each map root. A file that cannot be read is in <see cref="Problems"/>.
+    /// </summary>
+    public ExchangeDefinitions Exchanges { get; }
+
     /// <summary>The compiled schemas; null when they do not compile (see <see cref="Problems"/>).</summary>
     public SchemaSet? Schemas { get; }
 
@@ -121,6 +129,7 @@ public sealed class SchemaLibraryBuilder
     private static readonly string[] SchemaExtensions = [".xml", ".json"];
 
     private readonly ProcessorManager _processors = new();
+    private readonly ExchangeDefinitions _exchanges = new();
     private readonly Dictionary<string, (SchemaDocument Document, string Source)> _documents = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<string> _order = [];
     private readonly HashSet<string> _assemblies = new(StringComparer.Ordinal);
@@ -136,7 +145,7 @@ public sealed class SchemaLibraryBuilder
         typeof(Jacobi.Midi.Device.Processors.ProcessorFactory).Assembly,
     ];
 
-    /// <summary>Adds the embedded schemas and the processor factories of an assembly; an assembly is added once.</summary>
+    /// <summary>Adds the embedded schemas, exchange files and processor factories of an assembly; an assembly is added once.</summary>
     public SchemaLibraryBuilder AddAssembly(Assembly assembly)
     {
         ArgumentNullException.ThrowIfNull(assembly);
@@ -158,6 +167,11 @@ public sealed class SchemaLibraryBuilder
         {
             using var stream = assembly.GetManifestResourceStream(resource)!;
             AddDocument($"{source}/{resource}", () => new SchemaSetBuilder().LoadFromBinary(resource, stream));
+        }
+
+        foreach (var problem in _exchanges.AddAssembly(assembly))
+        {
+            _problems.Add(new(problem.Location, $"the exchange file cannot be read: {String.Join(" ", problem.Problems)}"));
         }
         return this;
     }
@@ -213,13 +227,13 @@ public sealed class SchemaLibraryBuilder
         {
             var schemas = builder.Compile();
             var serializer = new SerializerBuilder().AddSchemas(schemas).AddProcessors(_processors).Build();
-            return new SchemaLibrary(_processors, schemas, serializer, problems, DocumentSources());
+            return new SchemaLibrary(_processors, _exchanges, schemas, serializer, problems, DocumentSources());
         }
         catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or NotSupportedException
             or KeyNotFoundException)
         {
             problems.Add(new("compile", exception.Message));
-            return new SchemaLibrary(_processors, null, null, problems, DocumentSources());
+            return new SchemaLibrary(_processors, _exchanges, null, null, problems, DocumentSources());
         }
     }
 
@@ -247,8 +261,10 @@ public sealed class SchemaLibraryBuilder
         _documents[document.Name] = (document, source);
     }
 
+    // an embedded schema: an XML or JSON resource that is not an exchange file
     private static bool IsSchema(string resource)
-        => SchemaExtensions.Any(extension => resource.EndsWith(extension, StringComparison.OrdinalIgnoreCase));
+        => SchemaExtensions.Any(extension => resource.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
+        && !ExchangeDefinitions.IsDefinitionResource(resource);
 
     private static string Resolve(string path, string? baseDirectory)
         => baseDirectory is null || Path.IsPathRooted(path) ? path : Path.Combine(baseDirectory, path);

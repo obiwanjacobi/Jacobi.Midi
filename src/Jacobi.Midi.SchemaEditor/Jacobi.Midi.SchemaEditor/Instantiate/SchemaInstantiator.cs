@@ -4,13 +4,14 @@ using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Device.Addressing;
+using Jacobi.Midi.Device.Exchange;
 using Jacobi.Midi.SchemaEditor.Models;
 
 namespace Jacobi.Midi.SchemaEditor.Instantiate;
 
 /// <summary>
-/// One SysEx message written from an instance: its bytes and the time to wait after sending it (<c>midi.messageInterval</c>
-/// of the data message of an address map; zero otherwise).
+/// One SysEx message written from an instance: its bytes and the time to wait after sending it (the <c>messageInterval</c>
+/// of the <see cref="ExchangeNames.SendData"/> exchange of an address map's exchange file; zero otherwise).
 /// </summary>
 internal sealed record SerializedMessage(byte[] Bytes, TimeSpan Interval);
 
@@ -27,6 +28,7 @@ internal sealed class SchemaInstantiator
     private readonly IReadOnlyList<EditDocument> _edits;
     private readonly List<string> _warnings;
     private readonly Serializer _serializer;
+    private readonly ExchangeDefinitions? _exchanges;
     private AddressMapAdapter? _adapter;
 
     /// <param name="compilation">The compiled document with the schemas it was compiled with.</param>
@@ -34,7 +36,8 @@ internal sealed class SchemaInstantiator
     /// The processors the schemas use (those of the opened assemblies): the instances are created, checked, written and read
     /// with the plans of the serializer, as the device does.
     /// </param>
-    public SchemaInstantiator(SchemaSetCompilation compilation, IProcessorProvider processors)
+    /// <param name="exchanges">The exchange files of the opened assemblies: the time between the messages sent to a device; null: none.</param>
+    public SchemaInstantiator(SchemaSetCompilation compilation, IProcessorProvider processors, ExchangeDefinitions? exchanges = null)
     {
         ArgumentNullException.ThrowIfNull(compilation);
         ArgumentNullException.ThrowIfNull(processors);
@@ -44,6 +47,7 @@ internal sealed class SchemaInstantiator
             .AddProcessors(processors)
             .Build();
         _edits = compilation.Documents;
+        _exchanges = exchanges;
         _warnings = [.. compilation.Warnings];
         DocumentName = compilation.Document.Name;
     }
@@ -144,7 +148,8 @@ internal sealed class SchemaInstantiator
         if (FindAddressMap(instance) is { } map)
         {
             var messages = Adapter.WriteData(root, map.Choice.Path, map.Body.Root, Selection(map.Body), source, warnings);
-            return [.. messages.Select(message => new SerializedMessage(message.SysEx, message.Message.Interval))];
+            var interval = _exchanges?.Find(map.Body.Root, ExchangeNames.SendData)?.MessageInterval ?? TimeSpan.Zero;
+            return [.. messages.Select(message => new SerializedMessage(message.SysEx, interval))];
         }
 
         var output = new ArrayBufferWriter<byte>();
@@ -439,12 +444,14 @@ internal sealed class SchemaInstantiator
     /// <summary>
     /// Marks how the role fields of the message that <paramref name="data"/> is the data of (<c>midi.role="data"</c>) get
     /// their value: with an address map as the body the map supplies them (see <see cref="AddressMapAdapter.DescribeRole"/>),
-    /// otherwise the values are given in the instance.
+    /// otherwise the values are given in the instance. The message is found as the address map finds a data message:
+    /// the member group of the schema root that holds the data (path 'root.message'), or the root itself when the data
+    /// is one of its members.
     /// </summary>
     private void MarkRoles(InstanceChoice data)
     {
         var message = data.Parent;
-        while (message is not null && AddressMapTags.MessageOf(message.Schema) is null)
+        while (message?.Parent is not null && message.Path.Segments.Count() > 2)
         {
             message = message.Parent;
         }

@@ -26,7 +26,8 @@ public class AddressMapValidatorTests
         Assert.Empty(Of(problems, AddressMapProblemSeverity.Error));
         Assert.Empty(Of(problems, AddressMapProblemSeverity.Warning));
         var information = Of(problems, AddressMapProblemSeverity.Information).ToList();
-        Assert.Equal(["Message.Data.DeviceId", "Message.Request.DeviceId"], information.Select(p => p.Path.Value).Order());
+        // the data message is the one the map finds; the request is only a message when an exchange file names it
+        Assert.Equal(["Message.Data.DeviceId"], information.Select(p => p.Path.Value));
         Assert.All(information, problem => Assert.Equal("TestEnvelope", problem.Document));
     }
 
@@ -42,27 +43,7 @@ public class AddressMapValidatorTests
 
         Assert.Empty(Of(problems, AddressMapProblemSeverity.Error));
         Assert.Empty(Of(problems, AddressMapProblemSeverity.Warning));
-        Assert.Contains(problems, p => String.Equals(p.Document, "Roland", StringComparison.OrdinalIgnoreCase) && p.Path.Value == "Message16.RQ1.DeviceId");
-    }
-
-    [Fact]
-    public void Validate_RoleOutsideAMessage_IsAWarning()
-    {
-        var problems = Validate("""
-            <schema name="Other">
-              <members>
-                <group name="Loose">
-                  <members>
-                    <field name="Address" datatype="sys.uint8" midi.role="address" />
-                  </members>
-                </group>
-              </members>
-            </schema>
-            """);
-
-        var problem = Assert.Single(problems, p => p.Document == "Other");
-        Assert.Equal(AddressMapProblemSeverity.Warning, problem.Severity);
-        Assert.Equal("Loose.Address", problem.Path.Value);
+        Assert.Contains(problems, p => String.Equals(p.Document, "Roland", StringComparison.OrdinalIgnoreCase) && p.Path.Value == "Message16.DT1.DeviceId");
     }
 
     [Fact]
@@ -71,7 +52,7 @@ public class AddressMapValidatorTests
         var problems = Validate("""
             <schema name="Other">
               <members>
-                <group name="Message" midi.message="request">
+                <group name="Message">
                   <members>
                     <field name="Bad" datatype="sys.uint8" midi.role="adress" />
                     <field name="Data" datatype="sys.uint8" midi.role="data" />
@@ -97,7 +78,7 @@ public class AddressMapValidatorTests
               <members>
                 <group name="Envelope">
                   <members>
-                    <group name="Data" midi.message="data">
+                    <group name="Data">
                       <members>
                         <field name="Address" datatype="sys.uint8" byteLength="1" midi.role="address" />
                         <choice name="Body" memberNodeDef="body" midi.role="data" />
@@ -162,39 +143,21 @@ public class AddressMapValidatorTests
         Assert.Equal("Map.Value", problem.Path.Value);
     }
 
-    [Fact]
-    public void Validate_MessageOnARoot_IsAnError()
-    {
-        var problems = Validate("""
-            <schema name="Other">
-              <members>
-                <group name="Request" midi.message="request">
-                  <members>
-                    <field name="Address" datatype="sys.uint8" midi.role="address" />
-                  </members>
-                </group>
-              </members>
-            </schema>
-            """);
-
-        var problem = Assert.Single(Of(problems, AddressMapProblemSeverity.Error));
-        Assert.Equal("Request", problem.Path.Value);
-    }
-
     [Theory]
     [InlineData("midi.role", "address", true)]
     [InlineData("midi.role", "device.modelId", true)]
     [InlineData("midi.role", "device.", false)]
     [InlineData("midi.role", "adress", false)]
-    [InlineData("midi.message", "data", true)]
-    [InlineData("midi.message", "reply", false)]
+    // the exchange patterns are in the exchange files, not in the schemas
+    [InlineData("midi.message", "data", false)]
+    [InlineData("midi.messageInterval", "20", false)]
     [InlineData("midi.address", "0x40-00", true)]
     [InlineData("midi.address", "forty", false)]
     [InlineData("midi.atomic", "true", true)]
     [InlineData("midi.atomic", "yes", false)]
     [InlineData("midi.access", "read", true)]
     [InlineData("midi.unit", "field", true)]
-    [InlineData("midi.exchange", "acknowledged", true)]
+    [InlineData("midi.exchange", "acknowledged", false)]
     [InlineData("midi.device.modelId", "0x13", true)]
     [InlineData("midi.device.modelId", "x", false)]
     [InlineData("midi.adress", "0x40-00", false)]

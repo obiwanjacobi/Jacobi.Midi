@@ -120,12 +120,21 @@ internal sealed class AddressMap
     /// <summary>The addresses the map covers (from the root's start to its end).</summary>
     public AddressRange Range { get; }
 
+    /// <summary>The device value names the data messages need that the map root does not fix; the client supplies them.</summary>
+    public IReadOnlyList<string> RequiredDeviceValues => RequiredDeviceValuesOf(Protocol.DataMessages);
+
     /// <summary>The device value names the messages need that the map root does not fix; the client supplies them.</summary>
-    public IReadOnlyList<string> RequiredDeviceValues
-        => [.. Protocol.Requests.Concat(Protocol.DataMessages)
+    internal IReadOnlyList<string> RequiredDeviceValuesOf(IEnumerable<AddressMessage> messages)
+        => [.. messages
             .SelectMany(m => m.DeviceValueNames)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Where(name => !Device.TryGet(name, out _))];
+
+    /// <summary>
+    /// A message by its schema name, as an exchange definition names it (see <see cref="AddressProtocol.Message"/>),
+    /// with the map root's settings applied.
+    /// </summary>
+    public AddressMessage Message(SchemaName name) => Protocol.Message(name);
 
     /// <summary>A range over one node occurrence (a group with all its fields, or one field; an instance without the index of a repeat around it: all its items).</summary>
     public PlanRange CreateRange(SchemaPath path, InstancePath instance = default)
@@ -217,14 +226,15 @@ internal sealed class AddressMap
     /// <summary>
     /// Splits a node range into the blocks to transfer with the given message: per field, per atomic group, or in
     /// contiguous parts split at unmapped gaps and at the message's maximum data size, never inside a field or an
-    /// atomic group. Nodes the access excludes (write-only on receive, read-only on send) are left out.
+    /// atomic group. Nodes the access excludes are left out: read-only fields for a message that carries data (they
+    /// are not sent), write-only fields for any other message (the device does not transmit them).
     /// With an atomic message, only the atomic groups are returned.
     /// </summary>
     public IReadOnlyList<AddressBlock> Split(PlanRange range, AddressMessage message)
     {
         ArgumentNullException.ThrowIfNull(message);
         var span = GetAddressRange(range);
-        var excluded = message.Kind == ExchangeMessageKind.Request ? NodeAccess.Write : NodeAccess.Read;
+        var excluded = message.IsData ? NodeAccess.Read : NodeAccess.Write;
         var fields = _layout.Fields(span).Where(f => f.Layout.Access != excluded).ToList();
         var blocks = new List<AddressBlock>();
 
@@ -308,7 +318,7 @@ internal sealed class AddressMap
     {
         ArgumentNullException.ThrowIfNull(message);
         ArgumentNullException.ThrowIfNull(block);
-        if (message.Kind != ExchangeMessageKind.Data)
+        if (!message.IsData)
         {
             throw new ArgumentException($"'{message.Name}' is not a data message.", nameof(message));
         }
@@ -371,12 +381,19 @@ internal sealed class AddressMap
     internal DeviceValues DeviceFor(DeviceValues client)
     {
         var device = Device.With(client);
-        var missing = RequiredDeviceValues.Where(name => !device.TryGet(name, out _)).ToList();
+        var missing = MissingDeviceValues(client, Protocol.DataMessages);
         if (missing.Count > 0)
         {
             throw new InvalidOperationException($"The device values {String.Join(", ", missing)} are required by the messages of '{Root}'; supply them with the device.");
         }
         return device;
+    }
+
+    /// <summary>The device values the messages need that neither the map root nor the client supplies.</summary>
+    internal IReadOnlyList<string> MissingDeviceValues(DeviceValues client, IEnumerable<AddressMessage> messages)
+    {
+        var device = Device.With(client);
+        return [.. RequiredDeviceValuesOf(messages).Where(name => !device.TryGet(name, out _))];
     }
 
     /// <summary>The number of items of a repeat of the map in the address space (<c>midi.repeat</c>, or its constant count); null for any other node.</summary>
@@ -412,6 +429,18 @@ internal sealed class AddressMap
         data = null!;
         return false;
     }
+
+    /// <summary>Recognises one data message for this map and device (see <see cref="TryReadData(ReadOnlyMemory{byte}, DeviceValues, out ReceivedData)"/>).</summary>
+    internal bool TryReadData(AddressMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device, out ReceivedData data)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(device);
+        data = message.IsData ? TryRead(message, sysEx, device)! : null!;
+        return data is not null;
+    }
+
+    /// <summary>Follows which addresses of a block the received data covers, to tell when the block is complete.</summary>
+    internal static BlockCoverage Coverage(AddressBlock block) => new(block);
 
     /// <summary>
     /// Copies the values of a node range from a source to a sink by writing and reading them with the map plan,
@@ -667,4 +696,24 @@ public sealed class ReceivedData
 
     /// <summary>Reads the values of the message into the value model (paths and instances of the map plan).</summary>
     public long Decode(IValueSink sink) => _map.Decode(this, sink);
+}
+
+/// <summary>
+/// Which addresses of a block the data received so far covers: a block is complete when every address of it is
+/// covered (a device may answer one request with several data messages).
+/// </summary>
+internal sealed class BlockCoverage(AddressBlock block)
+{
+    private readonly bool[] _covered = new bool[block.Addresses.Size];
+
+    /// <summary>Adds the addresses of the data; true when the block is now complete.</summary>
+    public bool Add(ReceivedData data)
+    {
+        var overlap = block.Addresses.Intersect(data.Block.Addresses);
+        for (var address = overlap.Start; address < overlap.End; address++)
+        {
+            _covered[address - block.Addresses.Start] = true;
+        }
+        return _covered.All(covered => covered);
+    }
 }

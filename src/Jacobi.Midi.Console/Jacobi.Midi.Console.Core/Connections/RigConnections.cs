@@ -276,7 +276,7 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
         try
         {
             if (_factory is null || _factorySerializer != serializer)
-                (_factory, _factorySerializer) = (new MessageExchangeFactory(_session, serializer), serializer);
+                (_factory, _factorySerializer) = (new MessageExchangeFactory(_session, serializer, _rig?.Library.Exchanges ?? new ExchangeDefinitions()), serializer);
             var options = new MessageExchangeOptions { Groups = reference.Groups };
             var session = await _factory.CreateSession(endpoint.Id, link.DeviceValues, options, null, ct);
             link.Session = session;

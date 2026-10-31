@@ -23,7 +23,7 @@ public static class AddressMapValidator
         {
             foreach (var root in document.Roots)
             {
-                ValidateTags(document.Name, root, new SchemaPath(root.Name), inMessage: false, dataChoices, problems);
+                ValidateTags(document.Name, root, new SchemaPath(root.Name), dataChoices, problems);
             }
         }
 
@@ -49,7 +49,7 @@ public static class AddressMapValidator
         return [.. problems.Distinct()];
     }
 
-    private static void ValidateTags(string document, SchemaNode node, SchemaPath path, bool inMessage,
+    private static void ValidateTags(string document, SchemaNode node, SchemaPath path,
         List<(string, SchemaPath, SchemaName)> dataChoices, AddressMapProblems problems)
     {
         foreach (var property in node.Properties.Where(p => AddressMapTags.IsTag(p.Name)))
@@ -58,23 +58,6 @@ public static class AddressMapValidator
             {
                 problems.Error(document, path, problem);
             }
-        }
-
-        if (MidiProperties.Find(node, MidiProperties.Message) is not null)
-        {
-            if (node is not SchemaGroup || node is SchemaRepeat or SchemaChoice)
-            {
-                problems.Error(document, path, $"'{MidiProperties.Message}' only applies to groups.");
-            }
-            else if (path.Parent.IsEmpty)
-            {
-                problems.Error(document, path, $"'{MidiProperties.Message}' is not allowed on a root: a message is a group inside an envelope root.");
-            }
-            else if (inMessage)
-            {
-                problems.Error(document, path, $"'{MidiProperties.Message}' is not allowed inside another message.");
-            }
-            inMessage = true;
         }
 
         if (AddressMapTags.RoleOf(node) is { } role && AddressMapTags.IsRole(role))
@@ -92,17 +75,13 @@ public static class AddressMapValidator
             {
                 problems.Error(document, path, $"the role '{role}' only applies to fields.");
             }
-            if (!inMessage)
-            {
-                problems.Warning(document, path, $"the role '{role}' is not used: the node is not inside a message ({MidiProperties.Message}).");
-            }
         }
 
         if (node is SchemaGroup group)
         {
             foreach (var member in group.Members)
             {
-                ValidateTags(document, member, path.Append(member.Name), inMessage, dataChoices, problems);
+                ValidateTags(document, member, path.Append(member.Name), dataChoices, problems);
             }
         }
     }
@@ -127,7 +106,7 @@ public static class AddressMapValidator
         }
 
         var protocol = map.Protocol;
-        var messages = protocol.Requests.Concat(protocol.DataMessages).Concat(protocol.Replies).ToList();
+        var messages = protocol.DataMessages;
         foreach (var message in messages)
         {
             var document = message.Range.ExecutionPlan.Name?.Namespace ?? String.Empty;

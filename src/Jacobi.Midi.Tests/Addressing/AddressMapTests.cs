@@ -20,12 +20,14 @@ public class AddressMapTests
         var map = CreateMap();
 
         Assert.Equal(new AddressSpace(2, 7), map.Protocol.AddressSpace);
-        var request = Assert.Single(map.Protocol.Requests);
-        Assert.Equal("Message.Request", request.Name);
-        Assert.Equal(AddressUnit.Range, request.Unit);
+        // the data message is found by its data role; any other message by the name an exchange file gives
         var data = Assert.Single(map.Protocol.DataMessages);
         Assert.Equal("Message.Data", data.Name);
-        Assert.Equal(TimeSpan.FromMilliseconds(20), data.Interval);
+        Assert.True(data.IsData);
+        var request = map.Message(new SchemaName("TestEnvelope.Message.Request"));
+        Assert.Equal("Message.Request", request.Name);
+        Assert.Equal(AddressUnit.Range, request.Unit);
+        Assert.True(request.IsRequest);
     }
 
     [Fact]
@@ -154,7 +156,7 @@ public class AddressMapTests
     public void Split_RangeMessage_SplitsAtGaps()
     {
         var map = CreateMap();
-        var request = map.Protocol.Requests[0];
+        var request = map.Message(new SchemaName("TestEnvelope.Message.Request"));
 
         // three memory patches: each is followed by reserved addresses
         var range = map.CreateRange("AddressMap.Memory.Patch", new InstancePath([0]), "AddressMap.Memory.Patch", new InstancePath([2]));
@@ -237,7 +239,7 @@ public class AddressMapTests
         var map = CreateMap();
         var device = map.Device.With(Device0);
 
-        var bytes = map.Protocol.CreateRequest(map.Protocol.Requests[0], new AddressRange(PatchAddress(1), PatchSize), device);
+        var bytes = map.Protocol.CreateMessage(map.Message(new SchemaName("TestEnvelope.Message.Request")), new AddressRange(PatchAddress(1), PatchSize), device);
 
         // address 01 20, size 00 0F
         Assert.Equal(Convert.ToHexString(Request(PatchAddress(1), PatchSize)), Convert.ToHexString(bytes));
@@ -250,7 +252,7 @@ public class AddressMapTests
         var map = CreateMap();
         var device = map.Device.With(Device0);
 
-        var bytes = map.Protocol.CreateRequest(map.Protocol.Requests[0], new AddressRange(1, 0x80), device);
+        var bytes = map.Protocol.CreateMessage(map.Message(new SchemaName("TestEnvelope.Message.Request")), new AddressRange(1, 0x80), device);
 
         // address 00 01, size 01 00
         Assert.Equal("F07D0042010001010" + "0", Convert.ToHexString(bytes)[..18]);

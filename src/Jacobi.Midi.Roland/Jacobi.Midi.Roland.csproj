@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Schemas\*.xml" />
+    <EmbeddedResource Include="Exchange\*.xml" />
+    <EmbeddedResource Include="Exchange\*.json" />
   </ItemGroup>
 
   <ItemGroup>

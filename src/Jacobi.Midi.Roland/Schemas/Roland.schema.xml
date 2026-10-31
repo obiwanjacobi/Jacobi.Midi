@@ -9,14 +9,15 @@
 
   The model id is device specific (GP-8 = 0x13) and is therefore not fixed here.
   The device id is the MIDI basic channel - 1 (0000nnnn).
-  The content of the Address and Data is described by a device schema (see Gp8.xml).
+  The content of the Address and Data is described by a device schema (see Gp8.schema.xml).
 
   Message32 is the same format with 4 address bytes (and 4 size bytes in RQ1), as used by the GX-700
-  (see Gx700.xml). Its data is the open choice 'messageBody32': a device map conforms to one address size only.
+  (see Gx700.schema.xml). Its data is the open choice 'messageBody32': a device map conforms to one address size only.
 
-  The midi.* properties tag the messages for the address map mechanism (see src/Jacobi.Midi.Device/Addressing/readme.md):
-    midi.message  request (RQ1) or data (DT1)
-    midi.role     the value a node holds: address, size, device.<name> or data
+  The midi.role properties tag the values of the messages for the address map mechanism
+  (see src/Jacobi.Midi.Device/Addressing/readme.md): address, size, device.<name> or data.
+  A message with the data role (DT1) carries a device map; which messages a device exchanges, in which order and
+  with which timing, is in the exchange files of the devices (src/Jacobi.Midi.Roland/Exchange).
 -->
 <schema name="Roland">
   <includes>
@@ -50,7 +51,7 @@
         <processor name="midi.sysex"/>
       </processors>
       <members>
-        <group name="RQ1" midi.message="request">
+        <group name="RQ1">
           <members>
             <field name="RolandId" datatype="sys.uint8" value="0x41"/>
             <field name="DeviceId" datatype="sys.uint8" midi.role="device.deviceId"/>
@@ -67,7 +68,7 @@
             </group>
           </members>
         </group>
-        <group name="DT1" midi.message="data" midi.messageInterval="20">
+        <group name="DT1">
           <members>
             <field name="RolandId" datatype="sys.uint8" value="0x41"/>
             <field name="DeviceId" datatype="sys.uint8" midi.role="device.deviceId"/>
@@ -93,7 +94,7 @@
         <processor name="midi.sysex"/>
       </processors>
       <members>
-        <group name="RQ1" midi.message="request">
+        <group name="RQ1">
           <members>
             <field name="RolandId" datatype="sys.uint8" value="0x41"/>
             <field name="DeviceId" datatype="sys.uint8" midi.role="device.deviceId"/>
@@ -110,7 +111,7 @@
             </group>
           </members>
         </group>
-        <group name="DT1" midi.message="data" midi.messageInterval="20">
+        <group name="DT1">
           <members>
             <field name="RolandId" datatype="sys.uint8" value="0x41"/>
             <field name="DeviceId" datatype="sys.uint8" midi.role="device.deviceId"/>
@@ -136,7 +137,7 @@
         <processor name="midi.sysex"/>
       </processors>
       <members>
-        <group name="RQ1" midi.message="request">
+        <group name="RQ1">
           <members>
             <field name="RolandId" datatype="sys.uint8" value="0x41"/>
             <field name="DeviceId" datatype="sys.uint8" midi.role="device.deviceId"/>
@@ -153,7 +154,7 @@
             </group>
           </members>
         </group>
-        <group name="DT1" midi.message="data" midi.messageInterval="20">
+        <group name="DT1">
           <members>
             <field name="RolandId" datatype="sys.uint8" value="0x41"/>
             <field name="DeviceId" datatype="sys.uint8" midi.role="device.deviceId"/>

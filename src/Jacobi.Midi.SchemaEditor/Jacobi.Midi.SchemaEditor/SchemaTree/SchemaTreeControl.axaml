@@ -6,7 +6,7 @@
              x:Class="Jacobi.Midi.SchemaEditor.SchemaTree.SchemaTreeControl">
 
     <UserControl.Styles>
-        <!-- the address map tag of a node (its midi.role or midi.message): the roles a message fulfils from the map -->
+        <!-- the address map tag of a node (its midi.role): the roles a message fulfils from the map -->
         <Style Selector="TextBlock.addressTag">
             <Setter Property="FontSize" Value="11" />
             <Setter Property="VerticalAlignment" Value="Center" />

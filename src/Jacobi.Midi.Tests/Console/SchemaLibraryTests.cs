@@ -247,7 +247,7 @@ public sealed class SchemaLibraryTests : IDisposable
     {
         // the GX-700 schema is built in (the Roland assembly); the same schema from a file replaces it
         var roland = typeof(Jacobi.Midi.Roland.Processors.ProcessorFactory).Assembly;
-        var resource = roland.GetManifestResourceNames().Single(name => name.EndsWith("Gx700.xml", StringComparison.Ordinal));
+        var resource = roland.GetManifestResourceNames().Single(name => name.EndsWith(".Schemas.Gx700.schema.xml", StringComparison.Ordinal));
         var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}-Gx700.xml");
         using (var stream = roland.GetManifestResourceStream(resource)!)
         using (var file = File.Create(path))

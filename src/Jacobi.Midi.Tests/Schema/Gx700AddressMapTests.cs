@@ -69,7 +69,7 @@ public class Gx700AddressMapTests
         var map = CreateMap();
 
         Assert.Equal(new AddressSpace(4, 7), map.Protocol.AddressSpace);
-        Assert.Equal("Message32.RQ1", Assert.Single(map.Protocol.Requests).Name);
+        Assert.True(map.Message(new SchemaName("Roland.Message32.RQ1")).IsRequest);
         Assert.Equal("Message32.DT1", Assert.Single(map.Protocol.DataMessages).Name);
     }
 

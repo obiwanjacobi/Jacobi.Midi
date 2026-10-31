@@ -27,6 +27,8 @@
     <ProjectReference Include="..\Jacobi.Midi.SchemaEditor\Jacobi.Midi.SchemaEditor\Jacobi.Midi.SchemaEditor.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\Jacobi.Midi.Device\Exchange\exchange.xsd" Link="exchange.xsd" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Jacobi.Midi.Device\Exchange\exchange.schema.json" Link="exchange.schema.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Schema\gp8-sysex.syx">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

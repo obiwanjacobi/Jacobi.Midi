@@ -4,13 +4,14 @@ using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Device.Exchange;
+using System.Diagnostics;
 using Xunit;
 using static Jacobi.Midi.Tests.Addressing.TestDevice;
 
 namespace Jacobi.Midi.Tests.Addressing;
 
 /// <summary>
-/// The message exchange (one way) on the stand-alone <see cref="TestDevice"/> schemas.
+/// The message exchange (one way) on the stand-alone <see cref="TestDevice"/> schemas and its exchange file.
 /// </summary>
 public class MessageExchangeTests
 {
@@ -18,9 +19,15 @@ public class MessageExchangeTests
     private static PlanRange Range(Serializer serializer, string path, params int[] instance)
         => serializer.GetPlan(MapName).CreateRange(path, new InstancePath(instance), path, new InstancePath(instance));
 
-    private static MessageExchange CreateExchange(Serializer serializer, FakeDevice device, int timeoutMs = 1000, DeviceValues? values = null)
-        => new(new AddressMaps(serializer), device, values ?? new DeviceValues { ["deviceId"] = 0 },
-            new MessageExchangeOptions { ResponseTimeout = TimeSpan.FromMilliseconds(timeoutMs) });
+    private static MessageExchange CreateExchange(Serializer serializer, FakeDevice device, int timeoutMs = 1000, DeviceValues? values = null,
+        ExchangeDefinitions? exchanges = null)
+        => new(new AddressMaps(serializer), exchanges ?? CreateExchanges(timeoutMs), device, values ?? new DeviceValues { ["deviceId"] = 0 });
+
+    private static Task<TransferResult> RequestData(MessageExchange exchange, PlanRange range, IValueSink sink)
+        => exchange.Execute(ExchangeNames.RequestData, range, new ExchangeData { Sink = sink }, TestContext.Current.CancellationToken);
+
+    private static Task<TransferResult> SendData(MessageExchange exchange, PlanRange range, IValueSource source)
+        => exchange.Execute(ExchangeNames.SendData, range, new ExchangeData { Source = source }, TestContext.Current.CancellationToken);
 
     [Fact]
     public async Task Receive_MemoryPatch()
@@ -30,7 +37,7 @@ public class MessageExchangeTests
         await using var exchange = CreateExchange(serializer, device);
         var sink = new FieldValueStore();
 
-        var result = await exchange.Receive(Range(serializer, "AddressMap.Memory.Patch", 1), sink, TestContext.Current.CancellationToken);
+        var result = await RequestData(exchange, Range(serializer, "AddressMap.Memory.Patch", 1), sink);
 
         Assert.True(result.IsComplete);
         Assert.Equal(Convert.ToHexString(Request(PatchAddress(1), PatchSize)), Convert.ToHexString(Assert.Single(device.Requests)));
@@ -48,7 +55,7 @@ public class MessageExchangeTests
 
         var range = serializer.GetPlan(MapName)
             .CreateRange("AddressMap.Memory.Patch", new InstancePath([0]), "AddressMap.Memory.Patch", new InstancePath([2]));
-        var result = await exchange.Receive(range, sink, TestContext.Current.CancellationToken);
+        var result = await RequestData(exchange, range, sink);
 
         Assert.True(result.IsComplete);
         Assert.Equal(3, result.Blocks.Count);
@@ -65,7 +72,7 @@ public class MessageExchangeTests
         await using var exchange = CreateExchange(serializer, device);
         var sink = new FieldValueStore();
 
-        var result = await exchange.Receive(Range(serializer, "AddressMap.Memory.Patch.Filter.Cutoff", 3), sink, TestContext.Current.CancellationToken);
+        var result = await RequestData(exchange, Range(serializer, "AddressMap.Memory.Patch.Filter.Cutoff", 3), sink);
 
         Assert.True(result.IsComplete);
         // the patch is atomic: the request is for the whole patch
@@ -81,10 +88,30 @@ public class MessageExchangeTests
         var device = new FakeDevice { Silent = true };
         await using var exchange = CreateExchange(serializer, device, timeoutMs: 50);
 
-        var result = await exchange.Receive(Range(serializer, "AddressMap.Edit"), new FieldValueStore(), TestContext.Current.CancellationToken);
+        var result = await RequestData(exchange, Range(serializer, "AddressMap.Edit"), new FieldValueStore());
 
         Assert.False(result.IsComplete);
-        Assert.Equal(BlockStatus.TimedOut, Assert.Single(result.Blocks).Status);
+        var block = Assert.Single(result.Blocks);
+        Assert.Equal(BlockStatus.TimedOut, block.Status);
+        Assert.Equal("timeout in state 'request' of 'requestData'.", block.Reason);
+    }
+
+    [Fact]
+    public async Task Receive_AFailedBlock_EndsTheTransfer()
+    {
+        var serializer = CreateSerializer();
+        var device = new FakeDevice { Silent = true };
+        await using var exchange = CreateExchange(serializer, device, timeoutMs: 50);
+        var range = serializer.GetPlan(MapName)
+            .CreateRange("AddressMap.Memory.Patch", new InstancePath([0]), "AddressMap.Memory.Patch", new InstancePath([2]));
+
+        var result = await RequestData(exchange, range, new FieldValueStore());
+
+        // the first block times out: the others are not requested, and reported with the same status
+        Assert.Single(device.Requests);
+        Assert.Equal(3, result.Blocks.Count);
+        Assert.All(result.Blocks, block => Assert.Equal(BlockStatus.TimedOut, block.Status));
+        Assert.StartsWith("Not transferred", result.Blocks[2].Reason);
     }
 
     [Fact]
@@ -96,7 +123,7 @@ public class MessageExchangeTests
         var source = new FieldValueStore();
         source.Set("AddressMap.Edit.Filter.Cutoff", InstancePath.Empty, new LogicalField("Cutoff", typeof(byte), (byte)77));
 
-        var result = await exchange.Send(Range(serializer, "AddressMap.Edit.Filter.Cutoff"), source, TestContext.Current.CancellationToken);
+        var result = await SendData(exchange, Range(serializer, "AddressMap.Edit.Filter.Cutoff"), source);
 
         // the exchange does not complete the patch (a session does): the source must hold the whole patch
         Assert.Equal(BlockStatus.Failed, Assert.Single(result.Blocks).Status);
@@ -115,7 +142,7 @@ public class MessageExchangeTests
         Assert.True(AddressMap.Create(serializer, MapName).TryReadData(message, new DeviceValues { ["deviceId"] = 0 }, out var data));
         data.Decode(values);
 
-        var result = await exchange.Send(Range(serializer, "AddressMap.Memory.Patch", 4), values, TestContext.Current.CancellationToken);
+        var result = await SendData(exchange, Range(serializer, "AddressMap.Memory.Patch", 4), values);
 
         Assert.True(result.IsComplete);
         Assert.Empty(device.Requests);
@@ -131,11 +158,33 @@ public class MessageExchangeTests
         var source = new FieldValueStore();
         source.Set("AddressMap.Global.Volume", InstancePath.Empty, new LogicalField("Volume", typeof(byte), (byte)0x33));
 
-        var result = await exchange.Send(Range(serializer, "AddressMap.Global.Volume"), source, TestContext.Current.CancellationToken);
+        var result = await SendData(exchange, Range(serializer, "AddressMap.Global.Volume"), source);
 
         Assert.True(result.IsComplete);
         Assert.Empty(device.Requests);
         Assert.Equal(Convert.ToHexString(DataMessage(GlobalStart + 9, [0x33])), Convert.ToHexString(Assert.Single(device.DataSets)));
+    }
+
+    [Fact]
+    public async Task Send_KeepsTheMessageIntervalBetweenMessages()
+    {
+        var serializer = CreateSerializer();
+        var device = new FakeDevice();
+        var exchanges = new ExchangeDefinitions();
+        exchanges.Add(ExchangeDefinitionReader.ReadXml(ExchangeXml.Replace("messageInterval=\"20\"", "messageInterval=\"60\""), "test"));
+        await using var exchange = CreateExchange(serializer, device, exchanges: exchanges);
+        var values = new FieldValueStore();
+        var range = serializer.GetPlan(MapName)
+            .CreateRange("AddressMap.Memory.Patch", new InstancePath([0]), "AddressMap.Memory.Patch", new InstancePath([2]));
+        Assert.True((await RequestData(exchange, range, values)).IsComplete);
+
+        var watch = Stopwatch.StartNew();
+        var result = await SendData(exchange, range, values);
+
+        Assert.True(result.IsComplete);
+        Assert.Equal(3, device.DataSets.Count);
+        // 60 ms after the last request, and between the three data messages
+        Assert.True(watch.ElapsedMilliseconds >= 3 * 60 - 10, $"{watch.ElapsedMilliseconds} ms");
     }
 
     [Fact]
@@ -184,15 +233,81 @@ public class MessageExchangeTests
         var serializer = CreateSerializer();
         await using var exchange = CreateExchange(serializer, new FakeDevice(), values: new DeviceValues());
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => exchange.Receive(Range(serializer, "AddressMap.Edit"), new FieldValueStore(), TestContext.Current.CancellationToken));
+        var exception = await Assert.ThrowsAsync<ExchangeException>(
+            () => RequestData(exchange, Range(serializer, "AddressMap.Edit"), new FieldValueStore()));
         Assert.Contains("deviceId", exception.Message);
     }
 
     [Fact]
-    public void Protocol_WithoutReplies_IsOneWay()
+    public async Task Execute_AnExchangeTheFileDoesNotHave_Throws()
     {
-        Assert.Equal("oneWay", CreateMap().Protocol.Exchange);
+        var serializer = CreateSerializer();
+        var device = new FakeDevice();
+        await using var exchange = CreateExchange(serializer, device);
+
+        var exception = await Assert.ThrowsAsync<ExchangeException>(() => exchange.Execute(
+            "storeData", Range(serializer, "AddressMap.Edit"), new ExchangeData(), TestContext.Current.CancellationToken));
+
+        Assert.Equal("storeData", exception.Exchange);
+        Assert.Contains("has no exchange 'storeData'", Assert.Single(exception.Problems));
+        Assert.Empty(device.Requests);
+    }
+
+    [Fact]
+    public async Task Execute_WithoutAnExchangeFile_Throws()
+    {
+        var serializer = CreateSerializer();
+        await using var exchange = CreateExchange(serializer, new FakeDevice(), exchanges: new ExchangeDefinitions());
+
+        var exception = await Assert.ThrowsAsync<ExchangeException>(() => RequestData(exchange, Range(serializer, "AddressMap.Edit"), new FieldValueStore()));
+
+        Assert.Contains("There is no exchange file for 'TestDevice.AddressMap'", Assert.Single(exception.Problems));
+    }
+
+    [Fact]
+    public async Task Validate_ReportsTheProblems()
+    {
+        var serializer = CreateSerializer();
+        var exchanges = new ExchangeDefinitions();
+        exchanges.Add(ExchangeDefinitionReader.ReadXml("""
+            <exchanges for="TestDevice.AddressMap">
+              <exchange name="unknownMessage">
+                <state name="request">
+                  <send message="TestEnvelope.Message.Unknown" />
+                  <on event="sent" result="completed" />
+                </state>
+              </exchange>
+              <exchange name="twoCuts">
+                <state name="request">
+                  <send message="TestEnvelope.Message.Request" />
+                  <on event="sent" goto="write" />
+                </state>
+                <state name="write">
+                  <send message="TestEnvelope.Message.Data" />
+                  <on event="sent" result="completed" />
+                </state>
+              </exchange>
+            </exchanges>
+            """, "test"));
+        await using var exchange = CreateExchange(serializer, new FakeDevice(), exchanges: exchanges, values: new DeviceValues());
+        var edit = Range(serializer, "AddressMap.Edit");
+
+        Assert.Contains("There is no message 'TestEnvelope.Message.Unknown'", Assert.Single(exchange.Validate("unknownMessage", edit)));
+        var problems = exchange.Validate("twoCuts", edit, new ExchangeData());
+        Assert.Contains(problems, problem => problem.Contains("more than one message that asks for or carries data", StringComparison.Ordinal));
+        Assert.Contains(problems, problem => problem.Contains("deviceId", StringComparison.Ordinal));
+        Assert.Contains(problems, problem => problem.Contains("it needs a source", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void DataMessages_AreFoundByTheirDataRole()
+    {
+        var map = CreateMap();
+
+        Assert.Equal("TestEnvelope.Message.Data", Assert.Single(map.Protocol.DataMessages).FullName);
+        var request = map.Message(new SchemaName("TestEnvelope.Message.Request"));
+        Assert.True(request.IsRequest);
+        Assert.False(request.IsData);
     }
 
     [Fact]

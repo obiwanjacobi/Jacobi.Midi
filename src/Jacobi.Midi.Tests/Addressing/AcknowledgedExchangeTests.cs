@@ -10,9 +10,9 @@ using Xunit;
 namespace Jacobi.Midi.Tests.Addressing;
 
 /// <summary>
-/// The 'acknowledged' exchange protocol with a minimal envelope (manufacturer id 7D, non-commercial):
+/// An acknowledged exchange with a minimal envelope (manufacturer id 7D, non-commercial):
 ///   request  F0 7D 01 aa ss F7      data  F0 7D 02 aa dd… F7      ack  F0 7D 03 F7      nak  F0 7D 04 F7
-/// The protocol is inferred from the ack/nak messages.
+/// The exchange file names the ack and nak messages: sent data waits for them.
 /// </summary>
 public class AcknowledgedExchangeTests
 {
@@ -30,7 +30,7 @@ public class AcknowledgedExchangeTests
                 <processor name="midi.sysex" />
               </processors>
               <members>
-                <group name="Request" midi.message="request">
+                <group name="Request">
                   <members>
                     <field name="Id" datatype="sys.uint8" value="0x7D" />
                     <field name="Command" datatype="sys.uint8" value="0x01" />
@@ -38,7 +38,7 @@ public class AcknowledgedExchangeTests
                     <field name="Size" datatype="sys.uint8" midi.role="size" />
                   </members>
                 </group>
-                <group name="Data" midi.message="data">
+                <group name="Data">
                   <members>
                     <field name="Id" datatype="sys.uint8" value="0x7D" />
                     <field name="Command" datatype="sys.uint8" value="0x02" />
@@ -46,13 +46,13 @@ public class AcknowledgedExchangeTests
                     <choice name="Body" memberNodeDef="body" midi.role="data" />
                   </members>
                 </group>
-                <group name="Ack" midi.message="ack">
+                <group name="Ack">
                   <members>
                     <field name="Id" datatype="sys.uint8" value="0x7D" />
                     <field name="Command" datatype="sys.uint8" value="0x03" />
                   </members>
                 </group>
-                <group name="Nak" midi.message="nak">
+                <group name="Nak">
                   <members>
                     <field name="Id" datatype="sys.uint8" value="0x7D" />
                     <field name="Command" datatype="sys.uint8" value="0x04" />
@@ -70,6 +70,32 @@ public class AcknowledgedExchangeTests
         </schema>
         """;
 
+    private const string Exchanges = """
+        <exchanges for="Ack.Map" responseTimeout="200">
+          <exchange name="requestData">
+            <state name="request">
+              <send message="Ack.Message.Request" />
+              <receive message="Ack.Message.Data" />
+              <on event="complete" result="completed" />
+              <on message="Ack.Message.Nak" result="rejected" />
+            </state>
+          </exchange>
+          <exchange name="sendData">
+            <state name="write">
+              <send message="Ack.Message.Data" />
+              <on message="Ack.Message.Ack" result="completed" />
+              <on message="Ack.Message.Nak" result="rejected" />
+            </state>
+          </exchange>
+          <exchange name="sendDataOneWay">
+            <state name="write">
+              <send message="Ack.Message.Data" />
+              <on event="sent" result="completed" />
+            </state>
+          </exchange>
+        </exchanges>
+        """;
+
     private static readonly byte[] Ack = [0xF0, 0x7D, 0x03, 0xF7];
     private static readonly byte[] Nak = [0xF0, 0x7D, 0x04, 0xF7];
 
@@ -79,9 +105,11 @@ public class AcknowledgedExchangeTests
     private static PlanRange MapRange(Serializer serializer)
         => serializer.GetPlan(new SchemaName("Ack.Map")).CreateRange("Map");
 
-    private static MessageExchange CreateExchange(Serializer serializer, FakeDevice device, MessageExchangeOptions? options = null)
-        => new(new AddressMaps(serializer), device, new DeviceValues(),
-            options ?? new MessageExchangeOptions { ResponseTimeout = TimeSpan.FromMilliseconds(200) });
+    private static MessageExchange CreateExchange(Serializer serializer, FakeDevice device)
+        => new(new AddressMaps(serializer), TestDevice.CreateExchanges(files: Exchanges), device, new DeviceValues());
+
+    private static Task<TransferResult> Send(MessageExchange exchange, PlanRange range, IValueSource source, string name = ExchangeNames.SendData)
+        => exchange.Execute(name, range, new ExchangeData { Source = source }, TestContext.Current.CancellationToken);
 
     private static FieldValueStore Values(byte a, byte b)
     {
@@ -92,24 +120,27 @@ public class AcknowledgedExchangeTests
     }
 
     [Fact]
-    public void Protocol_IsInferredFromTheReplies()
+    public void MessagesWithoutData_AreFoundByName()
     {
         var map = AddressMap.Create(CreateSerializer(), new SchemaName("Ack.Map"));
 
-        Assert.Equal("acknowledged", map.Protocol.Exchange);
-        Assert.Equal([ExchangeMessageKind.Ack, ExchangeMessageKind.Nak], map.Protocol.Replies.Select(r => r.Kind));
+        var ack = map.Message(new SchemaName("Ack.Message.Ack"));
+        Assert.False(ack.IsData);
+        Assert.False(ack.IsRequest);
+        Assert.Throws<InvalidOperationException>(() => map.Message(new SchemaName("Ack.Message.Unknown")));
     }
 
     [Fact]
-    public void TryReadReply_RecognisesAckAndNak()
+    public void TryRead_RecognisesAckAndNak()
     {
         var map = AddressMap.Create(CreateSerializer(), new SchemaName("Ack.Map"));
+        var ack = map.Message(new SchemaName("Ack.Message.Ack"));
+        var nak = map.Message(new SchemaName("Ack.Message.Nak"));
 
-        Assert.True(map.Protocol.TryReadReply(Ack, new DeviceValues(), out var ack));
-        Assert.Equal(ExchangeMessageKind.Ack, ack.Kind);
-        Assert.True(map.Protocol.TryReadReply(Nak, new DeviceValues(), out var nak));
-        Assert.Equal(ExchangeMessageKind.Nak, nak.Kind);
-        Assert.False(map.Protocol.TryReadReply(new byte[] { 0xF0, 0x7D, 0x02, 0x10, 0x01, 0x02, 0xF7 }, new DeviceValues(), out _));
+        Assert.True(map.Protocol.TryRead(ack, Ack, new DeviceValues()));
+        Assert.False(map.Protocol.TryRead(ack, Nak, new DeviceValues()));
+        Assert.True(map.Protocol.TryRead(nak, Nak, new DeviceValues()));
+        Assert.False(map.Protocol.TryRead(ack, new byte[] { 0xF0, 0x7D, 0x02, 0x10, 0x01, 0x02, 0xF7 }, new DeviceValues()));
     }
 
     [Fact]
@@ -119,7 +150,7 @@ public class AcknowledgedExchangeTests
         var device = new FakeDevice { DataReply = Ack };
         await using var exchange = CreateExchange(serializer, device);
 
-        var result = await exchange.Send(MapRange(serializer), Values(5, 6), TestContext.Current.CancellationToken);
+        var result = await Send(exchange, MapRange(serializer), Values(5, 6));
 
         Assert.True(result.IsComplete);
         Assert.Equal("F07D02100506F7", Convert.ToHexString(Assert.Single(device.Sent)));
@@ -132,11 +163,11 @@ public class AcknowledgedExchangeTests
         var device = new FakeDevice { DataReply = Nak };
         await using var exchange = CreateExchange(serializer, device);
 
-        var result = await exchange.Send(MapRange(serializer), Values(5, 6), TestContext.Current.CancellationToken);
+        var result = await Send(exchange, MapRange(serializer), Values(5, 6));
 
         var block = Assert.Single(result.Blocks);
         Assert.Equal(BlockStatus.Rejected, block.Status);
-        Assert.NotNull(block.Reason);
+        Assert.Equal("'Ack.Message.Nak' in state 'write' of 'sendData'.", block.Reason);
     }
 
     [Fact]
@@ -145,7 +176,7 @@ public class AcknowledgedExchangeTests
         var serializer = CreateSerializer();
         await using var exchange = CreateExchange(serializer, new FakeDevice());
 
-        var result = await exchange.Send(MapRange(serializer), Values(5, 6), TestContext.Current.CancellationToken);
+        var result = await Send(exchange, MapRange(serializer), Values(5, 6));
 
         Assert.Equal(BlockStatus.TimedOut, Assert.Single(result.Blocks).Status);
     }
@@ -159,7 +190,7 @@ public class AcknowledgedExchangeTests
         var sink = new FieldValueStore();
         var progress = new List<BlockResult>();
 
-        var result = await exchange.Receive(MapRange(serializer), sink, new Progress(progress), TestContext.Current.CancellationToken);
+        var result = await exchange.Execute(ExchangeNames.RequestData, MapRange(serializer), new ExchangeData { Sink = sink }, new Progress(progress), TestContext.Current.CancellationToken);
 
         Assert.True(result.IsComplete);
         Assert.Equal("F07D011002F7", Convert.ToHexString(Assert.Single(device.Sent)));
@@ -174,26 +205,23 @@ public class AcknowledgedExchangeTests
         var serializer = CreateSerializer();
         await using var exchange = CreateExchange(serializer, new FakeDevice { RequestReply = Nak });
 
-        var result = await exchange.Receive(MapRange(serializer), new FieldValueStore(), TestContext.Current.CancellationToken);
+        var result = await exchange.Execute(ExchangeNames.RequestData, MapRange(serializer), new ExchangeData { Sink = new FieldValueStore() }, TestContext.Current.CancellationToken);
 
         Assert.Equal(BlockStatus.Rejected, Assert.Single(result.Blocks).Status);
     }
 
     [Fact]
-    public async Task Options_Protocol_OverridesTheSchema()
+    public async Task AnotherExchangeOfTheFile_RunsByItsName()
     {
         var serializer = CreateSerializer();
         // one way: the data is not acknowledged, so a silent device completes the send
         var device = new FakeDevice();
-        await using var exchange = CreateExchange(serializer, device, new MessageExchangeOptions
-        {
-            ResponseTimeout = TimeSpan.FromMilliseconds(200),
-            Protocol = ExchangeProtocols.OneWay,
-        });
+        await using var exchange = CreateExchange(serializer, device);
 
-        var result = await exchange.Send(MapRange(serializer), Values(5, 6), TestContext.Current.CancellationToken);
+        var result = await Send(exchange, MapRange(serializer), Values(5, 6), "sendDataOneWay");
 
         Assert.True(result.IsComplete);
+        Assert.Single(device.Sent);
     }
 
     /// <summary>Collects progress reports synchronously (System.Progress posts them asynchronously).</summary>

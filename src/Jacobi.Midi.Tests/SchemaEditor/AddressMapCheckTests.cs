@@ -34,8 +34,8 @@ public class AddressMapCheckTests
         var issues = AddressMapCheck.Run(viewModel.LoadedSchemas.Compile(gp8), viewModel.OpenedAssemblies.Processors);
 
         Assert.All(issues, issue => Assert.True(issue.IsInformation, issue.Problem.ToString()));
-        var rq1DeviceId = Member(Member(roland.Members.Single(member => member.Name == "Message16"), "RQ1"), "DeviceId");
-        Assert.Contains(issues, issue => ReferenceEquals(issue.Node, rq1DeviceId));
+        var dt1DeviceId = Member(Member(roland.Members.Single(member => member.Name == "Message16"), "DT1"), "DeviceId");
+        Assert.Contains(issues, issue => ReferenceEquals(issue.Node, dt1DeviceId));
     }
 
     [Fact]
@@ -81,7 +81,8 @@ public class AddressMapCheckTests
         field.Properties.Remove(role);
         Assert.Null(field.AddressTag);
 
+        // a message has no kind in the schema (an exchange file gives it its part): only roles are shown
         var group = new EditGroup(null) { Name = "G", Members = [], Processors = [], Properties = [new EditProperty { Name = "midi.message", Value = "request" }] };
-        Assert.Equal("message: request", group.AddressTag);
+        Assert.Null(group.AddressTag);
     }
 }

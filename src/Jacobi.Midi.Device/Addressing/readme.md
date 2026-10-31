@@ -34,7 +34,7 @@ untouched. A `device.<name>` role gets its value from `midi.device.<name>` in th
 | `midi.atomic` | group, repeat item, map root | `true`: the group is **indivisible**; it is always received and sent as a whole (a GP-8 patch, Yamaha dump blocks; a device that only does complete dumps has an atomic root). |
 | `midi.access` | any addressed node, inherited | `readwrite` (default), `read` (e.g. Yamaha System Information) or `write` (trigger addresses such as XG System On, Store To Flash). Receive never requests `write` nodes; send never writes `read` nodes. |
 | `midi.device.<name>` | map root | A device value that is fixed for the device type, e.g. `midi.device.modelId="0x13"`. The client can add or override values (`DeviceValues`). |
-| `midi.unit`, `midi.maxDataSize`, `midi.messageInterval`, `midi.exchange` | map root | Override the envelope's message settings for this device (see below). A `midi.unit` override applies to the data messages only. |
+| `midi.unit`, `midi.maxDataSize` | map root | Override the envelope's message settings for this device (see below). A `midi.unit` override applies to the data messages only. |
 
 Sizes come from the plan: a field's constant `byteLength`, else the fixed size of its data type, else its
 `midi.stride`. A bit-packed group (`sys.bitpacker`) occupies its `byteLength` (or its bits rounded up to bytes);
@@ -55,13 +55,16 @@ values are best written in hex with separators: decimal `256` is the wire bytes 
 
 | Property | On | Meaning |
 |----------|----|---------|
-| `midi.message` | a message group | `request` (RQ1, Parameter Request, Dump Request), `data` (DT1, Parameter Change, Bulk Dump), or a reply of the device: `ack`, `nak`, `error` (e.g. Korg DATA LOAD COMPLETED / ERROR, FORMAT ERROR). A reply has no address, size or data. |
 | `midi.role` | envelope field or open choice | Which value the node holds: `address`, `size`, `device.<name>` or `data` (see below). |
 | `midi.unit` | a message group | What one message covers. Only needed on a message without a `size` role, where the target decides the size: `field` (exactly one field: Yamaha Parameter Request/Change) or `atomic` (exactly one atomic group: Yamaha Dump Request/Bulk Dump). The default, `range`, is any contiguous range of addresses (Roland RQ1/DT1). |
 | `midi.addressBits` | the `address` field | Bits per address byte; default 7. The number of address bytes is the field's `byteLength`. |
 | `midi.maxDataSize` | a message group | The largest number of data bytes in one message; default no limit. |
-| `midi.messageInterval` | a message group | Milliseconds to wait after sending this message (Roland advises at least 20 ms after a DT1). |
-| `midi.exchange` | envelope root | The exchange protocol: `oneWay` or `acknowledged` (see the [message exchange](../Exchange/readme.md)). Optional: without it, an envelope with `ack`/`nak` replies is `acknowledged`, otherwise `oneWay`. |
+
+A message has no kind in the schema. Its roles say what it holds: a message with the role `data` carries data of a
+map, a message with the role `address` (and no data) asks for data, any other message (e.g. an acknowledgement) only
+identifies itself and the device. Which messages a device exchanges, in which order and with which timing (the time
+between messages), is described in its exchange file (see the [message exchange](../Exchange/readme.md)), which
+names the messages; the same message can be used by several patterns.
 
 | `midi.role` | Value on write | On read |
 |-------------|----------------|---------|
@@ -73,21 +76,24 @@ values are best written in hex with separators: decimal `256` is the wire bytes 
 Everything else is already in the schema: constants (`value`) are written by the engine and a mismatch on read means
 "not this message"; a byte count (`byteSize` ref) is derived; checksum and framing are processors.
 
-**Finding the messages of a map.** The *data* messages are the groups tagged `midi.message="data"` that contain an
-open choice with `midi.role="data"` whose `memberNodeDef` is the map root's `nodeDef`. The *requests* and *replies*
-are the groups tagged `request`, `ack`, `nak` or `error` in the same envelope root as a matching data message.
+**Finding the messages of a map.** The *data* messages are found by their data: in an envelope root that holds an
+open choice with `midi.role="data"` whose `memberNodeDef` is the map root's `nodeDef`, the member group of the root
+that holds the choice (or the root itself when the choice is one of its members). Any other message is found by the
+name an exchange file gives it: the schema, the root and the path of the group, e.g. `Roland.Message16.RQ1`
+(`AddressMap.Message`).
 
 ## Examples
 
 The schemas in the repository:
 
 - [TestDevice.cs](../../Jacobi.Midi.Tests/Addressing/TestDevice.cs): a complete envelope and device map without vendor schemas (the test schemas): 2 address bytes, a `sys.crc` (CRC-7) checksum, an atomic patch nodeDef, a non-atomic group and a repeat with reserved addresses.
-- [Roland.xml](../../Jacobi.Midi.Roland/Schemas/Roland.xml): the Roland Type IV envelope (RQ1, DT1). `Message16`, `Message24` and `Message32` are the same messages with 2, 3 and 4 address bytes, each with its own open choice contract (`messageBody16`, `messageBody24`, `messageBody32`); a device map conforms to one address size only.
-- [Gp8.xml](../../Jacobi.Midi.Roland/Schemas/Gp8.xml): a device map with 2 address bytes; a temporary patch and a repeat of 128 memory patches with a stride larger than the patch.
-- [Gx700.xml](../../Jacobi.Midi.Roland/Schemas/Gx700.xml): a device map with 4 address bytes; atomic sections inside a patch, the same sections without `midi.atomic` in the individual (per parameter) temporary area, a write-only trigger address (Sound Change Request) and a read-only area (display).
+- [Roland.schema.xml](../../Jacobi.Midi.Roland/Schemas/Roland.schema.xml): the Roland Type IV envelope (RQ1, DT1). `Message16`, `Message24` and `Message32` are the same messages with 2, 3 and 4 address bytes, each with its own open choice contract (`messageBody16`, `messageBody24`, `messageBody32`); a device map conforms to one address size only.
+- [Gp8.schema.xml](../../Jacobi.Midi.Roland/Schemas/Gp8.schema.xml): a device map with 2 address bytes; a temporary patch and a repeat of 128 memory patches with a stride larger than the patch.
+- [Gx700,schema.xml](../../Jacobi.Midi.Roland/Schemas/Gx700.schema.xml): a device map with 4 address bytes; atomic sections inside a patch, the same sections without `midi.atomic` in the individual (per parameter) temporary area, a write-only trigger address (Sound Change Request) and a read-only area (display).
 
 A minimal stand-alone example (a made-up device, not in the repository). The envelope has a request and a data
-message with a 2 byte address; the checksum and framing processors are left out:
+message with a 2 byte address; the checksum and framing processors are left out. How the two are exchanged (and the
+time between messages) is in the device's exchange file:
 
 ```xml
 <!-- envelope schema 'Acme' -->
@@ -100,7 +106,7 @@ message with a 2 byte address; the checksum and framing processors are left out:
 <members>
   <group name="Messages">
     <members>
-      <group name="Request" midi.message="request">
+      <group name="Request">
         <members>
           <field name="Command" datatype="sys.uint8" value="0x01"/>
           <field name="Model" datatype="sys.uint8" midi.role="device.model"/>
@@ -108,7 +114,7 @@ message with a 2 byte address; the checksum and framing processors are left out:
           <field name="Size" nodeDef="address" midi.role="size"/>
         </members>
       </group>
-      <group name="Data" midi.message="data" midi.messageInterval="10">
+      <group name="Data">
         <members>
           <field name="Command" datatype="sys.uint8" value="0x02"/>
           <field name="Model" datatype="sys.uint8" midi.role="device.model"/>
@@ -160,7 +166,7 @@ Yamaha envelope and map (CP88 family, a sketch, not yet in the repository; see
 constant in a bit-packed group:
 
 ```xml
-<group name="ParameterRequest" midi.message="request" midi.unit="field">
+<group name="ParameterRequest" midi.unit="field">
   <members>
     <field name="YamahaId" datatype="sys.uint8" value="0x43"/>
     <group name="TypeAndDevice" byteLength="1">
@@ -175,9 +181,9 @@ constant in a bit-packed group:
     <field name="Address" nodeDef="sysex21" midi.role="address"/>
   </members>
 </group>
-<group name="ParameterChange" midi.message="data" midi.unit="field"> ... Type = 1, Address, Data (role data) </group>
-<group name="DumpRequest" midi.message="request" midi.unit="atomic"> ... Type = 2, Address </group>
-<group name="BulkDump" midi.message="data" midi.unit="atomic" midi.maxDataSize="512" midi.messageInterval="120">
+<group name="ParameterChange" midi.unit="field"> ... Type = 1, Address, Data (role data) </group>
+<group name="DumpRequest" midi.unit="atomic"> ... Type = 2, Address </group>
+<group name="BulkDump" midi.unit="atomic" midi.maxDataSize="512">
   ... Type = 0, ByteCount (byteSize ref of the data), Address, Data (role data), checksum processor ...
 </group>
 
@@ -204,7 +210,8 @@ span. A range is **widened** to whole addresses (asking for one bit field of a b
 other fields of that byte) and, for a transfer, to the **atomic groups** it overlaps. It is then split into the blocks
 to transfer with a message: per field (`field`), per atomic group (`atomic`), or in contiguous parts split at
 unmapped gaps and at the message's maximum data size, never inside a field or an atomic group (`range`). Nodes the
-access excludes (write-only on receive, read-only on send) are left out.
+access excludes are left out: read-only fields for a message that carries data, write-only fields for any other
+message (the device does not transmit them).
 
 **The data is the device map, in one serializer call.** There is no opaque data buffer: the open choice of a data
 message selects the device map as its body and narrows it to the block it carries, with `FromTarget`/`FromInstance`
@@ -225,7 +232,7 @@ one field, a few fields of a group, a group, or neighbouring groups.
   - *Offline data of a map* (e.g. a dump in a .syx file), with a value model of the map only: `ReadData` decodes the data messages of the map for a device into the sink, as the exchange decodes what it receives (other messages are skipped with a warning); `EncodeData` writes a range of the map as the data messages the exchange would send (widened to atomic groups, the same choice of messages). The device values and the choice of messages are those of the exchange (`AddressMap.DeviceFor`, `AddressMap.SelectBlocks`).
 - **A value model of a device.** `FieldValueStore` keeps field values by the path and instance of the map plan: as a sink it stores what is read, as a source it gives what it holds. The device session keeps its state of a device in it; a client can use it to keep the values of a device (the console's device state).
 - **Writing.** A data message carries any block of contiguous whole fields (`AddressMap.CreateData`): with the GP-8 every transfer is a whole, atomic patch; the individual temporary area of the GX-700 takes one parameter per message. A block with unmapped addresses inside is rejected (`ArgumentException`); `Split` never makes one.
-- **Replies** (`ack`, `nak`, `error`) are recognised by their constants and device values alone.
+- **Messages without data** (e.g. an ack or nak an exchange file names) are recognised by their constants and device values alone (`AddressProtocol.TryRead`).
 
 ## Validation
 
@@ -234,14 +241,14 @@ The map and its envelopes are validated when the map is first used (or prepared,
 an `AddressMapProblem` located at its node (the document and the node path from a root, node defs expanded):
 
 - **Layout**: addresses in plan order without overlap, no `midi.address` inside a repeat item, constant field sizes, repeat counts (`midi.repeat` or a constant `count`), `midi.repeat` only on repeats, `midi.stride` not smaller than the content, valid address notation and access values, atomic groups not nested, the map within the address space. Choices and virtual fields (`byteOffset`) are not supported in a map.
-- **Envelope**: at least one data message carries the map; requests and data messages have an `address` field with a constant `byteLength` and agree on the address space; a `size` role only on a `range` request, which needs one; a `data` role only on data messages; replies have no address, size or data; the envelopes agree on `midi.exchange`.
+- **Envelope**: at least one data message carries the map; the data messages have an `address` field with a constant `byteLength`, agree on the address space and have no `size` role. A message an exchange file names is checked when it is first used: a `size` role only with an `address` role on a `range` message, which needs one.
 - **Device values**: the device values the messages need (`deviceId` for the GP-8) are checked when an exchange first uses the map; they come from the map root or the client.
 
 Tools that show problems while a schema is written (the Schema Editor) use `AddressMapValidator.Validate`: it checks
 all tags of all schemas of a serializer, also those that no map uses, and reports errors, warnings and information:
 
 - **Tags on their own** (`AddressMapTags.Validate`, also used per property): a known `midi.*` name and a valid value.
-- **Roles in context**: a role is used inside a message (`midi.message`, a group inside an envelope root, not nested); `data` only on an open choice, the other roles only on fields.
+- **Roles in context**: `data` only on an open choice, the other roles only on fields.
 - **Fulfilment**: a data message without a map root that conforms to its contract (information); a `device.<name>` role the map root does not fix, so the client supplies it (information); a `midi.device.<name>` on a map root that no message uses (warning).
 - **Every map** with its envelopes, as above.
 
@@ -255,7 +262,7 @@ Namespace `Jacobi.Midi.Device.Addressing`.
 | `AddressSpace` | How an address is encoded on the wire (byte count × bits per byte); converts between wire form and linear addresses and parses/formats the notation. |
 | `AddressBlock` | A unit of transfer: an address range plus the node range (`PlanRange`) whose data it holds. |
 | `AddressMatch` | The result of resolving an address range: the block of whole fields it covers, whether it is aligned to field boundaries, and the unmapped addresses. |
-| `AddressMessage`, `ExchangeMessageKind`, `AddressUnit` | A tagged message of an envelope with its kind (request, data, ack, nak, error), unit, maximum data size, interval and role nodes. |
+| `AddressMessage`, `AddressUnit` | A message group of an envelope with its unit, maximum data size and role nodes; whether it carries data (`IsData`) or asks for it (`IsRequest`) follows from its roles. |
 | `NodeAccess` | The access of an addressed node (`midi.access`). |
 | `DeviceValues` | The device values by name (`deviceId`, `modelId`, ...): those of the map root plus those of the client. |
 | `ReceivedData` | A recognised data message: its address, device values and block; `Decode` reads its values into a value model. |

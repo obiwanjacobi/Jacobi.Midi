@@ -2,42 +2,38 @@
 
 What is planned for the console, and what was done. What the console does now is in the [readme](readme.md).
 
-## Open
-
-- [ ] Slider/Knob value change-drag jumps values when pressing/releasing shift (for fine/coarse changes). Seems like both modes work with their own values.
-
-### Edit mode
+## Edit mode
 
 - [ ] **A dashboard alias that is not in the rig.** Opening a dashboard whose alias is not in the rig asks the user to pick a rig device with the same map root (today it is reported).
 - [ ] Selecting several controls.
 - [ ] Copy and paste.
 - [ ] **Patch names.** Show the number of an index variable as a device's own patch name (U01-1, A-11, ...): a display setting still to be designed.
-- [ ] **Units from the schema.** Should units turn out to be the same for every dashboard of a device, a schema property can be added as the default; the dashboard setting stays the override.
-- [ ] Save the chosen look (it is chosen in the toolbar and not saved).
+- [x] Save the chosen look (it is chosen in the toolbar and not saved). It is now saved as dashboard data. User can still change in play-mode.
+- [x] Slider/Knob value change-drag jumps values when pressing/releasing shift (for fine/coarse changes). Seems like both modes work with their own values.
 
-### Synchronisation with the device
+## Synchronisation with the device
 
 - [ ] **Synchronisation per device**, on the `DeviceSession` of each device (`RigConnections`). The console uses the [message exchange](../Jacobi.Midi.Device/Exchange/readme.md) of the Device project; it never builds SysEx messages itself.
-  1. **Sync.** The ranges (`PlanRange`) that cover the bound parameters are received (`Receive`) into the device state, merged so that each atomic group is requested once. The exchange widens a range to the atomic groups it overlaps, so a sync usually delivers more values than are bound; the device state keeps them all.
+  1. **Sync.** The ranges (`PlanRange`) that cover the bound parameters are received (`RequestData`) into the device state, merged so that each atomic group is requested once. The exchange widens a range to the atomic groups it overlaps, so a sync usually delivers more values than are bound; the device state keeps them all.
   2. **Follow.** The exchange listens (`Listen`) on the same ranges, so changes made on the device show up on the dashboard.
-  3. **Change.** A control writes the device state, which queues a `Send` of the parameter's range. While a knob is dragged, only the latest value per parameter is kept in the queue, so the device gets as many messages as it can take (paced by `midi.messageInterval`), not one per mouse move.
+  3. **Change.** A control writes the device state, which queues a `SendData` of the parameter's range. While a knob is dragged, only the latest value per parameter is kept in the queue, so the device gets as many messages as it can take (paced by the `messageInterval` of the device's exchange file), not one per mouse move.
   4. **Select.** When the user changes an index variable, the bindings are resolved again; the controls that use it get the new instance, and its ranges are received (step 1) and followed (step 2) instead of those of the previous one.
-  5. **Failure.** A block that times out or is rejected (`BlockStatus`) is shown on the controls of its parameters and in the status bar; nothing fails silently. Each block carries the plan nodes it covered (`AddressBlock.Nodes`), so a failure can be shown on the controls it affects.
+  5. **Failure.** A block that times out or is rejected (`BlockStatus`, with the `Reason` the exchange writes) is shown on the controls of its parameters and in the status bar; nothing fails silently. The first block that does not complete ends a transfer: the blocks after it are reported with the same status, as not transferred, and are shown the same way. Each block carries the plan nodes it covered (`AddressBlock.Nodes`), so a failure can be shown on the controls it affects.
   6. **Sync now.** A manual "sync now" (⟳) in the MIDI bar.
 
   Each device has its own exchange: a control whose slots are bound to different devices sends to each device separately. There is no transaction across devices. The sessions are made again when the schema library is rebuilt or a device changes (`RigConnections.Update` does this already). Tests use the fake MIDI backend of the console tests (`FakeMidi`).
-- [ ] **Ask up front whether a device can be exchanged** (Midi.Device). Today you only find out at the first transfer, from three different exceptions: an unknown `midi.exchange` protocol; no request message for the range; a root that is not an address map. The console wants to mark such a device in the rig and use it offline, or write-only. That needs a query on the factory, something like "can this root, with these device values, be received / sent / listened to, and if not, why". Without it the console would have to guess from exception types.
+- [ ] **Ask up front whether a device can be exchanged** (Midi.Device). The console wants to mark a device that cannot be exchanged in the rig and use it offline, or write-only. Partly there: before anything is sent, an exchange that cannot run throws an `ExchangeException` with all problems (no exchange file for the root, no exchange of the name, a message that does not exist or does not fit the map, a missing device value, no source or sink), and `MessageExchange.Validate(name, range, data)` lists them without sending. Still missing: the question without a connection (on the factory, or on the `SchemaLibrary` with its `Exchanges`), per standard exchange (`requestData`, `sendData`) and for a root rather than a range, with reasons the console can show per kind instead of text only; a root that is not an address map is still an `AddressMapException`. This is step 7 (capabilities) of the [exchange definitions](../Jacobi.Midi.Device/Exchange/exchange-definitions.md).
 - [ ] **Detect the receive group** in the device panel (see the [Device todo](../Jacobi.Midi.Device/todo.md): detect the receive group of a device).
 - [ ] **The message interval as the pause on the wire** (see [Device todo](../Jacobi.Midi.Device/todo.md)). Dragging a knob streams messages; over a DIN connection the transmission time must be part of the pause.
-- [ ] **Exchange patterns the console does not support.** Some devices need a message exchange pattern that the exchange does not have (see the [Device todo](../Jacobi.Midi.Device/todo.md): the Roland handshake, Yamaha Bulk Header/Footer, write/store requests, device modes, a manual operation on the device), and some need one that is specific to that device and of no use to any other. The console must not assume that every device in a rig can be synchronised:
-  - **Detect it, show it.** When the exchange cannot handle a device (an unknown `midi.exchange`, a message it cannot use), the device is marked in the rig and on its controls with the reason. Its dashboards still open and work offline; nothing fails silently.
-  - **Partial use.** A device that can be written but not read (no usable request) is used write-only: its parameters stay *unknown* until set, as for the parameters that cannot be read back (see *Parameter sources and targets* below).
-  - **Generic first.** A pattern that more devices use becomes a built-in protocol (`ExchangeProtocols`) or, later, a configurable state machine (an `ITransferMachine`) described in the schema.
-  - **Device specific as a plug-in.** A pattern that only one device uses comes with that device's assembly, the way processors do: a factory per assembly with its own namespace prefix, selected by name in the schema (e.g. `midi.exchange="acme.handshake"`). The console registers device assemblies already (for their processors and schemas), so it finds these protocols the same way, and the machines stay inside the existing `IExchangeProtocol` model.
-  - **The user in the loop.** Patterns that need the user ("press the bulk dump key", "switch the device to edit mode") need a prompt from the console: the exchange asks, the console shows the request with a *Cancel*, the exchange waits. The console supplies this prompt for every device; the request text comes from the schema or the protocol.
+- [ ] **Exchange files next to schema files.** The library (`SchemaLibrary.Exchanges`) only has the exchange files embedded in its assemblies. A rig, device or dashboard that brings schema files should be able to bring exchange files (`*.exchange.xml`, `*.exchange.json`) too: in the `SchemaSources`, read with `ExchangeDefinitions.AddFile`, a later file replacing the one for the same root, problems reported in `SchemaLibrary.Problems`. Without its exchange file a device of a schema file cannot be synchronised.
+- [ ] **Exchange patterns the console does not support.** The message exchange of a device is described in its exchange file, not in code: a pattern of one device is a file of that device (in its assembly, or next to its schemas), and the console asks for the standard patterns by name (`ExchangeNames`: `requestData`, `sendData`), whatever the device. Some patterns cannot be described yet: the [exchange definitions](../Jacobi.Midi.Device/Exchange/exchange-definitions.md) add them in steps (the Roland handshake and Yamaha Bulk Header/Footer in step 2, device modes in step 3, a manual operation on the device in step 4, patterns the device starts in step 5, write/store requests in step 6). The console must not assume that every device in a rig can be synchronised:
+  - **Detect it, show it.** When a device cannot be exchanged (no exchange file for its map root, no `requestData` or `sendData` in it, a message the exchange cannot use: see *Ask up front* above), the device is marked in the rig and on its controls with the reason. Its dashboards still open and work offline; nothing fails silently.
+  - **Partial use.** A device whose exchange file has a `sendData` but no `requestData` (or one that cannot run) is used write-only: its parameters stay *unknown* until set, as for the parameters that cannot be read back (see *Parameter sources and targets* below). One with only a `requestData` is used read-only.
+  - **Other exchanges of a device.** An exchange file can have exchanges of its own besides the standard ones (e.g. a handshake next to the one-way messages). The console runs them through `DeviceSession.Execute` by name; how the user chooses one (a device setting in the rig, a command) is to be designed.
+  - **The user in the loop.** Patterns that need the user ("press the bulk dump key", "switch the device to edit mode") need a prompt from the console: the exchange asks, the console shows the request with a *Cancel*, the exchange waits. The console gives the exchange a callback (in `ExchangeData`) for every device; the request text is literal text in the exchange file (step 4 of the exchange definitions).
 - [ ] **Devices that only do complete dumps without an address map.** A job for the message exchange of Midi.Device (see its todo: message exchange for schemas without an address map).
 
-### Parameter sources and targets
+## Parameter sources and targets
 
 - [ ] **Parameters that are not in an address map.** Only parameters in an address map are supported (SysEx data messages through the message exchange). Devices use other ways too, and the console is designed so that they can be added without changing the dashboards, the controls or the device state.
 
@@ -73,7 +69,7 @@ What is planned for the console, and what was done. What the console does now is
 
   Property Exchange is different: the device describes its own resources at run time. A port for it would build its parameters from the device's resource list instead of a schema; the bindings would still be paths, but into the device's resources. This is the furthest away and needs its own design.
 
-### Looks
+## Looks
 
 - [ ] **Choosing and composing looks; more kits, chromes and finishes.** The user chooses a look, or composes one from the building blocks: a chrome for the controls and one for the sections, a kit of faces (with an override per control type), a neutral palette, typography and a finish, each with its parameters (colours, corner radius, screws or not). The building blocks themselves are made in code; the user combines them, the way the schemas combine processors. A few ready-made looks are the starting point; free composition is for users who want it, and not every combination will look good.
 
@@ -95,7 +91,7 @@ What is planned for the console, and what was done. What the console does now is
 
   The [composable controls](readme.md#composable-controls) and the named resources are already there for this: no control has a colour, size, font or shape of its own in code. A look then only selects other faces, chromes and resources.
 
-### Browser support
+## Browser support
 
 - [ ] **MIDI in the browser host.** The host exists and works offline. A browser host is attractive (nothing to install, the same dashboards on any computer), but it has pitfalls:
   - **MIDI in the browser is Web MIDI.** A browser `IMidiApi` (the Core contract) would be implemented with JavaScript interop on the Web MIDI API. Web MIDI is MIDI 1.0 bytes, not UMP: the adapter converts SysEx to and from SysEx7 packets, and the UMP group is always 0.
@@ -108,7 +104,7 @@ What is planned for the console, and what was done. What the console does now is
 
   A browser host could also serve the [remote MIDI access](../readme.md#remote-midi-access) of the vision: the device stays at home, the dashboard runs anywhere.
 
-### Later
+## Later
 
 - [ ] **Shared UI library extracted from the Schema Editor**: the MIDI bar and its connection service, the themes and palette, and the registration of device assemblies and their processors; the central package versions (`Directory.Packages.props`) move with them to a level above both applications. *Not now (2026-10-29):* the Schema Editor's MIDI bar holds one connection, the console a session per device of the rig, so the console got its own MIDI bar.
 - [ ] The patch librarian (it will build on device state snapshots).
@@ -132,6 +128,8 @@ What is planned for the console, and what was done. What the console does now is
   │ Row Column Grid …    │                                           │                    │
   └──────────────────────┴───────────────────────────────────────────┴────────────────────┘
   ```
+
+---
 
 ## Done
 

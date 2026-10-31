@@ -2,6 +2,7 @@ using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Device.Addressing;
+using Jacobi.Midi.Device.Exchange;
 using Jacobi.Midi.Tests.Schema;
 using Xunit;
 
@@ -15,6 +16,7 @@ namespace Jacobi.Midi.Tests.Addressing;
 /// (0x00 bit-packed switches, 0x01-0x03 filter, 0x04-0x05 14-bit time, 0x06 level, 0x07-0x0E name):
 ///   0x00-00 Edit patch (0x20 addresses reserved), 0x00-40 Global (not atomic, 10 addresses),
 ///   0x01-00 Memory: 8 patches with a stride of 0x20.
+/// The exchange file (<see cref="ExchangeXml"/>) is one way: a request is answered with data, data is not acknowledged.
 /// </summary>
 internal static class TestDevice
 {
@@ -45,7 +47,7 @@ internal static class TestDevice
                 <processor name="midi.sysex" />
               </processors>
               <members>
-                <group name="Request" midi.message="request">
+                <group name="Request">
                   <members>
                     <field name="Id" datatype="sys.uint8" value="0x7D" />
                     <field name="DeviceId" datatype="sys.uint8" midi.role="device.deviceId" />
@@ -62,7 +64,7 @@ internal static class TestDevice
                     </group>
                   </members>
                 </group>
-                <group name="Data" midi.message="data" midi.messageInterval="20">
+                <group name="Data">
                   <members>
                     <field name="Id" datatype="sys.uint8" value="0x7D" />
                     <field name="DeviceId" datatype="sys.uint8" midi.role="device.deviceId" />
@@ -146,8 +148,40 @@ internal static class TestDevice
         </schema>
         """;
 
+    /// <summary>The exchange file of the device map: requestData and sendData, one way, 20 ms between messages.</summary>
+    public const string ExchangeXml = """
+        <exchanges for="TestDevice.AddressMap" responseTimeout="1000" messageInterval="20">
+          <exchange name="requestData">
+            <state name="request">
+              <send message="TestEnvelope.Message.Request" />
+              <receive message="TestEnvelope.Message.Data" />
+              <on event="complete" result="completed" />
+              <on event="timeout" result="timedOut" />
+            </state>
+          </exchange>
+          <exchange name="sendData">
+            <state name="write">
+              <send message="TestEnvelope.Message.Data" />
+              <on event="sent" result="completed" />
+            </state>
+          </exchange>
+        </exchanges>
+        """;
+
     public static SchemaDocument Parse(string xml)
         => Jacobi.BinarySerializer.Schema.Xml.XmlSerializer.Deserialize(xml);
+
+    /// <summary>The exchange files of the tests: <see cref="ExchangeXml"/> (with another response timeout) and the extra files.</summary>
+    public static ExchangeDefinitions CreateExchanges(int responseTimeoutMs = 1000, params string[] files)
+    {
+        var exchanges = new ExchangeDefinitions();
+        exchanges.Add(ExchangeDefinitionReader.ReadXml(ExchangeXml.Replace("responseTimeout=\"1000\"", $"responseTimeout=\"{responseTimeoutMs}\""), "TestDevice"));
+        foreach (var file in files)
+        {
+            exchanges.Add(ExchangeDefinitionReader.ReadXml(file, "test"));
+        }
+        return exchanges;
+    }
 
     /// <summary>Only the base 'midi' schema, the test envelope and device, and the extra documents: no vendor schemas.</summary>
     public static SchemaSet CreateSchemas(params SchemaDocument[] documents)

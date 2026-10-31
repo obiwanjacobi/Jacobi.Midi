@@ -1,6 +1,6 @@
 ---
 name: device-schema
-description: Rules for creating or editing MIDI device schemas in XML (e.g. Gp8.xml, Gx700.xml, G50.xml in src/Jacobi.Midi.<Vendor>/Schemas) and vendor envelope schemas (Roland.xml): file layout, header comment, naming, data types, address map (midi.* properties), comments and tests. Use for any change to a *.xml schema under a Schemas folder or to Jacobi.Midi.Device/Midi.xml.
+description: Rules for creating or editing MIDI device schemas in XML (e.g. Gp8.schema.xml, Gx700..schema.xml, G50.schema.xml in src/Jacobi.Midi.<Vendor>/Schemas) and vendor envelope schemas (Roland.schema.xml): file layout, header comment, naming, data types, address map (midi.* properties), comments and tests. Use for any change to a *.xml schema under a Schemas folder or to Jacobi.Midi.Device/Midi.xml.
 ---
 
 # MIDI device documentation
@@ -121,7 +121,7 @@ Full rules: `src/Jacobi.Midi.Device/Addressing/readme.md`. In short:
 - Message groups sit under a root group with the `midi.sysex` processor (framing F0 ... F7).
 - Put the bytes a checksum covers in a `ChecksumScope` group with the vendor checksum processor (`roland.checksum`, `yamaha.checksum`).
 - Use `byteSize` with a `ref` for byte counts. When the writer cannot derive one, use a constant `value` and add a `[TODO]`.
-- In an envelope schema, tag the messages with `midi.message` and the fields with `midi.role` (see the Addressing readme).
+- In an envelope schema, tag the fields with `midi.role` (see the Addressing readme). Messages get no kind tag: which messages a device exchanges, in which order and with which timing, goes in an exchange file of the device (`<assembly>/Exchange/<Device>.xml`, see `src/Jacobi.Midi.Device/Exchange/readme.md`).
 
 ## Tests
 

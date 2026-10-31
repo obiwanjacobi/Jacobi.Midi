@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/obiwanjacobi/Jacobi.Midi/exchange/exchange.schema.json",
+  "title": "Jacobi.Midi exchange file",
+  "description": "The message exchange patterns of one map root (see readme.md). The same content as the XML format (exchange.xsd): elements that repeat are arrays. Not expressed here, checked by the reader: 'goto' names a state of the same exchange, every state can be reached from the first one, 'sent' needs a 'send' in the state, 'complete' a 'receive', and names of exchanges and states are unique, ignoring case.",
+  "type": "object",
+  "required": [ "for", "exchanges" ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "for": {
+      "description": "The schema name of the map root whose ranges these exchanges transfer, e.g. 'Gx700.AddressMap'.",
+      "$ref": "#/$defs/schemaName"
+    },
+    "responseTimeout": { "$ref": "#/$defs/responseTimeout" },
+    "messageInterval": { "$ref": "#/$defs/messageInterval" },
+    "exchanges": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/exchange" }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "responseTimeout": {
+      "description": "Milliseconds a state waits for an event; default 1000 (an exchange takes the file's value).",
+      "type": "integer",
+      "minimum": 0
+    },
+    "messageInterval": {
+      "description": "The least number of milliseconds between two messages sent to the device; default 0 (an exchange takes the file's value).",
+      "type": "integer",
+      "minimum": 0
+    },
+    "schemaName": {
+      "description": "A schema name: 'document.root'.",
+      "type": "string",
+      "pattern": "^[^.\\s]+(\\.[^.\\s]+)+$"
+    },
+    "messageName": {
+      "description": "The schema name of a message group: document, root and path, e.g. 'Roland.Message32.RQ1'.",
+      "type": "string",
+      "pattern": "^[^.\\s]+(\\.[^.\\s]+){2,}$"
+    },
+    "exchange": {
+      "description": "One exchange: a state machine that runs once per block of the range; the first state is the start.",
+      "type": "object",
+      "required": [ "name", "states" ],
+      "properties": {
+        "name": {
+          "description": "A standard name (requestData, sendData) or a name of the file's own.",
+          "type": "string",
+          "minLength": 1
+        },
+        "responseTimeout": { "$ref": "#/$defs/responseTimeout" },
+        "messageInterval": { "$ref": "#/$defs/messageInterval" },
+        "states": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/state" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "state": {
+      "description": "On entry the state sends its message (if any), then waits for the events it has an 'on' for.",
+      "type": "object",
+      "required": [ "name" ],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "send": {
+          "description": "The message to build for the block and send on entry.",
+          "$ref": "#/$defs/messageName"
+        },
+        "receive": {
+          "description": "The data messages whose data is accepted for the block while in the state, and counts towards 'complete'.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/messageName" }
+        },
+        "on": {
+          "description": "The transitions; the first one that matches is taken.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/transition" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "transition": {
+      "description": "On the event or message: go to a state, or end the run for the block with a result.",
+      "type": "object",
+      "properties": {
+        "event": { "enum": [ "sent", "complete", "timeout" ] },
+        "message": { "$ref": "#/$defs/messageName" },
+        "goto": { "type": "string", "minLength": 1 },
+        "result": { "enum": [ "completed", "rejected", "failed", "timedOut" ] }
+      },
+      "allOf": [
+        { "oneOf": [ { "required": [ "event" ] }, { "required": [ "message" ] } ] },
+        { "oneOf": [ { "required": [ "goto" ] }, { "required": [ "result" ] } ] }
+      ],
+      "additionalProperties": false
+    }
+  }
+}

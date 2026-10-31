@@ -15,8 +15,6 @@ public static class AddressMapTags
 
     /// <summary>The tag that says which value an envelope node holds (<c>midi.role</c>).</summary>
     public const string Role = MidiProperties.Role;
-    /// <summary>The tag that marks a message group of an envelope (<c>midi.message</c>).</summary>
-    public const string Message = MidiProperties.Message;
     /// <summary>The prefix of a device value fixed by a map root (<c>midi.device.&lt;name&gt;</c>).</summary>
     public const string DevicePrefix = MidiProperties.DevicePrefix;
 
@@ -30,9 +28,6 @@ public static class AddressMapTags
         Describe(MidiProperties.Access, "Map: readwrite (default), read or write; inherited."),
         Describe(MidiProperties.Unit, "Message or map root: what one message covers: range (default), field or atomic."),
         Describe(MidiProperties.MaxDataSize, "Message or map root: the largest number of data bytes in one message."),
-        Describe(MidiProperties.MessageInterval, "Message or map root: milliseconds to wait after sending the message."),
-        Describe(MidiProperties.Exchange, "Envelope or map root: the exchange protocol: oneWay or acknowledged."),
-        Describe(MidiProperties.Message, "Envelope: the message group is a request, data, ack, nak or error."),
         Describe(MidiProperties.Role, "Envelope: the value the node holds: address, size, data or device.<name>."),
         Describe(MidiProperties.AddressBits, "Envelope: the bits per address byte of the address field (default 7)."),
     ];
@@ -47,8 +42,8 @@ public static class AddressMapTags
     }
 
     /// <summary>
-    /// Checks a tag and its value on their own; null when valid. The rules that relate tags (e.g. a role is used inside a
-    /// message, a device value is fixed by the map root) are checked by <see cref="AddressMapValidator"/>.
+    /// Checks a tag and its value on their own; null when valid. The rules that relate tags (e.g. a device value is fixed
+    /// by the map root) are checked by <see cref="AddressMapValidator"/>.
     /// </summary>
     public static string? Validate(string name, string? value)
     {
@@ -68,7 +63,7 @@ public static class AddressMapTags
 
         return descriptor.Name switch
         {
-            MidiProperties.Address or MidiProperties.Stride or MidiProperties.MaxDataSize or MidiProperties.MessageInterval
+            MidiProperties.Address or MidiProperties.Stride or MidiProperties.MaxDataSize
                 or MidiProperties.AddressBits or MidiProperties.Repeat
                 => IsNumber(value) ? null : $"'{name}' must be a number, not '{value}'.",
             MidiProperties.Atomic
@@ -78,12 +73,6 @@ public static class AddressMapTags
                 => Enum.TryParse<NodeAccess>(value, ignoreCase: true, out _) ? null : $"'{name}' must be readwrite, read or write, not '{value}'.",
             MidiProperties.Unit
                 => Enum.TryParse<AddressUnit>(value, ignoreCase: true, out _) ? null : $"'{name}' must be range, field or atomic, not '{value}'.",
-            MidiProperties.Message
-                => Enum.TryParse<ExchangeMessageKind>(value, ignoreCase: true, out _) ? null : $"'{name}' must be request, data, ack, nak or error, not '{value}'.",
-            MidiProperties.Exchange
-                => String.Equals(value, AddressProtocol.OneWay, StringComparison.OrdinalIgnoreCase)
-                    || String.Equals(value, AddressProtocol.Acknowledged, StringComparison.OrdinalIgnoreCase)
-                    ? null : $"'{name}' must be {AddressProtocol.OneWay} or {AddressProtocol.Acknowledged}, not '{value}'.",
             MidiProperties.Role
                 => IsRole(value) ? null : $"'{name}' must be {MidiProperties.RoleAddress}, {MidiProperties.RoleSize}, {MidiProperties.RoleData} or {MidiProperties.RoleDevicePrefix}<name>, not '{value}'.",
             _ => null,
@@ -100,13 +89,6 @@ public static class AddressMapTags
     /// <summary>True when the node holds the data of a message (<c>midi.role="data"</c>, an open choice).</summary>
     public static bool IsData(SchemaNode node)
         => String.Equals(RoleOf(node), MidiProperties.RoleData, StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>The kind of message the node is (<c>midi.message</c>); null when it is not a message group.</summary>
-    public static string? MessageOf(SchemaNode node)
-    {
-        ArgumentNullException.ThrowIfNull(node);
-        return MidiProperties.Find(node, MidiProperties.Message);
-    }
 
     /// <summary>True for a valid role: <c>address</c>, <c>size</c>, <c>data</c> or <c>device.&lt;name&gt;</c>.</summary>
     internal static bool IsRole(string? role)

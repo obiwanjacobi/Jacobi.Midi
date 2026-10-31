@@ -193,7 +193,7 @@ internal sealed partial class MainViewModel : ViewModelBase
         // the target schema must be an open document: an embedded schema cannot be changed
         FindDocument = name => LoadedSchemas.Find(name) is { IsEmbedded: false } entry ? entry.Document : null,
         CreateDocument = CreateWorkbenchDocument,
-        Compile = (copy, copyOf) => new SchemaInstantiator(LoadedSchemas.Compile(copy, copyOf), OpenedAssemblies.Processors)
+        Compile = (copy, copyOf) => new SchemaInstantiator(LoadedSchemas.Compile(copy, copyOf), OpenedAssemblies.Processors, OpenedAssemblies.Exchanges)
     });
 
     // the target schema of the workbench: an empty XML document (like the device schemas)
@@ -993,7 +993,7 @@ internal sealed partial class MainViewModel : ViewModelBase
         {
             // compiled with all loaded schemas (open documents and embedded schemas)
             // the processors of the opened assemblies are used to detect address maps and when the values are serialized (or deserialized)
-            var instantiator = new SchemaInstantiator(LoadedSchemas.Compile(active.Schema), OpenedAssemblies.Processors);
+            var instantiator = new SchemaInstantiator(LoadedSchemas.Compile(active.Schema), OpenedAssemblies.Processors, OpenedAssemblies.Exchanges);
             var instance = instantiator.Create(root);
             var rootName = instantiator.FindRootName(root);
             Func<ICollection<string>, IReadOnlyList<SerializedMessage>>? serialize = rootName is { } writeRoot

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The message exchange of the Boss GP-8 (Roland one way: RQ1 is answered with DT1, DT1 is not acknowledged).
+  The device needs 20 ms between two messages.
+  See src/Jacobi.Midi.Device/Exchange/readme.md.
+-->
+<exchanges for="Gp8.AddressMap" responseTimeout="1000" messageInterval="20">
+  <exchange name="requestData">
+    <state name="request">
+      <send message="Roland.Message16.RQ1" />
+      <receive message="Roland.Message16.DT1" />
+      <on event="complete" result="completed" />
+      <on event="timeout" result="timedOut" />
+    </state>
+  </exchange>
+  <exchange name="sendData">
+    <state name="write">
+      <send message="Roland.Message16.DT1" />
+      <on event="sent" result="completed" />
+    </state>
+  </exchange>
+</exchanges>

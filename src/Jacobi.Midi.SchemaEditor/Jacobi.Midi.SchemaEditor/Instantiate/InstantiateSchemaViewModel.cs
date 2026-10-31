@@ -256,7 +256,7 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
                 await connection.Send(packets, CancellationToken.None);
                 byteCount += message.Bytes.Length;
                 packetCount += packets.Length;
-                // the device needs time to process a message (midi.messageInterval)
+                // the device needs time to process a message (the messageInterval of its exchange file)
                 if (index < messages.Count - 1 && message.Interval > TimeSpan.Zero)
                 {
                     await Task.Delay(message.Interval);

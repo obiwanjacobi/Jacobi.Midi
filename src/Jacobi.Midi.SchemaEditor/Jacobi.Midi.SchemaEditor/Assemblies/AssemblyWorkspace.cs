@@ -7,6 +7,7 @@ using System.Xml;
 using Jacobi.BinarySerializer.Descriptors;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.Device.Exchange;
 using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.SchemaEditor.Services;
 using YamlDotNet.Core;
@@ -14,7 +15,8 @@ using YamlDotNet.Core;
 namespace Jacobi.Midi.SchemaEditor.Assemblies;
 
 /// <summary>
-/// The assemblies (.dll files) that were opened in the editor, with the embedded schemas and the processors they provide.
+/// The assemblies (.dll files) that were opened in the editor, with the embedded schemas, exchange files and the
+/// processors they provide.
 /// The processors are managed by one shared <see cref="ProcessorManager"/>, so references can be looked up and validated
 /// across all opened assemblies. The embedded schemas are compiled with the open documents by the <see cref="SchemaSetWorkspace"/>.
 /// Embedded schemas are not editable and are not part of the open schema documents.
@@ -25,6 +27,11 @@ internal sealed class AssemblyWorkspace : ObservableObject
     /// The processor factories of all opened assemblies, by namespace.
     /// </summary>
     public ProcessorManager Processors { get; } = new();
+
+    /// <summary>
+    /// The exchange files of all opened assemblies (how a device exchanges its messages, e.g. the time between them).
+    /// </summary>
+    public ExchangeDefinitions Exchanges { get; } = new();
 
     public ObservableCollection<LoadedAssembly> Assemblies { get; } = [];
 
@@ -75,6 +82,10 @@ internal sealed class AssemblyWorkspace : ObservableObject
         var problems = new List<string>();
         var schemas = LoadSchemas(assembly, problems);
         var processorNamespaces = LoadProcessors(assembly, problems);
+        foreach (var problem in Exchanges.AddAssembly(assembly))
+        {
+            problems.AddRange(problem.Problems.Select(text => $"{problem.Location}: {text}"));
+        }
 
         var name = assembly.GetName();
         var loaded = new LoadedAssembly(assembly.FullName ?? name.Name ?? location, name.Name ?? location,
@@ -86,41 +97,32 @@ internal sealed class AssemblyWorkspace : ObservableObject
         return loaded;
     }
 
-    // SchemaSetBuilder.LoadFromAssembly reads the schemas (into a builder of its own: the set is not compiled).
-    // It throws on a resource it cannot read (e.g. YAML); the exception is reported as a problem.
+    // SchemaSetBuilder reads each embedded schema (into a builder of its own: the set is not compiled); the exchange
+    // files are not schemas. A resource it cannot read (e.g. YAML) is reported as a problem.
     private static List<LoadedSchema> LoadSchemas(Assembly assembly, List<string> problems)
     {
         var schemas = new List<LoadedSchema>();
-        // LoadFromAssembly reads the resources in this order
-        var resources = assembly.GetManifestResourceNames();
-        try
+        foreach (var resource in assembly.GetManifestResourceNames().Where(resource => !ExchangeDefinitions.IsDefinitionResource(resource)))
         {
-            var documents = new SchemaSetBuilder().LoadFromAssembly(assembly, String.Empty).ToList();
-            for (var index = 0; index < documents.Count && index < resources.Length; index++)
+            try
             {
-                var document = documents[index];
-                var resource = resources[index];
-                try
+                using var stream = assembly.GetManifestResourceStream(resource)
+                    ?? throw new InvalidOperationException($"Resource '{resource}' not found in assembly '{assembly.FullName}'.");
+                var document = new SchemaSetBuilder().LoadFromBinary(resource, stream);
+                // a read-only copy of the authored schema to show (and to compile with the open documents)
+                var format = Path.GetExtension(resource).ToLowerInvariant() switch
                 {
-                    // a read-only copy of the authored schema to show (and to compile with the open documents)
-                    var format = Path.GetExtension(resource).ToLowerInvariant() switch
-                    {
-                        ".json" => SchemaFormat.Json,
-                        ".xml" => SchemaFormat.Xml,
-                        _ => SchemaFormat.Yaml
-                    };
-                    var copy = new SchemaWorkspaceDocument(EditNodeMapper.ToEditDocument(document), format, resource) { IsReadOnly = true };
-                    schemas.Add(new LoadedSchema(document.Name, resource, copy));
-                }
-                catch (ArgumentException exception)
-                {
-                    problems.Add($"{resource}: {exception.Message}");
-                }
+                    ".json" => SchemaFormat.Json,
+                    ".xml" => SchemaFormat.Xml,
+                    _ => SchemaFormat.Yaml
+                };
+                var copy = new SchemaWorkspaceDocument(EditNodeMapper.ToEditDocument(document), format, resource) { IsReadOnly = true };
+                schemas.Add(new LoadedSchema(document.Name, resource, copy));
             }
-        }
-        catch (Exception exception) when (IsSchemaError(exception))
-        {
-            problems.Add($"Schemas: {exception.Message}");
+            catch (Exception exception) when (IsSchemaError(exception))
+            {
+                problems.Add($"{resource}: {exception.Message}");
+            }
         }
         return schemas;
     }

@@ -31,9 +31,8 @@ public class Gp8AddressMapTests
         var map = CreateMap();
 
         Assert.Equal(new AddressSpace(2, 7), map.Protocol.AddressSpace);
-        Assert.Equal("Message16.RQ1", Assert.Single(map.Protocol.Requests).Name);
+        Assert.True(map.Message(new SchemaName("Roland.Message16.RQ1")).IsRequest);
         Assert.Equal("Message16.DT1", Assert.Single(map.Protocol.DataMessages).Name);
-        Assert.Equal("oneWay", map.Protocol.Exchange);
     }
 
     [Fact]
@@ -71,7 +70,7 @@ public class Gp8AddressMapTests
         var map = CreateMap();
         var device = map.Device.With(new DeviceValues { ["deviceId"] = 0 });
 
-        var bytes = map.Protocol.CreateRequest(map.Protocol.Requests[0], new AddressRange(MemoryStart + Stride, PatchSize), device);
+        var bytes = map.Protocol.CreateMessage(map.Message(new SchemaName("Roland.Message16.RQ1")), new AddressRange(MemoryStart + Stride, PatchSize), device);
 
         // address 40 40, size 00 32: checksum = 128 - ((0x40 + 0x40 + 0x00 + 0x32) % 128) = 0x4E
         Assert.Equal(Convert.FromHexString("F0410013114040003" + "24EF7"), bytes);

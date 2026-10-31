@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The XML format of an exchange file: the message exchange patterns of one map root (see readme.md).
+  An exchange file can refer to it with xsi:noNamespaceSchemaLocation.
+
+  Rules the reader checks that XSD 1.0 cannot express:
+  - a state has at most one <send>;
+  - an <on> has either an 'event' or a 'message', and either a 'goto' or a 'result';
+  - 'goto' names a state of the same exchange; every state can be reached from the first one;
+  - 'sent' needs a <send> in the state, 'complete' a <receive>;
+  - names of exchanges (in the file) and of states (in an exchange) are unique, ignoring case.
+  The reader accepts the event and result values in any case; the values below are the canonical spelling.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified">
+
+  <xs:element name="exchanges">
+    <xs:annotation>
+      <xs:documentation>The exchanges of one map root, with the timing of the device.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="exchange" type="exchange" maxOccurs="unbounded" />
+      </xs:sequence>
+      <xs:attribute name="for" type="schemaName" use="required">
+        <xs:annotation>
+          <xs:documentation>The schema name of the map root whose ranges these exchanges transfer, e.g. 'Gx700.AddressMap'.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attributeGroup ref="timing" />
+    </xs:complexType>
+  </xs:element>
+
+  <xs:attributeGroup name="timing">
+    <xs:attribute name="responseTimeout" type="xs:nonNegativeInteger">
+      <xs:annotation>
+        <xs:documentation>Milliseconds a state waits for an event; default 1000 (an exchange takes the file's value).</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="messageInterval" type="xs:nonNegativeInteger">
+      <xs:annotation>
+        <xs:documentation>The least number of milliseconds between two messages sent to the device; default 0 (an exchange takes the file's value).</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:attributeGroup>
+
+  <xs:complexType name="exchange">
+    <xs:annotation>
+      <xs:documentation>One exchange: a state machine that runs once per block of the range; the first state is the start.</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="state" type="state" maxOccurs="unbounded" />
+    </xs:sequence>
+    <xs:attribute name="name" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>A standard name (requestData, sendData) or a name of the file's own.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attributeGroup ref="timing" />
+  </xs:complexType>
+
+  <xs:complexType name="state">
+    <xs:annotation>
+      <xs:documentation>On entry the state sends its message (if any), then waits for the events it has an 'on' for.</xs:documentation>
+    </xs:annotation>
+    <xs:choice minOccurs="0" maxOccurs="unbounded">
+      <xs:element name="send" type="message">
+        <xs:annotation>
+          <xs:documentation>The message to build for the block and send on entry (at most one).</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="receive" type="message">
+        <xs:annotation>
+          <xs:documentation>A data message whose data is accepted for the block while in the state, and counts towards 'complete'.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="on" type="transition" />
+    </xs:choice>
+    <xs:attribute name="name" type="xs:string" use="required" />
+  </xs:complexType>
+
+  <xs:complexType name="message">
+    <xs:attribute name="message" type="messageName" use="required" />
+  </xs:complexType>
+
+  <xs:complexType name="transition">
+    <xs:annotation>
+      <xs:documentation>On the event or message: go to a state, or end the run for the block with a result. The first 'on' that matches is taken.</xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="event" type="event" />
+    <xs:attribute name="message" type="messageName" />
+    <xs:attribute name="goto" type="xs:string" />
+    <xs:attribute name="result" type="result" />
+  </xs:complexType>
+
+  <xs:simpleType name="schemaName">
+    <xs:annotation>
+      <xs:documentation>A schema name: 'document.root'.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[^.\s]+(\.[^.\s]+)+" />
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="messageName">
+    <xs:annotation>
+      <xs:documentation>The schema name of a message group: document, root and path, e.g. 'Roland.Message32.RQ1'.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[^.\s]+(\.[^.\s]+){2,}" />
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="event">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="sent" />
+      <xs:enumeration value="complete" />
+      <xs:enumeration value="timeout" />
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="result">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="completed" />
+      <xs:enumeration value="rejected" />
+      <xs:enumeration value="failed" />
+      <xs:enumeration value="timedOut" />
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>

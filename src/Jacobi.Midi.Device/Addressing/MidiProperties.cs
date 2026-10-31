@@ -17,11 +17,8 @@ internal static class MidiProperties
     public const string DevicePrefix = "midi.device.";
     public const string Unit = "midi.unit";
     public const string MaxDataSize = "midi.maxDataSize";
-    public const string MessageInterval = "midi.messageInterval";
-    public const string Message = "midi.message";
     public const string Role = "midi.role";
     public const string AddressBits = "midi.addressBits";
-    public const string Exchange = "midi.exchange";
 
     // values of midi.role
     public const string RoleAddress = "address";

@@ -821,7 +821,7 @@ public class SchemaInstantiatorTests
         var message = (EditGroup)roland.Document.Schema.Members.Single(member => member.Name == "Message16");
         var dt1 = (EditGroup)message.Members.Single(member => member.Name == "DT1");
         var processors = viewModel.OpenedAssemblies.Processors;
-        var instantiator = new SchemaInstantiator(viewModel.LoadedSchemas.Compile(roland.Document.Schema), processors);
+        var instantiator = new SchemaInstantiator(viewModel.LoadedSchemas.Compile(roland.Document.Schema), processors, viewModel.OpenedAssemblies.Exchanges);
         var root = Assert.IsType<InstanceGroup>(instantiator.Create(dt1));
         var data = FindChoice(root, "Data")!;
         data.SelectedOption = data.Options.Single(option => option.Name == "Gp8.AddressMap");
