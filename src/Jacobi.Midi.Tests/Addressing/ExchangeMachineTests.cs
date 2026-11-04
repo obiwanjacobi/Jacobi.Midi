@@ -21,13 +21,13 @@ public class ExchangeMachineTests
             <turn name="request">
               <send message="TestEnvelope.Message.Request" />
               <receive message="TestEnvelope.Message.Data" />
-              <on event="complete" result="completed" />
+              <on event="received" result="completed" />
               <on event="timeout" goto="again" />
             </turn>
             <turn name="again">
               <send message="TestEnvelope.Message.Request" />
               <receive message="TestEnvelope.Message.Data" />
-              <on event="complete" result="completed" />
+              <on event="received" result="completed" />
               <on message="TestEnvelope.Message.Data" goto="again" />
               <on event="timeout" result="failed" />
             </turn>
@@ -122,7 +122,7 @@ public class ExchangeMachineTests
             <turn name="request">
               <send message="TestEnvelope.Message.Request" />
               <receive message="TestEnvelope.Message.Data" />
-              <on event="complete" result="completed" />
+              <on event="received" result="completed" />
               <on event="timeout" retry="2" result="timedOut" />
             </turn>
           </exchange>
@@ -130,7 +130,7 @@ public class ExchangeMachineTests
             <turn name="request">
               <send message="TestEnvelope.Message.Request" />
               <receive message="TestEnvelope.Message.Data" />
-              <on event="complete" result="completed" />
+              <on event="received" result="completed" />
               <on message="TestEnvelope.Message.Data" retry="1" goto="last" />
               <on event="timeout" retry="1" result="timedOut" />
             </turn>

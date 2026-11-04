@@ -79,11 +79,44 @@ public sealed record ExchangeTurn
     /// <summary>The message to build for the block and send on entry; null: the turn only waits.</summary>
     public SchemaName? Send { get; init; }
 
-    /// <summary>The data messages whose data is accepted for the block and counts towards <see cref="ExchangeEvent.Complete"/>.</summary>
+    /// <summary>The data messages whose data is accepted for the block and counts towards <see cref="ExchangeEvent.Received"/>.</summary>
     public IReadOnlyList<SchemaName> Receive { get; init; } = [];
 
-    /// <summary>What happens on an event, in order: the first transition that matches is taken.</summary>
+    /// <summary>
+    /// What happens on an event, in order: the first transition that matches is taken. Without one for
+    /// <see cref="ExchangeEvent.Sent"/>, <see cref="ExchangeEvent.Received"/> or <see cref="ExchangeEvent.Timeout"/> the
+    /// default applies (see <see cref="Transition"/>).
+    /// </summary>
     public IReadOnlyList<ExchangeTransition> Transitions { get; init; } = [];
+
+    /// <summary>True when the turn waits for nothing after its send: it has no <see cref="Receive"/> and no transitions.</summary>
+    public bool WaitsForNothing => Receive.Count == 0 && Transitions.Count == 0;
+
+    /// <summary>
+    /// The transition for an event other than a message: the turn's own, else the default. The defaults:
+    /// <list type="bullet">
+    ///   <item><see cref="ExchangeEvent.Sent"/>: <see cref="BlockStatus.Completed"/>, only for a turn that sends and
+    ///   waits for nothing (<see cref="WaitsForNothing"/>); else the turn waits for its other events (e.g. an ack).</item>
+    ///   <item><see cref="ExchangeEvent.Received"/>: <see cref="BlockStatus.Completed"/>, for a turn with a <see cref="Receive"/>.</item>
+    ///   <item><see cref="ExchangeEvent.Timeout"/>: <see cref="BlockStatus.TimedOut"/>.</item>
+    /// </list>
+    /// Null when there is no transition: the turn waits on.
+    /// </summary>
+    public ExchangeTransition? Transition(ExchangeEvent @event)
+    {
+        if (@event == ExchangeEvent.Message)
+        {
+            throw new ArgumentException("A message transition is found by its message.", nameof(@event));
+        }
+        return Transitions.FirstOrDefault(transition => transition.Event == @event)
+            ?? @event switch
+            {
+                ExchangeEvent.Sent when Send is not null && WaitsForNothing => ExchangeTransition.SentCompleted,
+                ExchangeEvent.Received when Receive.Count > 0 => ExchangeTransition.ReceivedCompleted,
+                ExchangeEvent.Timeout => ExchangeTransition.TimedOut,
+                _ => null,
+            };
+    }
 
     public override string ToString() => Name;
 }
@@ -95,8 +128,8 @@ public enum ExchangeEvent
 {
     /// <summary>The message of the turn was sent.</summary>
     Sent,
-    /// <summary>Received data made the block complete.</summary>
-    Complete,
+    /// <summary>Data accepted by a <c>receive</c> of the turn made the block complete.</summary>
+    Received,
     /// <summary>No event within the timeout.</summary>
     Timeout,
     /// <summary>The device sent a message the transition names.</summary>
@@ -110,6 +143,15 @@ public enum ExchangeEvent
 /// </summary>
 public sealed record ExchangeTransition
 {
+    /// <summary>The default for <see cref="ExchangeEvent.Sent"/> in a turn that waits for nothing (see <see cref="ExchangeTurn.Transition"/>).</summary>
+    internal static readonly ExchangeTransition SentCompleted = new() { Event = ExchangeEvent.Sent, Result = BlockStatus.Completed };
+
+    /// <summary>The default for <see cref="ExchangeEvent.Received"/> (see <see cref="ExchangeTurn.Transition"/>).</summary>
+    internal static readonly ExchangeTransition ReceivedCompleted = new() { Event = ExchangeEvent.Received, Result = BlockStatus.Completed };
+
+    /// <summary>The default for <see cref="ExchangeEvent.Timeout"/> (see <see cref="ExchangeTurn.Transition"/>).</summary>
+    internal static readonly ExchangeTransition TimedOut = new() { Event = ExchangeEvent.Timeout, Result = BlockStatus.TimedOut };
+
     public required ExchangeEvent Event { get; init; }
 
     /// <summary>The message of a <see cref="ExchangeEvent.Message"/> event; null for the other events.</summary>

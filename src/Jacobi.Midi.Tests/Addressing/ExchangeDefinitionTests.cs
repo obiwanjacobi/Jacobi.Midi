@@ -31,11 +31,7 @@ public class ExchangeDefinitionTests
                 {
                   "name": "request",
                   "send": "TestEnvelope.Message.Request",
-                  "receive": [ "TestEnvelope.Message.Data" ],
-                  "on": [
-                    { "event": "complete", "result": "completed" },
-                    { "event": "timeout", "result": "timedOut" }
-                  ]
+                  "receive": [ "TestEnvelope.Message.Data" ]
                 }
               ]
             },
@@ -44,8 +40,7 @@ public class ExchangeDefinitionTests
               "turns": [
                 {
                   "name": "write",
-                  "send": "TestEnvelope.Message.Data",
-                  "on": [ { "event": "sent", "result": "completed" } ]
+                  "send": "TestEnvelope.Message.Data"
                 }
               ]
             }
@@ -66,9 +61,55 @@ public class ExchangeDefinitionTests
         var turn = Assert.Single(request.Turns);
         Assert.Equal(new SchemaName("TestEnvelope.Message.Request"), turn.Send);
         Assert.Equal([new SchemaName("TestEnvelope.Message.Data")], turn.Receive);
-        Assert.Equal([ExchangeEvent.Complete, ExchangeEvent.Timeout], turn.Transitions.Select(transition => transition.Event));
-        Assert.Equal(BlockStatus.TimedOut, turn.Transitions[1].Result);
+        // no 'on': the defaults apply
+        Assert.Empty(turn.Transitions);
+        Assert.Equal(BlockStatus.Completed, turn.Transition(ExchangeEvent.Received)!.Result);
+        Assert.Equal(BlockStatus.TimedOut, turn.Transition(ExchangeEvent.Timeout)!.Result);
+        Assert.Null(turn.Transition(ExchangeEvent.Sent));
         Assert.Equal(["TestEnvelope.Message.Request", "TestEnvelope.Message.Data"], request.Messages.Select(message => message.FullName));
+    }
+
+    [Fact]
+    public void Transition_TheDefaults_AndAnOnOverridesThem()
+    {
+        var set = ExchangeDefinitionReader.ReadXml("""
+            <exchanges for="Device.Map">
+              <exchange name="defaults">
+                <turn name="oneWay">
+                  <send message="Envelope.Message.Data" />
+                </turn>
+              </exchange>
+              <exchange name="acknowledged">
+                <turn name="write">
+                  <send message="Envelope.Message.Data" />
+                  <on message="Envelope.Message.Ack" result="completed" />
+                </turn>
+              </exchange>
+              <exchange name="explicit">
+                <turn name="request">
+                  <send message="Envelope.Message.Request" />
+                  <receive message="Envelope.Message.Data" />
+                  <on event="received" result="rejected" />
+                  <on event="timeout" result="failed" />
+                </turn>
+              </exchange>
+            </exchanges>
+            """, "test");
+
+        // a turn that waits for nothing completes when sent
+        var oneWay = set.Find("defaults")!.Turns[0];
+        Assert.Equal(BlockStatus.Completed, oneWay.Transition(ExchangeEvent.Sent)!.Result);
+        Assert.Null(oneWay.Transition(ExchangeEvent.Received));
+
+        // a turn that waits for an ack does not complete when sent; its timeout is the default
+        var write = set.Find("acknowledged")!.Turns[0];
+        Assert.Null(write.Transition(ExchangeEvent.Sent));
+        Assert.Equal(BlockStatus.TimedOut, write.Transition(ExchangeEvent.Timeout)!.Result);
+
+        var request = set.Find("explicit")!.Turns[0];
+        Assert.Null(request.Transition(ExchangeEvent.Sent));
+        Assert.Equal(BlockStatus.Rejected, request.Transition(ExchangeEvent.Received)!.Result);
+        Assert.Equal(BlockStatus.Failed, request.Transition(ExchangeEvent.Timeout)!.Result);
     }
 
     [Fact]
@@ -109,7 +150,7 @@ public class ExchangeDefinitionTests
               <exchange name="broken">
                 <turn name="request">
                   <on event="sent" result="completed" />
-                  <on event="complete" goto="nowhere" />
+                  <on event="received" goto="nowhere" />
                   <on event="later" message="Envelope.Message.Ack" result="done" />
                   <wait />
                 </turn>
@@ -127,7 +168,7 @@ public class ExchangeDefinitionTests
             "has no attribute 'timeout'",
             "'wait' is not expected",
             "either an 'event' or a 'message'",
-            "the event must be sent, complete or timeout",
+            "the event must be sent, received or timeout",
             "the result must be completed, rejected, failed or timedOut",
         ];
         Assert.All(expected, text => Assert.Contains(exception.Problems, problem => problem.Contains(text, StringComparison.Ordinal)));
@@ -141,7 +182,7 @@ public class ExchangeDefinitionTests
               <exchange name="turns">
                 <turn name="request">
                   <on event="sent" result="completed" />
-                  <on event="complete" goto="nowhere" />
+                  <on event="received" goto="nowhere" />
                 </turn>
                 <turn name="lonely">
                   <send message="Envelope.Message.Request" />
@@ -157,7 +198,7 @@ public class ExchangeDefinitionTests
         string[] expected =
         [
             "'sent' needs a 'send'",
-            "'complete' needs a 'receive'",
+            "'received' needs a 'receive'",
             "there is no turn 'nowhere'",
             "turn 'lonely' is never reached",
             "the turn 'lonely' is defined more than once",
@@ -208,7 +249,7 @@ public class ExchangeDefinitionTests
                   <send message="Envelope.Message.Request" />
                   <receive message="Envelope.Message.Data" />
                   <on event="sent" retry="1" goto="request" />
-                  <on event="complete" retry="2" result="completed" />
+                  <on event="received" retry="2" result="completed" />
                   <on event="timeout" retry="0" result="timedOut" />
                   <on message="Envelope.Message.Nak" retry="many" result="rejected" />
                 </turn>
@@ -219,7 +260,7 @@ public class ExchangeDefinitionTests
         string[] expected =
         [
             "a 'retry' is for 'timeout' or a message, not for 'sent'",
-            "a 'retry' is for 'timeout' or a message, not for 'complete'",
+            "a 'retry' is for 'timeout' or a message, not for 'received'",
             "'retry' must be a number of 1 or more, not '0'",
             "'retry' must be a number of 1 or more, not 'many'",
         ];
@@ -273,7 +314,7 @@ public class ExchangeDefinitionTests
             "$.exchanges[0]: 'exchange' has no attribute 'timeout'",
             "$.exchanges[0].turns[0].send: 'send' must be the name of a message (text), not number.",
             "$.exchanges[0].turns[0].receive: must be an array, not string.",
-            "$.exchanges[0].turns[0].on[0]: the event must be sent, complete or timeout, not 'later'.",
+            "$.exchanges[0].turns[0].on[0]: the event must be sent, received or timeout, not 'later'.",
         ];
         Assert.All(expected, text => Assert.Contains(exception.Problems, problem => problem.StartsWith(text, StringComparison.Ordinal)));
     }

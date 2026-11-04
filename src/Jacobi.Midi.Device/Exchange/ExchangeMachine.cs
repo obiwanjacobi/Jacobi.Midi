@@ -44,38 +44,36 @@ internal sealed class ExchangeMachine(ExchangeDefinition definition, IReadOnlyDi
     public bool Receives(AddressMessage message)
         => _turn.Receive.Any(name => ReferenceEquals(messages[name], message));
 
-    /// <summary>The message of the turn was sent.</summary>
+    /// <summary>The message of the turn was sent; without a transition for it the turn waits for its other events.</summary>
     public ExchangeAction OnSent()
-        => Find(ExchangeEvent.Sent) is { } transition
+        => _turn.Transition(ExchangeEvent.Sent) is { } transition
             ? Apply(transition, "'sent'")
             : new WaitForMessage(definition.ResponseTimeout);
 
     /// <summary>
-    /// The turn accepted data of the block (see <see cref="Receives"/>): <c>complete</c> when the block is now complete,
+    /// The turn accepted data of the block (see <see cref="Receives"/>): <c>received</c> when the block is now complete,
     /// else the message itself; without a transition for it the turn waits on, with a new timeout.
     /// </summary>
     public ExchangeAction OnReceived(ExchangeMessage message, bool complete)
     {
-        if (complete && Find(ExchangeEvent.Complete) is { } done)
+        if (complete && _turn.Transition(ExchangeEvent.Received) is { } done)
         {
-            return Apply(done, "'complete'");
+            return Apply(done, "'received'");
         }
-        return Find(ExchangeEvent.Message, message.Message) is { } transition
+        return Find(message.Message) is { } transition
             ? Apply(transition, $"'{message.Message.FullName}'")
             : new WaitForMessage(definition.ResponseTimeout);
     }
 
     /// <summary>A message from the device that the turn does not receive as data.</summary>
     public ExchangeAction OnMessage(ExchangeMessage message)
-        => Find(ExchangeEvent.Message, message.Message) is { } transition
+        => Find(message.Message) is { } transition
             ? Apply(transition, $"'{message.Message.FullName}'")
             : new Ignore();
 
-    /// <summary>The timeout elapsed; without a transition for it the run ends as timed out.</summary>
+    /// <summary>The timeout elapsed; without a transition of its own the turn's default ends the run as timed out.</summary>
     public ExchangeAction OnElapsed()
-        => Find(ExchangeEvent.Timeout) is { } transition
-            ? Apply(transition, "timeout")
-            : new Complete(BlockStatus.TimedOut, Reason("timeout"));
+        => Apply(_turn.Transition(ExchangeEvent.Timeout)!, "timeout");
 
     private ExchangeAction Enter(ExchangeTurn turn)
     {
@@ -109,7 +107,7 @@ internal sealed class ExchangeMachine(ExchangeDefinition definition, IReadOnlyDi
             ? $"{happened} in turn '{_turn.Name}' of '{definition.Name}'."
             : $"{happened} in turn '{_turn.Name}' of '{definition.Name}', after {retries} {(retries == 1 ? "retry" : "retries")}.";
 
-    private ExchangeTransition? Find(ExchangeEvent @event, AddressMessage? message = null)
-        => _turn.Transitions.FirstOrDefault(transition => transition.Event == @event
-            && (message is null || (transition.Message is { } name && ReferenceEquals(messages[name], message))));
+    private ExchangeTransition? Find(AddressMessage message)
+        => _turn.Transitions.FirstOrDefault(transition => transition.Event == ExchangeEvent.Message
+            && transition.Message is { } name && ReferenceEquals(messages[name], message));
 }

@@ -7,10 +7,15 @@
   - a turn has at most one <send>;
   - an <on> has either an 'event' or a 'message', and either a 'goto' or a 'result';
   - 'goto' names a turn of the same exchange; every turn can be reached from the first one;
-  - 'sent' needs a <send> in the turn, 'complete' a <receive>;
-  - 'retry' is only for 'timeout' and messages, not for 'sent' or 'complete';
+  - 'sent' needs a <send> in the turn, 'received' a <receive>;
+  - 'retry' is only for 'timeout' and messages, not for 'sent' or 'received';
   - names of exchanges (in the file) and of turns (in an exchange) are unique, ignoring case.
   The reader accepts the event and result values in any case; the values below are the canonical spelling.
+
+  Defaults, for a turn without an <on> for the event:
+  - 'received' (a turn with a <receive>): result 'completed';
+  - 'sent' (a turn with a <send> that waits for nothing: no <receive> and no <on>): result 'completed';
+  - 'timeout': result 'timedOut'.
 -->
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified">
 
@@ -61,7 +66,7 @@
 
   <xs:complexType name="turn">
     <xs:annotation>
-      <xs:documentation>A turn in the conversation with the device: on entry it sends its message (if any), then waits for the events it has an 'on' for.</xs:documentation>
+      <xs:documentation>A turn in the conversation with the device: on entry it sends its message (if any), then waits for the events it has an 'on' for (or a default: see above).</xs:documentation>
     </xs:annotation>
     <xs:choice minOccurs="0" maxOccurs="unbounded">
       <xs:element name="send" type="message">
@@ -71,7 +76,7 @@
       </xs:element>
       <xs:element name="receive" type="message">
         <xs:annotation>
-          <xs:documentation>A data message whose data is accepted for the block while in the turn, and counts towards 'complete'.</xs:documentation>
+          <xs:documentation>A data message whose data is accepted for the block while in the turn, and counts towards 'received'.</xs:documentation>
         </xs:annotation>
       </xs:element>
       <xs:element name="on" type="transition" />
@@ -119,7 +124,7 @@
   <xs:simpleType name="event">
     <xs:restriction base="xs:string">
       <xs:enumeration value="sent" />
-      <xs:enumeration value="complete" />
+      <xs:enumeration value="received" />
       <xs:enumeration value="timeout" />
     </xs:restriction>
   </xs:simpleType>

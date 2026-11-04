@@ -76,7 +76,7 @@ public class AcknowledgedExchangeTests
             <turn name="request">
               <send message="Ack.Message.Request" />
               <receive message="Ack.Message.Data" />
-              <on event="complete" result="completed" />
+              <on event="received" result="completed" />
               <on message="Ack.Message.Nak" result="rejected" />
             </turn>
           </exchange>

@@ -214,7 +214,7 @@ public static class ExchangeDefinitionReader
         var @event = ExchangeEvent.Message;
         if (eventName is not null && !TryParseEvent(eventName, out @event))
         {
-            problems.Add($"{node.Location}the event must be sent, complete or timeout, not '{eventName}'.");
+            problems.Add($"{node.Location}the event must be sent, received or timeout, not '{eventName}'.");
         }
         BlockStatus? result = null;
         if (resultName is not null)
@@ -226,9 +226,9 @@ public static class ExchangeDefinitionReader
             }
         }
         var retry = Retry(node, problems);
-        if (retry > 0 && (@event is ExchangeEvent.Sent or ExchangeEvent.Complete))
+        if (retry > 0 && (@event is ExchangeEvent.Sent or ExchangeEvent.Received))
         {
-            // on sent the turn would send again without waiting; on complete there is nothing left to retry
+            // on sent the turn would send again without waiting; on received there is nothing left to retry
             problems.Add($"{node.Location}a 'retry' is for 'timeout' or a message, not for '{eventName}'.");
         }
 
@@ -252,9 +252,9 @@ public static class ExchangeDefinitionReader
                 {
                     problems.Add($"{node.Location}'{exchange.Name}', turn '{turn.Name}': 'sent' needs a 'send' in the turn.");
                 }
-                if (transition.Event == ExchangeEvent.Complete && turn.Receive.Count == 0)
+                if (transition.Event == ExchangeEvent.Received && turn.Receive.Count == 0)
                 {
-                    problems.Add($"{node.Location}'{exchange.Name}', turn '{turn.Name}': 'complete' needs a 'receive' in the turn.");
+                    problems.Add($"{node.Location}'{exchange.Name}', turn '{turn.Name}': 'received' needs a 'receive' in the turn.");
                 }
             }
         }
@@ -286,7 +286,7 @@ public static class ExchangeDefinitionReader
         @event = name.ToLowerInvariant() switch
         {
             "sent" => ExchangeEvent.Sent,
-            "complete" => ExchangeEvent.Complete,
+            "received" => ExchangeEvent.Received,
             "timeout" => ExchangeEvent.Timeout,
             _ => ExchangeEvent.Message,
         };

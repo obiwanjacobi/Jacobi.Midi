@@ -155,14 +155,11 @@ internal static class TestDevice
             <turn name="request">
               <send message="TestEnvelope.Message.Request" />
               <receive message="TestEnvelope.Message.Data" />
-              <on event="complete" result="completed" />
-              <on event="timeout" result="timedOut" />
             </turn>
           </exchange>
           <exchange name="sendData">
             <turn name="write">
               <send message="TestEnvelope.Message.Data" />
-              <on event="sent" result="completed" />
             </turn>
           </exchange>
         </exchanges>

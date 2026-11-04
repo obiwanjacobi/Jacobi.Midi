@@ -1,19 +1,20 @@
 # Exchange definitions (proposal)
 
-*Status: proposal, revision 7, 2026-11-04. Stages 1 and 2 are implemented (see the [readme](readme.md)); stage 3 and later are not.*
+*Status: proposal, revision 8, 2026-11-04. Stages 1 and 2 are implemented (see the [readme](readme.md)); stage 3 and later are not.*
 
 A configurable, generic way to describe the message exchange of a device: which messages go back and forth, how long
 to wait, and how an exchange ends. The design is built up in small stages, each usable on its own. Stages 1 and
 2 are implemented; stages 3 and 4 are worked out (`before` and `after`, prompts); the later stages are named, so the
-direction is visible. Revision 7 drops `forEach` and the handling of failed blocks of revision 6. Stage 1 below keeps
-the names of its time: its `state` is a `turn` since stage 2.
+direction is visible. Revision 7 drops `forEach` and the handling of failed blocks of revision 6. Revision 8 renames
+the event `complete` to `received` and adds the default transitions (see *The machine*). Stage 1 below keeps the
+names of its time: its `state` is a `turn` since stage 2.
 
 **Stage 1 as implemented**, where it differs from or adds to this proposal:
 
 - **No separate content binding yet.** The runner uses the address map directly (`AddressMap.Split`, `Message`, `CreateData`, `Protocol.CreateMessage`, `TryReadData`, `BlockCoverage`). These are the operations the content binding will have; turning them into an interface belongs with the *message exchange for schemas without an address map* item of the [Device todo](../todo.md), where the types become generic too.
 - **A timeout without an `on`** ends the run as `timedOut` (with the reason), instead of being a check error.
 - **Exchange files as files:** `ExchangeDefinitions.AddFile` reads them, but the console only loads the files embedded in its assemblies; files next to the schema files of a rig or device are not loaded yet.
-- **Not in the proposal:** `MessageExchange.Validate` lists the problems without sending anything; a `send` in a state without an `on` for `sent` waits for the events of the state.
+- **Not in the proposal:** `MessageExchange.Validate` lists the problems without sending anything.
 
 ## Principles
 
@@ -120,20 +121,29 @@ the same status. The author describes the exchange of
 **`send` and `receive` are actions:**
 
 - `send` names the message to build. The content fills it in for the current block.
-- `receive` names a data message whose content goes to the sink and counts towards `complete`. A data message that is not inside the block is not accepted, as today.
+- `receive` names a data message whose content goes to the sink and counts towards `received`. A data message that is not inside the block is not accepted, as today.
 
 **Events of a state:**
 
 | Event | When |
 | ----- | ---- |
 | `sent` | The message of the state's `send` was sent. |
-| `complete` | A `receive` accepted data, and the block now has all its data. |
-| `message="<name>"` | The device sent this message, and it matches the device values. For a data message accepted by `receive`: only while the block is not complete yet (else the event is `complete`). |
+| `received` | A `receive` accepted data, and the block now has all its data. |
+| `message="<name>"` | The device sent this message, and it matches the device values. For a data message accepted by `receive`: only while the block is not complete yet (else the event is `received`). |
 | `timeout` | No event within the timeout. The timer restarts with every accepted data message (a reply in several messages). |
 
 A message the state has no `on` or `receive` for is ignored. Messages that arrive between two states are queued,
 not lost: a state that only sends can go on with `sent` to the state that waits. A transition goes to another state
 (`goto`) or ends the run for the block (`result`).
+
+**Defaults:** a state without an `on` for an event gets the default for it; an `on` replaces the default. The
+defaults cover the common case, so a one-way request is a `send` and a `receive`, a one-way write just a `send`:
+
+| Event | Default | When |
+| ----- | ------- | ---- |
+| `sent` | `result="completed"` | The state sends and waits for nothing: no `receive` and no `on`. A state that waits for something (an ack) waits for its events instead. |
+| `received` | `result="completed"` | The state has a `receive`. |
+| `timeout` | `result="timedOut"` | Always. |
 
 The **reason** of a `BlockResult` is written by the runner from what happened, e.g.
 *"'Acme.Message.DataLoadError' in state 'write' of 'sendData'"* or *"timeout in state 'request' of 'requestData'"*:
@@ -148,7 +158,7 @@ the definition does not write texts.
 | `exchanges/@messageInterval`, `exchange/@messageInterval` | milliseconds, default 0 | `60` | The least time between two messages sent to the device. The runner keeps it between blocks and between calls. Replaces `midi.messageInterval`. |
 | `exchange/@name` | a standard name or a name of the file's own | `requestData` | The name the app passes to `Execute`. Unique in the file. |
 | `send/@message`, `receive/@message`, `on/@message` | the schema name of a message group | `Roland.Message32.RQ1` | A message of the schemas: schema, root and group, as plan ranges name nodes. |
-| `on/@event` | `sent`, `complete`, `timeout` | `complete` | See the events. |
+| `on/@event` | `sent`, `received`, `timeout` | `received` | See the events; without an `on` the default applies. |
 | `on/@goto` | the name of a state | `collect` | The next state. |
 | `on/@result` | `completed`, `rejected`, `failed`, `timedOut` | `completed` | Ends the run for the block with this `BlockStatus`. |
 
@@ -162,14 +172,11 @@ the definition does not write texts.
     <state name="request">
       <send message="Roland.Message32.RQ1"/>
       <receive message="Roland.Message32.DT1"/>
-      <on event="complete" result="completed"/>
-      <on event="timeout" result="timedOut"/>
     </state>
   </exchange>
   <exchange name="sendData">
     <state name="write">
       <send message="Roland.Message32.DT1"/>
-      <on event="sent" result="completed"/>
     </state>
   </exchange>
 </exchanges>
@@ -185,7 +192,7 @@ the definition does not write texts.
 5. **Content:** builds the `RQ1` for the block: its address, its size, the device id and the model id.
 6. **Runner:** sends it, at least 60 ms after the previous message to the device. The state has events to wait for, so it waits up to 1000 ms.
 7. A `DT1` arrives. **Content:** it matches the device values and lies inside the block; `receive` accepts it. The block is not complete yet and the state has no `on` for `DT1`, so the wait goes on; the timer restarts.
-8. The next `DT1` fills the block. **Content:** complete. **Definition:** `complete` → `result="completed"`.
+8. The next `DT1` fills the block. **Content:** complete. **Definition:** `received` → `result="completed"` (the default).
 9. **Runner:** decodes the accepted data into the sink in address order, adds the `BlockResult`, and starts the next block at point 4.
 
 A message that is neither a `DT1` of the block nor named in an `on` is ignored. When nothing arrives within 1000 ms:
@@ -193,7 +200,7 @@ A message that is neither a `DT1` of the block nor named in an `on` is ignored. 
 reported with the same status.
 
 **Sending a setting** with `sendData`: the cutting message is `DT1` (it carries data); per block the content builds
-the `DT1` from the source's values, the runner sends it and `sent` completes the block. Between two `DT1`s the
+the `DT1` from the source's values, the runner sends it and `sent` completes the block (the default). Between two `DT1`s the
 runner keeps 60 ms. The GP-8 gets the same file with `Message16`, `for="Gp8.AddressMap"` and 20 ms.
 
 ### Example: data acknowledged by the device
@@ -206,7 +213,6 @@ A made-up device that answers a dump with DATA LOAD COMPLETED or ERROR:
     <send message="Acme.Message.ProgramDump"/>
     <on message="Acme.Message.DataLoadCompleted" result="completed"/>
     <on message="Acme.Message.DataLoadError" result="rejected"/>
-    <on event="timeout" result="timedOut"/>
   </state>
 </exchange>
 ```
@@ -245,7 +251,6 @@ that, the `goto` or `result` of the same `on` is taken. One element says both th
   <turn name="request">
     <send message="Acme.Message.DumpRequest"/>
     <receive message="Acme.Message.Dump"/>
-    <on event="complete" result="completed"/>
     <on event="timeout" retry="2" result="timedOut"/>         <!-- ask again, twice; then timed out -->
   </turn>
 </exchange>
@@ -257,7 +262,6 @@ that, the `goto` or `result` of the same `on` is taken. One element says both th
     <send message="Acme.Message.ProgramDump"/>
     <on message="Acme.Message.DataLoadCompleted" result="completed"/>
     <on message="Acme.Message.DataLoadError" retry="3" result="rejected"/>   <!-- resend, up to 3 times -->
-    <on event="timeout" result="timedOut"/>
   </turn>
 </exchange>
 ```
@@ -276,7 +280,7 @@ that, the `goto` or `result` of the same `on` is taken. One element says both th
 
 - The rename in the model, both readers, `exchange.xsd`, `exchange.schema.json`, the Roland files and the tests.
 - `ExchangeTransition.Retry`; the counters in `ExchangeMachine`, per block.
-- The check: `retry` only on `timeout` and on a message (on `sent` it would resend without waiting, on `complete` there is nothing to retry).
+- The check: `retry` only on `timeout` and on a message (on `sent` it would resend without waiting, on `received` there is nothing to retry).
 
 ## Stage 3: before and after
 
@@ -326,17 +330,14 @@ has no such part. `IsComplete` includes them: data that was sent but whose store
   <before>
     <turn name="header">
       <send message="Yamaha.Cp88.BulkHeader"/>
-      <on event="sent" result="completed"/>
     </turn>
   </before>
   <turn name="dump">
     <send message="Yamaha.Cp88.BulkDump"/>
-    <on event="sent" result="completed"/>
   </turn>
   <after>
     <turn name="footer">
       <send message="Yamaha.Cp88.BulkFooter"/>
-      <on event="sent" result="completed"/>
     </turn>
   </after>
 </exchange>
@@ -356,14 +357,12 @@ A made-up device that writes a program from its edit buffer to memory after a st
     <send message="Acme.Message.ProgramDump"/>
     <on message="Acme.Message.DataLoadCompleted" result="completed"/>
     <on message="Acme.Message.DataLoadError" result="rejected"/>
-    <on event="timeout" result="timedOut"/>
   </turn>
   <after>
     <turn name="store">
       <send message="Acme.Message.ProgramWriteRequest"/>
       <on message="Acme.Message.WriteCompleted" result="completed"/>
       <on message="Acme.Message.WriteError" result="rejected"/>
-      <on event="timeout" result="timedOut"/>
     </turn>
   </after>
 </exchange>
@@ -380,12 +379,10 @@ exchange for the temporary area, and `sendData` for the other areas:
 <exchange name="sendTemporary">
   <turn name="write">
     <send message="Roland.Message32.DT1"/>
-    <on event="sent" result="completed"/>
   </turn>
   <after>
     <turn name="apply">
       <send message="Gx700.Message.SoundChangeRequest"/>
-      <on event="sent" result="completed"/>
     </turn>
   </after>
 </exchange>
@@ -440,8 +437,6 @@ message is the data message the block turns receive; more than one is a problem,
 <exchange name="requestDataManual">
   <turn name="wait" responseTimeout="30000">
     <receive message="Acme.Message.Dump" prompt="Press the BULK DUMP key on the device."/>
-    <on event="complete" result="completed"/>
-    <on event="timeout" result="timedOut"/>
   </turn>
 </exchange>
 ```

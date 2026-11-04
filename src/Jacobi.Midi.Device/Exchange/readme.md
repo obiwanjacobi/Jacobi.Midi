@@ -94,11 +94,7 @@ and [Gx700.exchange.xml](../../Jacobi.Midi.Roland/Boss/Gx700/Gx700.exchange.xml)
         {
           "name": "request",
           "send": "Roland.Message32.RQ1",
-          "receive": [ "Roland.Message32.DT1" ],
-          "on": [
-            { "event": "complete", "result": "completed" },
-            { "event": "timeout", "result": "timedOut" }
-          ]
+          "receive": [ "Roland.Message32.DT1" ]
         }
       ]
     }
@@ -110,14 +106,25 @@ and [Gx700.exchange.xml](../../Jacobi.Midi.Roland/Boss/Gx700/Gx700.exchange.xml)
 | ------- | ---------- | ------- |
 | `exchanges` | `for` (the map root, e.g. `Gx700.AddressMap`), `responseTimeout` (ms, default 1000), `messageInterval` (ms, default 0) | The file. `messageInterval` is the least time between two messages sent to the device. |
 | `exchange` | `name`, optional `responseTimeout`, `messageInterval` | One exchange; its timing overrides the file's. A standard name (`ExchangeNames`: `requestData`, `sendData`) or a name of the file's own. |
-| `turn` | `name` | A turn in the conversation with the device; the first one is the start. On entry it sends its message (if any), then waits for the events it has an `on` for. |
+| `turn` | `name` | A turn in the conversation with the device; the first one is the start. On entry it sends its message (if any), then waits for the events it has an `on` for, or a default (see below). |
 | `send` | `message` | The message to build for the block and send on entry: the schema name of the message group (document, root and path). |
-| `receive` | `message` | A data message whose data is accepted for the block while in the turn, and counts towards `complete`. |
-| `on` | `event` (`sent`, `complete`, `timeout`) or `message`; optional `retry` (1 or more, for `timeout` and messages); `goto` (a turn) or `result` (`completed`, `rejected`, `failed`, `timedOut`) | A transition; the first one that matches is taken. With `retry` it enters its turn again (sending its message again) at most that many times per block, then its `goto` or `result` is taken. A message without an `on` (or `receive`) is ignored. A timeout without an `on` ends the run as timed out. |
+| `receive` | `message` | A data message whose data is accepted for the block while in the turn, and counts towards `received`. |
+| `on` | `event` (`sent`, `received`, `timeout`) or `message`; optional `retry` (1 or more, for `timeout` and messages); `goto` (a turn) or `result` (`completed`, `rejected`, `failed`, `timedOut`) | A transition; the first one that matches is taken. With `retry` it enters its turn again (sending its message again) at most that many times per block, then its `goto` or `result` is taken. A message without an `on` (or `receive`) is ignored. |
+
+**Defaults.** A turn without an `on` for an event gets the default transition for it (`ExchangeTurn.Transition`); an
+`on` for the event replaces the default:
+
+| Event | Default | When |
+| ----- | ------- | ---- |
+| `sent` | `result="completed"` | The turn sends and waits for nothing: it has no `receive` and no `on`. A turn that waits for something (e.g. an `on` for an ack message) waits for its events instead. |
+| `received` | `result="completed"` | The turn has a `receive`. |
+| `timeout` | `result="timedOut"` | Always. |
+
+So a one-way request is a `send` and a `receive`, and a one-way write is just a `send`.
 
 The reader (`ReadXml`, `ReadJson`, or `Read` from a stream by the extension) turns both formats into the same tree
 first, so the checks are the same: it checks the file on its own (elements, attributes, names, unknown and
-unreachable turns, `sent` without a `send`, `complete` without a `receive`, `retry` on `sent` or `complete`) and reports all problems, located by line
+unreachable turns, `sent` without a `send`, `received` without a `receive`, `retry` on `sent` or `received`) and reports all problems, located by line
 (XML) or path (JSON), in an `ExchangeDefinitionException`. When an exchange
 is used, the exchange checks it against the schemas and the call (`ExchangeException`, before anything is sent): the
 messages exist and fit the map, there is exactly one message that asks for or carries data, the device values are
@@ -129,7 +136,7 @@ known, and a source or sink is given when it sends or receives data.
 2. **Blocks:** the range is widened to the atomic groups it overlaps and cut into blocks for the **cutting message**: the one message the exchange sends that asks for data (a role `address`, no data) or carries data (a role `data`). The address map cuts at unmapped gaps, at the message's `midi.maxDataSize`, per field or per atomic group (`midi.unit`), never inside an atomic group; blocks for a data message leave out read-only fields, other blocks write-only fields.
 3. **Per block** the exchange runs from its first turn (`ExchangeMachine`); `MessageExchange` executes it:
    - `send`: the address map builds the message for the block (address, size, device values, data from the source); the runner keeps the `messageInterval` since the previous message to the device, then sends it.
-   - waiting: a message from the device is recognised against the messages the exchange names (data inside the block, or a message without data its transitions wait for); data that a turn `receive`s is accepted and the timeout restarts; `complete` follows when the block has all its data.
+   - waiting: a message from the device is recognised against the messages the exchange names (data inside the block, or a message without data its transitions wait for); data that a turn `receive`s is accepted and the timeout restarts; `received` follows when the block has all its data.
    - the run ends with a `result`; the runner writes the reason (e.g. *"timeout in turn 'request' of 'requestData'."*, with *", after 2 retries"* when its retries were used). The accepted data of a completed block is decoded into the sink, in address order.
 4. **The first block that does not complete ends the transfer**: the blocks after it are reported with the same status, as not transferred.
 
