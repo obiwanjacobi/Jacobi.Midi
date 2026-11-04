@@ -18,19 +18,19 @@ public class ExchangeMachineTests
     private const string Retries = """
         <exchanges for="TestDevice.AddressMap" responseTimeout="500">
           <exchange name="retry">
-            <state name="request">
+            <turn name="request">
               <send message="TestEnvelope.Message.Request" />
               <receive message="TestEnvelope.Message.Data" />
               <on event="complete" result="completed" />
               <on event="timeout" goto="again" />
-            </state>
-            <state name="again">
+            </turn>
+            <turn name="again">
               <send message="TestEnvelope.Message.Request" />
               <receive message="TestEnvelope.Message.Data" />
               <on event="complete" result="completed" />
               <on message="TestEnvelope.Message.Data" goto="again" />
               <on event="timeout" result="failed" />
-            </state>
+            </turn>
           </exchange>
         </exchanges>
         """;
@@ -58,7 +58,7 @@ public class ExchangeMachineTests
 
         var data = Data(PatchAddress(0));
         Assert.True(machine.Receives(data.Message));
-        // more data to come: the state waits on, with a new timeout
+        // more data to come: the turn waits on, with a new timeout
         Assert.IsType<WaitForMessage>(machine.OnReceived(data, complete: false).Value);
         var done = Assert.IsType<Complete>(machine.OnReceived(data, complete: true).Value);
         Assert.Equal(BlockStatus.Completed, done.Status);
@@ -66,7 +66,7 @@ public class ExchangeMachineTests
     }
 
     [Fact]
-    public void RequestData_Timeout_TheReasonNamesTheStateAndTheExchange()
+    public void RequestData_Timeout_TheReasonNamesTheTurnAndTheExchange()
     {
         var machine = Machine(ExchangeNames.RequestData);
         machine.Start();
@@ -75,7 +75,7 @@ public class ExchangeMachineTests
         var done = Assert.IsType<Complete>(machine.OnElapsed().Value);
 
         Assert.Equal(BlockStatus.TimedOut, done.Status);
-        Assert.Equal("timeout in state 'request' of 'requestData'.", done.Reason);
+        Assert.Equal("timeout in turn 'request' of 'requestData'.", done.Reason);
     }
 
     [Fact]
@@ -98,21 +98,112 @@ public class ExchangeMachineTests
     }
 
     [Fact]
-    public void Goto_EntersTheNextStateAndSendsItsMessage()
+    public void Goto_EntersTheNextTurnAndSendsItsMessage()
     {
         var machine = Machine("retry", Retries);
         machine.Start();
         machine.OnSent();
 
-        // the timeout of the first state goes to 'again', which sends the request again
+        // the timeout of the first turn goes to 'again', which sends the request again
         Assert.Equal("TestEnvelope.Message.Request", Assert.IsType<SendMessage>(machine.OnElapsed().Value).Message.FullName);
-        Assert.Equal("again", machine.State.Name);
+        Assert.Equal("again", machine.Turn.Name);
         Assert.Equal(new WaitForMessage(TimeSpan.FromMilliseconds(500)), Assert.IsType<WaitForMessage>(machine.OnSent().Value));
 
         // data that does not complete the block: the message transition is taken
         Assert.IsType<SendMessage>(machine.OnReceived(Data(PatchAddress(0)), complete: false).Value);
         var failed = Assert.IsType<Complete>(machine.OnElapsed().Value);
         Assert.Equal(BlockStatus.Failed, failed.Status);
-        Assert.Equal("timeout in state 'again' of 'retry'.", failed.Reason);
+        Assert.Equal("timeout in turn 'again' of 'retry'.", failed.Reason);
+    }
+
+    private const string Limited = """
+        <exchanges for="TestDevice.AddressMap" responseTimeout="500">
+          <exchange name="requestData">
+            <turn name="request">
+              <send message="TestEnvelope.Message.Request" />
+              <receive message="TestEnvelope.Message.Data" />
+              <on event="complete" result="completed" />
+              <on event="timeout" retry="2" result="timedOut" />
+            </turn>
+          </exchange>
+          <exchange name="fallback">
+            <turn name="request">
+              <send message="TestEnvelope.Message.Request" />
+              <receive message="TestEnvelope.Message.Data" />
+              <on event="complete" result="completed" />
+              <on message="TestEnvelope.Message.Data" retry="1" goto="last" />
+              <on event="timeout" retry="1" result="timedOut" />
+            </turn>
+            <turn name="last">
+              <send message="TestEnvelope.Message.Request" />
+              <on event="timeout" result="failed" />
+            </turn>
+          </exchange>
+        </exchanges>
+        """;
+
+    [Fact]
+    public void Retry_EntersTheTurnAgain_ThenTakesTheResult()
+    {
+        var machine = Machine(ExchangeNames.RequestData, Limited);
+        machine.Start();
+        machine.OnSent();
+
+        // two retries: the request is sent again each time
+        for (var retry = 0; retry < 2; retry++)
+        {
+            Assert.Equal("TestEnvelope.Message.Request", Assert.IsType<SendMessage>(machine.OnElapsed().Value).Message.FullName);
+            Assert.Equal("request", machine.Turn.Name);
+            Assert.IsType<WaitForMessage>(machine.OnSent().Value);
+        }
+
+        var done = Assert.IsType<Complete>(machine.OnElapsed().Value);
+        Assert.Equal(BlockStatus.TimedOut, done.Status);
+        Assert.Equal("timeout in turn 'request' of 'requestData', after 2 retries.", done.Reason);
+    }
+
+    [Fact]
+    public void Retry_CompletesWhenTheDataArrivesInARetry()
+    {
+        var machine = Machine(ExchangeNames.RequestData, Limited);
+        machine.Start();
+        machine.OnSent();
+
+        Assert.IsType<SendMessage>(machine.OnElapsed().Value);
+        machine.OnSent();
+
+        Assert.Equal(BlockStatus.Completed, Assert.IsType<Complete>(machine.OnReceived(Data(PatchAddress(0)), complete: true).Value).Status);
+    }
+
+    [Fact]
+    public void Retry_IsCountedPerTransition_ThenTakesTheGoto()
+    {
+        var machine = Machine("fallback", Limited);
+        machine.Start();
+        machine.OnSent();
+
+        // the timeout uses its own retry; the message transition still has its own
+        Assert.IsType<SendMessage>(machine.OnElapsed().Value);
+        machine.OnSent();
+        Assert.IsType<SendMessage>(machine.OnReceived(Data(PatchAddress(0)), complete: false).Value);
+        Assert.Equal("request", machine.Turn.Name);
+        machine.OnSent();
+
+        // no retries left: the goto
+        Assert.IsType<SendMessage>(machine.OnReceived(Data(PatchAddress(0)), complete: false).Value);
+        Assert.Equal("last", machine.Turn.Name);
+    }
+
+    [Fact]
+    public void Retry_StartsAgainForEachBlock()
+    {
+        // a machine runs one block: a new block gets a new machine, with all retries
+        foreach (var _ in Enumerable.Range(0, 2))
+        {
+            var machine = Machine(ExchangeNames.RequestData, Limited);
+            machine.Start();
+            machine.OnSent();
+            Assert.IsType<SendMessage>(machine.OnElapsed().Value);
+        }
     }
 }

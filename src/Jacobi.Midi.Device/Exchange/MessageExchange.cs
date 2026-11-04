@@ -256,12 +256,12 @@ public sealed class MessageExchange : IAsyncDisposable
             return problems;
         }
 
-        foreach (var received in definition.States.SelectMany(state => state.Receive).Distinct().Where(received => !messages[received].IsData))
+        foreach (var received in definition.Turns.SelectMany(turn => turn.Receive).Distinct().Where(received => !messages[received].IsData))
         {
             problems.Add($"'{received}' is received as data, but it carries no data (it has no open choice midi.role=\"data\").");
         }
 
-        var sent = definition.States.Select(state => state.Send).OfType<SchemaName>().Select(send => messages[send]).Distinct().ToList();
+        var sent = definition.Turns.Select(turn => turn.Send).OfType<SchemaName>().Select(send => messages[send]).Distinct().ToList();
         var cutting = sent.Where(message => message.IsData || message.IsRequest).ToList();
         if (cutting.Count == 0)
         {
@@ -279,7 +279,7 @@ public sealed class MessageExchange : IAsyncDisposable
         }
 
         var sendsData = sent.Any(message => message.IsData);
-        var receivesData = definition.States.Any(state => state.Receive.Count > 0);
+        var receivesData = definition.Turns.Any(turn => turn.Receive.Count > 0);
         if (data is not null && sendsData && data.Source is null)
         {
             problems.Add($"'{name}' sends data: it needs a source.");
@@ -292,7 +292,7 @@ public sealed class MessageExchange : IAsyncDisposable
         if (problems.Count == 0)
         {
             var receivable = messages.Values.Where(message => message.IsData && !sent.Contains(message)).Distinct().ToList();
-            var others = definition.States.SelectMany(state => state.Transitions)
+            var others = definition.Turns.SelectMany(turn => turn.Transitions)
                 .Select(transition => transition.Message).OfType<SchemaName>()
                 .Select(message => messages[message]).Where(message => !message.IsData).Distinct().ToList();
             prepared = new PreparedExchange(map, definition, map.Device.With(_device), messages, cutting[0], sendsData, receivesData, receivable, others);
@@ -348,7 +348,7 @@ public sealed class MessageExchange : IAsyncDisposable
                         return new BlockResult(block, done.Status) { Reason = done.Reason };
 
                     default:
-                        throw new InvalidOperationException($"'{prepared.Definition.Name}', state '{machine.State.Name}': unexpected action.");
+                        throw new InvalidOperationException($"'{prepared.Definition.Name}', turn '{machine.Turn.Name}': unexpected action.");
                 }
             }
         }

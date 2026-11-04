@@ -25,32 +25,34 @@ internal union ExchangeAction(SendMessage, WaitForMessage, Ignore, Complete);
 
 /// <summary>
 /// Runs an <see cref="ExchangeDefinition"/> for one block: it gets events and answers with the next action. It never
-/// touches the connection, timers or message bytes; <see cref="MessageExchange"/> executes the actions. It writes the
-/// reason of a run that does not complete from the event and the state. Used for one block, from one thread at a time.
+/// touches the connection, timers or message bytes; <see cref="MessageExchange"/> executes the actions. It counts the
+/// retries of the transitions (per block, as a machine is used for one block) and writes the reason of a run that does
+/// not complete from the event and the turn. Used for one block, from one thread at a time.
 /// </summary>
 internal sealed class ExchangeMachine(ExchangeDefinition definition, IReadOnlyDictionary<SchemaName, AddressMessage> messages)
 {
-    private ExchangeState _state = definition.States[0];
+    private ExchangeTurn _turn = definition.Turns[0];
+    private readonly Dictionary<ExchangeTransition, int> _retries = new(ReferenceEqualityComparer.Instance);
 
-    /// <summary>The current state.</summary>
-    public ExchangeState State => _state;
+    /// <summary>The current turn.</summary>
+    public ExchangeTurn Turn => _turn;
 
-    /// <summary>The first action: enter the first state.</summary>
-    public ExchangeAction Start() => Enter(definition.States[0]);
+    /// <summary>The first action: enter the first turn.</summary>
+    public ExchangeAction Start() => Enter(definition.Turns[0]);
 
-    /// <summary>True when the current state accepts the data of the message for the block (<c>receive</c>).</summary>
+    /// <summary>True when the current turn accepts the data of the message for the block (<c>receive</c>).</summary>
     public bool Receives(AddressMessage message)
-        => _state.Receive.Any(name => ReferenceEquals(messages[name], message));
+        => _turn.Receive.Any(name => ReferenceEquals(messages[name], message));
 
-    /// <summary>The message of the state was sent.</summary>
+    /// <summary>The message of the turn was sent.</summary>
     public ExchangeAction OnSent()
         => Find(ExchangeEvent.Sent) is { } transition
             ? Apply(transition, "'sent'")
             : new WaitForMessage(definition.ResponseTimeout);
 
     /// <summary>
-    /// The state accepted data of the block (see <see cref="Receives"/>): <c>complete</c> when the block is now complete,
-    /// else the message itself; without a transition for it the state waits on, with a new timeout.
+    /// The turn accepted data of the block (see <see cref="Receives"/>): <c>complete</c> when the block is now complete,
+    /// else the message itself; without a transition for it the turn waits on, with a new timeout.
     /// </summary>
     public ExchangeAction OnReceived(ExchangeMessage message, bool complete)
     {
@@ -63,7 +65,7 @@ internal sealed class ExchangeMachine(ExchangeDefinition definition, IReadOnlyDi
             : new WaitForMessage(definition.ResponseTimeout);
     }
 
-    /// <summary>A message from the device that the state does not receive as data.</summary>
+    /// <summary>A message from the device that the turn does not receive as data.</summary>
     public ExchangeAction OnMessage(ExchangeMessage message)
         => Find(ExchangeEvent.Message, message.Message) is { } transition
             ? Apply(transition, $"'{message.Message.FullName}'")
@@ -75,28 +77,39 @@ internal sealed class ExchangeMachine(ExchangeDefinition definition, IReadOnlyDi
             ? Apply(transition, "timeout")
             : new Complete(BlockStatus.TimedOut, Reason("timeout"));
 
-    private ExchangeAction Enter(ExchangeState state)
+    private ExchangeAction Enter(ExchangeTurn turn)
     {
-        _state = state;
-        return state.Send is { } send
+        _turn = turn;
+        return turn.Send is { } send
             ? new SendMessage(messages[send])
             : new WaitForMessage(definition.ResponseTimeout);
     }
 
+    // a retry left: enter the turn again; else the goto or the result
     private ExchangeAction Apply(ExchangeTransition transition, string happened)
     {
+        var retries = _retries.GetValueOrDefault(transition);
+        if (retries < transition.Retry)
+        {
+            _retries[transition] = retries + 1;
+            return Enter(_turn);
+        }
+
         if (transition.Goto is { } target)
         {
             return Enter(definition.Find(target)
-                ?? throw new InvalidOperationException($"'{definition.Name}', state '{_state.Name}': there is no state '{target}'."));
+                ?? throw new InvalidOperationException($"'{definition.Name}', turn '{_turn.Name}': there is no turn '{target}'."));
         }
         var status = transition.Result ?? BlockStatus.Failed;
-        return new Complete(status, status == BlockStatus.Completed ? null : Reason(happened));
+        return new Complete(status, status == BlockStatus.Completed ? null : Reason(happened, retries));
     }
 
-    private string Reason(string happened) => $"{happened} in state '{_state.Name}' of '{definition.Name}'.";
+    private string Reason(string happened, int retries = 0)
+        => retries == 0
+            ? $"{happened} in turn '{_turn.Name}' of '{definition.Name}'."
+            : $"{happened} in turn '{_turn.Name}' of '{definition.Name}', after {retries} {(retries == 1 ? "retry" : "retries")}.";
 
     private ExchangeTransition? Find(ExchangeEvent @event, AddressMessage? message = null)
-        => _state.Transitions.FirstOrDefault(transition => transition.Event == @event
+        => _turn.Transitions.FirstOrDefault(transition => transition.Event == @event
             && (message is null || (transition.Message is { } name && ReferenceEquals(messages[name], message))));
 }

@@ -8,7 +8,7 @@
     <None Remove="Schemas\Midi.xml" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Schemas\Midi.xml" />
+    <EmbeddedResource Include="Schemas\*.xml" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\Jacobi.BinarySerializer\src\Jacobi.BinarySerializer\Jacobi.BinarySerializer.csproj" />

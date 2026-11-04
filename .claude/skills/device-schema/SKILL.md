@@ -1,6 +1,6 @@
 ---
 name: device-schema
-description: Rules for creating or editing MIDI device schemas in XML (e.g. Gp8.schema.xml, Gx700..schema.xml, G50.schema.xml in src/Jacobi.Midi.<Vendor>/Schemas) and vendor envelope schemas (Roland.schema.xml): file layout, header comment, naming, data types, address map (midi.* properties), comments and tests. Use for any change to a *.xml schema under a Schemas folder or to Jacobi.Midi.Device/Midi.xml.
+description: Rules for creating or editing MIDI device schemas in XML (*.schema.xml, e.g. Gp8.schema.xml, Gx700.schema.xml, G50.schema.xml, each in the folder of its device in src/Jacobi.Midi.<Vendor>) and vendor envelope schemas (Roland.schema.xml): file layout, header comment, naming, data types, address map (midi.* properties), comments and tests. Use for any change to a *.schema.xml file, including the base Midi.schema.xml of Jacobi.Midi.Device.
 ---
 
 # MIDI device documentation
@@ -10,8 +10,8 @@ When handed a .pdf look for the Midi Implementation section or similar. If the .
 # MIDI device schemas (XML)
 
 A device schema describes the SysEx data of one device: its parameters and, for address based devices, its
-address map. It builds on a vendor envelope schema (`Roland.xml`: the messages), which builds on the base `midi`
-schema (`Jacobi.Midi.Device/Midi.xml`: shared processor definitions).
+address map. It builds on a vendor envelope schema (`Roland.schema.xml`: the messages), which builds on the base `midi`
+schema (`Midi.schema.xml` in `src/Jacobi.Midi.Device`: shared processor definitions).
 
 Sources of truth, read them when a rule below is not enough:
 - Schema format: `../Jacobi.BinarySerializer/src/Jacobi.BinarySerializer/Schema/readme.md` and `schema.xsd` next to it.
@@ -19,13 +19,21 @@ Sources of truth, read them when a rule below is not enough:
 - Address map and `midi.*` properties: `src/Jacobi.Midi.Device/Addressing/readme.md`.
 - Vendor conventions: `docs/analysis/<vendor>.md`.
 
-Reference examples: `Gp8.xml` (address map, manual based) and `Gx700.xml` (address map, manual based and checked
-against dumps; section nodeDefs reused by an atomic bulk patch and a non-atomic individual patch) in `src/Jacobi.Midi.Roland/Schemas`, `G50.xml` (not address based) in `src/Jacobi.Midi.Yamaha/Schemas`.
+Reference examples: `src/Jacobi.Midi.Roland/Gp8/Gp8.schema.xml` (address map, manual based) and
+`src/Jacobi.Midi.Roland/Boss/Gx700/Gx700.schema.xml` (address map, manual based and checked against dumps; section
+nodeDefs reused by an atomic bulk patch and a non-atomic individual patch), `G50.schema.xml` in `src/Jacobi.Midi.Yamaha`
+(not address based).
 
 ## Location and naming
 
-- File: `src/Jacobi.Midi.<Vendor>/Schemas/<Device>.xml`. The project embeds `Schemas\*.xml`. A new vendor project needs that `EmbeddedResource` and must be added to `TestHelpers.CreateSchemas` / `CreateProcessors` in `Jacobi.Midi.Tests/Schema`.
-- `<schema name="...">` is the file name without extension, PascalCase without punctuation: `Gp8` for the GP-8, `Gx700` for the GX-700. References to it are case-insensitive (`roland.level`).
+- The files of a device are grouped together in one folder of the vendor project, named after the device:
+  `src/Jacobi.Midi.<Vendor>/<Device>/` (e.g. `Gp8/`), or under the brand when it differs from the vendor
+  (`src/Jacobi.Midi.Roland/Boss/Gx700/`). A sub-extension tells the files apart: `<Device>.schema.xml` is the schema,
+  `<Device>.exchange.xml` (or `.exchange.json`) the exchange file of the device.
+- A vendor envelope schema sits in the root of its vendor project: `src/Jacobi.Midi.<Vendor>/<Vendor>.schema.xml`.
+- The files are embedded resources. The project embeds each device folder (`<EmbeddedResource Include="Boss\Gx700\*.xml" />`): a new device folder needs its own entry, and one for `*.json` when it has a JSON exchange file. The loaders find the schemas by the `.schema.xml` sub-extension, whatever the folder (`SchemaSetBuilder.LoadFromAssembly(path, null, ".schema.xml")`), and the exchange files by `.exchange.xml` / `.exchange.json`.
+- A new vendor project must be added to `TestHelpers.CreateSchemas` / `CreateProcessors` in `Jacobi.Midi.Tests/Schema`.
+- `<schema name="...">` is the file name without the sub-extension and extension (`Gp8.schema.xml`: `Gp8`), PascalCase without punctuation: `Gp8` for the GP-8, `Gx700` for the GX-700. References to it are case-insensitive (`roland.level`).
 - nodeDefs and dataTypeDefs: camelCase (`patch`, `system`, `nibble8`, `upDown`, `switch100`).
 - Members (groups, repeats, fields): PascalCase, after the parameter names in the manual (`CutoffFreq`, `EffectLevel`). Same name for the same thing across sections (`On`, `Type`, `EffectLevel`).
 - Bytes whose meaning is unknown: `Unknown<offset>` with the hex offset in the section (`Unknown1A`), type `sys.uint8` or `sys.bytes` with `byteLength`.
@@ -82,9 +90,9 @@ Put the comment on its own line **above** the member (GP-8 style), not trailing 
 ```
 
 - Format: `<offset>: <stored range or values>`. The offset is hex, relative to the start of the nodeDef or section. Add the displayed value with `(= ...)` when it differs from the stored value: `0-100 (= -50 - +50)`.
-- Enumerations: list the values (`0 = down, 100 = up`), or better, model them with a dataTypeDef with `options` (see `upDown` in `Gp8.xml`).
+- Enumerations: list the values (`0 = down, 100 = up`), or better, model them with a dataTypeDef with `options` (see `upDown` in `Gp8.schema.xml`).
 - A section or group gets a comment with its number and size: `<!-- Section 01: 8 bytes. -->`.
-- Older files (`G50.xml`) use trailing, column-aligned comments. When editing a few lines there, keep the existing style and its alignment. Do not convert a whole file without asking.
+- Older files (`G50.schema.xml`) use trailing, column-aligned comments. When editing a few lines there, keep the existing style and its alignment. Do not convert a whole file without asking.
 
 ## Unknown and unverified data
 
@@ -101,7 +109,7 @@ Put the comment on its own line **above** the member (GP-8 style), not trailing 
   - Enumeration: `options` with one `<option value="<stored value>" name="<logical value>"/>` per value; `optionsDefault` for the value read for a stored value that is not an option (it cannot be written); `valueType` when the names are not strings (`sys.bool` for a 0/100 switch). No `min`/`max` with options: they would apply to the names.
   - Move a type to the vendor schema only once a second device needs it.
 - Multi-byte values: give the field a `byteLength` and a field processor: `midi.sysexbyte` (7 + 7 bits, MSB first), `sys.bitslicer bits="4" byteorder="big"` (nibbles). Make it a nodeDef when it recurs (`sysex14`, `nibble8`).
-- Bit flags in one byte: a group with `byteLength="1"` and `sys.bitpacker`, fields with `bits` (see `EffectSwiches1` in `Gp8.xml`).
+- Bit flags in one byte: a group with `byteLength="1"` and `sys.bitpacker`, fields with `bits` (see `EffectSwiches1` in `Gp8.schema.xml`).
 - Fixed bytes (ids, commands, terminators): a field with `value`. The reader checks it, the writer supplies it.
 
 ## Address map (address based devices)
@@ -121,7 +129,7 @@ Full rules: `src/Jacobi.Midi.Device/Addressing/readme.md`. In short:
 - Message groups sit under a root group with the `midi.sysex` processor (framing F0 ... F7).
 - Put the bytes a checksum covers in a `ChecksumScope` group with the vendor checksum processor (`roland.checksum`, `yamaha.checksum`).
 - Use `byteSize` with a `ref` for byte counts. When the writer cannot derive one, use a constant `value` and add a `[TODO]`.
-- In an envelope schema, tag the fields with `midi.role` (see the Addressing readme). Messages get no kind tag: which messages a device exchanges, in which order and with which timing, goes in an exchange file of the device (`<assembly>/Exchange/<Device>.xml`, see `src/Jacobi.Midi.Device/Exchange/readme.md`).
+- In an envelope schema, tag the fields with `midi.role` (see the Addressing readme). Messages get no kind tag: which messages a device exchanges, in which order and with which timing, goes in the exchange file of the device, next to its schema (`<Device>.exchange.xml`, see `src/Jacobi.Midi.Device/Exchange/readme.md`).
 
 ## Tests
 

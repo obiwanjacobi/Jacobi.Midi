@@ -14,7 +14,7 @@ public sealed class ProcessorFactory : IProcessorFactory
     public string Namespace => "midi";
 
     public IEnumerable<string> Processors
-    => ProcessorMap.Keys;
+        => ProcessorMap.Keys;
 
     public IProcessor? CreateProcessor(string id)
         => ProcessorMap.GetValueOrDefault(id);

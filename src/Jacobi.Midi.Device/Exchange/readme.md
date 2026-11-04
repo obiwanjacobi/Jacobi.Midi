@@ -13,7 +13,7 @@ Principles:
 - References go one way: an exchange file names its map root and the messages it uses; a schema never refers to an exchange file. A message has no kind in the schema: the same message can be used by several patterns.
 - Before an exchange starts, the device is known (its device values, e.g. the Roland device id) and so is how to reach it (the MIDI session and endpoint). The exchange opens its own connection.
 
-The design and its later steps (states around the blocks, retries, values from replies, prompts) are in the
+The design and its later stages (messages once around the blocks, prompts) are in the
 proposal: [exchange-definitions.md](exchange-definitions.md).
 
 ## Client usage
@@ -68,18 +68,20 @@ the atomic groups it overlaps: on receive, the sink then also gets the other fie
 
 ## Exchange files
 
-An exchange file holds the exchanges of one map root, each a plain state machine. It is XML (`*.exchange.xml`) or
-JSON (`*.exchange.json`), by convention in the `Exchange` folder of the assembly that owns it, embedded as a resource
-(`ExchangeDefinitions.AddAssembly`), or a file (`ExchangeDefinitions.AddFile`). A later file for the same root
+An exchange file holds the exchanges of one map root, each a plain state machine of turns. It is XML
+(`*.exchange.xml`) or JSON (`*.exchange.json`). The files of a device are grouped together in one folder (e.g.
+`Boss/Gx700/` in the Roland assembly) and told apart by their sub-extension: `Gx700.schema.xml` is the schema,
+`Gx700.exchange.xml` the exchange file. They are embedded as resources of the assembly that owns them
+(`ExchangeDefinitions.AddAssembly`), or loaded as a file (`ExchangeDefinitions.AddFile`). A later file for the same root
 replaces an earlier one. Loaders of embedded schemas skip these resources (`ExchangeDefinitions.IsDefinitionResource`).
 
 The formats are described by [exchange.xsd](exchange.xsd) and [exchange.schema.json](exchange.schema.json); the rules
 they cannot express are in their comments, and the reader checks them. Both formats have the same content: in JSON
-the elements that repeat are arrays (`exchanges`, `states`, `receive`, `on`), `send` and `receive` hold message
+the elements that repeat are arrays (`exchanges`, `turns`, `receive`, `on`), `send` and `receive` hold message
 names, and the attributes are properties.
 
-The files of the Roland devices are examples: [Gp8.exchange.xml](../../Jacobi.Midi.Roland/Exchange/Gp8.exchange.xml)
-and [Gx700.exchange.xml](../../Jacobi.Midi.Roland/Exchange/Gx700.exchange.xml). The same `requestData` in JSON:
+The files of the Roland devices are examples: [Gp8.exchange.xml](../../Jacobi.Midi.Roland/Gp8/Gp8.exchange.xml)
+and [Gx700.exchange.xml](../../Jacobi.Midi.Roland/Boss/Gx700/Gx700.exchange.xml). The same `requestData` in JSON:
 
 ```json
 {
@@ -88,7 +90,7 @@ and [Gx700.exchange.xml](../../Jacobi.Midi.Roland/Exchange/Gx700.exchange.xml). 
   "exchanges": [
     {
       "name": "requestData",
-      "states": [
+      "turns": [
         {
           "name": "request",
           "send": "Roland.Message32.RQ1",
@@ -108,14 +110,14 @@ and [Gx700.exchange.xml](../../Jacobi.Midi.Roland/Exchange/Gx700.exchange.xml). 
 | ------- | ---------- | ------- |
 | `exchanges` | `for` (the map root, e.g. `Gx700.AddressMap`), `responseTimeout` (ms, default 1000), `messageInterval` (ms, default 0) | The file. `messageInterval` is the least time between two messages sent to the device. |
 | `exchange` | `name`, optional `responseTimeout`, `messageInterval` | One exchange; its timing overrides the file's. A standard name (`ExchangeNames`: `requestData`, `sendData`) or a name of the file's own. |
-| `state` | `name` | A state; the first one is the start. On entry it sends its message (if any), then waits for the events it has an `on` for. |
+| `turn` | `name` | A turn in the conversation with the device; the first one is the start. On entry it sends its message (if any), then waits for the events it has an `on` for. |
 | `send` | `message` | The message to build for the block and send on entry: the schema name of the message group (document, root and path). |
-| `receive` | `message` | A data message whose data is accepted for the block while in the state, and counts towards `complete`. |
-| `on` | `event` (`sent`, `complete`, `timeout`) or `message`; `goto` (a state) or `result` (`completed`, `rejected`, `failed`, `timedOut`) | A transition; the first one that matches is taken. A message without an `on` (or `receive`) is ignored. A timeout without an `on` ends the run as timed out. |
+| `receive` | `message` | A data message whose data is accepted for the block while in the turn, and counts towards `complete`. |
+| `on` | `event` (`sent`, `complete`, `timeout`) or `message`; optional `retry` (1 or more, for `timeout` and messages); `goto` (a turn) or `result` (`completed`, `rejected`, `failed`, `timedOut`) | A transition; the first one that matches is taken. With `retry` it enters its turn again (sending its message again) at most that many times per block, then its `goto` or `result` is taken. A message without an `on` (or `receive`) is ignored. A timeout without an `on` ends the run as timed out. |
 
 The reader (`ReadXml`, `ReadJson`, or `Read` from a stream by the extension) turns both formats into the same tree
 first, so the checks are the same: it checks the file on its own (elements, attributes, names, unknown and
-unreachable states, `sent` without a `send`, `complete` without a `receive`) and reports all problems, located by line
+unreachable turns, `sent` without a `send`, `complete` without a `receive`, `retry` on `sent` or `complete`) and reports all problems, located by line
 (XML) or path (JSON), in an `ExchangeDefinitionException`. When an exchange
 is used, the exchange checks it against the schemas and the call (`ExchangeException`, before anything is sent): the
 messages exist and fit the map, there is exactly one message that asks for or carries data, the device values are
@@ -125,10 +127,10 @@ known, and a source or sink is given when it sends or receives data.
 
 1. **Finding the exchange:** the file whose `for` is the root of the range's plan, and in it the exchange with the name.
 2. **Blocks:** the range is widened to the atomic groups it overlaps and cut into blocks for the **cutting message**: the one message the exchange sends that asks for data (a role `address`, no data) or carries data (a role `data`). The address map cuts at unmapped gaps, at the message's `midi.maxDataSize`, per field or per atomic group (`midi.unit`), never inside an atomic group; blocks for a data message leave out read-only fields, other blocks write-only fields.
-3. **Per block** the exchange runs from its first state (`ExchangeMachine`); `MessageExchange` executes it:
+3. **Per block** the exchange runs from its first turn (`ExchangeMachine`); `MessageExchange` executes it:
    - `send`: the address map builds the message for the block (address, size, device values, data from the source); the runner keeps the `messageInterval` since the previous message to the device, then sends it.
-   - waiting: a message from the device is recognised against the messages the exchange names (data inside the block, or a message without data its transitions wait for); data that a state `receive`s is accepted and the timeout restarts; `complete` follows when the block has all its data.
-   - the run ends with a `result`; the runner writes the reason (e.g. *"timeout in state 'request' of 'requestData'."*). The accepted data of a completed block is decoded into the sink, in address order.
+   - waiting: a message from the device is recognised against the messages the exchange names (data inside the block, or a message without data its transitions wait for); data that a turn `receive`s is accepted and the timeout restarts; `complete` follows when the block has all its data.
+   - the run ends with a `result`; the runner writes the reason (e.g. *"timeout in turn 'request' of 'requestData'."*, with *", after 2 retries"* when its retries were used). The accepted data of a completed block is decoded into the sink, in address order.
 4. **The first block that does not complete ends the transfer**: the blocks after it are reported with the same status, as not transferred.
 
 **Listen:** data messages the device sends on its own are decoded into the sink when they overlap the range, until
@@ -180,7 +182,8 @@ packets with a `SysEx7Assembler`; its packet handler is the `MidiPacketReceivedH
 
 ## Not yet supported
 
-See [exchange-definitions.md](exchange-definitions.md) (the later steps) and [todo.md](../todo.md): states around the
-blocks and retries (the Roland handshake, Yamaha Bulk Header/Footer), values read from replies (device modes, error
-codes), prompts for a manual operation on the device, patterns the device starts, commands without data (write/store
-requests), a choice between messages per block, and areas of the session state that depend on others.
+See [exchange-definitions.md](exchange-definitions.md) (the later stages) and [todo.md](../todo.md):
+messages once around the blocks (Yamaha Bulk Header/Footer, a store request after the data), prompts for a manual
+operation on the device, two levels of blocks (the Roland handshake for sending), patterns the device starts,
+commands without data and without a range, a choice between messages per block, and areas of the session state that
+depend on others.

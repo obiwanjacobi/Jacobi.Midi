@@ -27,7 +27,7 @@ public class ExchangeDefinitionTests
           "exchanges": [
             {
               "name": "requestData",
-              "states": [
+              "turns": [
                 {
                   "name": "request",
                   "send": "TestEnvelope.Message.Request",
@@ -41,7 +41,7 @@ public class ExchangeDefinitionTests
             },
             {
               "name": "sendData",
-              "states": [
+              "turns": [
                 {
                   "name": "write",
                   "send": "TestEnvelope.Message.Data",
@@ -63,11 +63,11 @@ public class ExchangeDefinitionTests
         var request = set.Find("REQUESTDATA")!;
         Assert.Equal(TimeSpan.FromSeconds(1), request.ResponseTimeout);
         Assert.Equal(TimeSpan.FromMilliseconds(20), request.MessageInterval);
-        var state = Assert.Single(request.States);
-        Assert.Equal(new SchemaName("TestEnvelope.Message.Request"), state.Send);
-        Assert.Equal([new SchemaName("TestEnvelope.Message.Data")], state.Receive);
-        Assert.Equal([ExchangeEvent.Complete, ExchangeEvent.Timeout], state.Transitions.Select(transition => transition.Event));
-        Assert.Equal(BlockStatus.TimedOut, state.Transitions[1].Result);
+        var turn = Assert.Single(request.Turns);
+        Assert.Equal(new SchemaName("TestEnvelope.Message.Request"), turn.Send);
+        Assert.Equal([new SchemaName("TestEnvelope.Message.Data")], turn.Receive);
+        Assert.Equal([ExchangeEvent.Complete, ExchangeEvent.Timeout], turn.Transitions.Select(transition => transition.Event));
+        Assert.Equal(BlockStatus.TimedOut, turn.Transitions[1].Result);
         Assert.Equal(["TestEnvelope.Message.Request", "TestEnvelope.Message.Data"], request.Messages.Select(message => message.FullName));
     }
 
@@ -77,16 +77,16 @@ public class ExchangeDefinitionTests
         var set = ExchangeDefinitionReader.ReadXml("""
             <exchanges for="Device.Map">
               <exchange name="slow" responseTimeout="5000" messageInterval="40">
-                <state name="request">
+                <turn name="request">
                   <send message="Envelope.Message.Request" />
                   <on message="Envelope.Message.Ack" goto="request" />
-                </state>
+                </turn>
               </exchange>
               <exchange name="default">
-                <state name="request">
+                <turn name="request">
                   <send message="Envelope.Message.Request" />
                   <on event="sent" result="completed" />
-                </state>
+                </turn>
               </exchange>
             </exchanges>
             """, "test");
@@ -95,7 +95,7 @@ public class ExchangeDefinitionTests
         Assert.Equal(TimeSpan.FromMilliseconds(40), set.Find("slow")!.MessageInterval);
         Assert.Equal(TimeSpan.FromSeconds(1), set.Find("default")!.ResponseTimeout);
         Assert.Equal(TimeSpan.Zero, set.Find("default")!.MessageInterval);
-        var transition = Assert.Single(set.Find("slow")!.States[0].Transitions);
+        var transition = Assert.Single(set.Find("slow")!.Turns[0].Transitions);
         Assert.Equal(ExchangeEvent.Message, transition.Event);
         Assert.Equal(new SchemaName("Envelope.Message.Ack"), transition.Message);
         Assert.Equal("request", transition.Goto);
@@ -107,16 +107,16 @@ public class ExchangeDefinitionTests
         var exception = Assert.Throws<ExchangeDefinitionException>(() => ExchangeDefinitionReader.ReadXml("""
             <exchanges for="Device.Map" timeout="10">
               <exchange name="broken">
-                <state name="request">
+                <turn name="request">
                   <on event="sent" result="completed" />
                   <on event="complete" goto="nowhere" />
                   <on event="later" message="Envelope.Message.Ack" result="done" />
                   <wait />
-                </state>
-                <state name="lonely">
+                </turn>
+                <turn name="lonely">
                   <send message="Envelope.Message.Request" />
                   <on event="sent" result="completed" />
-                </state>
+                </turn>
               </exchange>
             </exchanges>
             """, "broken.xml"));
@@ -134,33 +134,94 @@ public class ExchangeDefinitionTests
     }
 
     [Fact]
-    public void Read_TheStatesAreChecked()
+    public void Read_TheTurnsAreChecked()
     {
         var exception = Assert.Throws<ExchangeDefinitionException>(() => ExchangeDefinitionReader.ReadXml("""
             <exchanges for="Device.Map">
-              <exchange name="states">
-                <state name="request">
+              <exchange name="turns">
+                <turn name="request">
                   <on event="sent" result="completed" />
                   <on event="complete" goto="nowhere" />
-                </state>
-                <state name="lonely">
+                </turn>
+                <turn name="lonely">
                   <send message="Envelope.Message.Request" />
                   <on event="sent" result="completed" />
-                </state>
-                <state name="lonely">
+                </turn>
+                <turn name="lonely">
                   <on event="timeout" result="failed" />
-                </state>
+                </turn>
               </exchange>
             </exchanges>
-            """, "states.xml"));
+            """, "turns.xml"));
 
         string[] expected =
         [
             "'sent' needs a 'send'",
             "'complete' needs a 'receive'",
-            "there is no state 'nowhere'",
-            "state 'lonely' is never reached",
-            "the state 'lonely' is defined more than once",
+            "there is no turn 'nowhere'",
+            "turn 'lonely' is never reached",
+            "the turn 'lonely' is defined more than once",
+        ];
+        Assert.All(expected, text => Assert.Contains(exception.Problems, problem => problem.Contains(text, StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void Read_Retry_TheSameInXmlAndJson()
+    {
+        var xml = ExchangeDefinitionReader.ReadXml("""
+            <exchanges for="Device.Map">
+              <exchange name="requestData">
+                <turn name="request">
+                  <send message="Envelope.Message.Request" />
+                  <on event="timeout" retry="3" result="timedOut" />
+                </turn>
+              </exchange>
+            </exchanges>
+            """, "retry.exchange.xml");
+        var json = ExchangeDefinitionReader.ReadJson("""
+            {
+              "for": "Device.Map",
+              "exchanges": [
+                {
+                  "name": "requestData",
+                  "turns": [
+                    { "name": "request", "send": "Envelope.Message.Request", "on": [ { "event": "timeout", "retry": 3, "result": "timedOut" } ] }
+                  ]
+                }
+              ]
+            }
+            """, "retry.exchange.json");
+
+        var transition = Assert.Single(xml.Exchanges[0].Turns[0].Transitions);
+        Assert.Equal(3, transition.Retry);
+        Assert.Equal(BlockStatus.TimedOut, transition.Result);
+        Assert.Equal(transition, Assert.Single(json.Exchanges[0].Turns[0].Transitions));
+    }
+
+    [Fact]
+    public void Read_RetryIsChecked()
+    {
+        var exception = Assert.Throws<ExchangeDefinitionException>(() => ExchangeDefinitionReader.ReadXml("""
+            <exchanges for="Device.Map">
+              <exchange name="retries">
+                <turn name="request">
+                  <send message="Envelope.Message.Request" />
+                  <receive message="Envelope.Message.Data" />
+                  <on event="sent" retry="1" goto="request" />
+                  <on event="complete" retry="2" result="completed" />
+                  <on event="timeout" retry="0" result="timedOut" />
+                  <on message="Envelope.Message.Nak" retry="many" result="rejected" />
+                </turn>
+              </exchange>
+            </exchanges>
+            """, "retries.xml"));
+
+        string[] expected =
+        [
+            "a 'retry' is for 'timeout' or a message, not for 'sent'",
+            "a 'retry' is for 'timeout' or a message, not for 'complete'",
+            "'retry' must be a number of 1 or more, not '0'",
+            "'retry' must be a number of 1 or more, not 'many'",
         ];
         Assert.All(expected, text => Assert.Contains(exception.Problems, problem => problem.Contains(text, StringComparison.Ordinal)));
     }
@@ -178,13 +239,13 @@ public class ExchangeDefinitionTests
             Assert.Equal(fromXml.Name, fromJson.Name);
             Assert.Equal(fromXml.ResponseTimeout, fromJson.ResponseTimeout);
             Assert.Equal(fromXml.MessageInterval, fromJson.MessageInterval);
-            Assert.Equal(fromXml.States.Count, fromJson.States.Count);
-            foreach (var (stateXml, stateJson) in fromXml.States.Zip(fromJson.States))
+            Assert.Equal(fromXml.Turns.Count, fromJson.Turns.Count);
+            foreach (var (turnXml, turnJson) in fromXml.Turns.Zip(fromJson.Turns))
             {
-                Assert.Equal(stateXml.Name, stateJson.Name);
-                Assert.Equal(stateXml.Send, stateJson.Send);
-                Assert.Equal(stateXml.Receive, stateJson.Receive);
-                Assert.Equal(stateXml.Transitions, stateJson.Transitions);
+                Assert.Equal(turnXml.Name, turnJson.Name);
+                Assert.Equal(turnXml.Send, turnJson.Send);
+                Assert.Equal(turnXml.Receive, turnJson.Receive);
+                Assert.Equal(turnXml.Transitions, turnJson.Transitions);
             }
         }
     }
@@ -199,7 +260,7 @@ public class ExchangeDefinitionTests
                 {
                   "name": "broken",
                   "timeout": 10,
-                  "states": [
+                  "turns": [
                     { "name": "request", "send": 5, "receive": "Envelope.Message.Data", "on": [ { "event": "later", "goto": "request" } ] }
                   ]
                 }
@@ -210,9 +271,9 @@ public class ExchangeDefinitionTests
         string[] expected =
         [
             "$.exchanges[0]: 'exchange' has no attribute 'timeout'",
-            "$.exchanges[0].states[0].send: 'send' must be the name of a message (text), not number.",
-            "$.exchanges[0].states[0].receive: must be an array, not string.",
-            "$.exchanges[0].states[0].on[0]: the event must be sent, complete or timeout, not 'later'.",
+            "$.exchanges[0].turns[0].send: 'send' must be the name of a message (text), not number.",
+            "$.exchanges[0].turns[0].receive: must be an array, not string.",
+            "$.exchanges[0].turns[0].on[0]: the event must be sent, complete or timeout, not 'later'.",
         ];
         Assert.All(expected, text => Assert.Contains(exception.Problems, problem => problem.StartsWith(text, StringComparison.Ordinal)));
     }
@@ -257,10 +318,10 @@ public class ExchangeDefinitionTests
         XDocument.Parse("""
             <exchanges for="Device">
               <exchange name="broken">
-                <state name="request">
+                <turn name="request">
                   <send message="Message" />
                   <on event="later" result="done" />
-                </state>
+                </turn>
               </exchange>
             </exchanges>
             """).Validate(schemas, (_, args) => errors.Add(args.Message));
@@ -278,9 +339,9 @@ public class ExchangeDefinitionTests
 
         // the properties the JSON reader knows, and no others
         Assert.Equal(["$schema", "for", "responseTimeout", "messageInterval", "exchanges"], Names(root.GetProperty("properties")));
-        Assert.Equal(["name", "responseTimeout", "messageInterval", "states"], Names(definitions.GetProperty("exchange").GetProperty("properties")));
-        Assert.Equal(["name", "send", "receive", "on"], Names(definitions.GetProperty("state").GetProperty("properties")));
-        Assert.Equal(["event", "message", "goto", "result"], Names(definitions.GetProperty("transition").GetProperty("properties")));
+        Assert.Equal(["name", "responseTimeout", "messageInterval", "turns"], Names(definitions.GetProperty("exchange").GetProperty("properties")));
+        Assert.Equal(["name", "send", "receive", "on"], Names(definitions.GetProperty("turn").GetProperty("properties")));
+        Assert.Equal(["event", "message", "retry", "goto", "result"], Names(definitions.GetProperty("transition").GetProperty("properties")));
 
         static string[] Names(JsonElement properties) => [.. properties.EnumerateObject().Select(property => property.Name)];
     }

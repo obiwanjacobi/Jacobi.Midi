@@ -8,10 +8,11 @@ namespace Jacobi.Midi.Device.Exchange;
 
 /// <summary>
 /// Reads an exchange file, XML or JSON, into an <see cref="ExchangeDefinitionSet"/> and checks what can be checked
-/// without the schemas: the elements and attributes, the names, and the states (an unknown or unreachable state, a
-/// transition on an event the state cannot have). Whether the messages exist and fit the map is checked when an
-/// exchange is used. Both formats are turned into the same tree of nodes first, so the checks are the same; the
-/// formats are described by <c>exchange.xsd</c> and <c>exchange.schema.json</c> next to this reader.
+/// without the schemas: the elements and attributes, the names, and the turns (an unknown or unreachable turn, a
+/// transition on an event the turn cannot have, a retry on an event that cannot be retried). Whether the messages
+/// exist and fit the map is checked when an exchange is used. Both formats are turned into the same tree of nodes
+/// first, so the checks are the same; the formats are described by <c>exchange.xsd</c> and <c>exchange.schema.json</c>
+/// next to this reader.
 /// </summary>
 public static class ExchangeDefinitionReader
 {
@@ -114,41 +115,41 @@ public static class ExchangeDefinitionReader
         var timeout = Milliseconds(node, "responseTimeout", problems) ?? responseTimeout;
         var interval = Milliseconds(node, "messageInterval", problems) ?? messageInterval;
 
-        var states = new List<ExchangeState>();
-        foreach (var stateNode in Children(node, problems, "state"))
+        var turns = new List<ExchangeTurn>();
+        foreach (var turnNode in Children(node, problems, "turn"))
         {
-            var state = ReadState(stateNode, problems);
-            if (state is not null)
+            var turn = ReadTurn(turnNode, problems);
+            if (turn is not null)
             {
-                if (states.Any(existing => String.Equals(existing.Name, state.Name, StringComparison.OrdinalIgnoreCase)))
+                if (turns.Any(existing => String.Equals(existing.Name, turn.Name, StringComparison.OrdinalIgnoreCase)))
                 {
-                    problems.Add($"{stateNode.Location}the state '{state.Name}' is defined more than once.");
+                    problems.Add($"{turnNode.Location}the turn '{turn.Name}' is defined more than once.");
                 }
-                states.Add(state);
+                turns.Add(turn);
             }
         }
-        if (states.Count == 0)
+        if (turns.Count == 0)
         {
-            problems.Add($"{node.Location}the exchange '{name}' has no state.");
+            problems.Add($"{node.Location}the exchange '{name}' has no turn.");
         }
-        if (name is null || states.Count == 0)
+        if (name is null || turns.Count == 0)
         {
             return null;
         }
 
-        // the states are checked also when others have problems: all problems are reported at once
+        // the turns are checked also when others have problems: all problems are reported at once
         var exchange = new ExchangeDefinition
         {
             Name = name,
             ResponseTimeout = TimeSpan.FromMilliseconds(timeout),
             MessageInterval = TimeSpan.FromMilliseconds(interval),
-            States = states,
+            Turns = turns,
         };
-        CheckStates(node, exchange, problems);
+        CheckTurns(node, exchange, problems);
         return problems.Count > count ? null : exchange;
     }
 
-    private static ExchangeState? ReadState(Node node, List<string> problems)
+    private static ExchangeTurn? ReadTurn(Node node, List<string> problems)
     {
         var count = problems.Count;
         Attributes(node, problems, "name");
@@ -165,7 +166,7 @@ public static class ExchangeDefinitionReader
                     Attributes(child, problems, "message");
                     if (send is not null)
                     {
-                        problems.Add($"{child.Location}a state sends one message: there is more than one 'send'.");
+                        problems.Add($"{child.Location}a turn sends one message: there is more than one 'send'.");
                     }
                     send = Required(child, "message", problems) is { } sent ? new SchemaName(sent) : send;
                     break;
@@ -189,13 +190,13 @@ public static class ExchangeDefinitionReader
         {
             return null;
         }
-        return new ExchangeState { Name = name, Send = send, Receive = receive, Transitions = transitions };
+        return new ExchangeTurn { Name = name, Send = send, Receive = receive, Transitions = transitions };
     }
 
     private static ExchangeTransition? ReadTransition(Node node, List<string> problems)
     {
         var count = problems.Count;
-        Attributes(node, problems, "event", "message", "goto", "result");
+        Attributes(node, problems, "event", "message", "retry", "goto", "result");
         var eventName = node.Attribute("event");
         var message = node.Attribute("message");
         var target = node.Attribute("goto");
@@ -224,43 +225,49 @@ public static class ExchangeDefinitionReader
                 problems.Add($"{node.Location}the result must be completed, rejected, failed or timedOut, not '{resultName}'.");
             }
         }
+        var retry = Retry(node, problems);
+        if (retry > 0 && (@event is ExchangeEvent.Sent or ExchangeEvent.Complete))
+        {
+            // on sent the turn would send again without waiting; on complete there is nothing left to retry
+            problems.Add($"{node.Location}a 'retry' is for 'timeout' or a message, not for '{eventName}'.");
+        }
 
         return problems.Count > count
             ? null
-            : new ExchangeTransition { Event = @event, Message = message is null ? (SchemaName?)null : new SchemaName(message), Goto = target, Result = result };
+            : new ExchangeTransition { Event = @event, Message = message is null ? (SchemaName?)null : new SchemaName(message), Retry = retry, Goto = target, Result = result };
     }
 
-    // the targets of the transitions exist, every state can be reached, and an event fits its state
-    private static void CheckStates(Node node, ExchangeDefinition exchange, List<string> problems)
+    // the targets of the transitions exist, every turn can be reached, and an event fits its turn
+    private static void CheckTurns(Node node, ExchangeDefinition exchange, List<string> problems)
     {
-        foreach (var state in exchange.States)
+        foreach (var turn in exchange.Turns)
         {
-            foreach (var transition in state.Transitions)
+            foreach (var transition in turn.Transitions)
             {
                 if (transition.Goto is { } target && exchange.Find(target) is null)
                 {
-                    problems.Add($"{node.Location}'{exchange.Name}', state '{state.Name}': there is no state '{target}' to go to.");
+                    problems.Add($"{node.Location}'{exchange.Name}', turn '{turn.Name}': there is no turn '{target}' to go to.");
                 }
-                if (transition.Event == ExchangeEvent.Sent && state.Send is null)
+                if (transition.Event == ExchangeEvent.Sent && turn.Send is null)
                 {
-                    problems.Add($"{node.Location}'{exchange.Name}', state '{state.Name}': 'sent' needs a 'send' in the state.");
+                    problems.Add($"{node.Location}'{exchange.Name}', turn '{turn.Name}': 'sent' needs a 'send' in the turn.");
                 }
-                if (transition.Event == ExchangeEvent.Complete && state.Receive.Count == 0)
+                if (transition.Event == ExchangeEvent.Complete && turn.Receive.Count == 0)
                 {
-                    problems.Add($"{node.Location}'{exchange.Name}', state '{state.Name}': 'complete' needs a 'receive' in the state.");
+                    problems.Add($"{node.Location}'{exchange.Name}', turn '{turn.Name}': 'complete' needs a 'receive' in the turn.");
                 }
             }
         }
 
         var reached = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var next = new Stack<ExchangeState>([exchange.States[0]]);
-        while (next.TryPop(out var state))
+        var next = new Stack<ExchangeTurn>([exchange.Turns[0]]);
+        while (next.TryPop(out var turn))
         {
-            if (!reached.Add(state.Name))
+            if (!reached.Add(turn.Name))
             {
                 continue;
             }
-            foreach (var target in state.Transitions.Select(transition => transition.Goto).OfType<string>())
+            foreach (var target in turn.Transitions.Select(transition => transition.Goto).OfType<string>())
             {
                 if (exchange.Find(target) is { } found)
                 {
@@ -268,9 +275,9 @@ public static class ExchangeDefinitionReader
                 }
             }
         }
-        foreach (var state in exchange.States.Where(state => !reached.Contains(state.Name)))
+        foreach (var turn in exchange.Turns.Where(turn => !reached.Contains(turn.Name)))
         {
-            problems.Add($"{node.Location}'{exchange.Name}', state '{state.Name}' is never reached.");
+            problems.Add($"{node.Location}'{exchange.Name}', turn '{turn.Name}' is never reached.");
         }
     }
 
@@ -332,6 +339,21 @@ public static class ExchangeDefinitionReader
         return value;
     }
 
+    // the retries of an 'on': a number, 1 or more; 0 without the attribute
+    private static int Retry(Node node, List<string> problems)
+    {
+        if (node.Attribute("retry") is not { } text)
+        {
+            return 0;
+        }
+        if (Int32.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var value) && value > 0)
+        {
+            return value;
+        }
+        problems.Add($"{node.Location}'retry' must be a number of 1 or more, not '{text}'.");
+        return 0;
+    }
+
     private static int? Milliseconds(Node node, string name, List<string> problems)
     {
         if (node.Attribute(name) is not { } text)
@@ -374,7 +396,7 @@ public static class ExchangeDefinitionReader
 
     /// <summary>
     /// Turns JSON into <see cref="Node"/>s, as the XML would be: the root object is 'exchanges'; its 'exchanges' array
-    /// holds the 'exchange' children, an exchange's 'states' array the 'state' children. In a state, 'send' is a message
+    /// holds the 'exchange' children, an exchange's 'turns' array the 'turn' children. In a turn, 'send' is a message
     /// name, 'receive' an array of message names and 'on' an array of transitions. Other values are attributes (as text);
     /// other arrays and objects are children with their own name, which the checks report as not expected.
     /// The root's '$schema' is left out.
@@ -390,8 +412,8 @@ public static class ExchangeDefinitionReader
         // the arrays of an object and the name of their items, per element
         private static readonly Dictionary<string, Dictionary<string, string>> Arrays = new()
         {
-            ["exchange"] = new() { ["states"] = "state" },
-            ["state"] = new() { ["receive"] = "receive", ["on"] = "on" },
+            ["exchange"] = new() { ["turns"] = "turn" },
+            ["turn"] = new() { ["receive"] = "receive", ["on"] = "on" },
         };
 
         private static Node Object(string name, JsonElement element, string path, List<string> problems, Dictionary<string, string>? arrays = null)
@@ -416,7 +438,7 @@ public static class ExchangeDefinitionReader
                 {
                     children.AddRange(Items(itemName, property.Value, at, problems));
                 }
-                else if (name == "state" && property.Name == "send")
+                else if (name == "turn" && property.Name == "send")
                 {
                     children.Add(MessageNode("send", property.Value, at, problems));
                 }

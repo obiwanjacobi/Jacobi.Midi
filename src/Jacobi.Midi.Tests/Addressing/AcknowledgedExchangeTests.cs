@@ -73,25 +73,25 @@ public class AcknowledgedExchangeTests
     private const string Exchanges = """
         <exchanges for="Ack.Map" responseTimeout="200">
           <exchange name="requestData">
-            <state name="request">
+            <turn name="request">
               <send message="Ack.Message.Request" />
               <receive message="Ack.Message.Data" />
               <on event="complete" result="completed" />
               <on message="Ack.Message.Nak" result="rejected" />
-            </state>
+            </turn>
           </exchange>
           <exchange name="sendData">
-            <state name="write">
+            <turn name="write">
               <send message="Ack.Message.Data" />
               <on message="Ack.Message.Ack" result="completed" />
               <on message="Ack.Message.Nak" result="rejected" />
-            </state>
+            </turn>
           </exchange>
           <exchange name="sendDataOneWay">
-            <state name="write">
+            <turn name="write">
               <send message="Ack.Message.Data" />
               <on event="sent" result="completed" />
-            </state>
+            </turn>
           </exchange>
         </exchanges>
         """;
@@ -167,7 +167,7 @@ public class AcknowledgedExchangeTests
 
         var block = Assert.Single(result.Blocks);
         Assert.Equal(BlockStatus.Rejected, block.Status);
-        Assert.Equal("'Ack.Message.Nak' in state 'write' of 'sendData'.", block.Reason);
+        Assert.Equal("'Ack.Message.Nak' in turn 'write' of 'sendData'.", block.Reason);
     }
 
     [Fact]

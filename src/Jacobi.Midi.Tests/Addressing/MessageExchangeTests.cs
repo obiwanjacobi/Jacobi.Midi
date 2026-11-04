@@ -93,7 +93,7 @@ public class MessageExchangeTests
         Assert.False(result.IsComplete);
         var block = Assert.Single(result.Blocks);
         Assert.Equal(BlockStatus.TimedOut, block.Status);
-        Assert.Equal("timeout in state 'request' of 'requestData'.", block.Reason);
+        Assert.Equal("timeout in turn 'request' of 'requestData'.", block.Reason);
     }
 
     [Fact]
@@ -272,20 +272,20 @@ public class MessageExchangeTests
         exchanges.Add(ExchangeDefinitionReader.ReadXml("""
             <exchanges for="TestDevice.AddressMap">
               <exchange name="unknownMessage">
-                <state name="request">
+                <turn name="request">
                   <send message="TestEnvelope.Message.Unknown" />
                   <on event="sent" result="completed" />
-                </state>
+                </turn>
               </exchange>
               <exchange name="twoCuts">
-                <state name="request">
+                <turn name="request">
                   <send message="TestEnvelope.Message.Request" />
                   <on event="sent" goto="write" />
-                </state>
-                <state name="write">
+                </turn>
+                <turn name="write">
                   <send message="TestEnvelope.Message.Data" />
                   <on event="sent" result="completed" />
-                </state>
+                </turn>
               </exchange>
             </exchanges>
             """, "test"));

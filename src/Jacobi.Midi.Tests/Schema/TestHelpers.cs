@@ -39,11 +39,11 @@ internal static class TestHelpers
     public static SchemaSet CreateSchemas(params SchemaDocument[] documents)
     {
         var schemaSetBuilder = new SchemaSetBuilder();
-        var midiDocs = schemaSetBuilder.LoadFromAssembly(AssemblyPathOf("Jacobi.Midi.Device"), "Jacobi.Midi.Device");
+        var midiDocs = schemaSetBuilder.LoadFromAssembly(AssemblyPathOf("Jacobi.Midi.Device"), null, ".schema.xml");
         Assert.True(midiDocs.Count() > 0);
-        var rolandDocs = schemaSetBuilder.LoadFromAssembly(AssemblyPathOf("Jacobi.Midi.Roland"), "Jacobi.Midi.Roland.Schemas");
+        var rolandDocs = schemaSetBuilder.LoadFromAssembly(AssemblyPathOf("Jacobi.Midi.Roland"), null, ".schema.xml");
         Assert.True(rolandDocs.Count() > 0);
-        var yamahaDocs = schemaSetBuilder.LoadFromAssembly(AssemblyPathOf("Jacobi.Midi.Yamaha"), "Jacobi.Midi.Yamaha.Schemas");
+        var yamahaDocs = schemaSetBuilder.LoadFromAssembly(AssemblyPathOf("Jacobi.Midi.Yamaha"), null, ".schema.xml");
         Assert.True(yamahaDocs.Count() > 0);
         documents.ForEach(document => schemaSetBuilder.AddDocument(document));
         return schemaSetBuilder.Compile();

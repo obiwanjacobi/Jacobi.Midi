@@ -2,6 +2,10 @@
 
 Known gaps and loose ends of the address map and the message exchange (see [Addressing/readme.md](Addressing/readme.md) and [Exchange/readme.md](Exchange/readme.md)).
 
+## General
+
+- [ ] Add universal sysex definitions to midi.schema.xml
+
 ## Address map
 
 - [x] **A data message carries any aligned block, not only one group occurrence.** `AddressMap.CreateData` and `Decode` only handle one whole group: a few fields, one field of a larger group, or neighbouring groups in one message throw `NotSupportedException`. This also fixes `MessageExchange.Send` with a `range` message whose blocks span more than one group.
@@ -24,6 +28,7 @@ Known gaps and loose ends of the address map and the message exchange (see [Addr
 - [ ] **Message exchange patterns**: configurable, in exchange files, built up in steps (see the proposal [exchange-definitions.md](Exchange/exchange-definitions.md)).
   - [x] Step 1: the patterns of the old code protocols (one way, acknowledged) as exchange files (`ExchangeDefinitions`) of a map root, run by `MessageExchange.Execute` per block (`ExchangeMachine`); standard names (`ExchangeNames`); `midi.message`, `midi.exchange` and `midi.messageInterval` removed from the schemas; the session's `RequestData`/`SendData`/`Execute`; the first block that does not complete ends a transfer; the Roland GP-8 and GX-700 files; the console and the Schema Editor load the files of their assemblies.
   - [x] The exchange files in XML (`*.exchange.xml`) and JSON (`*.exchange.json`), read into the same tree so the checks are the same; the formats described by `Exchange/exchange.xsd` and `Exchange/exchange.schema.json`.
+  - [x] Stage 2: `state` renamed to `turn` (`ExchangeTurn`); retries with a limit per block (`on/@retry`), the reason names the retries.
   - [ ] Roland handshake protocol: WSD/RQD → ACK → DAT → ACK … EOD, ERR → resend, RJC → abort, with retries and timeouts.
   - [ ] Boss GX700 requires change-sound-request to be sent after a parameter change (DS1) to effectuate the change.
   - [ ] Framed transactions: Yamaha Bulk Header → blocks → Bulk Footer (stored Live Set Sounds of the CP88, CK88, YC).

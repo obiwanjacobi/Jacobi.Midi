@@ -6,17 +6,17 @@
 -->
 <exchanges for="Gp8.AddressMap" responseTimeout="1000" messageInterval="20">
   <exchange name="requestData">
-    <state name="request">
+    <turn name="request">
       <send message="Roland.Message16.RQ1" />
       <receive message="Roland.Message16.DT1" />
       <on event="complete" result="completed" />
       <on event="timeout" result="timedOut" />
-    </state>
+    </turn>
   </exchange>
   <exchange name="sendData">
-    <state name="write">
+    <turn name="write">
       <send message="Roland.Message16.DT1" />
       <on event="sent" result="completed" />
-    </state>
+    </turn>
   </exchange>
 </exchanges>

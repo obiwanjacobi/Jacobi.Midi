@@ -7,9 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Schemas\*.xml" />
-    <EmbeddedResource Include="Exchange\*.xml" />
-    <EmbeddedResource Include="Exchange\*.json" />
+    <EmbeddedResource Include="Boss\Gx700\*.xml" />
+    <EmbeddedResource Include="Gp8\*.xml" />
+    <EmbeddedResource Include="*.xml" />
   </ItemGroup>
 
   <ItemGroup>

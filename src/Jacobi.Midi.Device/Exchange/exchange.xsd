@@ -4,11 +4,12 @@
   An exchange file can refer to it with xsi:noNamespaceSchemaLocation.
 
   Rules the reader checks that XSD 1.0 cannot express:
-  - a state has at most one <send>;
+  - a turn has at most one <send>;
   - an <on> has either an 'event' or a 'message', and either a 'goto' or a 'result';
-  - 'goto' names a state of the same exchange; every state can be reached from the first one;
-  - 'sent' needs a <send> in the state, 'complete' a <receive>;
-  - names of exchanges (in the file) and of states (in an exchange) are unique, ignoring case.
+  - 'goto' names a turn of the same exchange; every turn can be reached from the first one;
+  - 'sent' needs a <send> in the turn, 'complete' a <receive>;
+  - 'retry' is only for 'timeout' and messages, not for 'sent' or 'complete';
+  - names of exchanges (in the file) and of turns (in an exchange) are unique, ignoring case.
   The reader accepts the event and result values in any case; the values below are the canonical spelling.
 -->
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified">
@@ -33,7 +34,7 @@
   <xs:attributeGroup name="timing">
     <xs:attribute name="responseTimeout" type="xs:nonNegativeInteger">
       <xs:annotation>
-        <xs:documentation>Milliseconds a state waits for an event; default 1000 (an exchange takes the file's value).</xs:documentation>
+        <xs:documentation>Milliseconds a turn waits for an event; default 1000 (an exchange takes the file's value).</xs:documentation>
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="messageInterval" type="xs:nonNegativeInteger">
@@ -45,10 +46,10 @@
 
   <xs:complexType name="exchange">
     <xs:annotation>
-      <xs:documentation>One exchange: a state machine that runs once per block of the range; the first state is the start.</xs:documentation>
+      <xs:documentation>One exchange: a state machine of turns that runs once per block of the range; the first turn is the start.</xs:documentation>
     </xs:annotation>
     <xs:sequence>
-      <xs:element name="state" type="state" maxOccurs="unbounded" />
+      <xs:element name="turn" type="turn" maxOccurs="unbounded" />
     </xs:sequence>
     <xs:attribute name="name" type="xs:string" use="required">
       <xs:annotation>
@@ -58,9 +59,9 @@
     <xs:attributeGroup ref="timing" />
   </xs:complexType>
 
-  <xs:complexType name="state">
+  <xs:complexType name="turn">
     <xs:annotation>
-      <xs:documentation>On entry the state sends its message (if any), then waits for the events it has an 'on' for.</xs:documentation>
+      <xs:documentation>A turn in the conversation with the device: on entry it sends its message (if any), then waits for the events it has an 'on' for.</xs:documentation>
     </xs:annotation>
     <xs:choice minOccurs="0" maxOccurs="unbounded">
       <xs:element name="send" type="message">
@@ -70,7 +71,7 @@
       </xs:element>
       <xs:element name="receive" type="message">
         <xs:annotation>
-          <xs:documentation>A data message whose data is accepted for the block while in the state, and counts towards 'complete'.</xs:documentation>
+          <xs:documentation>A data message whose data is accepted for the block while in the turn, and counts towards 'complete'.</xs:documentation>
         </xs:annotation>
       </xs:element>
       <xs:element name="on" type="transition" />
@@ -84,10 +85,15 @@
 
   <xs:complexType name="transition">
     <xs:annotation>
-      <xs:documentation>On the event or message: go to a state, or end the run for the block with a result. The first 'on' that matches is taken.</xs:documentation>
+      <xs:documentation>On the event or message: enter the turn again while retries are left, then go to a turn, or end the run for the block with a result. The first 'on' that matches is taken.</xs:documentation>
     </xs:annotation>
     <xs:attribute name="event" type="event" />
     <xs:attribute name="message" type="messageName" />
+    <xs:attribute name="retry" type="xs:positiveInteger">
+      <xs:annotation>
+        <xs:documentation>The most times the turn is entered again (its message sent again) for this 'on', per block; then its 'goto' or 'result' is taken.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
     <xs:attribute name="goto" type="xs:string" />
     <xs:attribute name="result" type="result" />
   </xs:complexType>

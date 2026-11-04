@@ -35,8 +35,8 @@ public sealed class ExchangeDefinitionSet
 }
 
 /// <summary>
-/// One exchange: a plain state machine that transfers one block of a range. It runs once per block, from its first
-/// state; the blocks are cut for its cutting message (the first message it sends that asks for or carries data).
+/// One exchange: a plain state machine of turns that transfers one block of a range. It runs once per block, from its
+/// first turn; the blocks are cut for its cutting message (the first message it sends that asks for or carries data).
 /// It names messages and events only: building and recognising the messages is the content's job.
 /// </summary>
 public sealed record ExchangeDefinition
@@ -44,38 +44,39 @@ public sealed record ExchangeDefinition
     /// <summary>A standard name (<see cref="ExchangeNames"/>) or a name of the file's own.</summary>
     public required string Name { get; init; }
 
-    /// <summary>How long a state waits for an event.</summary>
+    /// <summary>How long a turn waits for an event.</summary>
     public required TimeSpan ResponseTimeout { get; init; }
 
     /// <summary>The least time between two messages sent to the device.</summary>
     public required TimeSpan MessageInterval { get; init; }
 
-    /// <summary>The states; the first one is the start.</summary>
-    public required IReadOnlyList<ExchangeState> States { get; init; }
+    /// <summary>The turns; the first one is the start.</summary>
+    public required IReadOnlyList<ExchangeTurn> Turns { get; init; }
 
-    /// <summary>The state with the name (case-insensitive); null when there is none.</summary>
-    public ExchangeState? Find(string state)
-        => States.FirstOrDefault(candidate => String.Equals(candidate.Name, state, StringComparison.OrdinalIgnoreCase));
+    /// <summary>The turn with the name (case-insensitive); null when there is none.</summary>
+    public ExchangeTurn? Find(string turn)
+        => Turns.FirstOrDefault(candidate => String.Equals(candidate.Name, turn, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>The messages the exchange names: sent, received and expected.</summary>
     public IEnumerable<SchemaName> Messages
-        => States.SelectMany(state => (state.Send is { } send ? [send] : Enumerable.Empty<SchemaName>())
-            .Concat(state.Receive)
-            .Concat(state.Transitions.Where(transition => transition.Message is not null).Select(transition => transition.Message!.Value)))
+        => Turns.SelectMany(turn => (turn.Send is { } send ? [send] : Enumerable.Empty<SchemaName>())
+            .Concat(turn.Receive)
+            .Concat(turn.Transitions.Where(transition => transition.Message is not null).Select(transition => transition.Message!.Value)))
             .Distinct();
 
     public override string ToString() => Name;
 }
 
 /// <summary>
-/// One state of an exchange: on entry it sends a message (optional), then it waits for the events it has a
-/// transition for. While in the state, the data messages it receives are accepted for the block.
+/// One turn of an exchange, a turn in the conversation with the device: on entry it sends a message (optional), then
+/// it waits for the events it has a transition for. While in the turn, the data messages it receives are accepted for
+/// the block.
 /// </summary>
-public sealed record ExchangeState
+public sealed record ExchangeTurn
 {
     public required string Name { get; init; }
 
-    /// <summary>The message to build for the block and send on entry; null: the state only waits.</summary>
+    /// <summary>The message to build for the block and send on entry; null: the turn only waits.</summary>
     public SchemaName? Send { get; init; }
 
     /// <summary>The data messages whose data is accepted for the block and counts towards <see cref="ExchangeEvent.Complete"/>.</summary>
@@ -88,11 +89,11 @@ public sealed record ExchangeState
 }
 
 /// <summary>
-/// What a state of an exchange waits for.
+/// What a turn of an exchange waits for.
 /// </summary>
 public enum ExchangeEvent
 {
-    /// <summary>The message of the state was sent.</summary>
+    /// <summary>The message of the turn was sent.</summary>
     Sent,
     /// <summary>Received data made the block complete.</summary>
     Complete,
@@ -103,8 +104,9 @@ public enum ExchangeEvent
 }
 
 /// <summary>
-/// A transition of a state: on the event (and for <see cref="ExchangeEvent.Message"/> the message) it goes to another
-/// state (<see cref="Goto"/>) or ends the run for the block (<see cref="Result"/>).
+/// A transition of a turn: on the event (and for <see cref="ExchangeEvent.Message"/> the message) it enters its turn
+/// again while it has retries left (<see cref="Retry"/>), then it goes to another turn (<see cref="Goto"/>) or ends the
+/// run for the block (<see cref="Result"/>).
 /// </summary>
 public sealed record ExchangeTransition
 {
@@ -113,9 +115,15 @@ public sealed record ExchangeTransition
     /// <summary>The message of a <see cref="ExchangeEvent.Message"/> event; null for the other events.</summary>
     public SchemaName? Message { get; init; }
 
-    /// <summary>The next state; null when the transition ends the run.</summary>
+    /// <summary>
+    /// The most times the transition enters its turn again (sending the turn's message again), per block; after that
+    /// <see cref="Goto"/> or <see cref="Result"/> is taken. 0: no retries.
+    /// </summary>
+    public int Retry { get; init; }
+
+    /// <summary>The next turn; null when the transition ends the run.</summary>
     public string? Goto { get; init; }
 
-    /// <summary>How the run for the block ends; null when the transition goes to another state.</summary>
+    /// <summary>How the run for the block ends; null when the transition goes to another turn.</summary>
     public BlockStatus? Result { get; init; }
 }

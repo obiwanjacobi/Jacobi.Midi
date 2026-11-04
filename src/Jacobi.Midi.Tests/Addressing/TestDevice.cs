@@ -152,18 +152,18 @@ internal static class TestDevice
     public const string ExchangeXml = """
         <exchanges for="TestDevice.AddressMap" responseTimeout="1000" messageInterval="20">
           <exchange name="requestData">
-            <state name="request">
+            <turn name="request">
               <send message="TestEnvelope.Message.Request" />
               <receive message="TestEnvelope.Message.Data" />
               <on event="complete" result="completed" />
               <on event="timeout" result="timedOut" />
-            </state>
+            </turn>
           </exchange>
           <exchange name="sendData">
-            <state name="write">
+            <turn name="write">
               <send message="TestEnvelope.Message.Data" />
               <on event="sent" result="completed" />
-            </state>
+            </turn>
           </exchange>
         </exchanges>
         """;
