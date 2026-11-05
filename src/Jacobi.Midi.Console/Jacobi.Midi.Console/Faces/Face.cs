@@ -34,7 +34,7 @@ public abstract class Face : Control
     public static readonly StyledProperty<FaceState?> StateProperty =
         AvaloniaProperty.Register<Face, FaceState?>(nameof(State));
 
-    /// <summary>The value colour: the device's accent, or the control's own colour.</summary>
+    /// <summary>The value color: the device's accent, or the control's own color.</summary>
     public static readonly StyledProperty<IBrush?> AccentBrushProperty =
         AvaloniaProperty.Register<Face, IBrush?>(nameof(AccentBrush));
 
@@ -42,7 +42,7 @@ public abstract class Face : Control
     public static readonly StyledProperty<IBrush?> AccentDisplayBrushProperty =
         AvaloniaProperty.Register<Face, IBrush?>(nameof(AccentDisplayBrush));
 
-    /// <summary>The colour of the range without value.</summary>
+    /// <summary>The color of the range without value.</summary>
     public static readonly StyledProperty<IBrush?> TrackBrushProperty =
         AvaloniaProperty.Register<Face, IBrush?>(nameof(TrackBrush));
 
@@ -54,7 +54,7 @@ public abstract class Face : Control
     public static readonly StyledProperty<IBrush?> SurfaceBrushProperty =
         AvaloniaProperty.Register<Face, IBrush?>(nameof(SurfaceBrush));
 
-    /// <summary>The colour of the marks on the moving part (a knob's pointer).</summary>
+    /// <summary>The color of the marks on the moving part (a knob's pointer).</summary>
     public static readonly StyledProperty<IBrush?> PointerBrushProperty =
         AvaloniaProperty.Register<Face, IBrush?>(nameof(PointerBrush));
 

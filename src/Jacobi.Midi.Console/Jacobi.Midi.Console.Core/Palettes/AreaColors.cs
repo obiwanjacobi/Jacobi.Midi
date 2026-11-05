@@ -1,6 +1,6 @@
 namespace Jacobi.Midi.Console.Core.Palettes;
 
-/// <summary>The parts of controls and sections that can be given a colour.</summary>
+/// <summary>The parts of controls and sections that can be given a color.</summary>
 public enum ColorArea
 {
     /// <summary>What shows the value and the device: arcs, LEDs, a section's tag or strip.</summary>
@@ -14,8 +14,8 @@ public enum ColorArea
 }
 
 /// <summary>
-/// The colours of a control, a section or a device, one per <see cref="ColorArea"/> (<c>#RRGGBB</c>); null where it
-/// has none, so the colour of that area is inherited. In the files: <c>color</c> (the accent), <c>plateColor</c> and
+/// The colors of a control, a section or a device, one per <see cref="ColorArea"/> (<c>#RRGGBB</c>); null where it
+/// has none, so the color of that area is inherited. In the files: <c>color</c> (the accent), <c>plateColor</c> and
 /// <c>panelColor</c>.
 /// </summary>
 public sealed record AreaColors(string? Accent = null, string? Plate = null, string? Panel = null)
@@ -33,7 +33,7 @@ public sealed record AreaColors(string? Accent = null, string? Plate = null, str
             _ => throw new ArgumentOutOfRangeException(nameof(area)),
         };
 
-    /// <summary>A copy with another colour (or none) for one area.</summary>
+    /// <summary>A copy with another color (or none) for one area.</summary>
     public AreaColors With(ColorArea area, string? color)
         => area switch
         {
@@ -43,7 +43,7 @@ public sealed record AreaColors(string? Accent = null, string? Plate = null, str
             _ => throw new ArgumentOutOfRangeException(nameof(area)),
         };
 
-    /// <summary>The colours of this one, else of the other: an override on top of <paramref name="under"/>.</summary>
+    /// <summary>The colors of this one, else of the other: an override on top of <paramref name="under"/>.</summary>
     public AreaColors Over(AreaColors under)
         => new(Accent ?? under.Accent, Plate ?? under.Plate, Panel ?? under.Panel);
 

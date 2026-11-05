@@ -122,7 +122,7 @@
 
     <!--
         every face draws with the same keys of the palette, the typography and the finish;
-        a look gives them other colours, materials, fonts and effects; every face takes this theme (Face.StyleKeyOverride)
+        a look gives them other colors, materials, fonts and effects; every face takes this theme (Face.StyleKeyOverride)
     -->
     <ControlTheme x:Key="{x:Type faces:Face}" TargetType="faces:Face">
         <Setter Property="AccentBrush" Value="{DynamicResource ConsoleAccentBrush}" />

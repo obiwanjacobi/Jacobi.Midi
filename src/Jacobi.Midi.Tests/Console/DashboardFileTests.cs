@@ -154,7 +154,7 @@ public class DashboardFileTests
     [Theory]
     [InlineData(FileFormat.Xml)]
     [InlineData(FileFormat.Json)]
-    public void Write_HasTheColoursTheUserChanged(FileFormat format)
+    public void Write_HasTheColorsTheUserChanged(FileFormat format)
     {
         var dashboard = DashboardFile.Read(Xml, FileFormat.Xml);
         var row = dashboard.Layout;
@@ -183,14 +183,14 @@ public class DashboardFileTests
     }
 
     [Theory]
-    [InlineData("""<knob label="Cutoff" colour="#FF0000" />""", "dashboard/row[0]/knob[0]: unknown attribute 'colour'")]
+    [InlineData("""<knob label="Cutoff" color="#FF0000" />""", "dashboard/row[0]/knob[0]: unknown attribute 'color'")]
     [InlineData("""<knob><bind slot="value" parameter="Cutoff" /><segment time="Attack" /></knob>""", "cannot contain 'segment'")]
     [InlineData("""<knob><bind slot="x" parameter="Cutoff" /></knob>""", "has no slot 'x'")]
     [InlineData("""<knob><bind slot="value" parameter="Cutoff" /><bind slot="value" parameter="Reso" /></knob>""", "bound more than once")]
     [InlineData("""<knob><bind slot="value" parameter="Level[x]" /></knob>""", "'parameter': 'Level[x]'")]
     [InlineData("""<knob><bind slot="value" /></knob>""", "'parameter' is required")]
-    [InlineData("""<knob color="red" />""", "is not a colour")]
-    [InlineData("""<knob plateColor="#12345" />""", "'plateColor': '#12345' is not a colour")]
+    [InlineData("""<knob color="red" />""", "is not a color")]
+    [InlineData("""<knob plateColor="#12345" />""", "'plateColor': '#12345' is not a color")]
     [InlineData("""<knob size="0,2" />""", "smaller than one cell")]
     [InlineData("""<knob size="two" />""", "not a pair of whole numbers")]
     [InlineData("""<section direction="column" />""", "unknown attribute 'direction'")]

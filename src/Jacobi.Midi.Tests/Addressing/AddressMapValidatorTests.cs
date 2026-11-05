@@ -105,7 +105,7 @@ public class AddressMapValidatorTests
                 <include schema="TestEnvelope" />
               </includes>
               <members>
-                <group name="Map" nodeDef="TestEnvelope.body" midi.device.modelId="0x43" midi.device.colour="1">
+                <group name="Map" nodeDef="TestEnvelope.body" midi.device.modelId="0x43" midi.device.color="1">
                   <members>
                     <field name="Value" datatype="sys.uint8" />
                   </members>
@@ -117,7 +117,7 @@ public class AddressMapValidatorTests
         var problem = Assert.Single(Of(problems, AddressMapProblemSeverity.Warning));
         Assert.Equal("Other", problem.Document);
         Assert.Equal("Map", problem.Path.Value);
-        Assert.Contains("midi.device.colour", problem.Message);
+        Assert.Contains("midi.device.color", problem.Message);
     }
 
     [Fact]

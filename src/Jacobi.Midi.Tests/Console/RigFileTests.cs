@@ -86,7 +86,7 @@ public class RigFileTests
     [Theory]
     [InlineData(FileFormat.Xml)]
     [InlineData(FileFormat.Json)]
-    public void Write_HasTheColourTheUserChanged(FileFormat format)
+    public void Write_HasTheColorTheUserChanged(FileFormat format)
     {
         var rig = RigFile.Read(Xml, FileFormat.Xml);
         rig.Find("synth")!.Colors = new AreaColors("#A8423A", Panel: "#1F2A3A");

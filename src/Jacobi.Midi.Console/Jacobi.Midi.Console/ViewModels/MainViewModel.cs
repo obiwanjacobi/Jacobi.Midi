@@ -470,7 +470,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     public void SetControlColor(DashboardControl control, ColorArea area, RgbColor? color)
     {
         ArgumentNullException.ThrowIfNull(control);
-        EditControl(control, $"{AreaColors.NameOf(area).ToLowerInvariant()} colour", () => control.Colors[area],
+        EditControl(control, $"{AreaColors.NameOf(area).ToLowerInvariant()} color", () => control.Colors[area],
             value => control.Colors = control.Colors.With(area, value), color?.ToString());
     }
 
@@ -479,15 +479,15 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         if (_rig?.Find(alias) is not { } device)
             return;
         var name = AreaColors.NameOf(area).ToLowerInvariant();
-        var edit = new ValueEdit<string?>($"{name} colour of device '{alias}'", () => device.Colors[area],
+        var edit = new ValueEdit<string?>($"{name} color of device '{alias}'", () => device.Colors[area],
             value => device.Colors = device.Colors.With(area, value), color?.ToString());
         if (!edit.Changes)
             return;
         DoRigEdit(edit);
         Status = $"{edit.Description}: {color?.ToString() ?? "the look's"}. Save to keep it in the rig.";
-        // the dashboard's colour of the device wins: say so, the change does not show here
+        // the dashboard's color of the device wins: say so, the change does not show here
         if (SelectedDashboard?.Dashboard.FindDevice(alias)?.Colors[area] is { } own)
-            Inform($"Device '{alias}'", $"the dashboard gives it its own {name} colour ({own}), so the rig's colour does not show on it.");
+            Inform($"Device '{alias}'", $"the dashboard gives it its own {name} color ({own}), so the rig's color does not show on it.");
     }
 
     /// <summary>

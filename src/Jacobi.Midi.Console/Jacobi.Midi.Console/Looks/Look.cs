@@ -13,11 +13,11 @@ namespace Jacobi.Midi.Console.Looks;
 /// by its module: the folder under <c>Looks</c> with its kit, faces and resources.
 /// </summary>
 /// <param name="Theme">The resource dictionary of the look (palette and chrome themes).</param>
-/// <param name="Accent">The accent of controls without a colour of their own or of their device.</param>
-/// <param name="Swatches">Per area, colours that suit the look, offered first when the user picks a colour.</param>
+/// <param name="Accent">The accent of controls without a color of their own or of their device.</param>
+/// <param name="Swatches">Per area, colors that suit the look, offered first when the user picks a color.</param>
 /// <param name="ControlsOnPanel">
 /// True when the controls have no plate of their own (it is transparent): their labels are on the panel, until the
-/// plate is given a colour.
+/// plate is given a color.
 /// </param>
 public sealed record Look(string Name, Kit Kit, Uri Theme, RgbColor Accent,
     IReadOnlyDictionary<ColorArea, IReadOnlyList<RgbColor>> Swatches, bool ControlsOnPanel = false)
@@ -34,7 +34,7 @@ public sealed record Look(string Name, Kit Kit, Uri Theme, RgbColor Accent,
         return new Uri($"avares://{moduleType.Assembly.GetName().Name}/{path}");
     }
 
-    /// <summary>Colours (<c>#RRGGBB</c>) for the swatches of a look.</summary>
+    /// <summary>Colors (<c>#RRGGBB</c>) for the swatches of a look.</summary>
     public static IReadOnlyList<RgbColor> Colors(params string[] colors) => [.. colors.Select(RgbColor.Parse)];
 }
 

@@ -300,7 +300,7 @@ internal sealed class HexView : Control
         }
     }
 
-    // a bar under the bytes of each field (alternating colours, so neighbouring fields can be told apart); unknown spans have none
+    // a bar under the bytes of each field (alternating colors, so neighbouring fields can be told apart); unknown spans have none
     private void DrawCoverage(DrawingContext context, int slotIndex, MessageLayout layout, IBrush accent)
     {
         var fieldIndex = 0;

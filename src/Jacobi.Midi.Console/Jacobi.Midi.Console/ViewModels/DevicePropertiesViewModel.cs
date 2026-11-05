@@ -16,7 +16,7 @@ namespace Jacobi.Midi.Console.ViewModels;
 
 /// <summary>
 /// The properties of the device selected in the rig tree, for the panel of Edit mode: its alias, name, map root (one of
-/// the address maps of the schema library), device values, endpoint and colours. The user changes them, each change an
+/// the address maps of the schema library), device values, endpoint and colors. The user changes them, each change an
 /// edit of the rig (see <see cref="MainViewModel.EditDevice"/>). A value that cannot be taken is a validation error of
 /// the field. It shows the device's connection (Edit mode is always connected), and tests it with an Identity Request or
 /// a request of data; a test changes no values.
@@ -223,7 +223,7 @@ internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, Dev
 
     public IBrush? PanelBrush => BrushOf(ColorArea.Panel);
 
-    /// <summary>The device has no colour for the area any more: its controls have the look's.</summary>
+    /// <summary>The device has no color for the area any more: its controls have the look's.</summary>
     [RelayCommand]
     private void ClearColor(ColorArea area) => owner.SetDeviceColor(device.Alias, area, null);
 

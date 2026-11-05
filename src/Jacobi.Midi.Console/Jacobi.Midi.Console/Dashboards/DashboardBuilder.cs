@@ -29,9 +29,9 @@ namespace Jacobi.Midi.Console.Dashboards;
 /// takes the cells of its inset. The dashboard as a whole is scaled to its cell size, so controls, fonts, gaps and
 /// grids scale together.
 /// <para>
-/// The colour cascade, per <see cref="ColorArea"/> (accent, plate, panel): a control has (1) its own colour, else (2)
-/// the colour of the nearest layout control around it that has one, else (3) the colour of its device (a layout
-/// control's device, a parameter control's first slot's device), else (4) the look's. A control whose colour of an
+/// The color cascade, per <see cref="ColorArea"/> (accent, plate, panel): a control has (1) its own color, else (2)
+/// the color of the nearest layout control around it that has one, else (3) the color of its device (a layout
+/// control's device, a parameter control's first slot's device), else (4) the look's. A control whose color of an
 /// area differs from the one around it sets the resources of that area (<see cref="PaletteBrushes"/>) for itself and
 /// the controls inside it.
 /// </para>
@@ -48,7 +48,7 @@ namespace Jacobi.Midi.Console.Dashboards;
 /// of the pointer (<see cref="IDashboardEditor.Drop"/>); a field dropped on a parameter control binds it
 /// (<see cref="IDashboardEditor.Bind"/>). A tab header shows its page in Edit mode too, and selects it; the page a
 /// tabs shows is kept when the dashboard is built again, and selecting a control shows the pages it is on. A label or
-/// separator has only an accent: drawn in the look's text or outline colour until it is given one. In Play mode a
+/// separator has only an accent: drawn in the look's text or outline color until it is given one. In Play mode a
 /// right-click does nothing.
 /// </para>
 /// </summary>
@@ -64,7 +64,7 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
 
     private static readonly IBrush SelectionBrush = new SolidColorBrush(Color.FromRgb(0x4F, 0xA3, 0xFF));
 
-    // the built controls with what they show and their colours, both ways
+    // the built controls with what they show and their colors, both ways
     private readonly Dictionary<Control, (DashboardControl Control, ColorScope Scope)> _built = [];
     private readonly Dictionary<DashboardControl, Control> _controls = [];
     // Play mode: the bound parameter controls with the devices (aliases) of their values
@@ -154,7 +154,7 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         }
     }
 
-    /// <summary>Opens the colour chooser of an area of a control at a placement target (e.g. a button in a panel).</summary>
+    /// <summary>Opens the color chooser of an area of a control at a placement target (e.g. a button in a panel).</summary>
     public void OpenColorChooser(DashboardControl control, ColorArea area, Control placementTarget)
     {
         if (_controls.GetValueOrDefault(control) is not { } built)
@@ -163,7 +163,7 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         ColorChooser.Create(editor, control, Describe(control, built), area, CurrentColor(scope, area), scope.Device).ShowAt(placementTarget);
     }
 
-    // Edit mode: the press selects the innermost built control under the pointer; a right press opens its colours, a
+    // Edit mode: the press selects the innermost built control under the pointer; a right press opens its colors, a
     // left press on the handle starts sizing it, elsewhere moving it (in a grid)
     private void OnEditPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -374,7 +374,7 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
             if (scope[area].Color != around[area].Color)
                 PaletteBrushes.Apply(built.Resources, area, scope[area].Color);
         }
-        // controls on the panel have their labels on it, until their plate has a colour
+        // controls on the panel have their labels on it, until their plate has a color
         if (editor.Look.ControlsOnPanel && scope[ColorArea.Plate].Color is null
             && (scope[ColorArea.Panel].Color != around[ColorArea.Panel].Color || around[ColorArea.Plate].Color is not null))
         {
@@ -386,7 +386,7 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         return built;
     }
 
-    // the colours of a control and the device the controls inside it are of: see the cascade above
+    // the colors of a control and the device the controls inside it are of: see the cascade above
     private ColorScope ScopeOf(DashboardControl control, ColorScope around)
     {
         var device = control switch
@@ -489,7 +489,7 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
                 return new Border { Background = isEditing ? Brushes.Transparent : null, Child = line };
 
             case LayoutControlKind.Label:
-                // the look's text colour, the accent when it is given one
+                // the look's text color, the accent when it is given one
                 var label = new TextBlock { Text = layout.Label, FontSize = 16, VerticalAlignment = VerticalAlignment.Center };
                 label.Bind(TextBlock.ForegroundProperty, label.GetResourceObservable(scope[ColorArea.Accent].IsGiven ? "ConsoleAccentBrush" : "ConsoleTextBrush"));
                 label.Bind(TextBlock.FontFamilyProperty, label.GetResourceObservable("ConsoleLabelFont"));
@@ -654,18 +654,18 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     private sealed record DropTarget(LayoutControl Container, ParameterControl? Control);
 
     /// <summary>
-    /// The colours of a control and the controls inside it: the device they are of and per area its colour.
+    /// The colors of a control and the controls inside it: the device they are of and per area its color.
     /// </summary>
     private sealed record ColorScope(string? Device, IReadOnlyList<AreaScope> Areas)
     {
-        /// <summary>No device, the look's colours.</summary>
+        /// <summary>No device, the look's colors.</summary>
         public static ColorScope Look { get; } = new(null, [.. AreaColors.Areas.Select(_ => new AreaScope(null, IsGiven: false))]);
 
         public AreaScope this[ColorArea area] => Areas[(int)area];
     }
 
     /// <summary>
-    /// The colour of an area (null: the look's) and whether a control gave it (then the devices inside it do not
+    /// The color of an area (null: the look's) and whether a control gave it (then the devices inside it do not
     /// change it).
     /// </summary>
     private readonly record struct AreaScope(RgbColor? Color, bool IsGiven);

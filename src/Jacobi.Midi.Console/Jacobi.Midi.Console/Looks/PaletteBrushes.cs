@@ -6,10 +6,10 @@ using Jacobi.Midi.Console.Core.Palettes;
 namespace Jacobi.Midi.Console.Looks;
 
 /// <summary>
-/// The resource keys of the colours of each <see cref="ColorArea"/>, and setting them in a resource dictionary: the
-/// application's for the look's accent, a control's for its own colours or its device's. From one colour it derives
-/// what the area needs (see <see cref="Palette"/>): the accent's text and display colours, a plate's or panel's
-/// material (the look's gradient, tinted) and the text on a plate. The looks use these keys, never a colour of their
+/// The resource keys of the colors of each <see cref="ColorArea"/>, and setting them in a resource dictionary: the
+/// application's for the look's accent, a control's for its own colors or its device's. From one color it derives
+/// what the area needs (see <see cref="Palette"/>): the accent's text and display colors, a plate's or panel's
+/// material (the look's gradient, tinted) and the text on a plate. The looks use these keys, never a color of their
 /// own, for everything drawn in, on or with these areas.
 /// </summary>
 public static class PaletteBrushes
@@ -52,8 +52,8 @@ public static class PaletteBrushes
     }
 
     /// <summary>
-    /// Sets the resources of an area for a colour, or back to those of the look (<paramref name="color"/> null): for
-    /// a control whose colour differs from the colour around it.
+    /// Sets the resources of an area for a color, or back to those of the look (<paramref name="color"/> null): for
+    /// a control whose color differs from the color around it.
     /// </summary>
     public static void Apply(IResourceDictionary resources, ColorArea area, RgbColor? color)
     {
@@ -80,7 +80,7 @@ public static class PaletteBrushes
         }
     }
 
-    /// <summary>Sets the text on the plate for a background colour, or back to the look's (null).</summary>
+    /// <summary>Sets the text on the plate for a background color, or back to the look's (null).</summary>
     public static void ApplyPlateText(IResourceDictionary resources, RgbColor? background)
     {
         ArgumentNullException.ThrowIfNull(resources);
@@ -90,8 +90,8 @@ public static class PaletteBrushes
     }
 
     /// <summary>
-    /// The colour the look gives an area (for the tints and shades when it has no colour of its own): the accent, or
-    /// the middle of a material; a plate without material (transparent) has the colour of the panel.
+    /// The color the look gives an area (for the tints and shades when it has no color of its own): the accent, or
+    /// the middle of a material; a plate without material (transparent) has the color of the panel.
     /// </summary>
     public static RgbColor LookColorOf(ColorArea area)
     {
@@ -106,7 +106,7 @@ public static class PaletteBrushes
     }
 
     /// <summary>
-    /// A material in another colour: the stops of a gradient tinted (<see cref="Palette.Tint"/>), a solid colour
+    /// A material in another color: the stops of a gradient tinted (<see cref="Palette.Tint"/>), a solid color
     /// replaced; a material that is not there (transparent) becomes a plain one (<see cref="Palette.Shading"/>).
     /// </summary>
     public static IBrush Tint(object? material, RgbColor color)

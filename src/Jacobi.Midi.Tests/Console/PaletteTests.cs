@@ -4,8 +4,8 @@ using Xunit;
 namespace Jacobi.Midi.Tests.Console;
 
 /// <summary>
-/// The colours of the console: their notation, contrast and lightness, and the palette, tints and shades derived
-/// from one colour.
+/// The colors of the console: their notation, contrast and lightness, and the palette, tints and shades derived
+/// from one color.
 /// </summary>
 public class PaletteTests
 {
@@ -25,7 +25,7 @@ public class PaletteTests
     [InlineData("D4A838")]
     [InlineData("#D4A83")]
     [InlineData("#D4A83G")]
-    public void TryParse_RejectsWhatIsNoColour(string? text)
+    public void TryParse_RejectsWhatIsNoColor(string? text)
         => Assert.False(RgbColor.TryParse(text, out _));
 
     [Theory]
@@ -84,7 +84,7 @@ public class PaletteTests
     }
 
     [Fact]
-    public void Tint_GivesTheMaterialTheColour_AndKeepsItsShading()
+    public void Tint_GivesTheMaterialTheColor_AndKeepsItsShading()
     {
         // brushed steel: light to dark grey
         IReadOnlyList<RgbColor> steel = [RgbColor.Parse("#CDD0D1"), RgbColor.Parse("#9A9EA0")];
@@ -95,7 +95,7 @@ public class PaletteTests
         Assert.Equal(2, tinted.Count);
         var (hue, _, lightness) = navy.ToHsl();
         Assert.All(tinted, color => Assert.InRange(color.ToHsl().Hue - hue, -2, 2));
-        // the same difference in lightness, around the colour's lightness
+        // the same difference in lightness, around the color's lightness
         Assert.Equal(steel[0].ToHsl().Lightness - steel[1].ToHsl().Lightness, tinted[0].ToHsl().Lightness - tinted[1].ToHsl().Lightness, 1);
         Assert.Equal(lightness, tinted.Average(color => color.ToHsl().Lightness), 1);
     }
@@ -120,7 +120,7 @@ public class PaletteTests
     }
 
     [Fact]
-    public void TintsAndShades_AreDarkToLight_WithTheColourInTheMiddle()
+    public void TintsAndShades_AreDarkToLight_WithTheColorInTheMiddle()
     {
         var color = RgbColor.Parse("#5FB3A1");
 

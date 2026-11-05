@@ -70,6 +70,6 @@ public sealed class RigSession
             && state.DeviceValues.Count == device.DeviceValues.Count
             && device.DeviceValues.All(value => state.DeviceValues.TryGet(value.Key, out var known) && known == value.Value);
 
-    /// <summary>The colours of a device in the rig; none for a device that is not in it.</summary>
+    /// <summary>The colors of a device in the rig; none for a device that is not in it.</summary>
     public AreaColors ColorsOf(string alias) => Rig.Find(alias)?.Colors ?? AreaColors.None;
 }

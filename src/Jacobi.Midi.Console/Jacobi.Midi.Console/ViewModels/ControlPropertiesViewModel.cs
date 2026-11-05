@@ -13,7 +13,7 @@ namespace Jacobi.Midi.Console.ViewModels;
 
 /// <summary>
 /// The properties of the control selected in Edit mode, for the control panel: its kind (and the kinds it can become),
-/// label, size, display settings, colours, and its device, base and bindings; for a layout control the variables it
+/// label, size, display settings, colors, and its device, base and bindings; for a layout control the variables it
 /// declares and, for a row or column, its arrangement. The user changes them, each change an edit of the
 /// <see cref="MainViewModel"/>. The position and size are always set: changing them places the control in its grid
 /// (see <see cref="MainViewModel.Place"/>). A value that cannot be taken is a validation error of the field.
@@ -237,7 +237,7 @@ internal sealed partial class ControlPropertiesViewModel(MainViewModel owner, Da
 
     public IBrush? PanelBrush => BrushOf(ColorArea.Panel);
 
-    /// <summary>The control has no colour of its own for the area any more: it inherits it.</summary>
+    /// <summary>The control has no color of its own for the area any more: it inherits it.</summary>
     [RelayCommand]
     private void ClearColor(ColorArea area) => owner.SetControlColor(control, area, null);
 

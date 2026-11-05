@@ -11,8 +11,8 @@ using Jacobi.Midi.Console.Looks;
 namespace Jacobi.Midi.Console.Dashboards;
 
 /// <summary>
-/// Changes the colours of an open dashboard and its rig, per <see cref="ColorArea"/>: a control's own colour, or a
-/// device's colour (in the rig). Null takes the colour away, so the control or device inherits again. Implemented by
+/// Changes the colors of an open dashboard and its rig, per <see cref="ColorArea"/>: a control's own color, or a
+/// device's color (in the rig). Null takes the color away, so the control or device inherits again. Implemented by
 /// the main view model, which marks the file as changed and builds the dashboard again.
 /// </summary>
 internal interface IColorEditor
@@ -26,7 +26,7 @@ internal interface IColorEditor
 }
 
 /// <summary>
-/// What the dashboard changes in Edit mode: besides the colours, the selection, the place of a control in its grid, the
+/// What the dashboard changes in Edit mode: besides the colors, the selection, the place of a control in its grid, the
 /// controls dropped on it and moved into another layout control. Implemented by the main view model, every change an
 /// edit that can be undone.
 /// </summary>
@@ -49,18 +49,18 @@ internal interface IDashboardEditor : IColorEditor
 }
 
 /// <summary>
-/// What a control or section shows when the user right-clicks it: picks the colour of one area (the one clicked on)
+/// What a control or section shows when the user right-clicks it: picks the color of one area (the one clicked on)
 /// for the control (and the controls inside it) or for its device. Offers the look's swatches of the area, tints and
-/// shades of the current colour and any colour; a pick applies at once. "Inherited" takes the colour away. Any colour
-/// is a flyout of its own (a popup keeps the size it opened with, so it cannot grow to show the colour view). Without a
-/// control (the device panel) the pick is the device's colour.
+/// shades of the current color and any color; a pick applies at once. "Inherited" takes the color away. Any color
+/// is a flyout of its own (a popup keeps the size it opened with, so it cannot grow to show the color view). Without a
+/// control (the device panel) the pick is the device's color.
 /// </summary>
 internal static class ColorChooser
 {
     private const double SwatchSize = 22;
 
-    /// <param name="current">The colour the area has now (own, inherited or the look's).</param>
-    /// <param name="control">The control; null to pick the colour of the device.</param>
+    /// <param name="current">The color the area has now (own, inherited or the look's).</param>
+    /// <param name="control">The control; null to pick the color of the device.</param>
     /// <param name="device">The device of the control; null when it has none.</param>
     public static Flyout Create(IColorEditor editor, DashboardControl? control, string name, ColorArea area, RgbColor current, string? device)
     {
@@ -119,11 +119,11 @@ internal static class ColorChooser
             Dispatcher.UIThread.Post(() => to.ShowAt(target));
         }
         back.Click += (_, _) => Switch(anyFlyout, flyout);
-        var any = new Button { Content = "Any colour…" };
+        var any = new Button { Content = "Any color…" };
         any.Click += (_, _) => Switch(flyout, anyFlyout);
 
         var inherited = new Button { Content = "Inherited" };
-        ToolTip.SetTip(inherited, "Take the colour away: the colour of the section, the device or the look");
+        ToolTip.SetTip(inherited, "Take the color away: the color of the section, the device or the look");
         inherited.Click += (_, _) => Apply(null);
 
         flyout.Content = new StackPanel
@@ -134,7 +134,7 @@ internal static class ColorChooser
             {
                 new TextBlock { Text = title, FontWeight = FontWeight.SemiBold },
                 forDevice,
-                Caption($"{editor.Look.Name} colours"),
+                Caption($"{editor.Look.Name} colors"),
                 Swatches(editor.Look.Swatches[area], Apply),
                 Caption("Tints and shades"),
                 Swatches(Palette.TintsAndShades(current, 3), Apply),
@@ -151,7 +151,7 @@ internal static class ColorChooser
         var panel = new WrapPanel { ItemSpacing = 4, LineSpacing = 4 };
         foreach (var color in colors)
         {
-            // the colour is the content: the button's own background changes when pointed at
+            // the color is the content: the button's own background changes when pointed at
             var swatch = new Button
             {
                 Width = SwatchSize,

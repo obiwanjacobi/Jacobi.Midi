@@ -38,7 +38,7 @@ internal sealed class RigTreeItem : ViewModelBase
     /// <summary>What a drag of the item drops; null when the device has no parameter tree (see the problems).</summary>
     public DropSource? Source { get; private init; }
 
-    /// <summary>The device's accent colour; null for a node, or a device with the look's.</summary>
+    /// <summary>The device's accent color; null for a node, or a device with the look's.</summary>
     public IBrush? ColorBrush { get; private init; }
 
     public IReadOnlyList<RigTreeItem> Children { get; private init; } = [];

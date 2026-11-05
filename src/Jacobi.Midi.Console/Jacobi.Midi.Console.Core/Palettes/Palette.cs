@@ -1,10 +1,10 @@
 namespace Jacobi.Midi.Console.Core.Palettes;
 
 /// <summary>
-/// The colours a control is drawn with, derived from one colour (a device's, a control's own or the look's accent):
-/// the accent itself, the text on the accent (a label on a coloured tag) and the accent for text and figures in the
+/// The colors a control is drawn with, derived from one color (a device's, a control's own or the look's accent):
+/// the accent itself, the text on the accent (a label on a colored tag) and the accent for text and figures in the
 /// displays (readouts, OLEDs), lightened where needed to stay readable on their dark background. For the materials
-/// (plates, panels): <see cref="Tint"/> and the text on them, <see cref="OnAccent"/> of their colour.
+/// (plates, panels): <see cref="Tint"/> and the text on them, <see cref="OnAccent"/> of their color.
 /// </summary>
 public sealed record Palette(RgbColor Accent, RgbColor OnAccent, RgbColor AccentOnDisplay)
 {
@@ -32,7 +32,7 @@ public sealed record Palette(RgbColor Accent, RgbColor OnAccent, RgbColor Accent
     }
 
     /// <summary>
-    /// Gives a material (the colours of a gradient: steel, cast iron) another colour and keeps its shading: each colour
+    /// Gives a material (the colors of a gradient: steel, cast iron) another color and keeps its shading: each color
     /// gets the hue and saturation of <paramref name="color"/>, and its lightness differs from that of
     /// <paramref name="color"/> as much as it differs from the material's average. Transparency is kept.
     /// </summary>
@@ -46,7 +46,7 @@ public sealed record Palette(RgbColor Accent, RgbColor OnAccent, RgbColor Accent
         return [.. material.Select(stop => RgbColor.FromHsl(hue, saturation, lightness + stop.ToHsl().Lightness - average, stop.A))];
     }
 
-    /// <summary>A plain material in a colour, for a look without one: lit from above, lighter to darker.</summary>
+    /// <summary>A plain material in a color, for a look without one: lit from above, lighter to darker.</summary>
     public static IReadOnlyList<RgbColor> Shading(RgbColor color)
     {
         var (_, _, lightness) = color.ToHsl();
@@ -54,7 +54,7 @@ public sealed record Palette(RgbColor Accent, RgbColor OnAccent, RgbColor Accent
     }
 
     /// <summary>
-    /// Lighter and darker colours of the same hue: <paramref name="steps"/> on each side of the colour (which is in
+    /// Lighter and darker colors of the same hue: <paramref name="steps"/> on each side of the color (which is in
     /// the middle), evenly spread between it and almost white and almost black; darkest first.
     /// </summary>
     public static IReadOnlyList<RgbColor> TintsAndShades(RgbColor color, int steps = 2)

@@ -1,8 +1,8 @@
 <!--
     The Foundry look: brushed steel plates held by screws on cast iron, bakelite and brass, amber readouts.
-    The palette (materials and colours for the faces) and the chrome of controls and sections.
-    The accent and the colours derived from it (ConsoleAccentBrush, ConsoleAccentTextBrush, ConsoleAccentDisplayBrush)
-    come from the look in code (see ConsoleLooks and PaletteBrushes); a control or section with a colour of its own or
+    The palette (materials and colors for the faces) and the chrome of controls and sections.
+    The accent and the colors derived from it (ConsoleAccentBrush, ConsoleAccentTextBrush, ConsoleAccentDisplayBrush)
+    come from the look in code (see ConsoleLooks and PaletteBrushes); a control or section with a color of its own or
     of its device overrides them, and its plate (ConsolePlateBrush, ConsolePlateTextBrush) and panel
     (ConsoleSectionBrush) with this dictionary's materials tinted. Elements in the accent have the class accentArea:
     a right-click on them picks the accent, elsewhere the plate or the panel.
@@ -91,7 +91,7 @@
         </Setter>
     </ControlTheme>
 
-    <!-- a section: a cast iron panel with a tag in the device's colour; the tag in the top inset (Padding, in cells) -->
+    <!-- a section: a cast iron panel with a tag in the device's color; the tag in the top inset (Padding, in cells) -->
     <ControlTheme x:Key="{x:Type chrome:SectionFrame}" TargetType="chrome:SectionFrame">
         <Setter Property="Template">
             <ControlTemplate>

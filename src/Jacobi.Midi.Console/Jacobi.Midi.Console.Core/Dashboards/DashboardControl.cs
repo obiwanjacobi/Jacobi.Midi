@@ -5,7 +5,7 @@ namespace Jacobi.Midi.Console.Core.Dashboards;
 /// <summary>
 /// An element of a dashboard: a <see cref="ParameterControl"/> bound to device parameters or a
 /// <see cref="LayoutControl"/> that arranges other controls. Holds what every control has: its place in the layout,
-/// its label and colour, and the device and base path the bindings inside it are relative to.
+/// its label and color, and the device and base path the bindings inside it are relative to.
 /// </summary>
 public closed class DashboardControl
 {
@@ -25,7 +25,7 @@ public closed class DashboardControl
     public int? Grow { get; set; }
 
     /// <summary>
-    /// Other colours (accent, plate, panel) for this control and the controls inside it; the user changes them in the
+    /// Other colors (accent, plate, panel) for this control and the controls inside it; the user changes them in the
     /// console.
     /// </summary>
     public AreaColors Colors { get; set; } = AreaColors.None;

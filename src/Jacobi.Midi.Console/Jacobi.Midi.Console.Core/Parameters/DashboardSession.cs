@@ -58,12 +58,12 @@ public sealed class DashboardSession : IDisposable
     /// <summary>The device state of a device of the dashboard; null when the rig does not have it.</summary>
     public DeviceState? DeviceOf(string alias) => Rig.Devices.GetValueOrDefault(alias);
 
-    /// <summary>The colours of a device: per area the dashboard's, else the rig's; none where neither gives one.</summary>
+    /// <summary>The colors of a device: per area the dashboard's, else the rig's; none where neither gives one.</summary>
     public AreaColors ColorsOf(string alias)
         => (Dashboard.FindDevice(alias)?.Colors ?? AreaColors.None).Over(Rig.ColorsOf(alias));
 
     /// <summary>
-    /// The device of the control's first bound slot: the device whose colour the control has when no colour is given
+    /// The device of the control's first bound slot: the device whose color the control has when no color is given
     /// for it or a layout control around it. Null when no slot is bound to a device parameter.
     /// </summary>
     public string? SlotDeviceOf(ParameterControl control)

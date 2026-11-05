@@ -104,14 +104,14 @@ internal partial class MainView : UserControl
             _builder?.ShowUsable(_viewModel.Midi.IsUsable);
     }
 
-    // a colour button of the control panel: the colour chooser of that area of the selected control
+    // a color button of the control panel: the color chooser of that area of the selected control
     private void OnColorClicked(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: ColorArea area } button && _viewModel?.SelectedControl is { } control)
             _builder?.OpenColorChooser(control, area, button);
     }
 
-    // a colour button of the device panel: the colour chooser of that area of the device
+    // a color button of the device panel: the color chooser of that area of the device
     private void OnDeviceColorClicked(object? sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: ColorArea area } button || _viewModel?.DeviceProperties?.Device is not { } device)
@@ -220,7 +220,7 @@ internal partial class MainView : UserControl
         rig.Width = properties.Width = new GridLength(0);
     }
 
-    // the faces come from the kit of the look, the colours from the dashboard and the rig, the input from the mode:
+    // the faces come from the kit of the look, the colors from the dashboard and the rig, the input from the mode:
     // a change builds the controls again
     private void Rebuild()
     {

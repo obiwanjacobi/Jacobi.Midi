@@ -175,7 +175,7 @@
             <StackPanel Spacing="4">
                 <TextBlock Text="{Binding Status}" Foreground="{DynamicResource ConsoleTextBrush}" FontSize="12" TextWrapping="Wrap" />
                 <Expander Header="{Binding NotificationsHeader}" IsVisible="{Binding Notifications.Count}">
-                    <!-- all notifications, scrolled when they do not fit; selectable, to copy them; a problem in its own colour -->
+                    <!-- all notifications, scrolled when they do not fit; selectable, to copy them; a problem in its own color -->
                     <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto">
                         <ItemsControl ItemsSource="{Binding Notifications}">
                             <ItemsControl.ItemTemplate>
@@ -191,7 +191,7 @@
         </Border>
 
         <Border DockPanel.Dock="Top" Padding="20,8" Background="#60000000" IsVisible="{Binding IsEditing}">
-            <TextBlock Text="Edit: drag parameters and groups from the rig, or controls from the palettes, onto the dashboard; drop a parameter on a control to bind it. Click a control to select it (Esc or a click beside the dashboard selects nothing), drag it to move it (also into another grid or section), Delete deletes it, right-click it for the colour of the part under the pointer. The values are locked."
+            <TextBlock Text="Edit: drag parameters and groups from the rig, or controls from the palettes, onto the dashboard; drop a parameter on a control to bind it. Click a control to select it (Esc or a click beside the dashboard selects nothing), drag it to move it (also into another grid or section), Delete deletes it, right-click it for the color of the part under the pointer. The values are locked."
                        Foreground="{DynamicResource ConsoleTextBrush}" FontSize="12" TextWrapping="Wrap" />
         </Border>
 
@@ -355,7 +355,7 @@
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
 
-                                    <TextBlock Text="Colours of its controls" Classes="heading" />
+                                    <TextBlock Text="Colors of its controls" Classes="heading" />
                                     <Grid ColumnDefinitions="64,*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="8">
                                         <TextBlock Text="Accent" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Tag="{x:Static palettes:ColorArea.Accent}" Click="OnDeviceColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
@@ -364,7 +364,7 @@
                                                 <TextBlock Text="{Binding AccentColor}" />
                                             </StackPanel>
                                         </Button>
-                                        <Button Grid.Column="2" Content="✕" ToolTip.Tip="The look's colour" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Accent}" />
+                                        <Button Grid.Column="2" Content="✕" ToolTip.Tip="The look's color" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Accent}" />
 
                                         <TextBlock Grid.Row="1" Text="Plate" VerticalAlignment="Center" />
                                         <Button Grid.Row="1" Grid.Column="1" Tag="{x:Static palettes:ColorArea.Plate}" Click="OnDeviceColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
@@ -373,7 +373,7 @@
                                                 <TextBlock Text="{Binding PlateColor}" />
                                             </StackPanel>
                                         </Button>
-                                        <Button Grid.Row="1" Grid.Column="2" Content="✕" ToolTip.Tip="The look's colour" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Plate}" />
+                                        <Button Grid.Row="1" Grid.Column="2" Content="✕" ToolTip.Tip="The look's color" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Plate}" />
 
                                         <TextBlock Grid.Row="2" Text="Panel" VerticalAlignment="Center" />
                                         <Button Grid.Row="2" Grid.Column="1" Tag="{x:Static palettes:ColorArea.Panel}" Click="OnDeviceColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
@@ -382,7 +382,7 @@
                                                 <TextBlock Text="{Binding PanelColor}" />
                                             </StackPanel>
                                         </Button>
-                                        <Button Grid.Row="2" Grid.Column="2" Content="✕" ToolTip.Tip="The look's colour" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Panel}" />
+                                        <Button Grid.Row="2" Grid.Column="2" Content="✕" ToolTip.Tip="The look's color" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Panel}" />
                                     </Grid>
                                 </StackPanel>
                             </DataTemplate>
@@ -443,7 +443,7 @@
                                         <CheckBox Content="Wrap onto more lines" IsChecked="{Binding Wrap}" />
                                     </StackPanel>
 
-                                    <TextBlock Text="Colours" Classes="heading" />
+                                    <TextBlock Text="Colors" Classes="heading" />
                                     <Grid ColumnDefinitions="64,*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="8">
                                         <TextBlock Text="Accent" VerticalAlignment="Center" />
                                         <Button Grid.Column="1" Tag="{x:Static palettes:ColorArea.Accent}" Click="OnColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
@@ -452,7 +452,7 @@
                                                 <TextBlock Text="{Binding AccentColor}" />
                                             </StackPanel>
                                         </Button>
-                                        <Button Grid.Column="2" Content="✕" ToolTip.Tip="Inherit the colour" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Accent}" />
+                                        <Button Grid.Column="2" Content="✕" ToolTip.Tip="Inherit the color" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Accent}" />
 
                                         <TextBlock Grid.Row="1" Text="Plate" VerticalAlignment="Center" />
                                         <Button Grid.Row="1" Grid.Column="1" Tag="{x:Static palettes:ColorArea.Plate}" Click="OnColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
@@ -461,7 +461,7 @@
                                                 <TextBlock Text="{Binding PlateColor}" />
                                             </StackPanel>
                                         </Button>
-                                        <Button Grid.Row="1" Grid.Column="2" Content="✕" ToolTip.Tip="Inherit the colour" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Plate}" />
+                                        <Button Grid.Row="1" Grid.Column="2" Content="✕" ToolTip.Tip="Inherit the color" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Plate}" />
 
                                         <TextBlock Grid.Row="2" Text="Panel" VerticalAlignment="Center" />
                                         <Button Grid.Row="2" Grid.Column="1" Tag="{x:Static palettes:ColorArea.Panel}" Click="OnColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
@@ -470,7 +470,7 @@
                                                 <TextBlock Text="{Binding PanelColor}" />
                                             </StackPanel>
                                         </Button>
-                                        <Button Grid.Row="2" Grid.Column="2" Content="✕" ToolTip.Tip="Inherit the colour" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Panel}" />
+                                        <Button Grid.Row="2" Grid.Column="2" Content="✕" ToolTip.Tip="Inherit the color" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Panel}" />
                                     </Grid>
 
                                     <TextBlock Text="Device and base" Classes="heading" />

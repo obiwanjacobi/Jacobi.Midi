@@ -71,9 +71,9 @@ What is planned for the console, and what was done. What the console does now is
 
 ## Looks
 
-- [ ] **Choosing and composing looks; more kits, chromes and finishes.** The user chooses a look, or composes one from the building blocks: a chrome for the controls and one for the sections, a kit of faces (with an override per control type), a neutral palette, typography and a finish, each with its parameters (colours, corner radius, screws or not). The building blocks themselves are made in code; the user combines them, the way the schemas combine processors. A few ready-made looks are the starting point; free composition is for users who want it, and not every combination will look good.
+- [ ] **Choosing and composing looks; more kits, chromes and finishes.** The user chooses a look, or composes one from the building blocks: a chrome for the controls and one for the sections, a kit of faces (with an override per control type), a neutral palette, typography and a finish, each with its parameters (colors, corner radius, screws or not). The building blocks themselves are made in code; the user combines them, the way the schemas combine processors. A few ready-made looks are the starting point; free composition is for users who want it, and not every combination will look good.
 
-  A look is a setting of the user, not of the dashboard: a shared dashboard looks the way its user likes it. The device palettes and control colours stay; the look only decides how they are used. A look is saved as a file, in XML or JSON like the rig and the dashboards. A made-up example (the names are not final):
+  A look is a setting of the user, not of the dashboard: a shared dashboard looks the way its user likes it. The device palettes and control colors stay; the look only decides how they are used. A look is saved as a file, in XML or JSON like the rig and the dashboards. A made-up example (the names are not final):
 
   ```json
   {
@@ -89,7 +89,7 @@ What is planned for the console, and what was done. What the console does now is
   }
   ```
 
-  The [composable controls](readme.md#composable-controls) and the named resources are already there for this: no control has a colour, size, font or shape of its own in code. A look then only selects other faces, chromes and resources.
+  The [composable controls](readme.md#composable-controls) and the named resources are already there for this: no control has a color, size, font or shape of its own in code. A look then only selects other faces, chromes and resources.
 
 ## Browser support
 
@@ -143,8 +143,8 @@ What is planned for the console, and what was done. What the console does now is
 - [x] First controls and dashboard view (before the synchronisation, which is postponed): the layers (control, face, chrome, palette) with two looks, Foundry and Anodized, to tweak; knob, fader, switch and text; the layout controls; a dashboard is opened with its rig and schema library (`DashboardSession`), the controls follow the device state (`ParameterValue`), with ranges, steps and value types from the data types (`ParameterInfo`); values from dumps; the GP-8 demo; tests of the session.
 - [x] Dashboard canvas with the layout controls and the parameter controls in *Play* mode.
 - [x] Dashboard canvas, done as: index variables as binding targets (`$patch`, `VariableValue`) instead of an index selector control, with the number box (▲/▼) in both kits; controls that re-bind when a variable changes; typing a value (double-click) and reset (Ctrl+click) for all controls; several dashboards on one rig sharing the device states (`RigSession`, `DashboardSession`); the Edit/Play switch (Edit not available yet); the GP-8 compare demo; tests.
-- [x] Device palettes and control colours: the palette derived from one colour with contrast (`RgbColor`, `Palette`); the colour cascade in the dashboard builder; colours per look, tints and shades and any colour in a colour chooser (right-click); control and device colours; Save and Save as for the dashboard and the rig; tests.
-- [x] *Edit* mode foundation: values locked, selecting controls, colours by right-click, the property panel (label, size, display settings, colours, bindings shown), undo and redo of every edit; tests of the edit history.
+- [x] Device palettes and control colors: the palette derived from one color with contrast (`RgbColor`, `Palette`); the color cascade in the dashboard builder; colors per look, tints and shades and any color in a color chooser (right-click); control and device colors; Save and Save as for the dashboard and the rig; tests.
+- [x] *Edit* mode foundation: values locked, selecting controls, colors by right-click, the property panel (label, size, display settings, colors, bindings shown), undo and redo of every edit; tests of the edit history.
 - [x] *Edit* mode: rig and parameter tree, drag & drop, control palettes, control panel: the parameter tree of a device (`ParameterNode`); the inheritance of device, base and variables in one place (`BindingScope`); dropping fields, groups and palette items with the index variables they need (`ControlDrops`, `ControlCatalog`); moving controls into another grid or section with their bindings (`ControlMoves`); deleting controls and changing their kind; editing bindings, device, base, variables and arrangement; editing the devices of the rig; the sessions following the edits; a new dashboard; tests.
 - [x] MIDI connections: `RigConnections` (Console.Core, `Connections/`) holds the MIDI session, the endpoints and a `DeviceSession` per device of the rig; Edit mode is always connected; Play mode has an explicit choice in the MIDI bar, Offline (dump files) or MIDI, and the bar shows the connection of each device. In Play mode with MIDI the controls of a device that is not online are disabled; tests with a fake MIDI backend.
 - [x] The device's endpoint: the device panel picks the endpoint from the endpoints MIDI reaches and the UMP group (with the names the endpoint gives them), shows the device's connection and tests it without changing any value (Identity Request, `DeviceIdentity` in Midi.Device; or a request of the first parameter of its map that is discarded, `DeviceSession.Probe`); the rig tree shows the connection per device.

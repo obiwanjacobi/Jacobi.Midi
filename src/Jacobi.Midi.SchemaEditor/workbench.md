@@ -97,10 +97,10 @@ What is drawn on the bytes:
 
 | Mark | Meaning |
 | --- | --- |
-| Orange background | The byte differs in a variant. The stronger the colour, the more variants differ (or: the focused variant differs). |
+| Orange background | The byte differs in a variant. The stronger the color, the more variants differ (or: the focused variant differs). |
 | Hatched | The byte probably holds no parameter but is derived from the others, e.g. a checksum: it differs in every variant that changed the message, while those variants changed different bytes otherwise. |
 | Dots under the value | The bits that changed (most significant left). Useful for bytes that hold several switches. |
-| Bar under the bytes | The bytes are described by a schema field (neighbouring fields alternate in colour). |
+| Bar under the bytes | The bytes are described by a schema field (neighbouring fields alternate in color). |
 | Corner mark | The byte has a note. |
 | Dashed yellow outline | A match of the value finder. |
 | Outlined | The selection (also in the ASCII column). |

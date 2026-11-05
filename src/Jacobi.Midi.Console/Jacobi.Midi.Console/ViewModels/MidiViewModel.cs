@@ -79,7 +79,7 @@ internal sealed class MidiViewModel : ViewModelBase, IAsyncDisposable
     /// <summary>The connections of the devices of the rig; none when not connected.</summary>
     public IReadOnlyList<DeviceConnection> Devices => _connections?.Devices ?? [];
 
-    /// <summary>The connection of each device for the MIDI bar: its status as colour and text.</summary>
+    /// <summary>The connection of each device for the MIDI bar: its status as color and text.</summary>
     public IReadOnlyList<ConnectionRow> Rows => [.. Devices.Select(connection => new ConnectionRow(connection.Alias, connection.Description, BrushOf(connection)))];
 
     /// <summary>The endpoints MIDI can reach; none when not connected.</summary>
@@ -101,7 +101,7 @@ internal sealed class MidiViewModel : ViewModelBase, IAsyncDisposable
         }
     }
 
-    /// <summary>The colour of the bar's indicator: all devices online, some, or none.</summary>
+    /// <summary>The color of the bar's indicator: all devices online, some, or none.</summary>
     public IBrush SummaryBrush
     {
         get
@@ -123,7 +123,7 @@ internal sealed class MidiViewModel : ViewModelBase, IAsyncDisposable
     /// <summary>The connection of a device; null when not connected.</summary>
     public DeviceConnection? ConnectionOf(string alias) => IsConnected ? _connections?.Find(alias) : null;
 
-    /// <summary>The colour of a connection status; grey when not connected.</summary>
+    /// <summary>The color of a connection status; grey when not connected.</summary>
     public static IBrush BrushOf(DeviceConnection? connection)
         => connection?.Status switch
         {
@@ -266,6 +266,6 @@ internal sealed class MidiViewModel : ViewModelBase, IAsyncDisposable
 }
 
 /// <summary>
-/// A device in the MIDI bar's list: its alias and connection status, in words and as a colour.
+/// A device in the MIDI bar's list: its alias and connection status, in words and as a color.
 /// </summary>
 internal sealed record ConnectionRow(string Alias, string Description, IBrush Brush);

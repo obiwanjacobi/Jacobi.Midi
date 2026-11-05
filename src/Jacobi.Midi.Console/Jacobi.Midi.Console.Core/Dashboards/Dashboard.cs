@@ -51,6 +51,6 @@ public sealed class Dashboard
 /// </summary>
 public sealed record DashboardDevice(string Alias, string MapRoot)
 {
-    /// <summary>Overrides the rig's colours of the device on this dashboard.</summary>
+    /// <summary>Overrides the rig's colors of the device on this dashboard.</summary>
     public AreaColors Colors { get; init; } = AreaColors.None;
 }

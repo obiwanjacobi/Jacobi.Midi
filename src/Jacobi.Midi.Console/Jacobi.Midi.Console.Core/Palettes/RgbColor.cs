@@ -4,8 +4,8 @@ using System.Globalization;
 namespace Jacobi.Midi.Console.Core.Palettes;
 
 /// <summary>
-/// A colour as written in the console's files (<c>#RRGGBB</c>, or <c>#AARRGGBB</c> with transparency), with the
-/// colour arithmetic of the palettes: relative luminance and contrast (WCAG 2) and hue, saturation and lightness.
+/// A color as written in the console's files (<c>#RRGGBB</c>, or <c>#AARRGGBB</c> with transparency), with the
+/// color arithmetic of the palettes: relative luminance and contrast (WCAG 2) and hue, saturation and lightness.
 /// </summary>
 public readonly record struct RgbColor(byte R, byte G, byte B, byte A = 255)
 {
@@ -23,9 +23,9 @@ public readonly record struct RgbColor(byte R, byte G, byte B, byte A = 255)
     }
 
     public static RgbColor Parse(string text)
-        => TryParse(text, out var color) ? color.Value : throw new FormatException($"'{text}' is not a colour (#RRGGBB or #AARRGGBB).");
+        => TryParse(text, out var color) ? color.Value : throw new FormatException($"'{text}' is not a color (#RRGGBB or #AARRGGBB).");
 
-    /// <summary>The colour as written in a file: <c>#RRGGBB</c>, or <c>#AARRGGBB</c> when it is transparent.</summary>
+    /// <summary>The color as written in a file: <c>#RRGGBB</c>, or <c>#AARRGGBB</c> when it is transparent.</summary>
     public override string ToString()
         => A == 255
             ? String.Create(CultureInfo.InvariantCulture, $"#{R:X2}{G:X2}{B:X2}")
@@ -34,7 +34,7 @@ public readonly record struct RgbColor(byte R, byte G, byte B, byte A = 255)
     /// <summary>The relative luminance (0 black - 1 white) as WCAG 2 defines it.</summary>
     public double Luminance => 0.2126 * Linear(R) + 0.7152 * Linear(G) + 0.0722 * Linear(B);
 
-    /// <summary>The contrast ratio with another colour (1-21) as WCAG 2 defines it; 4.5 is enough for text.</summary>
+    /// <summary>The contrast ratio with another color (1-21) as WCAG 2 defines it; 4.5 is enough for text.</summary>
     public double ContrastWith(RgbColor other)
     {
         var (lighter, darker) = Luminance >= other.Luminance ? (Luminance, other.Luminance) : (other.Luminance, Luminance);

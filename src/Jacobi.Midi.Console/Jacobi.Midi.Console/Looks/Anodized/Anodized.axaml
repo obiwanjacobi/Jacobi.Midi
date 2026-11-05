@@ -1,8 +1,8 @@
 <!--
     The Anodized look: dark bead-blasted aluminium panels, machined caps, LEDs and OLED displays in the accent.
-    The palette (materials and colours for the faces) and the chrome of controls and sections.
-    The accent and the colours derived from it (ConsoleAccentBrush, ConsoleAccentTextBrush, ConsoleAccentDisplayBrush)
-    come from the look in code (see ConsoleLooks and PaletteBrushes); a control or section with a colour of its own or
+    The palette (materials and colors for the faces) and the chrome of controls and sections.
+    The accent and the colors derived from it (ConsoleAccentBrush, ConsoleAccentTextBrush, ConsoleAccentDisplayBrush)
+    come from the look in code (see ConsoleLooks and PaletteBrushes); a control or section with a color of its own or
     of its device overrides them, and its plate (ConsolePlateBrush, ConsolePlateTextBrush) and panel
     (ConsoleSectionBrush) with this dictionary's materials tinted. Elements in the accent have the class accentArea:
     a right-click on them picks the accent, elsewhere the plate or the panel.
@@ -43,7 +43,7 @@
         <GradientStop Offset="1" Color="#2C2F33" />
     </LinearGradientBrush>
     <SolidColorBrush x:Key="ConsoleOutlineBrush" Color="#000000" />
-    <!-- the controls are on the panel: no plate until it is given a colour -->
+    <!-- the controls are on the panel: no plate until it is given a color -->
     <SolidColorBrush x:Key="ConsolePlateBrush" Color="Transparent" />
 
     <!-- typography -->
@@ -77,7 +77,7 @@
         </Setter>
     </ControlTheme>
 
-    <!-- a section: an aluminium panel with an LED strip and the title in the device's colour; the title in the top inset
+    <!-- a section: an aluminium panel with an LED strip and the title in the device's color; the title in the top inset
          (Padding, in cells) -->
     <ControlTheme x:Key="{x:Type chrome:SectionFrame}" TargetType="chrome:SectionFrame">
         <Setter Property="Template">

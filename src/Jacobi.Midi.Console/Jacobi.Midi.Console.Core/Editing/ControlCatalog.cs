@@ -91,7 +91,7 @@ public static class ControlCatalog
 
     /// <summary>
     /// A control of another kind (one of <see cref="KindsOf"/>) with everything the control has: its place, label,
-    /// colours, device and base; a parameter control its display settings and the bindings of the slots the kind has
+    /// colors, device and base; a parameter control its display settings and the bindings of the slots the kind has
     /// (the others are dropped), a layout control its children and variables.
     /// </summary>
     /// <exception cref="ArgumentException">The control cannot be changed to the kind.</exception>

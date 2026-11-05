@@ -6,7 +6,7 @@ namespace Jacobi.Midi.Console.Core.Files;
 /// <summary>
 /// What all console files share: the choice of text format, the <c>format</c> attribute of the root that names the
 /// kind of file and its version, the schema sources (<c>assembly</c> and <c>schema</c> elements) and the notation
-/// of colours.
+/// of colors.
 /// </summary>
 internal static class ConsoleFile
 {
@@ -62,11 +62,11 @@ internal static class ConsoleFile
             throw root.Error($"'{FormatAttribute}': '{format}' is not supported; expected '{expected}'.");
     }
 
-    /// <summary>The colours of the areas: <c>color</c> (the accent), <c>plateColor</c> and <c>panelColor</c>.</summary>
+    /// <summary>The colors of the areas: <c>color</c> (the accent), <c>plateColor</c> and <c>panelColor</c>.</summary>
     public static AreaColors GetColors(FileElement element)
         => new(GetColor(element, ColorAttribute(ColorArea.Accent)), GetColor(element, ColorAttribute(ColorArea.Plate)), GetColor(element, ColorAttribute(ColorArea.Panel)));
 
-    /// <summary>Sets the colours the areas have; see <see cref="GetColors"/>.</summary>
+    /// <summary>Sets the colors the areas have; see <see cref="GetColors"/>.</summary>
     public static FileElement SetColors(FileElement element, AreaColors colors)
     {
         foreach (var area in AreaColors.Areas)
@@ -77,14 +77,14 @@ internal static class ConsoleFile
     private static string ColorAttribute(ColorArea area)
         => area == ColorArea.Accent ? "color" : $"{FileNames.Of(area)}Color";
 
-    /// <summary>A colour: <c>#RRGGBB</c> or <c>#AARRGGBB</c>.</summary>
+    /// <summary>A color: <c>#RRGGBB</c> or <c>#AARRGGBB</c>.</summary>
     public static string? GetColor(FileElement element, string attribute)
     {
         if (element.Get(attribute) is not { } text)
             return null;
         return RgbColor.TryParse(text, out _)
             ? text
-            : throw element.Error($"'{attribute}': '{text}' is not a colour (#RRGGBB or #AARRGGBB).");
+            : throw element.Error($"'{attribute}': '{text}' is not a color (#RRGGBB or #AARRGGBB).");
     }
 
     /// <summary>A whole number of at least <paramref name="minimum"/>.</summary>

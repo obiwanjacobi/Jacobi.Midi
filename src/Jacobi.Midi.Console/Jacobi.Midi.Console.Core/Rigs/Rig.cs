@@ -22,7 +22,7 @@ public sealed class Rig
 
 /// <summary>
 /// One device of the rig: what it is (the map root of its schema and the device values the map root does not fix),
-/// how to reach it and its colour.
+/// how to reach it and its color.
 /// </summary>
 public sealed class DeviceInstance
 {
@@ -42,7 +42,7 @@ public sealed class DeviceInstance
     public EndpointReference? Endpoint { get; set; }
 
     /// <summary>
-    /// The colours of the device's controls (accent, plate, panel); the look's where it has none. The user changes
+    /// The colors of the device's controls (accent, plate, panel); the look's where it has none. The user changes
     /// them in the console.
     /// </summary>
     public AreaColors Colors { get; set; } = AreaColors.None;
