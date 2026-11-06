@@ -22,7 +22,7 @@ public class DeviceSessionTests
         => serializer.GetPlan(MapName).CreateRange(path, new InstancePath(instance), path, new InstancePath(instance));
 
     private static DeviceSession CreateSession(Serializer serializer, FakeDevice device, SessionData data = SessionData.Session, int timeoutMs = 1000)
-        => new(new MessageExchange(new AddressMaps(serializer), CreateExchanges(timeoutMs), device, new DeviceValues { ["deviceId"] = 0 }),
+        => new(new MessageExchange(new MessageMaps(serializer), CreateExchanges(timeoutMs), device, new DeviceValues { ["deviceId"] = 0 }),
             new DeviceSessionOptions { Data = data });
 
     private static FieldValueStore Cutoff(byte value)

@@ -11,20 +11,20 @@ namespace Jacobi.Midi.Device.Exchange;
 
 /// <summary>
 /// Creates message exchanges on a MIDI session. Each exchange gets its own connection to the endpoint, with the
-/// exchange as the receive handler. The address maps are deduced from the serializer's schemas when a range is used,
+/// exchange as the receive handler. The message maps are deduced from the serializer's schemas when a range is used,
 /// and shared by the exchanges of the factory; <see cref="Prepare"/> and <see cref="PrepareAll"/> validate them up front.
-/// The exchange files (<paramref name="exchanges"/>) say how each pattern goes for a map root.
+/// The exchange files (<paramref name="exchanges"/>) say how each pattern goes for a root.
 /// </summary>
 public sealed class MessageExchangeFactory(IMidiSession session, Serializer serializer, ExchangeDefinitions exchanges)
 {
-    private readonly AddressMaps _maps = new(serializer);
+    private readonly MessageMaps _maps = new(serializer);
 
-    /// <summary>Builds and validates the address map of a schema root; throws an <see cref="AddressMapException"/> when it is not valid.</summary>
+    /// <summary>Creates and validates the message map of a schema root; throws the map's exception (e.g. an <see cref="AddressMapException"/>) when it is not valid.</summary>
     public void Prepare(SchemaName root) => _maps.Prepare(root);
 
     /// <summary>
-    /// Builds and validates the address maps of all roots a data message can carry;
-    /// throws an <see cref="AddressMapException"/> for the first one that is not valid.
+    /// Creates and validates the message maps of all roots a data message can carry; throws the map's exception (e.g.
+    /// an <see cref="AddressMapException"/>) for the first one that is not valid.
     /// </summary>
     public void PrepareAll() => _maps.PrepareAll();
 
@@ -50,14 +50,15 @@ public sealed class MessageExchangeFactory(IMidiSession session, Serializer seri
 /// <summary>
 /// Transfers schema node ranges to and from one device over its own connection. Every transfer is given by a
 /// <see cref="PlanRange"/> (a range of a plan of the serializer) and the name of an exchange: the exchange file of the
-/// range's map root (<see cref="ExchangeDefinitions"/>) says how that exchange goes for the device. The address map
-/// cuts the range into blocks for the exchange's cutting message, builds and recognises the messages; the exchange
-/// runs once per block (<see cref="ExchangeMachine"/>). This class runs it: it sends, waits, paces and decodes.
+/// range's root (<see cref="ExchangeDefinitions"/>) says how that exchange goes for the device. The message map of the
+/// root (<see cref="IMessageMap"/>) splits the range into blocks for the exchange's split message, writes and
+/// recognises the messages; the exchange runs once per block (<see cref="ExchangeMachine"/>). This class runs it: it
+/// sends, waits, paces and decodes. It knows nothing of what a message holds (e.g. addresses).
 /// Transfers to the device run one at a time. Disposing it closes the connection.
 /// </summary>
 public sealed class MessageExchange : IAsyncDisposable
 {
-    private readonly AddressMaps _maps;
+    private readonly MessageMaps _maps;
     private readonly ExchangeDefinitions _exchanges;
     private readonly ISysExPort _port;
     private readonly DeviceValues _device;
@@ -68,7 +69,7 @@ public sealed class MessageExchange : IAsyncDisposable
     // when the last message was sent (a Stopwatch timestamp; 0: none yet); only used under _transfers
     private long _lastSent;
 
-    internal MessageExchange(AddressMaps maps, ExchangeDefinitions exchanges, ISysExPort port, DeviceValues device)
+    internal MessageExchange(MessageMaps maps, ExchangeDefinitions exchanges, ISysExPort port, DeviceValues device)
     {
         ArgumentNullException.ThrowIfNull(maps);
         ArgumentNullException.ThrowIfNull(exchanges);
@@ -92,11 +93,11 @@ public sealed class MessageExchange : IAsyncDisposable
         => Execute(name, range, data, null, ct);
 
     /// <summary>
-    /// Runs the exchange <paramref name="name"/> (e.g. <see cref="ExchangeNames.RequestData"/>) for the range: widened
-    /// to the atomic groups it overlaps and cut into blocks for the exchange's cutting message, the exchange runs once
-    /// per block. Received data of a completed block is decoded into the sink; sent data comes from the source, which
-    /// must supply every field that is sent, also those of the atomic groups outside the range (a
-    /// <see cref="DeviceSession"/> completes them). The first block that does not complete ends the transfer; the
+    /// Runs the exchange <paramref name="name"/> (e.g. <see cref="ExchangeNames.RequestData"/>) for the range: split
+    /// into blocks for the exchange's split message by the root's message map (which may widen the range, e.g. to the
+    /// atomic groups it overlaps), the exchange runs once per block. Received data of a completed block is decoded into
+    /// the sink; sent data comes from the source, which must supply every field that is sent, also those outside the
+    /// range that the widening added (a <see cref="DeviceSession"/> completes them). The first block that does not complete ends the transfer; the
     /// blocks after it are reported with the same status. Blocks are reported in the result (and to the progress), not thrown.
     /// </summary>
     /// <exception cref="ExchangeException">The exchange cannot run for the range (see <see cref="Validate"/>); nothing was sent.</exception>
@@ -131,17 +132,18 @@ public sealed class MessageExchange : IAsyncDisposable
 
     /// <summary>
     /// The problems that prevent the exchange <paramref name="name"/> from running for the range with the data; empty
-    /// when it can run. Checked: the exchange file of the range's map root has the exchange; the messages it names
-    /// exist and fit the map; it sends a message that asks for or carries data (its cutting message), and only one
-    /// such message; the device values its messages need are known; and (with <paramref name="data"/>) a source is
+    /// when it can run. Checked: the exchange file of the range's root has the exchange; the messages it names exist
+    /// and fit the root's message map; the messages it receives carry data; it has a message to split the range for
+    /// (the first message it sends, else the first data message it receives); the message map can transfer the range
+    /// with the messages (e.g. the device values they need are known); and (with <paramref name="data"/>) a source is
     /// given when it sends data, a sink when it receives data.
     /// </summary>
-    /// <exception cref="AddressMapException">The root of the range is not a valid address map.</exception>
+    /// <exception cref="Exception">The map's exception (e.g. an <see cref="AddressMapException"/>) when the root of the range is not valid.</exception>
     public IReadOnlyList<string> Validate(string name, PlanRange range, ExchangeData? data = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(range);
-        return TryPrepare(name, _maps.Get(range), data, out _);
+        return TryPrepare(name, range, data, out _);
     }
 
     /// <summary>
@@ -164,7 +166,7 @@ public sealed class MessageExchange : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(received);
 
         var map = _maps.Get(range);
-        var listener = new Listener(map, map.DeviceFor(_device), range);
+        var listener = new Listener(map, MessageMaps.DeviceFor(map, _device), range);
         lock (_lock)
         {
             _listeners.Add(listener);
@@ -198,16 +200,16 @@ public sealed class MessageExchange : IAsyncDisposable
         _transfers.Dispose();
     }
 
-    /// <summary>The address map of a range (deduced from its plan and cached).</summary>
-    internal AddressMap MapOf(PlanRange range) => _maps.Get(range);
+    /// <summary>The message map of a range (deduced from its plan and cached).</summary>
+    internal IMessageMap MapOf(PlanRange range) => _maps.Get(range);
 
-    /// <summary>The blocks the exchange splits a range into (widened to atomic groups), as <see cref="Execute(string, PlanRange, ExchangeData, IProgress{BlockResult}?, CancellationToken)"/> transfers them.</summary>
+    /// <summary>The blocks the exchange splits a range into, as <see cref="Execute(string, PlanRange, ExchangeData, IProgress{BlockResult}?, CancellationToken)"/> transfers them.</summary>
     /// <exception cref="ExchangeException">The exchange cannot run for the range.</exception>
     internal IReadOnlyList<PlanRange> Blocks(string name, PlanRange range)
         => Split(Prepare(name, range, null), range);
 
-    private static List<PlanRange> Split(PreparedExchange prepared, PlanRange range)
-        => [.. prepared.Map.Split(prepared.Map.WidenToAtomic(range), prepared.Cutting).Select(block => block.Nodes)];
+    private static IReadOnlyList<PlanRange> Split(PreparedExchange prepared, PlanRange range)
+        => prepared.Map.Split(range, prepared.SplitBy);
 
     /// <summary>Whether the exchange sends data (from a source) and receives data (into a sink).</summary>
     /// <exception cref="ExchangeException">The exchange cannot run for the range.</exception>
@@ -221,14 +223,15 @@ public sealed class MessageExchange : IAsyncDisposable
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(range);
-        var map = _maps.Get(range);
-        var problems = TryPrepare(name, map, data, out var prepared);
-        return problems.Count == 0 ? prepared! : throw new ExchangeException(name, map.Root.FullName, problems);
+        var problems = TryPrepare(name, range, data, out var prepared);
+        return problems.Count == 0 ? prepared! : throw new ExchangeException(name, _maps.Get(range).Root.FullName, problems);
     }
 
-    private List<string> TryPrepare(string name, AddressMap map, ExchangeData? data, out PreparedExchange? prepared)
+    // only the concerns of the exchange; what the messages hold is checked by the message map (MessageMaps.Validate)
+    private List<string> TryPrepare(string name, PlanRange range, ExchangeData? data, out PreparedExchange? prepared)
     {
         prepared = null;
+        var map = _maps.Get(range);
         var problems = new List<string>();
         var set = _exchanges.Find(map.Root);
         var definition = set?.Find(name);
@@ -247,8 +250,9 @@ public sealed class MessageExchange : IAsyncDisposable
             {
                 messages[messageName] = map.Message(messageName);
             }
-            catch (Exception exception) when (exception is InvalidOperationException or AddressMapException)
+            catch (Exception exception) when (exception is not OperationCanceledException)
             {
+                // the map's own exception (e.g. an AddressMapException) when the message does not fit it
                 problems.Add(exception.Message);
             }
         }
@@ -257,29 +261,25 @@ public sealed class MessageExchange : IAsyncDisposable
             return problems;
         }
 
-        foreach (var received in definition.Turns.SelectMany(turn => turn.Receive).Distinct().Where(received => !messages[received].IsData))
+        var receives = definition.Turns.SelectMany(turn => turn.Receive).Distinct().Select(received => messages[received]).ToList();
+        foreach (var received in receives.Where(received => !map.IsData(received)))
         {
-            problems.Add($"'{received}' is received as data, but it carries no data (it has no open choice midi.role=\"data\").");
+            problems.Add($"'{received.FullName}' is received as data, but it carries no data of '{map.Root}'.");
         }
 
+        // the blocks are split for the first message the exchange sends, else for the first data message it receives
         var sent = definition.Turns.Select(turn => turn.Send).OfType<SchemaName>().Select(send => messages[send]).Distinct().ToList();
-        var cutting = sent.Where(message => message.IsData || AddressProtocol.IsRequest(message)).ToList();
-        if (cutting.Count == 0)
+        var splitBy = sent.FirstOrDefault() ?? receives.FirstOrDefault(map.IsData);
+        if (splitBy is null)
         {
-            problems.Add($"'{name}' sends no message that asks for data (role '{MidiProperties.RoleAddress}') or carries data: the range cannot be cut into blocks.");
+            problems.Add($"'{name}' sends no message and receives no data: there is no message to split the range into blocks for.");
         }
-        else if (cutting.Count > 1)
+        else
         {
-            problems.Add($"'{name}' sends more than one message that asks for or carries data ({String.Join(", ", cutting.Select(message => message.FullName))}): the blocks can be cut for one message only.");
-        }
-
-        var missing = map.MissingDeviceValues(_device, messages.Values);
-        if (missing.Count > 0)
-        {
-            problems.Add($"The device values {String.Join(", ", missing)} are required by the messages of '{name}'; supply them with the device.");
+            problems.AddRange(_maps.Validate(range, splitBy, messages.Values, _device));
         }
 
-        var sendsData = sent.Any(message => message.IsData);
+        var sendsData = sent.Any(map.IsData);
         var receivesData = definition.Turns.Any(turn => turn.Receive.Count > 0);
         if (data is not null && sendsData && data.Source is null)
         {
@@ -292,11 +292,11 @@ public sealed class MessageExchange : IAsyncDisposable
 
         if (problems.Count == 0)
         {
-            var receivable = messages.Values.Where(message => message.IsData && !sent.Contains(message)).Distinct().ToList();
+            var receivable = messages.Values.Where(message => map.IsData(message) && !sent.Contains(message)).Distinct().ToList();
             var others = definition.Turns.SelectMany(turn => turn.Transitions)
                 .Select(transition => transition.Message).OfType<SchemaName>()
-                .Select(message => messages[message]).Where(message => !message.IsData).Distinct().ToList();
-            prepared = new PreparedExchange(map, definition, map.Device.With(_device), messages, cutting[0], sendsData, receivesData, receivable, others);
+                .Select(message => messages[message]).Where(message => !map.IsData(message)).Distinct().ToList();
+            prepared = new PreparedExchange(map, definition, map.Device.With(_device), messages, splitBy!, sendsData, receivesData, receivable, others);
         }
         return problems;
     }
@@ -318,7 +318,6 @@ public sealed class MessageExchange : IAsyncDisposable
         try
         {
             var machine = new ExchangeMachine(prepared.Definition, prepared.Messages);
-            var coverage = prepared.Map.Coverage(block);
             var received = new List<ReceivedData>();
             var action = machine.Start();
             while (true)
@@ -334,14 +333,14 @@ public sealed class MessageExchange : IAsyncDisposable
                         break;
 
                     case WaitForMessage wait:
-                        action = await Wait(active, machine, coverage, received, DateTime.UtcNow + wait.Timeout, ct);
+                        action = await Wait(active, machine, received, DateTime.UtcNow + wait.Timeout, ct);
                         break;
 
                     case Complete done:
                         if (done.Status == BlockStatus.Completed && data.Sink is { } sink)
                         {
-                            // decode on the caller's flow, in address order
-                            foreach (var accepted in received.OrderBy(d => prepared.Map.GetAddressRange(d.Block).Start))
+                            // decode on the caller's flow, in the order the data arrived
+                            foreach (var accepted in received)
                             {
                                 accepted.Decode(sink);
                             }
@@ -368,7 +367,7 @@ public sealed class MessageExchange : IAsyncDisposable
     }
 
     // waits for a message for the machine until the deadline; ignored messages do not extend it
-    private static async Task<ExchangeAction> Wait(ActiveTransfer active, ExchangeMachine machine, BlockCoverage coverage,
+    private static async Task<ExchangeAction> Wait(ActiveTransfer active, ExchangeMachine machine,
         List<ReceivedData> received, DateTime deadline, CancellationToken ct)
     {
         while (true)
@@ -397,7 +396,7 @@ public sealed class MessageExchange : IAsyncDisposable
             if (message.Data is { } data && machine.Receives(message.Message))
             {
                 received.Add(data);
-                next = machine.OnReceived(message, coverage.Add(data));
+                next = machine.OnReceived(message, active.Exchange.Map.IsComplete(active.Block, received));
             }
             else
             {
@@ -426,10 +425,11 @@ public sealed class MessageExchange : IAsyncDisposable
     }
 
     private static byte[] Build(PreparedExchange prepared, PlanRange block, DeviceMessage message, IValueSource? values)
-        => message.IsData
-            ? prepared.Map.CreateData(message, block,
-                values ?? throw new InvalidOperationException($"'{message.FullName}': there are no values to send."), prepared.Device)
-            : prepared.Map.Protocol.CreateMessage(message, prepared.Map.GetAddressRange(block), prepared.Device);
+        => prepared.Map.Write(message, block,
+            prepared.Map.IsData(message)
+                ? values ?? throw new InvalidOperationException($"'{message.FullName}': there are no values to send.")
+                : null,
+            prepared.Device);
 
     // raised by the port, possibly on a background thread
     private void OnReceived(ReadOnlyMemory<byte> sysEx)
@@ -451,20 +451,27 @@ public sealed class MessageExchange : IAsyncDisposable
 
         foreach (var listener in listeners)
         {
-            if (listener.Map.TryReadData(message, listener.Device, out var data) && data.Block.Overlaps(listener.Range))
+            foreach (var dataMessage in listener.Map.DataMessages)
             {
-                listener.Inbox.Writer.TryWrite(data);
+                if (listener.Map.TryRead(dataMessage, message, listener.Device, out var data) && data is not null)
+                {
+                    if (data.Block.Overlaps(listener.Range))
+                    {
+                        listener.Inbox.Writer.TryWrite(data);
+                    }
+                    break;
+                }
             }
         }
     }
 
     /// <summary>
     /// An exchange that can run for a map: its definition, the device values, the messages it names (resolved in the
-    /// map), its cutting message, and the messages it can get from the device: data it does not send itself, and
-    /// messages without data its transitions wait for.
+    /// map), the message the blocks are split for, and the messages it can get from the device: data it does not send
+    /// itself, and messages without data its transitions wait for.
     /// </summary>
-    private sealed record PreparedExchange(AddressMap Map, ExchangeDefinition Definition, DeviceValues Device,
-        IReadOnlyDictionary<SchemaName, DeviceMessage> Messages, DeviceMessage Cutting, bool SendsData, bool ReceivesData,
+    private sealed record PreparedExchange(IMessageMap Map, ExchangeDefinition Definition, DeviceValues Device,
+        IReadOnlyDictionary<SchemaName, DeviceMessage> Messages, DeviceMessage SplitBy, bool SendsData, bool ReceivesData,
         IReadOnlyList<DeviceMessage> Receivable, IReadOnlyList<DeviceMessage> Others);
 
     /// <summary>
@@ -472,21 +479,23 @@ public sealed class MessageExchange : IAsyncDisposable
     /// </summary>
     private sealed class ActiveTransfer(PreparedExchange exchange, PlanRange block)
     {
+        public PreparedExchange Exchange { get; } = exchange;
+        public PlanRange Block { get; } = block;
         public Channel<ExchangeMessage> Inbox { get; } = Channel.CreateUnbounded<ExchangeMessage>(new UnboundedChannelOptions { SingleReader = true });
 
         // a data message of the exchange inside the block, or another message the exchange waits for; null otherwise
         public ExchangeMessage? TryRecognise(byte[] sysEx)
         {
-            foreach (var message in exchange.Receivable)
+            foreach (var message in Exchange.Receivable)
             {
-                if (exchange.Map.TryReadData(message, sysEx, exchange.Device, out var data) && data.Block.Overlaps(block))
+                if (Exchange.Map.TryRead(message, sysEx, Exchange.Device, out var data) && data is not null && data.Block.Overlaps(Block))
                 {
                     return new ExchangeMessage(message, data);
                 }
             }
-            foreach (var message in exchange.Others)
+            foreach (var message in Exchange.Others)
             {
-                if (exchange.Map.Protocol.TryRead(message, sysEx, exchange.Device))
+                if (Exchange.Map.TryRead(message, sysEx, Exchange.Device, out _))
                 {
                     return new ExchangeMessage(message);
                 }
@@ -498,9 +507,9 @@ public sealed class MessageExchange : IAsyncDisposable
     /// <summary>
     /// A <see cref="Listen"/> call: the map and the range it listens to, and the channel to its caller.
     /// </summary>
-    private sealed class Listener(AddressMap map, DeviceValues device, PlanRange range)
+    private sealed class Listener(IMessageMap map, DeviceValues device, PlanRange range)
     {
-        public AddressMap Map { get; } = map;
+        public IMessageMap Map { get; } = map;
         public DeviceValues Device { get; } = device;
         public PlanRange Range { get; } = range;
         public Channel<ReceivedData> Inbox { get; } = Channel.CreateUnbounded<ReceivedData>(new UnboundedChannelOptions { SingleReader = true });

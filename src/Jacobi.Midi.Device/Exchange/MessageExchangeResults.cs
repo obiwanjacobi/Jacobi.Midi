@@ -1,7 +1,6 @@
 using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.Midi.Core;
-using Jacobi.Midi.Device.Addressing;
 
 namespace Jacobi.Midi.Device.Exchange;
 

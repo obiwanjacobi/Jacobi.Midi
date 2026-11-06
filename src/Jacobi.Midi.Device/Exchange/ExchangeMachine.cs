@@ -1,5 +1,4 @@
 using Jacobi.BinarySerializer.Schema;
-using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Device.Exchange;

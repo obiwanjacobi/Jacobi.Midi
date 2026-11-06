@@ -94,6 +94,16 @@ public class AcknowledgedExchangeTests
               <on event="sent" result="completed" />
             </turn>
           </exchange>
+          <exchange name="ackFirst">
+            <turn name="hello">
+              <send message="Ack.Message.Ack" />
+              <on event="sent" goto="request" />
+            </turn>
+            <turn name="request">
+              <send message="Ack.Message.Request" />
+              <receive message="Ack.Message.Data" />
+            </turn>
+          </exchange>
         </exchanges>
         """;
 
@@ -107,7 +117,7 @@ public class AcknowledgedExchangeTests
         => serializer.GetPlan(new SchemaName("Ack.Map")).CreateRange("Map");
 
     private static MessageExchange CreateExchange(Serializer serializer, FakeDevice device)
-        => new(new AddressMaps(serializer), TestDevice.CreateExchanges(files: Exchanges), device, new DeviceValues());
+        => new(new MessageMaps(serializer), TestDevice.CreateExchanges(files: Exchanges), device, new DeviceValues());
 
     private static Task<TransferResult> Send(MessageExchange exchange, PlanRange range, IValueSource source, string name = ExchangeNames.SendData)
         => exchange.Execute(name, range, new ExchangeData { Source = source }, TestContext.Current.CancellationToken);
@@ -129,6 +139,17 @@ public class AcknowledgedExchangeTests
         Assert.False(ack.IsData);
         Assert.False(AddressProtocol.IsRequest(ack));
         Assert.Throws<InvalidOperationException>(() => map.Message(new SchemaName("Ack.Message.Unknown")));
+    }
+
+    [Fact]
+    public async Task Validate_FirstSentMessageCannotSplit_IsReportedByTheMap()
+    {
+        var serializer = CreateSerializer();
+        await using var exchange = CreateExchange(serializer, new FakeDevice());
+
+        // the blocks are split for the first message sent: the ack neither asks for nor carries data
+        var problem = Assert.Single(exchange.Validate("ackFirst", MapRange(serializer), new ExchangeData { Sink = new FieldValueStore() }));
+        Assert.Contains("'Ack.Message.Ack' neither asks for data", problem, StringComparison.Ordinal);
     }
 
     [Fact]

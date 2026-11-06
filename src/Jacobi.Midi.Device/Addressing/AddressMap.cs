@@ -42,7 +42,7 @@ public sealed class AddressMatch
 /// Immutable (apart from the learned overhead of the data messages, a cache) and thread-safe; <see cref="AddressMaps"/>
 /// creates and caches one per plan.
 /// </summary>
-internal sealed class AddressMap
+internal sealed class AddressMap : IMessageMap
 {
     private readonly AddressLayout _layout;
     private readonly Serializer _serializer;
@@ -553,7 +553,7 @@ internal sealed class AddressMap
                     if (read == sysEx.Length && tried is not null)
                     {
                         _overheads[message] = sysEx.Length - tried.Addresses.Size;
-                        return new ReceivedData(this, message, sysEx, sink.Device, tried.Nodes);
+                        return new ReceivedData(message, sysEx, sink.Device, tried.Nodes, Decode);
                     }
                 }
                 catch (Exception exception) when (exception is not OperationCanceledException)
@@ -680,34 +680,57 @@ internal sealed class AddressMap
 
     private AddressLayoutNode LayoutOf(FieldInfo field)
         => _layout.Find(field) ?? throw new ArgumentException($"'{field.Path}' has no address in the map '{Root}'.", nameof(field));
-}
 
-/// <summary>
-/// A data message that was recognised for a map: the device values in it and the block of the map it carries (a range
-/// of the map plan). Call <see cref="Decode"/> to read its values into a value model.
-/// </summary>
-public sealed class ReceivedData
-{
-    private readonly AddressMap _map;
+    // IMessageMap: the address map as one kind of message map
 
-    internal ReceivedData(AddressMap map, DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device, PlanRange block)
+    IReadOnlyList<DeviceMessage> IMessageMap.DataMessages => Protocol.DataMessages;
+
+    bool IMessageMap.IsData(DeviceMessage message) => Protocol.DataMessages.Contains(message);
+
+    // the blocks are split for a message that asks for data (an address role) or carries data
+    IReadOnlyList<string> IMessageMap.Validate(PlanRange range, DeviceMessage splitBy)
+        => splitBy.IsData || AddressProtocol.IsRequest(splitBy)
+            ? []
+            : [$"'{splitBy.FullName}' neither asks for data (role '{MidiProperties.RoleAddress}') nor carries data: the range cannot be split into blocks for it."];
+
+    IReadOnlyList<PlanRange> IMessageMap.Split(PlanRange range, DeviceMessage message)
     {
-        _map = map;
-        Message = message;
-        SysEx = sysEx;
-        Device = device;
-        Block = block;
+        if (((IMessageMap)this).Validate(range, message) is [var problem, ..])
+        {
+            throw new InvalidOperationException(problem);
+        }
+        return [.. Split(WidenToAtomic(range), message).Select(block => block.Nodes)];
     }
 
-    public DeviceMessage Message { get; }
-    public ReadOnlyMemory<byte> SysEx { get; }
-    /// <summary>The device values read from the message.</summary>
-    public DeviceValues Device { get; }
-    /// <summary>The nodes of the map the message carries.</summary>
-    public PlanRange Block { get; }
+    byte[] IMessageMap.Write(DeviceMessage message, PlanRange block, IValueSource? source, DeviceValues device)
+        => message.IsData
+            ? CreateData(message, block, source ?? throw new ArgumentNullException(nameof(source), $"'{message.FullName}': there are no values to send."), device)
+            : Protocol.CreateMessage(message, GetAddressRange(block), device);
 
-    /// <summary>Reads the values of the message into the value model (paths and instances of the map plan).</summary>
-    public long Decode(IValueSink sink) => _map.Decode(this, sink);
+    bool IMessageMap.TryRead(DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device, out ReceivedData? data)
+    {
+        if (message.IsData)
+        {
+            var read = TryReadData(message, sysEx, device, out var received);
+            data = read ? received : null;
+            return read;
+        }
+        data = null;
+        return Protocol.TryRead(message, sysEx, device);
+    }
+
+    bool IMessageMap.IsComplete(PlanRange block, IReadOnlyList<ReceivedData> received)
+    {
+        var coverage = Coverage(block);
+        var complete = false;
+        foreach (var data in received)
+        {
+            complete = coverage.Add(data);
+        }
+        return complete;
+    }
+
+    IDeviceState IMessageMap.CreateState() => new AddressDeviceState(this);
 }
 
 /// <summary>

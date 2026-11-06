@@ -2,7 +2,6 @@ using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.Midi.Core;
-using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Device.Exchange;
@@ -66,7 +65,7 @@ public sealed class DeviceSession : IAsyncDisposable
     private readonly MessageExchange _exchange;
     private readonly DeviceSessionOptions _options;
     private readonly Lock _lock = new();
-    private readonly Dictionary<AddressMap, MapState> _states = [];
+    private readonly Dictionary<IMessageMap, IDeviceState> _states = [];
     private readonly CancellationTokenSource _listening = new();
     private readonly List<Task> _listeners = [];
     private bool _connected;
@@ -186,8 +185,9 @@ public sealed class DeviceSession : IAsyncDisposable
     }
 
     /// <summary>
-    /// Forgets the values of the range (widened to whole addresses): the next transfer that needs them requests them
-    /// from the device. Use it when the device changed them without telling (e.g. another patch was selected on the device).
+    /// Forgets the values of the range (the state may widen it, e.g. an address map to whole addresses): the next
+    /// transfer that needs them requests them from the device. Use it when the device changed them without telling (e.g.
+    /// another patch was selected on the device).
     /// </summary>
     public void Invalidate(PlanRange range)
     {
@@ -195,14 +195,14 @@ public sealed class DeviceSession : IAsyncDisposable
         ThrowIfNotConnected();
 
         var map = _exchange.MapOf(range);
-        MapState? state;
+        IDeviceState? state;
         lock (_lock)
         {
             _states.TryGetValue(map, out state);
         }
         if (state is not null)
         {
-            state.Remove(map, range);
+            state.Clear(range);
             Raise(range, DeviceStateChange.Invalidated);
         }
     }
@@ -212,7 +212,7 @@ public sealed class DeviceSession : IAsyncDisposable
     {
         ThrowIfNotConnected();
 
-        List<MapState> states;
+        List<IDeviceState> states;
         lock (_lock)
         {
             states = [.. _states.Values];
@@ -254,23 +254,21 @@ public sealed class DeviceSession : IAsyncDisposable
     // per block: from the state, or requested with the exchange; the first block that does not complete ends it
     private async Task<TransferResult> Receive(string name, PlanRange range, IValueSink sink, bool fresh, IProgress<BlockResult>? progress, CancellationToken ct)
     {
-        var map = _exchange.MapOf(range);
-        var state = StateOf(map);
+        var state = StateOf(_exchange.MapOf(range));
 
         var results = new List<BlockResult>();
         var blocks = _exchange.Blocks(name, range);
         for (var index = 0; index < blocks.Count; index++)
         {
             var block = blocks[index];
-            // the device never transmits write-only fields
-            IReadOnlyList<BlockResult> done = fresh || !Holds(map, block, access => access != NodeAccess.Write, state.Has)
+            IReadOnlyList<BlockResult> done = fresh || !state.Contains(block)
                 ? await Fetch(name, state, block, ct)
                 : [new BlockResult(block, BlockStatus.Completed)];
             foreach (var result in done)
             {
                 if (result.Status == BlockStatus.Completed)
                 {
-                    map.CopyValues(result.Block, state, sink);
+                    state.CopyTo(result.Block, sink);
                 }
                 Report(result);
             }
@@ -292,24 +290,16 @@ public sealed class DeviceSession : IAsyncDisposable
         }
     }
 
-    // completes the atomic groups from the state (requested with requestData when it does not hold them), then sends
+    // completes what the send needs from the state (requested with requestData when it does not hold it), then sends
     private async Task<TransferResult> Send(string name, PlanRange range, IValueSource source, bool fresh, IProgress<BlockResult>? progress, CancellationToken ct)
     {
-        var map = _exchange.MapOf(range);
-        var state = StateOf(map);
+        var state = StateOf(_exchange.MapOf(range));
 
         // exactly the client's values of the range
-        var client = new FieldValueStore();
-        map.CopyValues(range, source, client);
-        bool FromClient(string path, InstancePath instance) => client.TryGet(path, instance, out _);
-        bool Known(string path, InstancePath instance) => FromClient(path, instance) || (!fresh && state.Has(path, instance));
-
-        // complete the atomic groups: the fields that are sent (not read-only) and can be received (not write-only)
-        var widened = map.WidenToAtomic(range);
-        static bool Completes(NodeAccess access) => access == NodeAccess.ReadWrite;
-        if (!Holds(map, widened, Completes, Known))
+        var client = state.ClientValues(range, source);
+        if (!state.Completes(range, client, fresh))
         {
-            foreach (var block in _exchange.Blocks(ExchangeNames.RequestData, widened).Where(block => !Holds(map, block, Completes, Known)))
+            foreach (var block in _exchange.Blocks(ExchangeNames.RequestData, range).Where(block => !state.Completes(block, client, fresh)))
             {
                 var failed = (await Fetch(ExchangeNames.RequestData, state, block, ct)).Where(result => result.Status != BlockStatus.Completed).ToList();
                 if (failed.Count > 0)
@@ -319,14 +309,10 @@ public sealed class DeviceSession : IAsyncDisposable
             }
         }
 
-        // the client's values over the state; a read-only field is not sent, so the device keeps its own value
-        var readOnly = map.FieldsOf(range)
-            .Where(field => field.Layout.Access == NodeAccess.Read)
-            .Select(field => (field.Node.Path.Value, field.Instance))
-            .ToHashSet();
-        state.Merge(client.Values.Where(value => !readOnly.Contains((value.Path, value.Instance))));
+        // the client's values over the state
+        state.Merge(range, client);
 
-        var sent = await _exchange.Execute(name, widened, new ExchangeData { Source = state }, progress, ct);
+        var sent = await _exchange.Execute(name, range, new ExchangeData { Source = state }, progress, ct);
         foreach (var result in sent.Blocks)
         {
             if (result.Status == BlockStatus.Completed)
@@ -335,7 +321,7 @@ public sealed class DeviceSession : IAsyncDisposable
             }
             else
             {
-                state.Remove(map, result.Block);
+                state.Clear(result.Block);
                 Raise(result.Block, DeviceStateChange.Invalidated);
             }
         }
@@ -343,21 +329,22 @@ public sealed class DeviceSession : IAsyncDisposable
     }
 
     // the state of a map; the first use of a map starts listening to all of it, so the state follows the device
-    private MapState StateOf(AddressMap map)
+    private IDeviceState StateOf(IMessageMap map)
     {
         lock (_lock)
         {
             if (!_states.TryGetValue(map, out var state))
             {
-                state = new MapState(map.Plan.CreateRange(map.Plan.Root.Path));
+                state = map.CreateState();
                 _states[map] = state;
-                _listeners.Add(_exchange.Listen(state.Whole, data => OnListened(state, data), _listening.Token));
+                var listened = state;
+                _listeners.Add(_exchange.Listen(state.Whole, data => OnListened(listened, data), _listening.Token));
             }
             return state;
         }
     }
 
-    private async Task<IReadOnlyList<BlockResult>> Fetch(string name, MapState state, PlanRange block, CancellationToken ct)
+    private async Task<IReadOnlyList<BlockResult>> Fetch(string name, IDeviceState state, PlanRange block, CancellationToken ct)
     {
         var result = await _exchange.Execute(name, block, new ExchangeData { Sink = state }, ct);
         foreach (var received in result.Blocks.Where(r => r.Status == BlockStatus.Completed))
@@ -370,13 +357,7 @@ public sealed class DeviceSession : IAsyncDisposable
     private static ExchangeException Missing(string name, PlanRange range, string problem)
         => new(name, range.ExecutionPlan.Name?.FullName ?? String.Empty, [$"'{name}' {problem}."]);
 
-    // true when every field of the nodes whose access is needed is known
-    private static bool Holds(AddressMap map, PlanRange nodes, Func<NodeAccess, bool> needed, Func<string, InstancePath, bool> known)
-        => map.FieldsOf(nodes)
-            .Where(field => needed(field.Layout.Access))
-            .All(field => known(field.Node.Path.Value, field.Instance));
-
-    private void OnListened(MapState state, ReceivedData data)
+    private void OnListened(IDeviceState state, ReceivedData data)
     {
         data.Decode(state);
         Raise(data.Block, DeviceStateChange.Received);
@@ -414,86 +395,5 @@ public sealed class DeviceSession : IAsyncDisposable
                     "The connection to the device is lost: the session can no longer be used. Dispose it and create a new session.");
             }
         }
-    }
-
-    /// <summary>
-    /// The state of one address map of the device: the field values by path and instance of the map plan, guarded by
-    /// a lock (the device's own data arrives on the listener's flow). As a sink and a source it is the flat
-    /// <see cref="FieldValueStore"/>.
-    /// </summary>
-    private sealed class MapState(PlanRange whole) : IValueSink, IValueSource
-    {
-        private readonly Lock _lock = new();
-        private readonly FieldValueStore _store = new();
-
-        /// <summary>The range of the whole map.</summary>
-        public PlanRange Whole { get; } = whole;
-
-        public bool Has(string path, InstancePath instance)
-        {
-            lock (_lock)
-            {
-                return _store.TryGet(path, instance, out _);
-            }
-        }
-
-        public void Merge(IEnumerable<(string Path, InstancePath Instance, LogicalField Value)> values)
-        {
-            lock (_lock)
-            {
-                foreach (var (path, instance, value) in values)
-                {
-                    _store.Set(path, instance, value);
-                }
-            }
-        }
-
-        public void Remove(AddressMap map, PlanRange range)
-        {
-            lock (_lock)
-            {
-                foreach (var field in map.FieldsOf(range))
-                {
-                    _store.Remove(field.Node.Path.Value, field.Instance);
-                }
-            }
-        }
-
-        public void Clear()
-        {
-            lock (_lock)
-            {
-                _store.Clear();
-            }
-        }
-
-        public void SetField(FieldContext context, LogicalField value)
-        {
-            lock (_lock)
-            {
-                _store.SetField(context, value);
-            }
-        }
-
-        public SourceResult GetField(FieldContext context)
-        {
-            lock (_lock)
-            {
-                return _store.GetField(context);
-            }
-        }
-
-        // the store is flat: every scope is the state itself
-        public IValueSink EnterGroup(GroupContext context) => this;
-        public IValueSink EnterItem(RepeatContext context, int index, int count) => this;
-        public IValueSink EnterChoice(ChoiceContext context, int selectedIndex) => this;
-        public void ExitGroup(GroupContext context) { }
-        public void ExitItem(RepeatContext context, int index, int count) { }
-        public void ExitChoice(ChoiceContext context, int selectedIndex) { }
-        IValueSource IValueSource.EnterGroup(GroupContext context) => this;
-        public int GetCount(RepeatContext context) => ((IValueSource)_store).GetCount(context);
-        public IValueSource EnterItem(RepeatContext context, int index) => this;
-        public int GetSelectedIndex(ChoiceContext context) => ((IValueSource)_store).GetSelectedIndex(context);
-        IValueSource IValueSource.EnterChoice(ChoiceContext context) => this;
     }
 }

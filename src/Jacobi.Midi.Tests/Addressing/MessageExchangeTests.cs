@@ -22,7 +22,7 @@ public class MessageExchangeTests
 
     private static MessageExchange CreateExchange(Serializer serializer, FakeDevice device, int timeoutMs = 1000, DeviceValues? values = null,
         ExchangeDefinitions? exchanges = null)
-        => new(new AddressMaps(serializer), exchanges ?? CreateExchanges(timeoutMs), device, values ?? new DeviceValues { ["deviceId"] = 0 });
+        => new(new MessageMaps(serializer), exchanges ?? CreateExchanges(timeoutMs), device, values ?? new DeviceValues { ["deviceId"] = 0 });
 
     private static Task<TransferResult> RequestData(MessageExchange exchange, PlanRange range, IValueSink sink)
         => exchange.Execute(ExchangeNames.RequestData, range, new ExchangeData { Sink = sink }, TestContext.Current.CancellationToken);
@@ -278,7 +278,7 @@ public class MessageExchangeTests
                   <on event="sent" result="completed" />
                 </turn>
               </exchange>
-              <exchange name="twoCuts">
+              <exchange name="requestThenWrite">
                 <turn name="request">
                   <send message="TestEnvelope.Message.Request" />
                   <on event="sent" goto="write" />
@@ -294,8 +294,9 @@ public class MessageExchangeTests
         var edit = Range(serializer, "AddressMap.Edit");
 
         Assert.Contains("There is no message 'TestEnvelope.Message.Unknown'", Assert.Single(exchange.Validate("unknownMessage", edit)));
-        var problems = exchange.Validate("twoCuts", edit, new ExchangeData());
-        Assert.Contains(problems, problem => problem.Contains("more than one message that asks for or carries data", StringComparison.Ordinal));
+        var problems = exchange.Validate("requestThenWrite", edit, new ExchangeData());
+        // the blocks are split for the first message sent (the request); the data message is written for the same blocks
+        Assert.DoesNotContain(problems, problem => problem.Contains("split", StringComparison.Ordinal));
         Assert.Contains(problems, problem => problem.Contains("deviceId", StringComparison.Ordinal));
         Assert.Contains(problems, problem => problem.Contains("it needs a source", StringComparison.Ordinal));
     }
@@ -317,7 +318,7 @@ public class MessageExchangeTests
         var serializer = CreateSerializer();
 
         Assert.Equal([MapName.FullName], AddressProtocol.FindMapRoots(serializer.Schemas).Select(r => r.FullName));
-        new AddressMaps(serializer).PrepareAll();
+        new MessageMaps(serializer).PrepareAll();
     }
 
     [Fact]
@@ -339,7 +340,7 @@ public class MessageExchangeTests
               </members>
             </schema>
             """);
-        var maps = new AddressMaps(CreateSerializer(invalid));
+        var maps = new MessageMaps(CreateSerializer(invalid));
 
         maps.Prepare(MapName);
         var exception = Assert.Throws<AddressMapException>(maps.PrepareAll);
@@ -375,7 +376,7 @@ public class MessageExchangeTests
               </members>
             </schema>
             """);
-        var maps = new AddressMaps(CreateSerializer(invalid));
+        var maps = new MessageMaps(CreateSerializer(invalid));
 
         var exception = Assert.Throws<AddressMapException>(maps.PrepareAll);
         Assert.Contains(exception.Errors, e => e.StartsWith("AddressMap.A:", StringComparison.Ordinal));
