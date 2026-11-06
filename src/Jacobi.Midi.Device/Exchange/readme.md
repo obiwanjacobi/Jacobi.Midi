@@ -15,8 +15,8 @@ Principles:
 - References go one way: an exchange file names its root and the messages it uses; a schema never refers to an exchange file. A message has no kind in the schema: the same message can be used by several patterns.
 - Before an exchange starts, the device is known (its device values, e.g. the Roland device id) and so is how to reach it (the MIDI session and endpoint). The exchange opens its own connection.
 
-The design and its later stages (messages once around the blocks, prompts) are in the
-proposal: [exchange-definitions.md](exchange-definitions.md).
+The design decisions are in [docs/decisions.md](../../../docs/decisions.md) (*Exchange definitions*); the open items
+in the [Device todo](../todo.md) (*Message exchange patterns*).
 
 ## Client usage
 
@@ -160,7 +160,7 @@ only orchestrates: it answers from the state or fetches, sends, and raises `Stat
 
 - **`RequestData`:** per block of the range, the values come from the state when it holds them all (for an address map: write-only fields aside); otherwise the block is requested with `requestData` and the state updated. The sink gets the values of the blocks (also the other fields the map widened the range with). The first block that does not complete ends the transfer.
 - **`SendData`:** the client's values of the range are taken as they are. What else the send needs comes from the state (an address map: the other fields of the atomic groups that are sent and can be received); what it does not hold is requested first (`requestData`). When that fails, nothing is sent and the result holds the blocks that could not be received. The client's values then go into the state (an address map leaves out read-only fields: the device keeps its own) and the range is sent from the state with `sendData`. A block that did not complete is invalidated: the device's values are no longer known. A dump is sent whole from the client's values (see [Messages](../Messages/readme.md)).
-- **`Execute`:** another exchange of the device's file, with the state: one that sends data runs as `SendData`, one that receives data always requests and updates the state; one that does neither runs as it is.
+- **`Execute`:** another exchange of the device's file, with the state: one that sends data runs as `SendData`, one that receives data always requests and updates the state; one that does neither runs as it is. One that both sends and receives data is not supported yet (`NotSupportedException`).
 - **`SessionData`:** `Session` (the default) uses the state as above; `Device` always requests (a fresh copy for a receive, a read-modify-write for a send) and updates the state. Per session (`DeviceSessionOptions.Data`) and per call.
 - **Data the device sends on its own:** the first use of a root starts listening to all of it; what arrives goes into the state.
 - **`Invalidate(range)` / `Clear()`:** forget values that the device changed without telling (the state may widen the range: an address map to whole addresses, a dump to the whole root); the next transfer requests them.
@@ -181,7 +181,7 @@ Namespace `Jacobi.Midi.Device.Exchange`.
 | `MessageExchangeOptions` | Runtime settings that belong neither in the schema nor in the exchange file: the UMP `Groups` (a `MidiGroupPair`: the group to send on and the group to receive on). |
 | `ExchangeData` | What an exchange needs from the app: a `Source` for data that is sent, a `Sink` for data that is received. |
 | `ExchangeNames` | The standard names of the most important patterns: `requestData`, `sendData`. |
-| `ExchangeDefinitions`, `ExchangeDefinitionSet`, `ExchangeDefinition`, `ExchangeState`, `ExchangeTransition`, `ExchangeEvent` | The exchange files by root, and their content. |
+| `ExchangeDefinitions`, `ExchangeDefinitionSet`, `ExchangeDefinition`, `ExchangeTurn`, `ExchangeTransition`, `ExchangeEvent` | The exchange files by root, and their content. |
 | `ExchangeDefinitionReader`, `ExchangeDefinitionException` | Reads an exchange file (XML or JSON) and reports all its problems. |
 | `ExchangeException` | An exchange that cannot run for a range, with all problems; thrown before anything is sent. |
 | `TransferResult`, `BlockResult`, `BlockStatus` | The outcome per block (the block is the `PlanRange` of the nodes one message asks for or carries): `Completed`, `TimedOut`, `Rejected` or `Failed`, with the `Reason` the runner writes and the exception, if any. `Execute` also reports each block to an optional `IProgress<BlockResult>`. |
@@ -194,9 +194,12 @@ connection-based port splits outgoing messages into SysEx7 packets on the option
 packets with a `SysEx7Assembler`; its packet handler is the `MidiPacketReceivedHandler` the factory passes to
 `IMidiSession.Connect`. Tests use a fake port that plays the device.
 
+The Schema Editor's *Send* does not go through the runner yet: it keeps the `messageInterval` of the root's
+`sendData` exchange between its messages.
+
 ## Not yet supported
 
-See [exchange-definitions.md](exchange-definitions.md) (the later stages) and [todo.md](../todo.md):
+See the [Device todo](../todo.md) (*Message exchange patterns*):
 messages once around the blocks (Yamaha Bulk Header/Footer, a store request after the data), prompts for a manual
 operation on the device, two levels of blocks (the Roland handshake for sending), patterns the device starts,
 commands without data and without a range, a choice between messages per block, and areas of the session state that

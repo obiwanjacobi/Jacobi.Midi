@@ -84,3 +84,52 @@ See the Device todo, *Message exchange for schemas without an address map*.
     send from what it holds or from the device; a source that does not supply every value is told so. The fields
     with a role (e.g. the device id) are not kept in the dump state: the device values supply them. *Why:* the
     smallest working step; completing a partial send of a dump can be added when a device needs it.
+
+## Exchange definitions (2026-11-06)
+
+Issue: the message exchange patterns (request and collect data, send data with or without an acknowledgement) were
+code protocols, chosen through schema tags (`midi.message`, `midi.exchange`, `midi.messageInterval`). Devices need
+other patterns (handshakes, framing, store requests, prompts) without new code. See the Device todo, *Message
+exchange patterns*, and the [Exchange readme](../src/Jacobi.Midi.Device/Exchange/readme.md) for how it works.
+
+1. **The app decides what, how and when:** the range, the name of the exchange and the call. Neither the exchange
+   file nor the messages decide which data is transferred. *Why:* one entry point; the device only describes how.
+2. **Standard names for the most important patterns** (`ExchangeNames`: `requestData`, `sendData`); a file can add
+   names of its own. *Why:* an app asks for a pattern whatever the device.
+3. **References go one way:** an exchange file names its root (`for`) and the messages it uses; a schema never refers
+   to an exchange file. There are no message kinds: a request is a message like any other. `midi.message`,
+   `midi.exchange` and `midi.messageInterval` are removed, with no backwards compatibility. *Why:* the same message
+   can be used by several patterns.
+4. **Three responsibilities:** the app (range, exchange name, source and sink), the content (the schemas through the
+   root's message map: what a message looks like, the blocks, when a block is complete) and the exchange file (the
+   pattern and its timing). The exchange is not bound to addresses. *Why:* one place for each concern.
+5. **One file per root with the device's timing; XML or JSON, read into the same model.** Files stand on their own
+   (no extension); messages are named by their full schema name, so each device gets its own small file. *Why:*
+   simple, explicit files.
+6. **An exchange is a plain state machine of turns** with `send` and `receive` actions and transitions on events;
+   no conditions, no values from replies. Defaults cover the common case (`sent`, `received` → completed; `timeout` →
+   timed out). *Why:* small definitions; explicit only where the rule is not enough.
+7. **No reason texts in a definition:** the runner writes them from what happened. *Why:* consistent reasons.
+8. **The response timeout and message interval are set in the definition**, with defaults; per turn and at run time
+   later. *Why:* the timing is a property of the device.
+9. **Blocks are split by the root's message map for the split message:** the first message the block turns send,
+   else the first data message they receive. The map checks whether it can split for it. *Why:* the exchange knows
+   nothing of what a message holds.
+10. **An exchange runs once per block; the first block that does not complete ends the call.** No explicit loop and
+    no way to go on after a failed block. *Why:* the author describes one block; no partial transfers to reason about.
+11. **Retries are an attribute of the `on` (`retry`),** followed by its own `goto` or `result`. *Why:* one element
+    says both.
+12. **Messages that arrive between turns are queued;** a turn that only sends goes on with `sent`. *Why:* no reply
+    is lost.
+13. **Messages once per call go in an optional `before` and `after`,** built for the whole range; `after` only runs
+    when all blocks completed. Fixed messages (no `address`, `size` or `data` role) can be sent in any turn. *Why:*
+    framing and store requests without a loop construct.
+14. **A prompt for the user belongs to the exchange** (a literal text on a `receive`), because the exchange must
+    already wait for the data when the user is asked. A prompt that waits for the user to confirm is the app's, before
+    the call. *Why:* the app decides when a transfer starts.
+15. **A device mode is switched by the app**, with an exchange of its own name, before it calls the exchange that
+    needs the mode. Dropped: `forEach` with nested blocks, going on after a failed block, values from replies and
+    conditions. *Why:* keep the exchange a plain state machine.
+16. **`MessageExchange.Execute` replaces `Receive`/`Send`; `DeviceSession` gets everything when it is created** and
+    has `Execute`, `RequestData` and `SendData`. *Why:* one entry point per layer.
+17. **The Schema Editor's *Send* through the runner is a separate item.** *Why:* not needed for the exchange itself.
