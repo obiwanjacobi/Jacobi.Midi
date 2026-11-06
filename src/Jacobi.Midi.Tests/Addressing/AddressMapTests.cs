@@ -4,6 +4,7 @@ using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Device.Addressing;
 using Xunit;
 using static Jacobi.Midi.Tests.Addressing.TestDevice;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Tests.Addressing;
 
@@ -26,8 +27,8 @@ public class AddressMapTests
         Assert.True(data.IsData);
         var request = map.Message(new SchemaName("TestEnvelope.Message.Request"));
         Assert.Equal("Message.Request", request.Name);
-        Assert.Equal(AddressUnit.Range, request.Unit);
-        Assert.True(request.IsRequest);
+        Assert.Equal(AddressUnit.Range, map.Protocol.SettingsOf(request).Unit);
+        Assert.True(AddressProtocol.IsRequest(request));
     }
 
     [Fact]
@@ -175,10 +176,11 @@ public class AddressMapTests
     public void Split_FieldMessage_SharesBitPackedBytes()
     {
         var map = CreateMap();
-        var perField = map.Protocol.DataMessages[0] with { Unit = AddressUnit.Field };
+        var data = map.Protocol.DataMessages[0];
+        var perField = map.Protocol.SettingsOf(data) with { Unit = AddressUnit.Field };
 
         var range = map.CreateRange("AddressMap.Edit.Switches", default, "AddressMap.Edit.Filter", default);
-        var blocks = map.Split(range, perField);
+        var blocks = map.Split(range, data, perField);
 
         // 0x00 (4 bits), 0x01-0x03 (one parameter each)
         Assert.Equal([0L, 1, 2, 3], blocks.Select(b => b.Addresses.Start));
@@ -190,9 +192,10 @@ public class AddressMapTests
     public void Split_MaxDataSize_AtomicGroupStaysWhole()
     {
         var map = CreateMap();
-        var small = map.Protocol.DataMessages[0] with { MaxDataSize = 4 };
+        var data = map.Protocol.DataMessages[0];
+        var small = map.Protocol.SettingsOf(data) with { MaxDataSize = 4 };
 
-        var blocks = map.Split(map.CreateRange("AddressMap.Edit"), small);
+        var blocks = map.Split(map.CreateRange("AddressMap.Edit"), data, small);
 
         Assert.Equal([new AddressRange(0, PatchSize)], blocks.Select(b => b.Addresses));
     }
@@ -201,10 +204,11 @@ public class AddressMapTests
     public void Split_MaxDataSize_NeverInsideAField()
     {
         var map = CreateMap();
-        var small = map.Protocol.DataMessages[0] with { MaxDataSize = 9 };
+        var data = map.Protocol.DataMessages[0];
+        var small = map.Protocol.SettingsOf(data) with { MaxDataSize = 9 };
 
         // Channel (1) + Text (8) fit, Volume (1) does not
-        var blocks = map.Split(map.CreateRange("AddressMap.Global"), small);
+        var blocks = map.Split(map.CreateRange("AddressMap.Global"), data, small);
 
         Assert.Equal([new AddressRange(GlobalStart, 9), new AddressRange(GlobalStart + 9, 1)], blocks.Select(b => b.Addresses));
     }
@@ -266,10 +270,10 @@ public class AddressMapTests
 
         Assert.True(map.TryReadData(DataMessage(PatchAddress(1), Patch("Patch  1")), Device0, out var data));
 
-        Assert.Equal(PatchAddress(1), data.Address);
+        Assert.Equal(PatchAddress(1), map.GetAddressRange(data.Block).Start);
         Assert.Equal(ModelId, data.Device["modelId"]);
-        Assert.Equal(new AddressRange(PatchAddress(1), PatchSize), data.Block.Addresses);
-        Assert.Equal(new InstancePath([1]), data.Block.Nodes.FromInstance);
+        Assert.Equal(new AddressRange(PatchAddress(1), PatchSize), map.GetAddressRange(data.Block));
+        Assert.Equal(new InstancePath([1]), data.Block.FromInstance);
     }
 
     [Fact]
@@ -347,7 +351,7 @@ public class AddressMapTests
 
         Assert.Equal(Convert.ToHexString(DataMessage(PatchAddress(2) + 1, [99, 5])), Convert.ToHexString(bytes));
         Assert.True(map.TryReadData(bytes, device, out var data));
-        Assert.Equal(block.Addresses, data.Block.Addresses);
+        Assert.Equal(block.Addresses, map.GetAddressRange(data.Block));
         var read = new FieldValueStore();
         data.Decode(read);
         Assert.Equal(2, read.Count);
@@ -374,7 +378,7 @@ public class AddressMapTests
 
         Assert.True(map.TryReadData(DataMessage(GlobalStart + 9, [0x33]), Device0, out var data));
 
-        Assert.Equal(new AddressRange(GlobalStart + 9, 1), data.Block.Addresses);
+        Assert.Equal(new AddressRange(GlobalStart + 9, 1), map.GetAddressRange(data.Block));
         var store = new FieldValueStore();
         data.Decode(store);
         Assert.True(store.TryGet("AddressMap.Global.Volume", InstancePath.Empty, out var volume));
@@ -406,9 +410,9 @@ public class AddressMapTests
         // the filter, the time and the level of patch 3
         Assert.True(map.TryReadData(DataMessage(PatchAddress(3) + 1, [10, 20, 1, 2, 44, 100]), Device0, out var data));
 
-        Assert.Equal(new AddressRange(PatchAddress(3) + 1, 6), data.Block.Addresses);
-        Assert.Equal("AddressMap.Memory.Patch.Filter.Cutoff", data.Block.Nodes.First.Path.Value);
-        Assert.Equal("AddressMap.Memory.Patch.Level", data.Block.Nodes.Last.Path.Value);
+        Assert.Equal(new AddressRange(PatchAddress(3) + 1, 6), map.GetAddressRange(data.Block));
+        Assert.Equal("AddressMap.Memory.Patch.Filter.Cutoff", data.Block.First.Path.Value);
+        Assert.Equal("AddressMap.Memory.Patch.Level", data.Block.Last.Path.Value);
     }
 
     [Fact]
@@ -422,9 +426,9 @@ public class AddressMapTests
         Assert.True(map.TryReadData(channelAndText, Device0, out var global));
         Assert.True(map.TryReadData(DataMessage(PatchAddress(0), Patch("Patch  0")), Device0, out var patch));
 
-        Assert.Equal(new AddressRange(GlobalStart + 9, 1), volume.Block.Addresses);
-        Assert.Equal(new AddressRange(GlobalStart, 9), global.Block.Addresses);
-        Assert.Equal(new AddressRange(PatchAddress(0), PatchSize), patch.Block.Addresses);
+        Assert.Equal(new AddressRange(GlobalStart + 9, 1), map.GetAddressRange(volume.Block));
+        Assert.Equal(new AddressRange(GlobalStart, 9), map.GetAddressRange(global.Block));
+        Assert.Equal(new AddressRange(PatchAddress(0), PatchSize), map.GetAddressRange(patch.Block));
     }
 
     [Fact]

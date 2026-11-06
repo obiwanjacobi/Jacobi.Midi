@@ -6,6 +6,7 @@ using Jacobi.Midi.Core;
 using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Device.Exchange;
 using Xunit;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Tests.Addressing;
 
@@ -126,7 +127,7 @@ public class AcknowledgedExchangeTests
 
         var ack = map.Message(new SchemaName("Ack.Message.Ack"));
         Assert.False(ack.IsData);
-        Assert.False(ack.IsRequest);
+        Assert.False(AddressProtocol.IsRequest(ack));
         Assert.Throws<InvalidOperationException>(() => map.Message(new SchemaName("Ack.Message.Unknown")));
     }
 

@@ -1,13 +1,14 @@
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Device.Addressing;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Device.Exchange;
 
 /// <summary>A message from the device, recognised for the running exchange: the message it matched and, for a data message, its data.</summary>
-internal readonly record struct ExchangeMessage(AddressMessage Message, ReceivedData? Data = null);
+internal readonly record struct ExchangeMessage(DeviceMessage Message, ReceivedData? Data = null);
 
 /// <summary>Action: build the message for the block and send it; then <see cref="ExchangeMachine.OnSent"/> is called.</summary>
-internal readonly record struct SendMessage(AddressMessage Message);
+internal readonly record struct SendMessage(DeviceMessage Message);
 
 /// <summary>Action: wait for a message from the device until the timeout (a new deadline).</summary>
 internal readonly record struct WaitForMessage(TimeSpan Timeout);
@@ -29,7 +30,7 @@ internal union ExchangeAction(SendMessage, WaitForMessage, Ignore, Complete);
 /// retries of the transitions (per block, as a machine is used for one block) and writes the reason of a run that does
 /// not complete from the event and the turn. Used for one block, from one thread at a time.
 /// </summary>
-internal sealed class ExchangeMachine(ExchangeDefinition definition, IReadOnlyDictionary<SchemaName, AddressMessage> messages)
+internal sealed class ExchangeMachine(ExchangeDefinition definition, IReadOnlyDictionary<SchemaName, DeviceMessage> messages)
 {
     private ExchangeTurn _turn = definition.Turns[0];
     private readonly Dictionary<ExchangeTransition, int> _retries = new(ReferenceEqualityComparer.Instance);
@@ -41,7 +42,7 @@ internal sealed class ExchangeMachine(ExchangeDefinition definition, IReadOnlyDi
     public ExchangeAction Start() => Enter(definition.Turns[0]);
 
     /// <summary>True when the current turn accepts the data of the message for the block (<c>receive</c>).</summary>
-    public bool Receives(AddressMessage message)
+    public bool Receives(DeviceMessage message)
         => _turn.Receive.Any(name => ReferenceEquals(messages[name], message));
 
     /// <summary>The message of the turn was sent; without a transition for it the turn waits for its other events.</summary>
@@ -107,7 +108,7 @@ internal sealed class ExchangeMachine(ExchangeDefinition definition, IReadOnlyDi
             ? $"{happened} in turn '{_turn.Name}' of '{definition.Name}'."
             : $"{happened} in turn '{_turn.Name}' of '{definition.Name}', after {retries} {(retries == 1 ? "retry" : "retries")}.";
 
-    private ExchangeTransition? Find(AddressMessage message)
+    private ExchangeTransition? Find(DeviceMessage message)
         => _turn.Transitions.FirstOrDefault(transition => transition.Event == ExchangeEvent.Message
             && transition.Message is { } name && ReferenceEquals(messages[name], message));
 }

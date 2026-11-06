@@ -11,6 +11,7 @@ using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Core.Rigs;
 using Jacobi.Midi.Console.Looks;
 using Jacobi.Midi.Device.Addressing;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Console.ViewModels;
 

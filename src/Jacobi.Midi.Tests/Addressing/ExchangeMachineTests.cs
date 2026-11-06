@@ -3,6 +3,7 @@ using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Device.Exchange;
 using Xunit;
 using static Jacobi.Midi.Tests.Addressing.TestDevice;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Tests.Addressing;
 

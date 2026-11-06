@@ -1,70 +1,95 @@
-using System.Buffers;
 using System.Collections.Concurrent;
 using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Device.Addressing;
 
 /// <summary>
-/// The envelope messages of one open choice contract (memberNodeDef): the data messages that can carry it (found
-/// through their open choice with <c>midi.role="data"</c>), which body group (device map) a data message carries, and
-/// any other message an exchange definition names (<see cref="Message"/>): how to fill and recognise them.
-/// Generic: all vendor specifics are in the schemas.
+/// The envelope messages of one open choice contract (memberNodeDef) for an address map: the data messages that can
+/// carry it and any other message an exchange definition names (<see cref="Message"/>), with what they mean for the
+/// map: their address settings (<c>midi.unit</c>, <c>midi.maxDataSize</c>), the <c>address</c> and <c>size</c> roles
+/// and the address space. Finding the messages, selecting the body and the messages without data are generic
+/// (<see cref="DeviceMessages"/>, <see cref="ConformingBodies"/>). All vendor specifics are in the schemas.
 /// </summary>
 internal sealed class AddressProtocol
 {
     private readonly Serializer _serializer;
-    private readonly IReadOnlyList<BodyCandidate> _bodies;
+    private readonly ConformingBodies _bodies;
     private readonly int? _maxDataSize;
-    private readonly ConcurrentDictionary<string, Lazy<AddressMessage>> _named = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, Lazy<DeviceMessage>> _named = new(StringComparer.OrdinalIgnoreCase);
+    // the address settings of the data messages and of the named messages that were resolved
+    private readonly ConcurrentDictionary<DeviceMessage, AddressSettings> _settings = new(ReferenceEqualityComparer.Instance);
 
-    private AddressProtocol(Serializer serializer, SchemaName contract, AddressSpace addressSpace,
-        IReadOnlyList<AddressMessage> dataMessages, IReadOnlyList<BodyCandidate> bodies, int? maxDataSize)
+    private AddressProtocol(Serializer serializer, AddressSpace addressSpace,
+        IReadOnlyList<(DeviceMessage Message, AddressSettings Settings)> dataMessages, ConformingBodies bodies, int? maxDataSize)
     {
         _serializer = serializer;
-        Contract = contract;
         AddressSpace = addressSpace;
-        DataMessages = dataMessages;
+        DataMessages = [.. dataMessages.Select(data => data.Message)];
+        foreach (var (message, settings) in dataMessages)
+        {
+            _settings[message] = settings;
+        }
         _bodies = bodies;
         _maxDataSize = maxDataSize;
     }
 
     /// <summary>The open choice contract (the nodeDef the map roots conform to).</summary>
-    public SchemaName Contract { get; }
+    public SchemaName Contract => _bodies.Contract;
     public AddressSpace AddressSpace { get; }
     /// <summary>The messages that carry the contract: the groups of an envelope root that hold its data open choice.</summary>
-    public IReadOnlyList<AddressMessage> DataMessages { get; }
+    public IReadOnlyList<DeviceMessage> DataMessages { get; }
 
     /// <summary>
-    /// Finds the data messages of a contract in the schemas: in an envelope root that holds an open choice with
-    /// <c>midi.role="data"</c> whose memberNodeDef is the contract, the member group of the root that holds the choice
-    /// (or the root itself when the choice is a member of the root). The open choices and the groups that conform to
-    /// the contract are found with the lookups of the serializer. Problems are added to <paramref name="problems"/>.
+    /// The address settings of a message of this protocol (a data message, or a message resolved with <see cref="Message"/>),
+    /// with the map root's overrides applied.
+    /// </summary>
+    /// <exception cref="ArgumentException">The message is not a message of this protocol.</exception>
+    public AddressSettings SettingsOf(DeviceMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        return _settings.TryGetValue(message, out var settings)
+            ? settings
+            : throw new ArgumentException($"'{message.FullName}' is not a message of the contract '{Contract}' (resolve it with Message).", nameof(message));
+    }
+
+    /// <summary>The values of the roles <c>address</c> and <c>size</c> for a block at <paramref name="addresses"/>, for writing a message.</summary>
+    internal static IReadOnlyDictionary<string, long> RolesOf(AddressRange addresses)
+        => new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase)
+        {
+            [MidiProperties.RoleAddress] = addresses.Start,
+            [MidiProperties.RoleSize] = addresses.Size,
+        };
+
+    /// <summary>The address read from the <c>address</c> field of a message; null when it was not read (yet).</summary>
+    internal static long? AddressOf(EnvelopeSink envelope)
+        => envelope.BlockRoles.TryGetValue(MidiProperties.RoleAddress, out var address) ? address : null;
+
+    /// <summary>True when the message asks for data: it has the role <c>address</c> and carries no data.</summary>
+    public static bool IsRequest(DeviceMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        return !message.IsData && message.Roles.ContainsKey(MidiProperties.RoleAddress);
+    }
+
+    /// <summary>
+    /// Finds the data messages of a contract in the schemas (<see cref="DeviceMessages.FindDataMessageGroups"/>) and
+    /// the groups that conform to it, and checks them as messages of an address map. Problems are added to
+    /// <paramref name="problems"/>.
     /// </summary>
     internal static AddressProtocol Create(SchemaSet schemas, Serializer serializer, SchemaName contract, AddressMapProblems problems)
     {
-        var bodies = new List<BodyCandidate>();
-        foreach (var body in schemas.FindConformingGroups(contract))
-        {
-            var document = DocumentOf(schemas, body).Name;
-            bodies.Add(new BodyCandidate(new SchemaName($"{document}.{body.Name}"), DeviceValues.FromProperties(body, document, new SchemaPath(body.Name), problems)));
-        }
+        var bodies = ConformingBodies.Find(schemas, contract, problems);
 
-        var dataMessages = new List<AddressMessage>();
-        var choices = schemas.FindOpenChoices(contract).Where(choice => IsRole(choice, MidiProperties.RoleData)).ToList();
-        foreach (var document in choices.Select(choice => DocumentOf(schemas, choice)).Distinct())
+        var dataMessages = new List<(DeviceMessage Message, AddressSettings Settings)>();
+        foreach (var (plan, group, document) in DeviceMessages.FindDataMessageGroups(serializer, contract))
         {
-            foreach (var root in document.Roots)
-            {
-                var plan = serializer.GetPlan(new SchemaName($"{document.Name}.{root.Name}"));
-                foreach (var group in DataMessageGroups(plan, choices))
-                {
-                    var message = CreateMessage(plan, group, document.Name, problems);
-                    Validate(document.Name, group.Path, message, problems);
-                    dataMessages.Add(message);
-                }
-            }
+            var message = DeviceMessages.Create(plan, group, document, problems);
+            var settings = SettingsOf(document, group, problems);
+            Validate(document, group.Path, message, settings, problems);
+            dataMessages.Add((message, settings));
         }
 
         if (dataMessages.Count == 0)
@@ -72,8 +97,8 @@ internal sealed class AddressProtocol
             problems.Error(contract.Namespace, default, $"There is no data message (a group with an open choice midi.role=\"data\") for the contract '{contract}'.");
         }
 
-        var addressSpace = AddressSpaceOf(dataMessages, problems);
-        return new AddressProtocol(serializer, contract, addressSpace, dataMessages, bodies, maxDataSize: null);
+        var addressSpace = AddressSpaceOf(dataMessages.Select(data => data.Message), problems);
+        return new AddressProtocol(serializer, addressSpace, dataMessages, bodies, maxDataSize: null);
     }
 
     /// <summary>
@@ -89,8 +114,9 @@ internal sealed class AddressProtocol
             return this;
         }
 
-        return new AddressProtocol(_serializer, Contract, AddressSpace,
-            [.. DataMessages.Select(message => message with { Unit = unit ?? message.Unit, MaxDataSize = maxDataSize ?? message.MaxDataSize })],
+        AddressSettings Override(AddressSettings settings) => new(unit ?? settings.Unit, maxDataSize ?? settings.MaxDataSize);
+        return new AddressProtocol(_serializer, AddressSpace,
+            [.. DataMessages.Select(message => (message, Override(SettingsOf(message))))],
             _bodies, maxDataSize);
     }
 
@@ -101,10 +127,10 @@ internal sealed class AddressProtocol
     /// </summary>
     /// <exception cref="InvalidOperationException">There is no such message group, or it carries data of another contract.</exception>
     /// <exception cref="AddressMapException">The roles of the message are not valid.</exception>
-    public AddressMessage Message(SchemaName name)
-        => _named.GetOrAdd(name.FullName, _ => new Lazy<AddressMessage>(() => Resolve(name))).Value;
+    public DeviceMessage Message(SchemaName name)
+        => _named.GetOrAdd(name.FullName, _ => new Lazy<DeviceMessage>(() => Resolve(name))).Value;
 
-    private AddressMessage Resolve(SchemaName name)
+    private DeviceMessage Resolve(SchemaName name)
     {
         var fullName = name.FullName;
         if (DataMessages.FirstOrDefault(message => String.Equals(message.FullName, fullName, StringComparison.OrdinalIgnoreCase)) is { } data)
@@ -112,181 +138,55 @@ internal sealed class AddressProtocol
             return data;
         }
 
-        foreach (var document in _serializer.Schemas.Documents
-            .Where(document => fullName.StartsWith(document.Name + SchemaName.Separator, StringComparison.OrdinalIgnoreCase)))
+        var (plan, group, document) = DeviceMessages.FindMessageGroup(_serializer, name);
+        var problems = new AddressMapProblems();
+        var message = DeviceMessages.Create(plan, group, document, problems);
+        if (message.IsData)
         {
-            var path = new SchemaPath(fullName[(document.Name.Length + 1)..]);
-            var rootName = path.Value.Split(SchemaName.Separator)[0];
-            if (!document.Roots.Any(root => String.Equals(root.Name, rootName, StringComparison.OrdinalIgnoreCase)))
-            {
-                continue;
-            }
-
-            var plan = _serializer.GetPlan(new SchemaName($"{document.Name}.{rootName}"));
-            var node = plan.Find(path);
-            if (node is null)
-            {
-                break;
-            }
-            if (node is not GroupInfo group || group is ChoiceInfo or RepeatInfo)
-            {
-                throw new InvalidOperationException($"'{name}' is not a message: it is not a group.");
-            }
-
-            var problems = new AddressMapProblems();
-            var message = CreateMessage(plan, group, document.Name, problems);
-            if (message.IsData)
-            {
-                throw new InvalidOperationException($"'{name}' carries data, but it cannot carry '{Contract}' (its data open choice has another memberNodeDef).");
-            }
-            Validate(document.Name, group.Path, message, problems);
-            if (problems.HasErrors)
-            {
-                throw new AddressMapException(fullName, problems);
-            }
-            return _maxDataSize is { } size ? message with { MaxDataSize = size } : message;
+            throw new InvalidOperationException($"'{name}' carries data, but it cannot carry '{Contract}' (its data open choice has another memberNodeDef).");
         }
-        throw new InvalidOperationException($"There is no message '{name}' in the schemas (name it as document.root.group, e.g. 'Roland.Message16.RQ1').");
+        var settings = SettingsOf(document, group, problems);
+        Validate(document, group.Path, message, settings, problems);
+        if (problems.HasErrors)
+        {
+            throw new AddressMapException(fullName, problems);
+        }
+        _settings[message] = _maxDataSize is { } size ? settings with { MaxDataSize = size } : settings;
+        return message;
     }
 
     /// <summary>
     /// Recognises a message without data (e.g. an acknowledgement): the constants match and the device values in it
     /// agree with <paramref name="device"/>. Returns false for any other message.
     /// </summary>
-    public bool TryRead(AddressMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device)
-    {
-        ArgumentNullException.ThrowIfNull(message);
-        try
-        {
-            var sink = new EnvelopeSink(_ => throw new InvalidOperationException($"'{message.Name}': the message carries no data."));
-            var read = _serializer.Deserialize(message.Range, new ReadOnlySequence<byte>(sysEx), sink);
-            return read == sysEx.Length && sink.Device.All(v => !device.TryGet(v.Key, out var expected) || expected == v.Value);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            // not this message
-            return false;
-        }
-    }
+    public bool TryRead(DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device)
+        => DeviceMessages.TryReadWithoutData(_serializer, message, sysEx, device);
 
     /// <summary>
-    /// Selects the body group (device map) for the device values read from an envelope: of the groups that conform
-    /// to the contract, the one whose <c>midi.device.*</c> values all match. None or more than one is an error.
+    /// Selects the body group (device map) for the device values read from an envelope (see <see cref="ConformingBodies.Select"/>).
     /// </summary>
-    public SchemaName SelectBody(DeviceValues values)
-    {
-        var matches = _bodies
-            .Where(body => body.Device.All(device => values.TryGet(device.Key, out var value) && value == device.Value))
-            .ToList();
-
-        return matches.Count switch
-        {
-            1 => matches[0].Name,
-            0 => throw new InvalidOperationException(
-                $"No group that conforms to '{Contract}' matches the device values {Format(values)}."),
-            _ => throw new InvalidOperationException(
-                $"More than one group that conforms to '{Contract}' matches the device values {Format(values)}: {String.Join(", ", matches.Select(m => m.Name))}."),
-        };
-    }
+    public SchemaName SelectBody(DeviceValues values) => _bodies.Select(values);
 
     /// <summary>
     /// A message without data as a complete SysEx message: a request for the addresses, or any other message (the
     /// addresses are only used for the roles <c>address</c> and <c>size</c>).
     /// </summary>
-    public byte[] CreateMessage(AddressMessage message, AddressRange addresses, DeviceValues device)
-    {
-        ArgumentNullException.ThrowIfNull(message);
-        if (message.IsData)
-        {
-            throw new ArgumentException($"'{message.Name}' carries data: it is built with the data of a block.", nameof(message));
-        }
-
-        var writer = new ArrayBufferWriter<byte>();
-        _serializer.Serialize(message.Range, new EnvelopeSource(addresses, device), writer);
-        return writer.WrittenSpan.ToArray();
-    }
+    public byte[] CreateMessage(DeviceMessage message, AddressRange addresses, DeviceValues device)
+        => DeviceMessages.WriteWithoutData(_serializer, message, RolesOf(addresses), device);
 
     /// <summary>
     /// The address-map roots in the schemas: the roots whose nodeDef is the contract (memberNodeDef) of an open choice
     /// with <c>midi.role="data"</c>, i.e. the groups a data message can carry.
     /// </summary>
-    internal static IReadOnlyList<SchemaName> FindMapRoots(SchemaSet schemas)
-    {
-        var roots = new List<SchemaName>();
-        foreach (var document in schemas.Documents)
-        {
-            foreach (var root in document.Roots)
-            {
-                if (schemas.FindOpenChoices(root).Any(choice => IsRole(choice, MidiProperties.RoleData)))
-                {
-                    roots.Add(new SchemaName($"{document.Name}.{root.Name}"));
-                }
-            }
-        }
-        return roots;
-    }
+    internal static IReadOnlyList<SchemaName> FindMapRoots(SchemaSet schemas) => DeviceMessages.FindCarriedRoots(schemas);
 
-    // the groups of an envelope root that are data messages: per data open choice in the root's own tree (not in a
-    // body), the member group of the root that holds it, or the root itself when the choice is one of its members
-    private static IEnumerable<GroupInfo> DataMessageGroups(ExecutionPlan plan, IReadOnlyList<SchemaChoice> dataChoices)
-    {
-        var groups = new List<GroupInfo>();
-        foreach (var choice in plan.OpenChoices.Where(choice => dataChoices.Any(data => ReferenceEquals(data, choice.Group))))
-        {
-            if (!ReferenceEquals(plan.Find(choice.Path), choice))
-            {
-                // an open choice inside a body of the plan: it does not make the root a message
-                continue;
-            }
-
-            var segments = choice.Path.Segments.ToList();
-            var group = segments.Count == 2
-                ? plan.Root
-                : plan.Find(new SchemaPath($"{segments[0]}{SchemaPath.Separator}{segments[1]}")) as GroupInfo;
-            if (group is not null and not ChoiceInfo && !groups.Contains(group))
-            {
-                groups.Add(group);
-            }
-        }
-
-        // the root itself when it holds a choice as a member: then it is the only message of the root
-        return groups.Contains(plan.Root) ? [plan.Root] : groups;
-    }
-
-    private static SchemaDocument DocumentOf(SchemaSet schemas, SchemaNode node)
-        => schemas.FindDocument(node) ?? throw new InvalidOperationException($"'{node.Name}' is not part of the schemas.");
-
-    private static AddressMessage CreateMessage(ExecutionPlan plan, GroupInfo group, string documentName, AddressMapProblems problems)
-    {
-        var roles = new Dictionary<string, NodeInfo>(StringComparer.OrdinalIgnoreCase);
-        CollectRoles(documentName, group, roles, problems);
-        return new AddressMessage
-        {
-            Name = group.Path,
-            Unit = Unit(documentName, group, problems) ?? AddressUnit.Range,
-            MaxDataSize = (int)(Number(documentName, group, MidiProperties.MaxDataSize, problems) ?? 0),
-            Range = plan.CreateRange(group.Path),
-            Roles = roles,
-        };
-    }
-
-    private static void CollectRoles(string document, GroupInfo group, Dictionary<string, NodeInfo> roles, AddressMapProblems problems)
-    {
-        foreach (var member in group.Members)
-        {
-            if (MidiProperties.Find(member, MidiProperties.Role) is { } role && !roles.TryAdd(role, member))
-            {
-                problems.Error(document, member.Path, $"the role '{role}' is already used by '{roles[role].Path}'.");
-            }
-            if (member is GroupInfo child and not ChoiceInfo)
-            {
-                CollectRoles(document, child, roles, problems);
-            }
-        }
-    }
+    // the address settings of a message group, as the schema gives them
+    private static AddressSettings SettingsOf(string document, GroupInfo group, AddressMapProblems problems)
+        => new(Unit(document, group, problems) ?? AddressUnit.Range,
+            (int)(Number(document, group, MidiProperties.MaxDataSize, problems) ?? 0));
 
     // a message that carries data needs an address and has no size; one that asks for a range needs both
-    private static void Validate(string document, SchemaPath path, AddressMessage message, AddressMapProblems problems)
+    private static void Validate(string document, SchemaPath path, DeviceMessage message, AddressSettings settings, AddressMapProblems problems)
     {
         var hasAddress = message.Roles.TryGetValue(MidiProperties.RoleAddress, out var address);
         if (hasAddress && address is not FieldInfo)
@@ -308,17 +208,17 @@ internal sealed class AddressProtocol
             return;
         }
 
-        if (hasAddress && message.Unit == AddressUnit.Range && !hasSize)
+        if (hasAddress && settings.Unit == AddressUnit.Range && !hasSize)
         {
             problems.Error(document, path, $"a message that asks for a range needs a field with the role '{MidiProperties.RoleSize}' (or a '{MidiProperties.Unit}').");
         }
-        if (hasSize && (!hasAddress || message.Unit != AddressUnit.Range))
+        if (hasSize && (!hasAddress || settings.Unit != AddressUnit.Range))
         {
             problems.Error(document, message.Roles[MidiProperties.RoleSize].Path, $"the role '{MidiProperties.RoleSize}' is only used on a message that asks for a range (with the role '{MidiProperties.RoleAddress}').");
         }
     }
 
-    private static AddressSpace AddressSpaceOf(IEnumerable<AddressMessage> messages, AddressMapProblems problems)
+    private static AddressSpace AddressSpaceOf(IEnumerable<DeviceMessage> messages, AddressMapProblems problems)
     {
         AddressSpace? space = null;
         foreach (var message in messages)
@@ -373,13 +273,4 @@ internal sealed class AddressProtocol
         problems.Error(document, node.Path, $"'{property}' has no valid number: '{text}'.");
         return null;
     }
-
-    private static bool IsRole(SchemaNode node, string role)
-        => String.Equals(MidiProperties.Find(node, MidiProperties.Role), role, StringComparison.OrdinalIgnoreCase);
-
-    private static string Format(DeviceValues values)
-        => "{" + String.Join(", ", values.Select(v => $"{v.Key}=0x{v.Value:X}")) + "}";
-
-    /// <summary>A group that conforms to the contract, with the device values it declares.</summary>
-    private sealed record BodyCandidate(SchemaName Name, DeviceValues Device);
 }

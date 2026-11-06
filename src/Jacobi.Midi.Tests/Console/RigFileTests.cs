@@ -3,6 +3,7 @@ using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Core.Rigs;
 using Jacobi.Midi.Core;
 using Xunit;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Tests.Console;
 

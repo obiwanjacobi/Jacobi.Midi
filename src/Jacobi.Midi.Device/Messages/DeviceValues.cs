@@ -1,7 +1,8 @@
 using System.Collections;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.Device.Addressing;
 
-namespace Jacobi.Midi.Device.Addressing;
+namespace Jacobi.Midi.Device.Messages;
 
 /// <summary>
 /// The device values (<c>device.&lt;name&gt;</c> roles) by name, e.g. <c>deviceId</c> or <c>modelId</c>: the values a
@@ -39,6 +40,16 @@ public sealed class DeviceValues : IEnumerable<KeyValuePair<string, long>>
         }
         return result;
     }
+
+    /// <summary>
+    /// The names of the device values the messages need (their <c>device.&lt;name&gt;</c> roles) that <paramref name="known"/>
+    /// does not hold, e.g. the values of the map root with the client's values over them.
+    /// </summary>
+    internal static IReadOnlyList<string> Missing(IEnumerable<DeviceMessage> messages, DeviceValues known)
+        => [.. messages
+            .SelectMany(message => message.DeviceValueNames)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(name => !known.TryGet(name, out _))];
 
     /// <summary>Reads the <c>midi.device.&lt;name&gt;</c> properties of a schema node (the map root).</summary>
     internal static DeviceValues FromProperties(SchemaNode node, string document, SchemaPath path, AddressMapProblems problems)

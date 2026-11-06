@@ -8,6 +8,7 @@ using Jacobi.Midi.Console.Core.Rigs;
 using Jacobi.Midi.Console.Core.Schemas;
 using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Messages;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Console.Core.Devices;
 

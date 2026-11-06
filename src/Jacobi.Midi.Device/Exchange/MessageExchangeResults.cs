@@ -1,4 +1,5 @@
 using Jacobi.BinarySerializer;
+using Jacobi.BinarySerializer.Execution;
 using Jacobi.Midi.Core;
 using Jacobi.Midi.Device.Addressing;
 
@@ -56,12 +57,21 @@ public enum BlockStatus
 }
 
 /// <summary>
-/// The outcome of one block of a transfer.
+/// The outcome of one block of a transfer: the nodes one message asks for or carries (a range of the plan of the
+/// transferred range).
 /// </summary>
-public sealed record BlockResult(AddressBlock Block, BlockStatus Status, Exception? Error = null)
+public sealed record BlockResult(PlanRange Block, BlockStatus Status, Exception? Error = null)
 {
     /// <summary>Why the transfer did not complete, as written by the exchange; null when it completed.</summary>
     public string? Reason { get; init; }
+
+    /// <summary>A block that was not transferred because the transfer ended at <paramref name="ended"/>; it gets the same status.</summary>
+    internal static BlockResult NotTransferred(PlanRange block, BlockResult ended)
+        => new(block, ended.Status) { Reason = $"Not transferred: the transfer ended at {Describe(ended.Block)}: {ended.Reason}" };
+
+    /// <summary>The nodes of a block as text, e.g. 'AddressMap.Memory.Patch.Level[3]'..'AddressMap.Memory.Patch.Name[3]'.</summary>
+    internal static string Describe(PlanRange block)
+        => $"'{block.First.Path}{block.FromInstance}'..'{block.Last.Path}{block.ToInstance}'";
 }
 
 /// <summary>

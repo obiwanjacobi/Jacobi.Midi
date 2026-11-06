@@ -1,5 +1,6 @@
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Device.Addressing;
 

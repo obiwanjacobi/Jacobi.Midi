@@ -7,6 +7,7 @@ using Jacobi.Midi.Device.Exchange;
 using System.Diagnostics;
 using Xunit;
 using static Jacobi.Midi.Tests.Addressing.TestDevice;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Tests.Addressing;
 
@@ -76,7 +77,7 @@ public class MessageExchangeTests
 
         Assert.True(result.IsComplete);
         // the patch is atomic: the request is for the whole patch
-        Assert.Equal(new AddressRange(PatchAddress(3), PatchSize), Assert.Single(result.Blocks).Block.Addresses);
+        Assert.Equal(Range(serializer, "AddressMap.Memory.Patch", 3), Assert.Single(result.Blocks).Block);
         Assert.True(sink.TryGet("AddressMap.Memory.Patch.Filter.Cutoff", new InstancePath([3]), out _));
         Assert.True(sink.TryGet("AddressMap.Memory.Patch.Name", new InstancePath([3]), out _));
     }
@@ -306,7 +307,7 @@ public class MessageExchangeTests
 
         Assert.Equal("TestEnvelope.Message.Data", Assert.Single(map.Protocol.DataMessages).FullName);
         var request = map.Message(new SchemaName("TestEnvelope.Message.Request"));
-        Assert.True(request.IsRequest);
+        Assert.True(AddressProtocol.IsRequest(request));
         Assert.False(request.IsData);
     }
 

@@ -5,6 +5,7 @@ using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Core;
 using Jacobi.Midi.Device.Addressing;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Device.Exchange;
 
@@ -103,7 +104,7 @@ public sealed class MessageExchange : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(data);
         var prepared = Prepare(name, range, data);
-        var blocks = prepared.Map.Split(prepared.Map.WidenToAtomic(range), prepared.Cutting);
+        var blocks = Split(prepared, range);
 
         var results = new List<BlockResult>();
         for (var index = 0; index < blocks.Count; index++)
@@ -114,7 +115,7 @@ public sealed class MessageExchange : IAsyncDisposable
             {
                 foreach (var block in blocks.Skip(index + 1))
                 {
-                    Report(new BlockResult(block, result.Status) { Reason = $"Not transferred: the transfer ended at {result.Block.Addresses}: {result.Reason}" });
+                    Report(BlockResult.NotTransferred(block, result));
                 }
                 break;
             }
@@ -163,7 +164,7 @@ public sealed class MessageExchange : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(received);
 
         var map = _maps.Get(range);
-        var listener = new Listener(map, map.DeviceFor(_device), map.GetAddressRange(range));
+        var listener = new Listener(map, map.DeviceFor(_device), range);
         lock (_lock)
         {
             _listeners.Add(listener);
@@ -200,13 +201,13 @@ public sealed class MessageExchange : IAsyncDisposable
     /// <summary>The address map of a range (deduced from its plan and cached).</summary>
     internal AddressMap MapOf(PlanRange range) => _maps.Get(range);
 
-    /// <summary>The blocks the exchange cuts a range into (widened to atomic groups), as <see cref="Execute(string, PlanRange, ExchangeData, IProgress{BlockResult}?, CancellationToken)"/> transfers them.</summary>
+    /// <summary>The blocks the exchange splits a range into (widened to atomic groups), as <see cref="Execute(string, PlanRange, ExchangeData, IProgress{BlockResult}?, CancellationToken)"/> transfers them.</summary>
     /// <exception cref="ExchangeException">The exchange cannot run for the range.</exception>
-    internal IReadOnlyList<AddressBlock> Blocks(string name, PlanRange range)
-    {
-        var prepared = Prepare(name, range, null);
-        return prepared.Map.Split(prepared.Map.WidenToAtomic(range), prepared.Cutting);
-    }
+    internal IReadOnlyList<PlanRange> Blocks(string name, PlanRange range)
+        => Split(Prepare(name, range, null), range);
+
+    private static List<PlanRange> Split(PreparedExchange prepared, PlanRange range)
+        => [.. prepared.Map.Split(prepared.Map.WidenToAtomic(range), prepared.Cutting).Select(block => block.Nodes)];
 
     /// <summary>Whether the exchange sends data (from a source) and receives data (into a sink).</summary>
     /// <exception cref="ExchangeException">The exchange cannot run for the range.</exception>
@@ -239,7 +240,7 @@ public sealed class MessageExchange : IAsyncDisposable
             return problems;
         }
 
-        var messages = new Dictionary<SchemaName, AddressMessage>();
+        var messages = new Dictionary<SchemaName, DeviceMessage>();
         foreach (var messageName in definition.Messages)
         {
             try
@@ -262,7 +263,7 @@ public sealed class MessageExchange : IAsyncDisposable
         }
 
         var sent = definition.Turns.Select(turn => turn.Send).OfType<SchemaName>().Select(send => messages[send]).Distinct().ToList();
-        var cutting = sent.Where(message => message.IsData || message.IsRequest).ToList();
+        var cutting = sent.Where(message => message.IsData || AddressProtocol.IsRequest(message)).ToList();
         if (cutting.Count == 0)
         {
             problems.Add($"'{name}' sends no message that asks for data (role '{MidiProperties.RoleAddress}') or carries data: the range cannot be cut into blocks.");
@@ -305,7 +306,7 @@ public sealed class MessageExchange : IAsyncDisposable
 
     // Runs the exchange for one block: executes the actions of its machine and feeds it the events, then decodes the
     // data it accepted. One transfer at a time, so messages without an address (an ack) belong to it.
-    private async Task<BlockResult> Run(PreparedExchange prepared, AddressBlock block, ExchangeData data, CancellationToken ct)
+    private async Task<BlockResult> Run(PreparedExchange prepared, PlanRange block, ExchangeData data, CancellationToken ct)
     {
         await _transfers.WaitAsync(ct);
         var active = new ActiveTransfer(prepared, block);
@@ -317,7 +318,7 @@ public sealed class MessageExchange : IAsyncDisposable
         try
         {
             var machine = new ExchangeMachine(prepared.Definition, prepared.Messages);
-            var coverage = AddressMap.Coverage(block);
+            var coverage = prepared.Map.Coverage(block);
             var received = new List<ReceivedData>();
             var action = machine.Start();
             while (true)
@@ -340,7 +341,7 @@ public sealed class MessageExchange : IAsyncDisposable
                         if (done.Status == BlockStatus.Completed && data.Sink is { } sink)
                         {
                             // decode on the caller's flow, in address order
-                            foreach (var accepted in received.OrderBy(d => d.Address))
+                            foreach (var accepted in received.OrderBy(d => prepared.Map.GetAddressRange(d.Block).Start))
                             {
                                 accepted.Decode(sink);
                             }
@@ -424,11 +425,11 @@ public sealed class MessageExchange : IAsyncDisposable
         }
     }
 
-    private static byte[] Build(PreparedExchange prepared, AddressBlock block, AddressMessage message, IValueSource? values)
+    private static byte[] Build(PreparedExchange prepared, PlanRange block, DeviceMessage message, IValueSource? values)
         => message.IsData
             ? prepared.Map.CreateData(message, block,
                 values ?? throw new InvalidOperationException($"'{message.FullName}': there are no values to send."), prepared.Device)
-            : prepared.Map.Protocol.CreateMessage(message, block.Addresses, prepared.Device);
+            : prepared.Map.Protocol.CreateMessage(message, prepared.Map.GetAddressRange(block), prepared.Device);
 
     // raised by the port, possibly on a background thread
     private void OnReceived(ReadOnlyMemory<byte> sysEx)
@@ -450,7 +451,7 @@ public sealed class MessageExchange : IAsyncDisposable
 
         foreach (var listener in listeners)
         {
-            if (listener.Map.TryReadData(message, listener.Device, out var data) && data.Block.Addresses.Overlaps(listener.Span))
+            if (listener.Map.TryReadData(message, listener.Device, out var data) && data.Block.Overlaps(listener.Range))
             {
                 listener.Inbox.Writer.TryWrite(data);
             }
@@ -463,13 +464,13 @@ public sealed class MessageExchange : IAsyncDisposable
     /// messages without data its transitions wait for.
     /// </summary>
     private sealed record PreparedExchange(AddressMap Map, ExchangeDefinition Definition, DeviceValues Device,
-        IReadOnlyDictionary<SchemaName, AddressMessage> Messages, AddressMessage Cutting, bool SendsData, bool ReceivesData,
-        IReadOnlyList<AddressMessage> Receivable, IReadOnlyList<AddressMessage> Others);
+        IReadOnlyDictionary<SchemaName, DeviceMessage> Messages, DeviceMessage Cutting, bool SendsData, bool ReceivesData,
+        IReadOnlyList<DeviceMessage> Receivable, IReadOnlyList<DeviceMessage> Others);
 
     /// <summary>
     /// The transfer that is running: the exchange and block it is for, and the messages for its machine.
     /// </summary>
-    private sealed class ActiveTransfer(PreparedExchange exchange, AddressBlock block)
+    private sealed class ActiveTransfer(PreparedExchange exchange, PlanRange block)
     {
         public Channel<ExchangeMessage> Inbox { get; } = Channel.CreateUnbounded<ExchangeMessage>(new UnboundedChannelOptions { SingleReader = true });
 
@@ -478,7 +479,7 @@ public sealed class MessageExchange : IAsyncDisposable
         {
             foreach (var message in exchange.Receivable)
             {
-                if (exchange.Map.TryReadData(message, sysEx, exchange.Device, out var data) && data.Block.Addresses.Overlaps(block.Addresses))
+                if (exchange.Map.TryReadData(message, sysEx, exchange.Device, out var data) && data.Block.Overlaps(block))
                 {
                     return new ExchangeMessage(message, data);
                 }
@@ -495,13 +496,13 @@ public sealed class MessageExchange : IAsyncDisposable
     }
 
     /// <summary>
-    /// A <see cref="Listen"/> call: the map and addresses it listens to, and the channel to its caller.
+    /// A <see cref="Listen"/> call: the map and the range it listens to, and the channel to its caller.
     /// </summary>
-    private sealed class Listener(AddressMap map, DeviceValues device, AddressRange span)
+    private sealed class Listener(AddressMap map, DeviceValues device, PlanRange range)
     {
         public AddressMap Map { get; } = map;
         public DeviceValues Device { get; } = device;
-        public AddressRange Span { get; } = span;
+        public PlanRange Range { get; } = range;
         public Channel<ReceivedData> Inbox { get; } = Channel.CreateUnbounded<ReceivedData>(new UnboundedChannelOptions { SingleReader = true });
     }
 }

@@ -3,6 +3,7 @@ using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Device.Addressing;
 using Xunit;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Tests.Schema;
 
@@ -69,7 +70,7 @@ public class Gx700AddressMapTests
         var map = CreateMap();
 
         Assert.Equal(new AddressSpace(4, 7), map.Protocol.AddressSpace);
-        Assert.True(map.Message(new SchemaName("Roland.Message32.RQ1")).IsRequest);
+        Assert.True(AddressProtocol.IsRequest(map.Message(new SchemaName("Roland.Message32.RQ1"))));
         Assert.Equal("Message32.DT1", Assert.Single(map.Protocol.DataMessages).Name);
     }
 
@@ -193,8 +194,8 @@ public class Gx700AddressMapTests
         byte[] message = [0xF0, 0x41, 0x00, 0x79, 0x12, .. scope, (byte)((128 - scope.Sum(b => b) % 128) % 128), 0xF7];
 
         Assert.True(map.TryReadData(message, Device, out var data));
-        Assert.Equal(new AddressRange(IndividualStart + 0x0D * SectionStride + 2, 1), data.Block.Addresses);
-        Assert.Equal("AddressMap.IndividualTemporary.Reverb.Time", data.Block.Nodes.First.Path.Value);
+        Assert.Equal(new AddressRange(IndividualStart + 0x0D * SectionStride + 2, 1), map.GetAddressRange(data.Block));
+        Assert.Equal("AddressMap.IndividualTemporary.Reverb.Time", data.Block.First.Path.Value);
         var store = new FieldValueStore();
         data.Decode(store);
         Assert.Equal(1, store.Count);

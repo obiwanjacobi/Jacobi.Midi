@@ -3,6 +3,7 @@ using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Device.Addressing;
 
@@ -16,10 +17,10 @@ public readonly record struct MapOccurrence(SchemaPath Path, InstancePath Instan
 /// How a selection of map nodes is transferred: the data message that carries them, the address space of the map
 /// (to format the addresses) and the blocks, one message each, in address order.
 /// </summary>
-public sealed record DataPlan(AddressMessage Message, AddressSpace AddressSpace, IReadOnlyList<AddressBlock> Blocks);
+public sealed record DataPlan(DeviceMessage Message, AddressSpace AddressSpace, IReadOnlyList<AddressBlock> Blocks);
 
 /// <summary>One data message that was written: the message, the block of the map it carries and its SysEx bytes.</summary>
-public sealed record EncodedDataMessage(AddressMessage Message, AddressBlock Block, byte[] SysEx);
+public sealed record EncodedDataMessage(DeviceMessage Message, AddressBlock Block, byte[] SysEx);
 
 /// <summary>
 /// Lets a client that reads and writes arbitrary messages with its own value model (e.g. the Schema Editor) work with
@@ -288,13 +289,13 @@ public sealed class AddressMapAdapter
                 return selected with { Scope = map.WrapBody(selected.Scope, narrowed) };
             }
 
-            var target = (Recognize(map, context) ?? Fallback(map, context, envelope)).Nodes;
+            var target = Recognize(map, context) ?? Fallback(map, context, envelope);
             return new OpenChoiceSinkResult(map.WrapBody(selected.Scope, target), selected.Group,
                 target.First.Path, target.FromInstance, target.Last.Path, target.ToInstance);
         }
 
         // the block the message carries, when it is a data message of the map and this open choice is its data
-        private AddressBlock? Recognize(AddressMap map, OpenChoiceContext context)
+        private PlanRange? Recognize(AddressMap map, OpenChoiceContext context)
         {
             // [TODO] any device id is accepted for now; only the device values the map root fixes (model id) select it
             if (!map.TryReadData(message, new DeviceValues(), out var data)
@@ -307,9 +308,9 @@ public sealed class AddressMapAdapter
         }
 
         // read as much as possible: the largest group at the address, until the data runs out
-        private AddressBlock Fallback(AddressMap map, OpenChoiceContext context, EnvelopeSink envelope)
+        private PlanRange Fallback(AddressMap map, OpenChoiceContext context, EnvelopeSink envelope)
         {
-            if (envelope.Address is not { } address)
+            if (AddressProtocol.AddressOf(envelope) is not { } address)
             {
                 throw new InvalidOperationException(
                     $"'{context.Path}': no address was read before the data, so the data cannot be placed in the map '{map.Root}'.");
@@ -319,7 +320,7 @@ public sealed class AddressMapAdapter
             warnings.Add($"'{context.Path}': the message is not recognised as data of the map '{map.Root}' " +
                 $"(another device model, or the data is incomplete or does not end on a field boundary). " +
                 $"It is read into '{target.Nodes.First.Path}' to '{target.Nodes.Last.Path}' at {map.Protocol.AddressSpace.Format(address)} as far as the data goes.");
-            return target;
+            return target.Nodes;
         }
     }
 

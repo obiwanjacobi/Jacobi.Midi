@@ -1,7 +1,7 @@
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Schema;
 
-namespace Jacobi.Midi.Device.Addressing;
+namespace Jacobi.Midi.Device.Messages;
 
 /// <summary>
 /// The names of the <c>midi.*</c> schema properties of the address map mechanism and helpers to read them from

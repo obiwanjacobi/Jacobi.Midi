@@ -3,6 +3,7 @@ using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.Midi.Core;
 using Jacobi.Midi.Device.Addressing;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Device.Exchange;
 
@@ -262,14 +263,14 @@ public sealed class DeviceSession : IAsyncDisposable
         {
             var block = blocks[index];
             // the device never transmits write-only fields
-            IReadOnlyList<BlockResult> done = fresh || !Holds(map, block.Nodes, access => access != NodeAccess.Write, state.Has)
+            IReadOnlyList<BlockResult> done = fresh || !Holds(map, block, access => access != NodeAccess.Write, state.Has)
                 ? await Fetch(name, state, block, ct)
                 : [new BlockResult(block, BlockStatus.Completed)];
             foreach (var result in done)
             {
                 if (result.Status == BlockStatus.Completed)
                 {
-                    map.CopyValues(result.Block.Nodes, state, sink);
+                    map.CopyValues(result.Block, state, sink);
                 }
                 Report(result);
             }
@@ -277,7 +278,7 @@ public sealed class DeviceSession : IAsyncDisposable
             {
                 foreach (var skipped in blocks.Skip(index + 1))
                 {
-                    Report(new BlockResult(skipped, failed.Status) { Reason = $"Not transferred: the transfer ended at {failed.Block.Addresses}: {failed.Reason}" });
+                    Report(BlockResult.NotTransferred(skipped, failed));
                 }
                 break;
             }
@@ -308,7 +309,7 @@ public sealed class DeviceSession : IAsyncDisposable
         static bool Completes(NodeAccess access) => access == NodeAccess.ReadWrite;
         if (!Holds(map, widened, Completes, Known))
         {
-            foreach (var block in _exchange.Blocks(ExchangeNames.RequestData, widened).Where(block => !Holds(map, block.Nodes, Completes, Known)))
+            foreach (var block in _exchange.Blocks(ExchangeNames.RequestData, widened).Where(block => !Holds(map, block, Completes, Known)))
             {
                 var failed = (await Fetch(ExchangeNames.RequestData, state, block, ct)).Where(result => result.Status != BlockStatus.Completed).ToList();
                 if (failed.Count > 0)
@@ -330,12 +331,12 @@ public sealed class DeviceSession : IAsyncDisposable
         {
             if (result.Status == BlockStatus.Completed)
             {
-                Raise(result.Block.Nodes, DeviceStateChange.Sent);
+                Raise(result.Block, DeviceStateChange.Sent);
             }
             else
             {
-                state.Remove(map, result.Block.Nodes);
-                Raise(result.Block.Nodes, DeviceStateChange.Invalidated);
+                state.Remove(map, result.Block);
+                Raise(result.Block, DeviceStateChange.Invalidated);
             }
         }
         return sent;
@@ -356,12 +357,12 @@ public sealed class DeviceSession : IAsyncDisposable
         }
     }
 
-    private async Task<IReadOnlyList<BlockResult>> Fetch(string name, MapState state, AddressBlock block, CancellationToken ct)
+    private async Task<IReadOnlyList<BlockResult>> Fetch(string name, MapState state, PlanRange block, CancellationToken ct)
     {
-        var result = await _exchange.Execute(name, block.Nodes, new ExchangeData { Sink = state }, ct);
+        var result = await _exchange.Execute(name, block, new ExchangeData { Sink = state }, ct);
         foreach (var received in result.Blocks.Where(r => r.Status == BlockStatus.Completed))
         {
-            Raise(received.Block.Nodes, DeviceStateChange.Received);
+            Raise(received.Block, DeviceStateChange.Received);
         }
         return result.Blocks;
     }
@@ -378,7 +379,7 @@ public sealed class DeviceSession : IAsyncDisposable
     private void OnListened(MapState state, ReceivedData data)
     {
         data.Decode(state);
-        Raise(data.Block.Nodes, DeviceStateChange.Received);
+        Raise(data.Block, DeviceStateChange.Received);
     }
 
     private void Raise(PlanRange nodes, DeviceStateChange change)

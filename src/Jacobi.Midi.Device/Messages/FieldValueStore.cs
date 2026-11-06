@@ -2,7 +2,7 @@ using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
 
-namespace Jacobi.Midi.Device.Addressing;
+namespace Jacobi.Midi.Device.Messages;
 
 /// <summary>
 /// A flat value model that keeps field values by schema path and instance (the paths and instances of the map plan):

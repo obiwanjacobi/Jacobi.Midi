@@ -6,6 +6,7 @@ using Jacobi.Midi.Console.Core.Files;
 using Jacobi.Midi.Console.Core.Parameters;
 using Jacobi.Midi.Console.Core.Rigs;
 using Xunit;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Tests.Console;
 

@@ -4,6 +4,7 @@ using Jacobi.Midi.Console.Core.Rigs;
 using Jacobi.Midi.Core;
 using Jacobi.Midi.Device.Exchange;
 using Xunit;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Tests.Console;
 

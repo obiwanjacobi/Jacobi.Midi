@@ -1,6 +1,7 @@
 using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Core.Schemas;
 using Jacobi.Midi.Core;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Console.Core.Rigs;
 

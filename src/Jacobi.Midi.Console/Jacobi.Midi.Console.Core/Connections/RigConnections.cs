@@ -7,6 +7,7 @@ using Jacobi.Midi.Core;
 using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Device.Exchange;
 using Jacobi.Midi.Messages;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Console.Core.Connections;
 

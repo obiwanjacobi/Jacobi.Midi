@@ -3,6 +3,7 @@ using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Device.Addressing;
 using Xunit;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Tests.Schema;
 
@@ -31,7 +32,7 @@ public class Gp8AddressMapTests
         var map = CreateMap();
 
         Assert.Equal(new AddressSpace(2, 7), map.Protocol.AddressSpace);
-        Assert.True(map.Message(new SchemaName("Roland.Message16.RQ1")).IsRequest);
+        Assert.True(AddressProtocol.IsRequest(map.Message(new SchemaName("Roland.Message16.RQ1"))));
         Assert.Equal("Message16.DT1", Assert.Single(map.Protocol.DataMessages).Name);
     }
 
@@ -90,10 +91,10 @@ public class Gp8AddressMapTests
 
         Assert.True(map.TryReadData(DumpMessage(1), new DeviceValues { ["deviceId"] = 0 }, out var data));
 
-        Assert.Equal(MemoryStart + Stride, data.Address);
+        Assert.Equal(MemoryStart + Stride, map.GetAddressRange(data.Block).Start);
         Assert.Equal(0x13, data.Device["modelId"]);
-        Assert.Equal(new AddressRange(MemoryStart + Stride, PatchSize), data.Block.Addresses);
-        Assert.Equal(new InstancePath([1]), data.Block.Nodes.FromInstance);
+        Assert.Equal(new AddressRange(MemoryStart + Stride, PatchSize), map.GetAddressRange(data.Block));
+        Assert.Equal(new InstancePath([1]), data.Block.FromInstance);
     }
 
     [Fact]
