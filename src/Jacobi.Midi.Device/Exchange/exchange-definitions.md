@@ -18,6 +18,10 @@ time: its `state` is a `turn` since stage 2.
 - **The split message** is the first message the exchange sends, else the first data message it receives (which also covers an exchange that only receives, see stage 4). The exchange does not check that only one message asks for or carries data: the map checks whether it can split for the split message (an address map: a message with an `address` role or data; a dump: any message). Received data is decoded in the order it arrived.
 - **A timeout without an `on`** ends the run as `timedOut` (with the reason), instead of being a check error.
 - **Exchange files as files:** `ExchangeDefinitions.AddFile` reads them, but the console only loads the files embedded in its assemblies; files next to the schema files of a rig or device are not loaded yet.
+- **The checks of a file and of an exchange:** the reader checks the file on its own (see *What changes in the code*); whether an exchange has a split message needs the map (`IsData`), so that is checked when the exchange is used (`Validate`, `Execute`).
+- **`DeviceSession.Execute`:** an exchange that receives data always requests it from the device and puts it into the state (as `SessionData.Device`); one that sends data follows the session's `SessionData`. An exchange that both sends and receives data is not supported yet (see the [Device todo](../todo.md)).
+- **The files of the Roland devices** are in the folder of their device: `Jacobi.Midi.Roland/Boss/Gx700/Gx700.exchange.xml` and `Jacobi.Midi.Roland/Gp8/Gp8.exchange.xml`.
+- **The Schema Editor's *Send*** does not go through the runner yet (a separate item, see *Later stages*); meanwhile it keeps the `messageInterval` of the root's `sendData` exchange between its messages.
 - **Not in the proposal:** `MessageExchange.Validate` lists the problems without sending anything.
 
 ## Principles
@@ -72,7 +76,7 @@ Its API:
 ```csharp
 await session.RequestData(range, sink, ct);   // today's Receive: Execute with requestData
 await session.SendData(range, source, ct);    // today's Send: Execute with sendData
-await session.Execute("sendDataHandshake", range, new ExchangeData { Source = source }, ct);
+await session.Execute("sendDataHandshake", range, new ExchangeData { Source = source }, progress: null, ct);
 ```
 
 - `RequestData` and `SendData` are today's `Receive` and `Send`, renamed. Their logic stays: values from the state, atomic groups completed before a send (with `requestData` when the state does not hold them), invalidation of blocks that did not complete.
@@ -169,7 +173,7 @@ the definition does not write texts.
 
 ### Example: the Roland request–data exchange
 
-`Jacobi.Midi.Roland/Exchange/Gx700.exchange.xml`:
+`Jacobi.Midi.Roland/Boss/Gx700/Gx700.exchange.xml`:
 
 ```xml
 <exchanges for="Gx700.AddressMap" responseTimeout="1000" messageInterval="60">
@@ -225,7 +229,7 @@ A made-up device that answers a dump with DATA LOAD COMPLETED or ERROR:
 ### What changes in the code
 
 - **New:** `MessageExchange.Execute` and `Validate`, `ExchangeData`, `ExchangeNames`; `DeviceSession.Execute`; the definition model, its XML reader and checks; a registry that finds the files by their `for` root, in the registered assemblies and as files; the runner of a definition, which writes the reasons.
-- **The checks:** a `goto` to an unknown state, a state that is never reached, a state that waits without a way out, and an exchange without a split message. (Revision 8 also rejected an exchange that sends two different messages that ask for or carry data; with the split message rule of revision 9 the map checks the split message instead.)
+- **The checks:** a `goto` to an unknown state and a state that is never reached. (Revision 8 also rejected an exchange that sends two different messages that ask for or carry data; with the split message rule of revision 9 the map checks the split message instead.)
 - **New: the content binding**, the runner's view of the content: split a range into blocks for a message; write a message for a block; recognise a message (does it match the device values, is it data inside the block); is the block complete. As implemented: the message map (`IMessageMap`), created per root by a chain of providers; the address map and the dump map implement it, each with its own check of when a block is complete. This is also the seam for content without an address map.
 - **Changed: finding the messages.** Before, `AddressProtocol` found requests, data messages and replies through `midi.message`. Without the tag:
   - the messages of an exchange are the ones its definition names;

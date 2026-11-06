@@ -36,7 +36,8 @@ public sealed class ExchangeDefinitionSet
 
 /// <summary>
 /// One exchange: a plain state machine of turns that transfers one block of a range. It runs once per block, from its
-/// first turn; the blocks are cut for its cutting message (the first message it sends that asks for or carries data).
+/// first turn; the root's message map splits the range into blocks for its split message (the first message it sends,
+/// else the first data message it receives).
 /// It names messages and events only: building and recognising the messages is the content's job.
 /// </summary>
 public sealed record ExchangeDefinition

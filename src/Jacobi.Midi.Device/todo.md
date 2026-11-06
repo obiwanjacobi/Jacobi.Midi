@@ -23,13 +23,14 @@ Known gaps and loose ends of the address map and the message exchange (see [Addr
   - [x] Step 1: the patterns of the old code protocols (one way, acknowledged) as exchange files (`ExchangeDefinitions`) of a map root, run by `MessageExchange.Execute` per block (`ExchangeMachine`); standard names (`ExchangeNames`); `midi.message`, `midi.exchange` and `midi.messageInterval` removed from the schemas; the session's `RequestData`/`SendData`/`Execute`; the first block that does not complete ends a transfer; the Roland GP-8 and GX-700 files; the console and the Schema Editor load the files of their assemblies.
   - [x] The exchange files in XML (`*.exchange.xml`) and JSON (`*.exchange.json`), read into the same tree so the checks are the same; the formats described by `Exchange/exchange.xsd` and `Exchange/exchange.schema.json`.
   - [x] Stage 2: `state` renamed to `turn` (`ExchangeTurn`); retries with a limit per block (`on/@retry`), the reason names the retries.
+  - [ ] `DeviceSession.Execute` for an exchange that both sends and receives data: today it throws `NotSupportedException`. Apply both state rules: complete the atomic groups from the state before sending, and put the received data into the state.
   - [ ] Roland handshake protocol: WSD/RQD → ACK → DAT → ACK … EOD, ERR → resend, RJC → abort, with retries and timeouts.
   - [ ] Boss GX700 requires change-sound-request to be sent after a parameter change (DS1) to effectuate the change.
   - [ ] Framed transactions: Yamaha Bulk Header → blocks → Bulk Footer (stored Live Set Sounds of the CP88, CK88, YC).
   - [ ] Commands without data: write/store requests (Korg Program Write Request, Yamaha Store To Flash) with their completed/error replies.
   - [ ] Device modes: requests that are only accepted in some modes (Korg i5M, DS-8 panel modes), with mode request/change messages.
   - [ ] A hook for a manual operation on the device (e.g. "press the bulk dump key"): the exchange asks the client to prompt the user and waits for the data or a cancel.
-- [ ] **Windows Midi API - use of EndpointTerminalBlocks** is discuraged in favor of using function blocks. 
+- [ ] **Windows Midi API - use of EndpointTerminalBlocks** is discuraged in favor of using function blocks.
 - [ ] **Detect the receive group of a device.** The send and receive group of a device can differ (`MidiGroupPair`): a MIDI 1.0 DIN in/out pair is two independent cables, and a MIDI 2.0 function block can be one-way. The cabling is not in the endpoint's blocks, so only a round trip finds it: `DeviceIdentity` sends the Identity Request on the send group, listens on **all** groups and returns each reply with the group it arrived on. The Schema Editor (MIDI bar) and the Console (device panel) offer a *Detect* that fills in the receive group from it.
 
 ---
@@ -39,4 +40,3 @@ Known gaps and loose ends of the address map and the message exchange (see [Addr
 - [x] **A data message carries any aligned block, not only one group occurrence.** `AddressMap.CreateData` and `Decode` only handle one whole group: a few fields, one field of a larger group, or neighbouring groups in one message throw `NotSupportedException`. This also fixes `MessageExchange.Send` with a `range` message whose blocks span more than one group.
   - [x] Let an open choice target a range in Jacobi.BinarySerializer: `FromTarget`/`FromInstance` to `ToTarget`/`ToInstance` (`OpenChoiceSourceResult`/`OpenChoiceSinkResult`, `CreateOpenChoiceRange`), each a group or a field.
   - [x] Accept any aligned block in `CreateData`/`Decode` (`GroupTarget` becomes a block target), the recognition of received data (`TryRead`, `GroupTargets`) and `AddressMapAdapter` (it rejects a client's body narrowed to a range with `NotSupportedException`).
-
