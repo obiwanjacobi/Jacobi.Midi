@@ -4,7 +4,6 @@ using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Core;
-using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Device.Exchange;
@@ -19,12 +18,12 @@ public sealed class MessageExchangeFactory(IMidiSession session, Serializer seri
 {
     private readonly MessageMaps _maps = new(serializer);
 
-    /// <summary>Creates and validates the message map of a schema root; throws the map's exception (e.g. an <see cref="AddressMapException"/>) when it is not valid.</summary>
+    /// <summary>Creates and validates the message map of a schema root; throws the map's exception (e.g. an <see cref="MessageMapException"/>) when it is not valid.</summary>
     public void Prepare(SchemaName root) => _maps.Prepare(root);
 
     /// <summary>
     /// Creates and validates the message maps of all roots a data message can carry; throws the map's exception (e.g.
-    /// an <see cref="AddressMapException"/>) for the first one that is not valid.
+    /// an <see cref="MessageMapException"/>) for the first one that is not valid.
     /// </summary>
     public void PrepareAll() => _maps.PrepareAll();
 
@@ -138,7 +137,7 @@ public sealed class MessageExchange : IAsyncDisposable
     /// with the messages (e.g. the device values they need are known); and (with <paramref name="data"/>) a source is
     /// given when it sends data, a sink when it receives data.
     /// </summary>
-    /// <exception cref="Exception">The map's exception (e.g. an <see cref="AddressMapException"/>) when the root of the range is not valid.</exception>
+    /// <exception cref="Exception">The map's exception (e.g. an <see cref="MessageMapException"/>) when the root of the range is not valid.</exception>
     public IReadOnlyList<string> Validate(string name, PlanRange range, ExchangeData? data = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -252,7 +251,7 @@ public sealed class MessageExchange : IAsyncDisposable
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // the map's own exception (e.g. an AddressMapException) when the message does not fit it
+                // the map's own exception (e.g. an MessageMapException) when the message does not fit it
                 problems.Add(exception.Message);
             }
         }

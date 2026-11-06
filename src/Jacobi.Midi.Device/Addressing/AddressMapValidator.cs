@@ -15,10 +15,10 @@ namespace Jacobi.Midi.Device.Addressing;
 public static class AddressMapValidator
 {
     /// <summary>All problems found, without duplicates; empty when the schemas have no tags or no problems.</summary>
-    public static IReadOnlyList<AddressMapProblem> Validate(Serializer serializer)
+    public static IReadOnlyList<MessageMapProblem> Validate(Serializer serializer)
     {
         ArgumentNullException.ThrowIfNull(serializer);
-        var problems = new AddressMapProblems();
+        var problems = new MessageMapProblems();
         var dataChoices = new List<(string Document, SchemaPath Path, SchemaName Contract)>();
         foreach (var document in serializer.Schemas.Documents)
         {
@@ -51,7 +51,7 @@ public static class AddressMapValidator
     }
 
     private static void ValidateTags(string document, SchemaNode node, SchemaPath path,
-        List<(string, SchemaPath, SchemaName)> dataChoices, AddressMapProblems problems)
+        List<(string, SchemaPath, SchemaName)> dataChoices, MessageMapProblems problems)
     {
         foreach (var property in node.Properties.Where(p => AddressMapTags.IsTag(p.Name)))
         {
@@ -88,14 +88,14 @@ public static class AddressMapValidator
     }
 
     // the map with its envelopes, and how its device roles are fulfilled
-    private static void ValidateMap(Serializer serializer, SchemaName root, AddressMapProblems problems)
+    private static void ValidateMap(Serializer serializer, SchemaName root, MessageMapProblems problems)
     {
         AddressMap map;
         try
         {
             map = AddressMap.Create(serializer, root);
         }
-        catch (AddressMapException exception)
+        catch (MessageMapException exception)
         {
             problems.AddRange(exception.Problems);
             return;
@@ -141,7 +141,7 @@ public static class AddressMapValidator
         return qualified == contract;
     }
 
-    private static void Guarded(AddressMapProblems problems, Action validate)
+    private static void Guarded(MessageMapProblems problems, Action validate)
     {
         try
         {

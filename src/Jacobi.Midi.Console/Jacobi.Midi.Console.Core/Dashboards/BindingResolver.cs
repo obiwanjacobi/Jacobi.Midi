@@ -2,6 +2,7 @@ using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Console.Core.Rigs;
 using Jacobi.Midi.Console.Core.Schemas;
 using Jacobi.Midi.Device.Addressing;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Console.Core.Dashboards;
 
@@ -154,7 +155,7 @@ public static class BindingResolver
                 {
                     count = library.ItemCount(mapRoot, use.Repeat);
                 }
-                catch (AddressMapException exception)
+                catch (MessageMapException exception)
                 {
                     problems.Add(new(control, slot, $"The address map '{device.MapRoot}' is not valid: {exception.Message}"));
                     return false;

@@ -2,7 +2,6 @@ using System.Buffers;
 using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Schema;
-using Jacobi.Midi.Device.Addressing;
 
 namespace Jacobi.Midi.Device.Messages;
 
@@ -86,7 +85,7 @@ internal static class DeviceMessages
     }
 
     /// <summary>The message of a group, with the nodes that have a role; a role used twice is added to <paramref name="problems"/>.</summary>
-    public static DeviceMessage Create(ExecutionPlan plan, GroupInfo group, string document, AddressMapProblems problems)
+    public static DeviceMessage Create(ExecutionPlan plan, GroupInfo group, string document, MessageMapProblems problems)
     {
         var roles = new Dictionary<string, NodeInfo>(StringComparer.OrdinalIgnoreCase);
         CollectRoles(document, group, roles, problems);
@@ -116,17 +115,25 @@ internal static class DeviceMessages
     }
 
     /// <summary>
-    /// Recognises a message without data (e.g. an acknowledgement): the constants match and the device values in it
-    /// agree with <paramref name="device"/>. Returns false for any other message.
+    /// Recognises a message that has no data open choice (e.g. an acknowledgement, or a message that is itself the
+    /// data): the constants and checksums match, the message is read to its end and the device values in it agree
+    /// with <paramref name="device"/>; <paramref name="read"/> are the device values it holds. The values of the other
+    /// fields are discarded. Returns false for any other message.
     /// </summary>
-    public static bool TryReadWithoutData(Serializer serializer, DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device)
+    public static bool TryRecognise(Serializer serializer, DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device, out DeviceValues read)
     {
         ArgumentNullException.ThrowIfNull(message);
+        read = new DeviceValues();
         try
         {
-            var sink = new EnvelopeSink(_ => throw new InvalidOperationException($"'{message.Name}': the message carries no data."));
-            var read = serializer.Deserialize(message.Range, new ReadOnlySequence<byte>(sysEx), sink);
-            return read == sysEx.Length && sink.Device.All(v => !device.TryGet(v.Key, out var expected) || expected == v.Value);
+            var sink = new EnvelopeSink(_ => throw new InvalidOperationException($"'{message.Name}': the message has a data open choice."));
+            var length = serializer.Deserialize(message.Range, new ReadOnlySequence<byte>(sysEx), sink);
+            if (length != sysEx.Length || !sink.Device.All(v => !device.TryGet(v.Key, out var expected) || expected == v.Value))
+            {
+                return false;
+            }
+            read = sink.Device;
+            return true;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -168,7 +175,7 @@ internal static class DeviceMessages
         return groups.Contains(plan.Root) ? [plan.Root] : groups;
     }
 
-    private static void CollectRoles(string document, GroupInfo group, Dictionary<string, NodeInfo> roles, AddressMapProblems problems)
+    private static void CollectRoles(string document, GroupInfo group, Dictionary<string, NodeInfo> roles, MessageMapProblems problems)
     {
         foreach (var member in group.Members)
         {

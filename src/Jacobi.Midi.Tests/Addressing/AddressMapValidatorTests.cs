@@ -1,8 +1,8 @@
 using Jacobi.BinarySerializer;
-using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Tests.Schema;
 using Xunit;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Tests.Addressing;
 
@@ -12,10 +12,10 @@ namespace Jacobi.Midi.Tests.Addressing;
 /// </summary>
 public class AddressMapValidatorTests
 {
-    private static IReadOnlyList<AddressMapProblem> Validate(params string[] xml)
+    private static IReadOnlyList<MessageMapProblem> Validate(params string[] xml)
         => AddressMapValidator.Validate(TestDevice.CreateSerializer([.. xml.Select(TestDevice.Parse)]));
 
-    private static IEnumerable<AddressMapProblem> Of(IEnumerable<AddressMapProblem> problems, AddressMapProblemSeverity severity)
+    private static IEnumerable<MessageMapProblem> Of(IEnumerable<MessageMapProblem> problems, MessageMapProblemSeverity severity)
         => problems.Where(problem => problem.Severity == severity);
 
     [Fact]
@@ -23,9 +23,9 @@ public class AddressMapValidatorTests
     {
         var problems = Validate();
 
-        Assert.Empty(Of(problems, AddressMapProblemSeverity.Error));
-        Assert.Empty(Of(problems, AddressMapProblemSeverity.Warning));
-        var information = Of(problems, AddressMapProblemSeverity.Information).ToList();
+        Assert.Empty(Of(problems, MessageMapProblemSeverity.Error));
+        Assert.Empty(Of(problems, MessageMapProblemSeverity.Warning));
+        var information = Of(problems, MessageMapProblemSeverity.Information).ToList();
         // the data message is the one the map finds; the request is only a message when an exchange file names it
         Assert.Equal(["Message.Data.DeviceId"], information.Select(p => p.Path.Value));
         Assert.All(information, problem => Assert.Equal("TestEnvelope", problem.Document));
@@ -41,8 +41,8 @@ public class AddressMapValidatorTests
 
         var problems = AddressMapValidator.Validate(serializer);
 
-        Assert.Empty(Of(problems, AddressMapProblemSeverity.Error));
-        Assert.Empty(Of(problems, AddressMapProblemSeverity.Warning));
+        Assert.Empty(Of(problems, MessageMapProblemSeverity.Error));
+        Assert.Empty(Of(problems, MessageMapProblemSeverity.Warning));
         Assert.Contains(problems, p => String.Equals(p.Document, "Roland", StringComparison.OrdinalIgnoreCase) && p.Path.Value == "Message16.DT1.DeviceId");
     }
 
@@ -62,7 +62,7 @@ public class AddressMapValidatorTests
             </schema>
             """);
 
-        var errors = Of(problems, AddressMapProblemSeverity.Error).Where(p => p.Document == "Other").ToList();
+        var errors = Of(problems, MessageMapProblemSeverity.Error).Where(p => p.Document == "Other").ToList();
         Assert.Contains(errors, p => p.Path.Value == "Message.Bad");
         Assert.Contains(errors, p => p.Path.Value == "Message.Data");
     }
@@ -91,7 +91,7 @@ public class AddressMapValidatorTests
             """);
 
         var problem = Assert.Single(problems, p => p.Document == "Other");
-        Assert.Equal(AddressMapProblemSeverity.Information, problem.Severity);
+        Assert.Equal(MessageMapProblemSeverity.Information, problem.Severity);
         Assert.Equal("Envelope.Data.Body", problem.Path.Value);
         Assert.Contains("Other.body", problem.Message);
     }
@@ -114,7 +114,7 @@ public class AddressMapValidatorTests
             </schema>
             """);
 
-        var problem = Assert.Single(Of(problems, AddressMapProblemSeverity.Warning));
+        var problem = Assert.Single(Of(problems, MessageMapProblemSeverity.Warning));
         Assert.Equal("Other", problem.Document);
         Assert.Equal("Map", problem.Path.Value);
         Assert.Contains("midi.device.color", problem.Message);
@@ -138,7 +138,7 @@ public class AddressMapValidatorTests
             </schema>
             """);
 
-        var problem = Assert.Single(Of(problems, AddressMapProblemSeverity.Error));
+        var problem = Assert.Single(Of(problems, MessageMapProblemSeverity.Error));
         Assert.Equal("Other", problem.Document);
         Assert.Equal("Map.Value", problem.Path.Value);
     }

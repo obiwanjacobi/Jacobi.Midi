@@ -71,7 +71,7 @@ internal sealed class AddressMap : IMessageMap
 
     /// <summary>
     /// Builds and validates the map of a plan and finds its messages (open choices whose memberNodeDef is the root's
-    /// nodeDef, in the serializer's schemas); throws an <see cref="AddressMapException"/> with all problems found.
+    /// nodeDef, in the serializer's schemas); throws an <see cref="MessageMapException"/> with all problems found.
     /// </summary>
     public static AddressMap Create(Serializer serializer, ExecutionPlan plan)
     {
@@ -80,18 +80,18 @@ internal sealed class AddressMap : IMessageMap
 
         if (plan.Name is not { } root)
         {
-            throw new AddressMapException(plan.Root.Path.Value,
-                [new AddressMapProblem(String.Empty, plan.Root.Path, "the plan has no schema name; create it with the serializer (GetPlan).")]);
+            throw new MessageMapException(plan.Root.Path.Value,
+                [new MessageMapProblem(String.Empty, plan.Root.Path, "the plan has no schema name; create it with the serializer (GetPlan).")]);
         }
 
-        var problems = new AddressMapProblems();
+        var problems = new MessageMapProblems();
         var group = plan.Root.Group;
         var document = root.Namespace;
 
         if (group.NodeDef is not { } contract)
         {
-            throw new AddressMapException(root.FullName,
-                [new AddressMapProblem(document, plan.Root.Path, "the map root does not conform to a message contract (it has no nodeDef).")]);
+            throw new MessageMapException(root.FullName,
+                [new MessageMapProblem(document, plan.Root.Path, "the map root does not conform to a message contract (it has no nodeDef).")]);
         }
         contract = String.IsNullOrEmpty(contract.Namespace) ? new SchemaName($"{root.Namespace}.{contract.Name}") : contract;
 
@@ -107,7 +107,7 @@ internal sealed class AddressMap : IMessageMap
 
         if (problems.HasErrors)
         {
-            throw new AddressMapException(root.FullName, problems);
+            throw new MessageMapException(root.FullName, problems);
         }
         return new AddressMap(serializer, root, plan, protocol, device, layout);
     }

@@ -4,10 +4,10 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.Midi.Core;
-using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Messages.V2;
 using Jacobi.Midi.SchemaEditor.Midi;
 using Jacobi.Midi.SchemaEditor.ViewModels;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.SchemaEditor.Instantiate;
 
@@ -179,7 +179,7 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
         {
             return _serialize!(warnings);
         }
-        catch (Exception exception) when (exception is ExecutionPlanException or AddressMapException
+        catch (Exception exception) when (exception is ExecutionPlanException or MessageMapException
             or InvalidOperationException or ArgumentException or NotSupportedException)
         {
             StatusMessage = $"Could not {action}: the values could not be serialized.";

@@ -74,7 +74,7 @@ internal sealed class AddressLayout
     public AddressLayoutNode? Find(SchemaPath path)
         => _byPath.GetValueOrDefault(path);
 
-    public static AddressLayout Build(string document, GroupInfo root, int bitsPerByte, AddressMapProblems problems)
+    public static AddressLayout Build(string document, GroupInfo root, int bitsPerByte, MessageMapProblems problems)
     {
         var builder = new Builder(document, bitsPerByte, problems);
         var layout = builder.Node(root, parent: null, cursor: 0, inRepeat: false, inAtomic: false, NodeAccess.ReadWrite)!;
@@ -216,7 +216,7 @@ internal sealed class AddressLayout
         }
     }
 
-    private sealed class Builder(string document, int bitsPerByte, AddressMapProblems problems)
+    private sealed class Builder(string document, int bitsPerByte, MessageMapProblems problems)
     {
         public AddressLayoutNode? Node(NodeInfo node, AddressLayoutNode? parent, long cursor, bool inRepeat, bool inAtomic, NodeAccess inheritedAccess)
         {

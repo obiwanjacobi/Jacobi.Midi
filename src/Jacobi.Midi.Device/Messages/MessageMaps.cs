@@ -15,7 +15,7 @@ namespace Jacobi.Midi.Device.Messages;
 internal sealed class MessageMaps(Serializer serializer)
 {
     // the providers in the order they get to claim a root
-    private static readonly IReadOnlyList<IMessageMapProvider> Providers = [new AddressMapProvider()];
+    private static readonly IReadOnlyList<IMessageMapProvider> Providers = [new AddressMapProvider(), new DumpMapProvider()];
 
     private readonly ConcurrentDictionary<ExecutionPlan, Lazy<IMessageMap>> _maps = new(ReferenceEqualityComparer.Instance);
 

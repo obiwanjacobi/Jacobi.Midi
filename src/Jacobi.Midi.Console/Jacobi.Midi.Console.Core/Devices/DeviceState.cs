@@ -87,7 +87,7 @@ public sealed class DeviceState
         {
             return _library.ItemCount(MapRoot, repeat);
         }
-        catch (AddressMapException)
+        catch (MessageMapException)
         {
             return null;
         }
@@ -145,7 +145,7 @@ public sealed class DeviceState
     /// device, are decoded; other messages are skipped and reported.
     /// </summary>
     /// <exception cref="InvalidOperationException">A device value the messages need is not known.</exception>
-    /// <exception cref="AddressMapException">The map is not valid.</exception>
+    /// <exception cref="MessageMapException">The map is not valid.</exception>
     public DumpLoadResult LoadDump(byte[] dump)
     {
         ArgumentNullException.ThrowIfNull(dump);
@@ -164,7 +164,7 @@ public sealed class DeviceState
     /// after the other. The range is widened to the atomic groups it overlaps; all their values must be known.
     /// </summary>
     /// <exception cref="InvalidOperationException">A value of the range, or a device value the messages need, is not known.</exception>
-    /// <exception cref="AddressMapException">The map is not valid.</exception>
+    /// <exception cref="MessageMapException">The map is not valid.</exception>
     public byte[] SaveDump(PlanRange range)
     {
         ArgumentNullException.ThrowIfNull(range);

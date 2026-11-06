@@ -79,7 +79,7 @@ internal sealed class AddressProtocol
     /// the groups that conform to it, and checks them as messages of an address map. Problems are added to
     /// <paramref name="problems"/>.
     /// </summary>
-    internal static AddressProtocol Create(SchemaSet schemas, Serializer serializer, SchemaName contract, AddressMapProblems problems)
+    internal static AddressProtocol Create(SchemaSet schemas, Serializer serializer, SchemaName contract, MessageMapProblems problems)
     {
         var bodies = ConformingBodies.Find(schemas, contract, problems);
 
@@ -105,7 +105,7 @@ internal sealed class AddressProtocol
     /// A copy with the settings of a map root applied (<c>midi.unit</c>, <c>midi.maxDataSize</c>). The unit only applies
     /// to the data messages; the messages that ask for data keep what the device answers to.
     /// </summary>
-    internal AddressProtocol WithOverrides(string document, GroupInfo mapRoot, AddressMapProblems problems)
+    internal AddressProtocol WithOverrides(string document, GroupInfo mapRoot, MessageMapProblems problems)
     {
         var unit = Unit(document, mapRoot, problems);
         var maxDataSize = Number(document, mapRoot, MidiProperties.MaxDataSize, problems) is { } size ? (int)size : (int?)null;
@@ -126,7 +126,7 @@ internal sealed class AddressProtocol
     /// <see cref="DataMessages"/>: a message that carries data of another contract cannot carry this map.
     /// </summary>
     /// <exception cref="InvalidOperationException">There is no such message group, or it carries data of another contract.</exception>
-    /// <exception cref="AddressMapException">The roles of the message are not valid.</exception>
+    /// <exception cref="MessageMapException">The roles of the message are not valid.</exception>
     public DeviceMessage Message(SchemaName name)
         => _named.GetOrAdd(name.FullName, _ => new Lazy<DeviceMessage>(() => Resolve(name))).Value;
 
@@ -139,7 +139,7 @@ internal sealed class AddressProtocol
         }
 
         var (plan, group, document) = DeviceMessages.FindMessageGroup(_serializer, name);
-        var problems = new AddressMapProblems();
+        var problems = new MessageMapProblems();
         var message = DeviceMessages.Create(plan, group, document, problems);
         if (message.IsData)
         {
@@ -149,7 +149,7 @@ internal sealed class AddressProtocol
         Validate(document, group.Path, message, settings, problems);
         if (problems.HasErrors)
         {
-            throw new AddressMapException(fullName, problems);
+            throw new MessageMapException(fullName, problems);
         }
         _settings[message] = _maxDataSize is { } size ? settings with { MaxDataSize = size } : settings;
         return message;
@@ -160,7 +160,7 @@ internal sealed class AddressProtocol
     /// agree with <paramref name="device"/>. Returns false for any other message.
     /// </summary>
     public bool TryRead(DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device)
-        => DeviceMessages.TryReadWithoutData(_serializer, message, sysEx, device);
+        => DeviceMessages.TryRecognise(_serializer, message, sysEx, device, out _);
 
     /// <summary>
     /// Selects the body group (device map) for the device values read from an envelope (see <see cref="ConformingBodies.Select"/>).
@@ -181,12 +181,12 @@ internal sealed class AddressProtocol
     internal static IReadOnlyList<SchemaName> FindMapRoots(SchemaSet schemas) => DeviceMessages.FindCarriedRoots(schemas);
 
     // the address settings of a message group, as the schema gives them
-    private static AddressSettings SettingsOf(string document, GroupInfo group, AddressMapProblems problems)
+    private static AddressSettings SettingsOf(string document, GroupInfo group, MessageMapProblems problems)
         => new(Unit(document, group, problems) ?? AddressUnit.Range,
             (int)(Number(document, group, MidiProperties.MaxDataSize, problems) ?? 0));
 
     // a message that carries data needs an address and has no size; one that asks for a range needs both
-    private static void Validate(string document, SchemaPath path, DeviceMessage message, AddressSettings settings, AddressMapProblems problems)
+    private static void Validate(string document, SchemaPath path, DeviceMessage message, AddressSettings settings, MessageMapProblems problems)
     {
         var hasAddress = message.Roles.TryGetValue(MidiProperties.RoleAddress, out var address);
         if (hasAddress && address is not FieldInfo)
@@ -218,7 +218,7 @@ internal sealed class AddressProtocol
         }
     }
 
-    private static AddressSpace AddressSpaceOf(IEnumerable<DeviceMessage> messages, AddressMapProblems problems)
+    private static AddressSpace AddressSpaceOf(IEnumerable<DeviceMessage> messages, MessageMapProblems problems)
     {
         AddressSpace? space = null;
         foreach (var message in messages)
@@ -246,7 +246,7 @@ internal sealed class AddressProtocol
         return space ?? new AddressSpace(0);
     }
 
-    private static AddressUnit? Unit(string document, NodeInfo node, AddressMapProblems problems)
+    private static AddressUnit? Unit(string document, NodeInfo node, MessageMapProblems problems)
     {
         if (MidiProperties.Find(node, MidiProperties.Unit) is not { } text)
         {
@@ -260,7 +260,7 @@ internal sealed class AddressProtocol
         return null;
     }
 
-    private static long? Number(string document, NodeInfo node, string property, AddressMapProblems problems)
+    private static long? Number(string document, NodeInfo node, string property, MessageMapProblems problems)
     {
         if (MidiProperties.Find(node, property) is not { } text)
         {

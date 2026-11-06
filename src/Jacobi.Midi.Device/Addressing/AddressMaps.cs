@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Device.Addressing;
 
@@ -27,13 +28,13 @@ internal sealed class AddressMaps(Serializer serializer)
     public AddressMap Get(ExecutionPlan plan)
         => _maps.GetOrAdd(plan, p => new Lazy<AddressMap>(() => AddressMap.Create(Serializer, p))).Value;
 
-    /// <summary>Builds and validates the map of an address-map root; throws an <see cref="AddressMapException"/> when it is not valid.</summary>
+    /// <summary>Builds and validates the map of an address-map root; throws an <see cref="MessageMapException"/> when it is not valid.</summary>
     public void Prepare(SchemaName root)
         => Get(Serializer.GetPlan(root));
 
     /// <summary>
     /// Builds and validates the maps of all address-map roots in the schemas (the groups a data message can carry);
-    /// throws an <see cref="AddressMapException"/> for the first one that is not valid.
+    /// throws an <see cref="MessageMapException"/> for the first one that is not valid.
     /// </summary>
     public void PrepareAll()
     {

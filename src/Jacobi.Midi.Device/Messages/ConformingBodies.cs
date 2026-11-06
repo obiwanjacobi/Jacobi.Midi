@@ -1,5 +1,4 @@
 using Jacobi.BinarySerializer.Schema;
-using Jacobi.Midi.Device.Addressing;
 
 namespace Jacobi.Midi.Device.Messages;
 
@@ -21,7 +20,7 @@ internal sealed class ConformingBodies
     public SchemaName Contract { get; }
 
     /// <summary>Finds the roots that conform to the contract (with the serializer's lookup); invalid device values are added to <paramref name="problems"/>.</summary>
-    public static ConformingBodies Find(SchemaSet schemas, SchemaName contract, AddressMapProblems problems)
+    public static ConformingBodies Find(SchemaSet schemas, SchemaName contract, MessageMapProblems problems)
     {
         var bodies = new List<(SchemaName Name, DeviceValues Device)>();
         foreach (var body in schemas.FindConformingGroups(contract))

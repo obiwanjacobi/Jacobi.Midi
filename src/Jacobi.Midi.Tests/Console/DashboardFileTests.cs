@@ -183,7 +183,7 @@ public class DashboardFileTests
     }
 
     [Theory]
-    [InlineData("""<knob label="Cutoff" colour="#FF0000" />""", "dashboard/row[0]/knob[0]: unknown attribute 'color'")]
+    [InlineData("""<knob label="Cutoff" colour="#FF0000" />""", "dashboard/row[0]/knob[0]: unknown attribute 'colour'")]
     [InlineData("""<knob><bind slot="value" parameter="Cutoff" /><segment time="Attack" /></knob>""", "cannot contain 'segment'")]
     [InlineData("""<knob><bind slot="x" parameter="Cutoff" /></knob>""", "has no slot 'x'")]
     [InlineData("""<knob><bind slot="value" parameter="Cutoff" /><bind slot="value" parameter="Reso" /></knob>""", "bound more than once")]

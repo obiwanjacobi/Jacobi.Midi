@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Device.Addressing;
 
@@ -105,25 +106,7 @@ public readonly record struct AddressSpace(int ByteCount, int BitsPerByte = 7)
 
     /// <summary>
     /// Parses a number in the schema notation without the wire conversion: '-' and '_' are removed,
-    /// a '0x' prefix or 'H' postfix means hex, otherwise decimal.
+    /// a '0x' prefix or 'H' postfix means hex, otherwise decimal (the notation of all <c>midi.*</c> numbers).
     /// </summary>
-    public static bool TryParseNumber(string? text, out ulong value)
-    {
-        value = 0;
-        if (String.IsNullOrWhiteSpace(text))
-        {
-            return false;
-        }
-
-        var digits = text.Trim().Replace("-", String.Empty).Replace("_", String.Empty);
-        if (digits.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-        {
-            return UInt64.TryParse(digits.AsSpan(2), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out value);
-        }
-        if (digits.EndsWith('H') || digits.EndsWith('h'))
-        {
-            return UInt64.TryParse(digits.AsSpan(0, digits.Length - 1), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out value);
-        }
-        return UInt64.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out value);
-    }
+    public static bool TryParseNumber(string? text, out ulong value) => MidiProperties.TryParseNumber(text, out value);
 }

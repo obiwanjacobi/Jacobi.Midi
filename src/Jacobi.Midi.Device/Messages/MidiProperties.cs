@@ -1,3 +1,4 @@
+using System.Globalization;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Schema;
 
@@ -41,4 +42,28 @@ internal static class MidiProperties
 
     public static bool IsTrue(string? value)
         => String.Equals(value, "true", StringComparison.OrdinalIgnoreCase) || value == "1";
+
+    /// <summary>
+    /// Parses a number in the notation of the <c>midi.*</c> properties: '-' and '_' are removed, a '0x' prefix or 'H'
+    /// postfix means hex, otherwise decimal.
+    /// </summary>
+    public static bool TryParseNumber(string? text, out ulong value)
+    {
+        value = 0;
+        if (String.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        var digits = text.Trim().Replace("-", String.Empty).Replace("_", String.Empty);
+        if (digits.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+        {
+            return UInt64.TryParse(digits.AsSpan(2), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out value);
+        }
+        if (digits.EndsWith('H') || digits.EndsWith('h'))
+        {
+            return UInt64.TryParse(digits.AsSpan(0, digits.Length - 1), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out value);
+        }
+        return UInt64.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out value);
+    }
 }

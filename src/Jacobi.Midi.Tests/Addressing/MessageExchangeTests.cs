@@ -343,7 +343,7 @@ public class MessageExchangeTests
         var maps = new MessageMaps(CreateSerializer(invalid));
 
         maps.Prepare(MapName);
-        var exception = Assert.Throws<AddressMapException>(maps.PrepareAll);
+        var exception = Assert.Throws<MessageMapException>(maps.PrepareAll);
         Assert.Equal("Invalid.AddressMap", exception.Root);
         Assert.Contains(exception.Errors, e => e.StartsWith("AddressMap.B:", StringComparison.Ordinal));
     }
@@ -378,7 +378,7 @@ public class MessageExchangeTests
             """);
         var maps = new MessageMaps(CreateSerializer(invalid));
 
-        var exception = Assert.Throws<AddressMapException>(maps.PrepareAll);
+        var exception = Assert.Throws<MessageMapException>(maps.PrepareAll);
         Assert.Contains(exception.Errors, e => e.StartsWith("AddressMap.A:", StringComparison.Ordinal));
         Assert.Contains(exception.Errors, e => e.StartsWith("AddressMap.B:", StringComparison.Ordinal));
         Assert.Contains(exception.Errors, e => e.StartsWith("AddressMap.C:", StringComparison.Ordinal));

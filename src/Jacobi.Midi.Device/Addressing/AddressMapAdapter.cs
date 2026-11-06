@@ -66,7 +66,7 @@ public sealed class AddressMapAdapter
     /// <summary>Reads the input with a whole plan into the sink.</summary>
     /// <param name="warnings">Receives the situations the user may not expect, also when the read fails.</param>
     /// <returns>The number of bytes read.</returns>
-    /// <exception cref="AddressMapException">The map that is read is not valid.</exception>
+    /// <exception cref="MessageMapException">The map that is read is not valid.</exception>
     public long Deserialize(ExecutionPlan plan, ReadOnlySequence<byte> input, IValueSink sink, ICollection<string> warnings)
     {
         ArgumentNullException.ThrowIfNull(plan);
@@ -106,7 +106,7 @@ public sealed class AddressMapAdapter
     /// </summary>
     /// <param name="map">The map root (see <see cref="IsMap"/>).</param>
     /// <param name="repeat">The path of the repeat in the map plan.</param>
-    /// <exception cref="AddressMapException">The map is not valid.</exception>
+    /// <exception cref="MessageMapException">The map is not valid.</exception>
     public int? ItemCount(SchemaName map, SchemaPath repeat) => MapOf(map).ItemCount(repeat);
 
     /// <summary>
@@ -115,7 +115,7 @@ public sealed class AddressMapAdapter
     /// addresses. A selection inside an atomic group is widened to the whole group (with a warning).
     /// </summary>
     /// <param name="warnings">Receives the situations the user may not expect.</param>
-    /// <exception cref="AddressMapException">The map is not valid.</exception>
+    /// <exception cref="MessageMapException">The map is not valid.</exception>
     /// <exception cref="InvalidOperationException">The open choice is not the data of a message that can carry the map.</exception>
     public DataPlan PlanData(SchemaName envelope, SchemaPath dataChoice, SchemaName map, IEnumerable<MapOccurrence> selection, ICollection<string> warnings)
         => Plan(envelope, dataChoice, map, selection, warnings).Plan;
@@ -127,7 +127,7 @@ public sealed class AddressMapAdapter
     /// scope for the data open choice (paths of the map plan).
     /// </summary>
     /// <param name="warnings">Receives the situations the user may not expect.</param>
-    /// <exception cref="AddressMapException">The map is not valid.</exception>
+    /// <exception cref="MessageMapException">The map is not valid.</exception>
     /// <exception cref="InvalidOperationException">The open choice is not the data of a message that can carry the map, or a value is missing.</exception>
     public IReadOnlyList<EncodedDataMessage> WriteData(SchemaName envelope, SchemaPath dataChoice, SchemaName map,
         IEnumerable<MapOccurrence> selection, IValueSource source, ICollection<string> warnings)
@@ -148,7 +148,7 @@ public sealed class AddressMapAdapter
     /// <param name="sink">The value model: paths and instances of the map plan.</param>
     /// <param name="warnings">Receives the messages that were skipped.</param>
     /// <returns>The number of messages decoded.</returns>
-    /// <exception cref="AddressMapException">The map is not valid.</exception>
+    /// <exception cref="MessageMapException">The map is not valid.</exception>
     /// <exception cref="InvalidOperationException">A device value the messages need is not given.</exception>
     public int ReadData(SchemaName map, IEnumerable<ReadOnlyMemory<byte>> messages, DeviceValues device, IValueSink sink, ICollection<string> warnings)
     {
@@ -185,7 +185,7 @@ public sealed class AddressMapAdapter
     /// <param name="range">A range of the map plan.</param>
     /// <param name="source">The value model: paths and instances of the map plan.</param>
     /// <param name="device">The device values the map root does not fix (e.g. <c>deviceId</c>).</param>
-    /// <exception cref="AddressMapException">The map is not valid.</exception>
+    /// <exception cref="MessageMapException">The map is not valid.</exception>
     /// <exception cref="InvalidOperationException">A device value the messages need is not given, or the source has no value for a field.</exception>
     public IReadOnlyList<EncodedDataMessage> EncodeData(PlanRange range, IValueSource source, DeviceValues device)
     {
@@ -234,7 +234,7 @@ public sealed class AddressMapAdapter
     /// carries <paramref name="map"/>: a short description, or null when the client's value model supplies it (a device
     /// value the map root does not fix, or not a role).
     /// </summary>
-    /// <exception cref="AddressMapException">The map is not valid.</exception>
+    /// <exception cref="MessageMapException">The map is not valid.</exception>
     public string? DescribeRole(SchemaName map, string role)
     {
         ArgumentNullException.ThrowIfNull(role);

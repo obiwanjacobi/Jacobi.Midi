@@ -1,6 +1,5 @@
 using System.Collections;
 using Jacobi.BinarySerializer.Schema;
-using Jacobi.Midi.Device.Addressing;
 
 namespace Jacobi.Midi.Device.Messages;
 
@@ -52,7 +51,7 @@ public sealed class DeviceValues : IEnumerable<KeyValuePair<string, long>>
             .Where(name => !known.TryGet(name, out _))];
 
     /// <summary>Reads the <c>midi.device.&lt;name&gt;</c> properties of a schema node (the map root).</summary>
-    internal static DeviceValues FromProperties(SchemaNode node, string document, SchemaPath path, AddressMapProblems problems)
+    internal static DeviceValues FromProperties(SchemaNode node, string document, SchemaPath path, MessageMapProblems problems)
     {
         var values = new DeviceValues();
         foreach (var property in node.Properties)
@@ -63,7 +62,7 @@ public sealed class DeviceValues : IEnumerable<KeyValuePair<string, long>>
             }
 
             var name = property.Name[MidiProperties.DevicePrefix.Length..];
-            if (AddressSpace.TryParseNumber(property.Value, out var value) && value <= Int64.MaxValue)
+            if (MidiProperties.TryParseNumber(property.Value, out var value) && value <= Int64.MaxValue)
             {
                 values[name] = (long)value;
             }

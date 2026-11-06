@@ -5,6 +5,7 @@ using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Device.Exchange;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Console.Core.Schemas;
 
@@ -59,7 +60,7 @@ public sealed class SchemaLibrary
     /// The number of items of a repeat of a root: in the address space of an address map (<c>midi.repeat</c>), else the
     /// repeat's count in the schema; null for a node that is not a repeat, or a repeat whose count is a value.
     /// </summary>
-    /// <exception cref="AddressMapException">The root is an address map that is not valid.</exception>
+    /// <exception cref="MessageMapException">The root is an address map that is not valid.</exception>
     public int? ItemCount(SchemaName root, string repeat)
     {
         ArgumentException.ThrowIfNullOrEmpty(repeat);

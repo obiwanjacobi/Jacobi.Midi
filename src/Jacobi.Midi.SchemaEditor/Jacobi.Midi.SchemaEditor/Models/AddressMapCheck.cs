@@ -1,6 +1,7 @@
 using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.Midi.Device.Addressing;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.SchemaEditor.Models;
 
@@ -9,19 +10,19 @@ namespace Jacobi.Midi.SchemaEditor.Models;
 /// </summary>
 /// <param name="Problem">The problem as the Device addressing code reports it.</param>
 /// <param name="Node">The authored node of the problem; null when it is not in an authored document (or has no node).</param>
-internal sealed record AddressMapIssue(AddressMapProblem Problem, EditNode? Node)
+internal sealed record AddressMapIssue(MessageMapProblem Problem, EditNode? Node)
 {
-    public bool IsError => Problem.Severity == AddressMapProblemSeverity.Error;
+    public bool IsError => Problem.Severity == MessageMapProblemSeverity.Error;
 
-    public bool IsWarning => Problem.Severity == AddressMapProblemSeverity.Warning;
+    public bool IsWarning => Problem.Severity == MessageMapProblemSeverity.Warning;
 
-    public bool IsInformation => Problem.Severity == AddressMapProblemSeverity.Information;
+    public bool IsInformation => Problem.Severity == MessageMapProblemSeverity.Information;
 
     /// <summary>The severity as shown: error, warning or info.</summary>
     public string SeverityText => Problem.Severity switch
     {
-        AddressMapProblemSeverity.Error => "error",
-        AddressMapProblemSeverity.Warning => "warning",
+        MessageMapProblemSeverity.Error => "error",
+        MessageMapProblemSeverity.Warning => "warning",
         _ => "info",
     };
 

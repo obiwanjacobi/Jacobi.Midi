@@ -1,6 +1,6 @@
-# Design decisions
+# User Design decisions
 
-The design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
+The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
 ## Device messages without an address map (2026-11-06)
@@ -71,3 +71,16 @@ See the Device todo, *Message exchange for schemas without an address map*.
     for addresses only (`WidenToAtomic`, `FieldsOf`, `midi.access` around a generic store); one member on the map
     instead of three; a dump needs no field occurrences (repeats sized by the data are no problem). Named after what
     the user sees: the state of the device.
+21. **One generic problem and exception type for all message maps** (`MessageMapProblem`, `MessageMapProblemSeverity`,
+    `MessageMapException`, in `Messages`; they replace the `AddressMap*` ones). Every kind of map reports its schema
+    problems the same way, located at a schema node. *Why:* the shared helpers (`DeviceMessages`, `ConformingBodies`,
+    `DeviceValues`) report problems too, and a client handles an invalid map the same way whatever its kind; the
+    base layer (`Messages`) no longer depends on `Addressing` (apart from the provider chain).
+22. **The address provider claims a root by its tags:** an address-map tag (`midi.address`, `midi.stride`,
+    `midi.repeat`, `midi.atomic`, `midi.access`) on a node of the root, or a data message with an `address` role that
+    carries the root. Every other root goes to the dump provider. *Why:* decision 5; a broken address map still gets
+    address errors.
+23. **A dump is sent whole, from the client's values only** (for now): the dump state does not complete a partial
+    send from what it holds or from the device; a source that does not supply every value is told so. The fields
+    with a role (e.g. the device id) are not kept in the dump state: the device values supply them. *Why:* the
+    smallest working step; completing a partial send of a dump can be added when a device needs it.

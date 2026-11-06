@@ -6,6 +6,7 @@ using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Device.Exchange;
 using Jacobi.Midi.SchemaEditor.Models;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.SchemaEditor.Instantiate;
 
@@ -190,7 +191,7 @@ internal sealed class SchemaInstantiator
             var text = $"Sends {plan.Blocks.Count} {plan.Message.Name} message(s) at {String.Join(", ", blocks)}{(plan.Blocks.Count > shown ? ", …" : String.Empty)}.";
             return String.Join(Environment.NewLine, [text, .. warnings]);
         }
-        catch (Exception exception) when (exception is AddressMapException or ExecutionPlanException
+        catch (Exception exception) when (exception is MessageMapException or ExecutionPlanException
             or InvalidOperationException or ArgumentException or NotSupportedException)
         {
             return $"Cannot send the included groups: {exception.Message}";
@@ -482,7 +483,7 @@ internal sealed class SchemaInstantiator
         {
             return Adapter.DescribeRole(map, role);
         }
-        catch (Exception exception) when (exception is AddressMapException or ExecutionPlanException or InvalidOperationException or ArgumentException)
+        catch (Exception exception) when (exception is MessageMapException or ExecutionPlanException or InvalidOperationException or ArgumentException)
         {
             // the body is only an address map when its map is valid (see DetectAddressMap)
             AddWarning($"How the role '{role}' is supplied by '{map}' is not known: {exception.Message}");
@@ -520,7 +521,7 @@ internal sealed class SchemaInstantiator
             Adapter.ItemCount(root, new SchemaPath(root.Name));
             return (true, null);
         }
-        catch (Exception exception) when (exception is AddressMapException or ExecutionPlanException or InvalidOperationException or ArgumentException)
+        catch (Exception exception) when (exception is MessageMapException or ExecutionPlanException or InvalidOperationException or ArgumentException)
         {
             return (false, $"'{root}' is an address map, but it cannot be used as one (it is a plain group here): {exception.Message}");
         }
