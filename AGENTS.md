@@ -16,6 +16,8 @@
 - When an item on the todo list is done, mark it of - do not delete it. Marked items are read-only and will never change, even if the item they describe is no longer valid or accurate.
 - Don't copy-paste code or data from project files to document a concept or mechanism. Reference to the files as examples or create stand-alone examples that don't go out of sync when the code evolves.
 - Always look for or think in generic solutions. This project is a data-driven mechanism. When solving bugs/problems do not just look at where the specific problem exists. Look with a wider view to see if there are other places that should behave the same. Perhaps a specific piece of code needs to be extracted, made more generic and reused. Aim for a single place of truth.
+- When analyzing or proposing new functionality or changes, work with the user in small incremental steps: one concept per step, kept short, ending with one or two concrete questions. Build a shared mental picture first (how the code works now, then what changes), before going into types and members. Propose a minimal API that covers the known cases and extend it when a real need arises; do not cover theoretical options.
+- Record the design decisions made with the user in [docs/decisions.md](docs/decisions.md): per decision a short summary of the issue, the decided direction and briefly why. Add them as they are made; check the file before proposing a change in an area it covers.
 
 ## Project Overview
 

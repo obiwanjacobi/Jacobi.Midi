@@ -4,10 +4,8 @@ What is planned for the console, and what was done. What the console does now is
 
 ## Edit mode
 
-- [ ] **A dashboard alias that is not in the rig.** Opening a dashboard whose alias is not in the rig asks the user to pick a rig device with the same map root (today it is reported).
 - [ ] Selecting several controls.
 - [ ] Copy and paste.
-- [ ] **Patch names.** Show the number of an index variable as a device's own patch name (U01-1, A-11, ...): a display setting still to be designed.
 - [x] Save the chosen look (it is chosen in the toolbar and not saved). It is now saved as dashboard data. User can still change in play-mode.
 - [x] Slider/Knob value change-drag jumps values when pressing/releasing shift (for fine/coarse changes). Seems like both modes work with their own values.
 
@@ -22,7 +20,7 @@ What is planned for the console, and what was done. What the console does now is
   6. **Sync now.** A manual "sync now" (⟳) in the MIDI bar.
 
   Each device has its own exchange: a control whose slots are bound to different devices sends to each device separately. There is no transaction across devices. The sessions are made again when the schema library is rebuilt or a device changes (`RigConnections.Update` does this already). Tests use the fake MIDI backend of the console tests (`FakeMidi`).
-- [ ] **Ask up front whether a device can be exchanged** (Midi.Device). The console wants to mark a device that cannot be exchanged in the rig and use it offline, or write-only. Partly there: before anything is sent, an exchange that cannot run throws an `ExchangeException` with all problems (no exchange file for the root, no exchange of the name, a message that does not exist or does not fit the map, a missing device value, no source or sink), and `MessageExchange.Validate(name, range, data)` lists them without sending. Still missing: the question without a connection (on the factory, or on the `SchemaLibrary` with its `Exchanges`), per standard exchange (`requestData`, `sendData`) and for a root rather than a range, with reasons the console can show per kind instead of text only; a root that is not an address map is still an `AddressMapException`. This is step 7 (capabilities) of the [exchange definitions](../Jacobi.Midi.Device/Exchange/exchange-definitions.md).
+- [x] **Ask up front whether a device can be exchanged** (Midi.Device). The console wants to mark a device that cannot be exchanged in the rig and use it offline, or write-only. *Done:* a device can be exchanged when there is an exchange file for its map root. The console asks this without a connection, on the `SchemaLibrary`: `Exchanges.Find(root)`, and `Exchanges.Find(root, name)` for each standard exchange (`ExchangeNames`: `requestData`, `sendData`). Before anything is sent, an exchange that cannot run throws an `ExchangeException` with all its problems, and `MessageExchange.Validate(name, range, data)` lists them without sending.
 - [ ] **Detect the receive group** in the device panel (see the [Device todo](../Jacobi.Midi.Device/todo.md): detect the receive group of a device).
 - [ ] **The message interval as the pause on the wire** (see [Device todo](../Jacobi.Midi.Device/todo.md)). Dragging a knob streams messages; over a DIN connection the transmission time must be part of the pause.
 - [ ] **Exchange files next to schema files.** The library (`SchemaLibrary.Exchanges`) only has the exchange files embedded in its assemblies. A rig, device or dashboard that brings schema files should be able to bring exchange files (`*.exchange.xml`, `*.exchange.json`) too: in the `SchemaSources`, read with `ExchangeDefinitions.AddFile`, a later file replacing the one for the same root, problems reported in `SchemaLibrary.Problems`. Without its exchange file a device of a schema file cannot be synchronised.
