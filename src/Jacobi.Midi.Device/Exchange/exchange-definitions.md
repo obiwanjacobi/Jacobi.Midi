@@ -1,18 +1,21 @@
 # Exchange definitions (proposal)
 
-*Status: proposal, revision 8, 2026-11-04. Stages 1 and 2 are implemented (see the [readme](readme.md)); stage 3 and later are not.*
+*Status: proposal, revision 9, 2026-11-06. Stages 1 and 2 are implemented (see the [readme](readme.md)), and the
+split message of stage 4 for an exchange that sends nothing; stage 3 and the rest of stage 4 are not.*
 
 A configurable, generic way to describe the message exchange of a device: which messages go back and forth, how long
 to wait, and how an exchange ends. The design is built up in small stages, each usable on its own. Stages 1 and
 2 are implemented; stages 3 and 4 are worked out (`before` and `after`, prompts); the later stages are named, so the
 direction is visible. Revision 7 drops `forEach` and the handling of failed blocks of revision 6. Revision 8 renames
-the event `complete` to `received` and adds the default transitions (see *The machine*). Stage 1 below keeps the
-names of its time: its `state` is a `turn` since stage 2.
+the event `complete` to `received` and adds the default transitions (see *The machine*). Revision 9 follows the
+message maps (the content binding without addresses): the *cutting message* is the *split message*, chosen by a
+simpler rule, and the content *splits* and *writes* where it *cut* and *built*. Stage 1 below keeps the names of its
+time: its `state` is a `turn` since stage 2.
 
 **Stage 1 as implemented**, where it differs from or adds to this proposal:
 
-- **The content binding is the message map** (`IMessageMap`, see [Messages](../Messages/readme.md)): the runner splits, writes and recognises through the map of the range's root and asks it when a block is complete (`Split`, `Write`, `TryRead`, `IsComplete`); an ordered chain of providers creates the map (the address map, else a dump). Added later, with the *message exchange for schemas without an address map* item of the [Device todo](../todo.md); the reasons are in [decisions.md](../../../docs/decisions.md).
-- **The split message** (called the *cutting message* below) is the first message the exchange sends, else the first data message it receives; the map checks whether it can split for it (an address map: a message with an `address` role or data). Received data is decoded in the order it arrived.
+- **The content binding is the message map** (`IMessageMap`, see [Messages](../Messages/readme.md)): the runner splits, writes and recognises through the map of the range's root and asks it when a block is complete (`Split`, `Write`, `TryRead`, `IsComplete`); an ordered chain of providers creates the map (the address map, else a dump). Added later, with the *message exchange for schemas without an address map* item of the [Device todo](../todo.md); the reasons are in [decisions.md](../../../docs/decisions.md). The exchange knows nothing of what a message holds: whether a message carries data is the map's answer (`IsData`), not a role the exchange looks at.
+- **The split message** is the first message the exchange sends, else the first data message it receives (which also covers an exchange that only receives, see stage 4). The exchange does not check that only one message asks for or carries data: the map checks whether it can split for the split message (an address map: a message with an `address` role or data; a dump: any message). Received data is decoded in the order it arrived.
 - **A timeout without an `on`** ends the run as `timedOut` (with the reason), instead of being a check error.
 - **Exchange files as files:** `ExchangeDefinitions.AddFile` reads them, but the console only loads the files embedded in its assemblies; files next to the schema files of a rig or device are not loaded yet.
 - **Not in the proposal:** `MessageExchange.Validate` lists the problems without sending anything.
@@ -21,17 +24,17 @@ names of its time: its `state` is a `turn` since stage 2.
 
 1. **The app decides what is transferred, and with which pattern.** The app calls one entry point with a plan range, the name of an exchange and what the exchange needs (a source, a sink). Neither the definition nor the messages decide which data is fetched or sent.
 2. **Standard names.** The most important patterns have a central name (`requestData`, `sendData`). An app asks for the pattern by that name, whatever the device; the device's file says how that pattern goes for that device.
-3. **References go one way: from a definition to the schemas.** A schema never refers to a definition: the same message can be used by many patterns. A definition file says which map root it is for and names the messages it uses.
+3. **References go one way: from a definition to the schemas.** A schema never refers to a definition: the same message can be used by many patterns. A definition file says which root it is for and names the messages it uses.
 4. **Three responsibilities**, each in one place:
 
    | Who | Decides |
    | --- | ------- |
    | **App** | *What* is transferred (the plan range), *how* (the exchange name) and *when* (the call). It gives what the exchange needs: a source for data that is sent, a sink for data that is received. |
-   | **Content**: the schemas, with a content binding (the message map: an address map or a dump) | What a message looks like. It cuts a range or a block into blocks for a message, builds a message (the `address`, `size`, `device.<name>` and `data` roles), recognises a message of the device and whether it belongs to the block, and tells when the data of a block is **complete**. |
+   | **Content**: the schemas, with a content binding (the message map: an address map or a dump) | What a message looks like. It splits a range into blocks for a message, writes a message for a block (the `device.<name>` and `data` roles, and the roles of its kind of map, e.g. the `address` and `size` of an address map), recognises a message of the device and whether it belongs to the block, and tells when the data of a block is **complete**. |
    | **Exchange definition** | The pattern: which message is sent, which messages are expected back, how long to wait, the time between messages, retries, and what a failure means for the rest of the exchange. |
 
 5. **Not bound to addresses.** The definition only knows messages, blocks and events such as *complete*. A content binding without an address map (the dump map, for dumps selected by a function code, see [Messages](../Messages/readme.md)) uses the same definitions.
-6. **No message kinds.** A message is a group of the schemas; the definition gives it its part in the pattern. The only distinction the content makes is whether a message has a `data` role (it carries data of the range) or not (a request, a WSD, an ack, a store request: they are all just messages).
+6. **No message kinds.** A message is a group of the schemas; the definition gives it its part in the pattern. The only distinction the content makes is whether a message carries data of the range (an open choice with a `data` role that can select the root, or the root itself for a dump) or not (a request, a WSD, an ack, a store request: they are all just messages).
 7. **The exchange makes it work; explicit only when needed.** Technical structure (such as the loop over the blocks) stays out of a definition as long as one clear rule covers it. Where the rule is not enough, the definition must say it, and the checks require that: nothing is guessed.
 8. **No extension.** A definition stands on its own. A device that needs other messages or timing gets its own file; definitions are small.
 9. **Location.** A definition file is XML (`*.exchange.xml`) or JSON (`*.exchange.json`), described by `exchange.xsd` and `exchange.schema.json`; by convention in the folder of its device, next to the device's schema (`*.schema.xml`), embedded as a resource of the assembly that owns it (like the schemas), or a file.
@@ -82,7 +85,7 @@ await session.Execute("sendDataHandshake", range, new ExchangeData { Source = so
 <exchanges for="..." responseTimeout="..." messageInterval="...">
   <exchange name="...">
     <state name="...">
-      <send message="..."/>         <!-- optional: on entry, build and send this message -->
+      <send message="..."/>         <!-- optional: on entry, write and send this message -->
       <receive message="..."/>      <!-- optional, repeatable: accept this data message while in this state -->
       <on event="..." | message="..."  goto="..." | result="..."/>
     </state>
@@ -91,29 +94,30 @@ await session.Execute("sendDataHandshake", range, new ExchangeData { Source = so
 </exchanges>
 ```
 
-- `exchanges` is the file: the exchanges of one map root (`for`), with the timing of the device.
+- `exchanges` is the file: the exchanges of one root (`for`), with the timing of the device.
 - An `exchange` is one plain state machine; the first state is the start.
 - A state optionally sends a message, then waits for the events it has an `on` for.
 
 ### Blocks
 
-A **block** is the part of the range that one message asks for or carries. Blocks exist today (`AddressBlock`, and
-a `BlockResult` per block). The content cuts them, to honour what the device and the messages demand:
+A **block** is the part of the range that one message asks for or carries: a `PlanRange` of the root's plan, with a
+`BlockResult` per block. The root's message map splits the range into blocks, to honour what the device and the
+messages demand. An address map honours:
 
 - **atomic groups** (`midi.atomic`, e.g. a voice allocation) go whole, never split;
 - the **maximum size** of a message (`midi.maxDataSize`);
 - **gaps**: a message covers contiguous addresses;
 - the **unit** of a message (`midi.unit`): exactly one field, exactly one atomic group, or any range;
-- **access**: blocks for a message with a `data` role leave out the read-only fields, blocks for any other message the write-only fields (today this follows from `midi.message`).
+- **access**: blocks for a message that carries data leave out the read-only fields, blocks for any other message the write-only fields.
 
-For example, a whole GX-700 patch cut for `RQ1` (unit `range`) gives one block per section: a section takes 128
+For example, a whole GX-700 patch split for `RQ1` (unit `range`) gives one block per section: a section takes 128
 addresses but holds fewer fields, so there is a gap after each one. That gives 14 blocks, so 14 `RQ1`/`DT1` pairs. A
 device with another layout comes out differently from the same code (`AddressMap.Split`). For content without an
-address map, a block is one dump message (the dump map).
+address map, a block is one dump message (the dump map): the whole root.
 
-**The rule:** an exchange runs **once per block**, from its first state. The blocks are cut for the **cutting
-message**: the first message the exchange sends that asks for data (an `address`/`size` role) or carries it (a `data`
-role). A block that does not complete ends the exchange; the blocks that were not transferred are reported with
+**The rule:** an exchange runs **once per block**, from its first state. The blocks are split for the **split
+message**: the first message the exchange sends, else the first data message it receives; the map checks whether it
+can split for it. A block that does not complete ends the exchange; the blocks that were not transferred are reported with
 the same status. The author describes the exchange of
 *one* block and writes no loop. Messages once around the blocks come with stage 3 (`before` and `after`).
 
@@ -121,7 +125,7 @@ the same status. The author describes the exchange of
 
 **`send` and `receive` are actions:**
 
-- `send` names the message to build. The content fills it in for the current block.
+- `send` names the message to write. The content fills it in for the current block.
 - `receive` names a data message whose content goes to the sink and counts towards `received`. A data message that is not inside the block is not accepted, as today.
 
 **Events of a state:**
@@ -154,7 +158,7 @@ the definition does not write texts.
 
 | Where | Value | Example | Meaning |
 | ----- | ----- | ------- | ------- |
-| `exchanges/@for` | the schema name of a map root | `Gx700.AddressMap` | The root whose ranges these exchanges transfer. |
+| `exchanges/@for` | the schema name of a root | `Gx700.AddressMap` | The root whose ranges these exchanges transfer. |
 | `exchanges/@responseTimeout`, `exchange/@responseTimeout` | milliseconds, default 1000 | `1000` | How long a state waits for an event. On the exchange it overrides the file. Replaces `MessageExchangeOptions.ResponseTimeout`. |
 | `exchanges/@messageInterval`, `exchange/@messageInterval` | milliseconds, default 0 | `60` | The least time between two messages sent to the device. The runner keeps it between blocks and between calls. Replaces `midi.messageInterval`. |
 | `exchange/@name` | a standard name or a name of the file's own | `requestData` | The name the app passes to `Execute`. Unique in the file. |
@@ -188,20 +192,20 @@ the definition does not write texts.
 
 1. **Finding:** the root of the range's plan is `Gx700.AddressMap`; its file has `requestData`.
 2. **Validation:** `RQ1` and `DT1` exist; the data choice of `DT1` accepts the GX-700 map (the range's body); the device values hold the device id and model id; a sink is given (the exchange receives data).
-3. **Content:** the address map widens the range to its atomic groups and cuts it into blocks for `RQ1`, the cutting message (it asks for data): one block per section.
+3. **Content:** the address map widens the range to its atomic groups and splits it into blocks for `RQ1`, the split message (the first message sent; it asks for data): one block per section.
 4. **Definition:** the first block starts in `request`, which sends `RQ1`.
-5. **Content:** builds the `RQ1` for the block: its address, its size, the device id and the model id.
+5. **Content:** writes the `RQ1` for the block: its address, its size, the device id and the model id.
 6. **Runner:** sends it, at least 60 ms after the previous message to the device. The state has events to wait for, so it waits up to 1000 ms.
 7. A `DT1` arrives. **Content:** it matches the device values and lies inside the block; `receive` accepts it. The block is not complete yet and the state has no `on` for `DT1`, so the wait goes on; the timer restarts.
 8. The next `DT1` fills the block. **Content:** complete. **Definition:** `received` → `result="completed"` (the default).
-9. **Runner:** decodes the accepted data into the sink in address order, adds the `BlockResult`, and starts the next block at point 4.
+9. **Runner:** decodes the accepted data into the sink in the order it arrived, adds the `BlockResult`, and starts the next block at point 4.
 
 A message that is neither a `DT1` of the block nor named in an `on` is ignored. When nothing arrives within 1000 ms:
 `timedOut`, with the reason *"timeout in state 'request' of 'requestData'"*; the exchange ends and the remaining blocks are
 reported with the same status.
 
-**Sending a setting** with `sendData`: the cutting message is `DT1` (it carries data); per block the content builds
-the `DT1` from the source's values, the runner sends it and `sent` completes the block (the default). Between two `DT1`s the
+**Sending a setting** with `sendData`: the split message is `DT1` (the first message sent; it carries data); per block
+the content writes the `DT1` from the source's values, the runner sends it and `sent` completes the block (the default). Between two `DT1`s the
 runner keeps 60 ms. The GP-8 gets the same file with `Message16`, `for="Gp8.AddressMap"` and 20 ms.
 
 ### Example: data acknowledged by the device
@@ -221,12 +225,12 @@ A made-up device that answers a dump with DATA LOAD COMPLETED or ERROR:
 ### What changes in the code
 
 - **New:** `MessageExchange.Execute` and `Validate`, `ExchangeData`, `ExchangeNames`; `DeviceSession.Execute`; the definition model, its XML reader and checks; a registry that finds the files by their `for` root, in the registered assemblies and as files; the runner of a definition, which writes the reasons.
-- **The checks:** a `goto` to an unknown state, a state that is never reached, a state that waits without a way out, an exchange without a cutting message, and an exchange that sends two different messages that ask for or carry data (it would need two cuts, see *Later stages*).
-- **New: the content binding**, the runner's view of the content: cut a range into blocks for a message; build a message for a block; recognise a message (does it match the device values, is it data inside the block); is the block complete. The address map implements it. The coverage check moves from `RequestReplyMachine` to the address map. This is also the seam for content without an address map.
-- **Changed: finding the messages.** Today `AddressProtocol` finds requests, data messages and replies through `midi.message`. Without the tag:
+- **The checks:** a `goto` to an unknown state, a state that is never reached, a state that waits without a way out, and an exchange without a split message. (Revision 8 also rejected an exchange that sends two different messages that ask for or carry data; with the split message rule of revision 9 the map checks the split message instead.)
+- **New: the content binding**, the runner's view of the content: split a range into blocks for a message; write a message for a block; recognise a message (does it match the device values, is it data inside the block); is the block complete. As implemented: the message map (`IMessageMap`), created per root by a chain of providers; the address map and the dump map implement it, each with its own check of when a block is complete. This is also the seam for content without an address map.
+- **Changed: finding the messages.** Before, `AddressProtocol` found requests, data messages and replies through `midi.message`. Without the tag:
   - the messages of an exchange are the ones its definition names;
-  - for use without an exchange (reading a dump file, the Schema Editor, the console offline), a data message is a group of an envelope root that holds an open choice with `midi.role="data"`, a tag that exists already. The address space follows from the `address` role of those data messages.
-  - `AddressMap.Split` tells a data message from any other by its `data` role instead of its kind (see *Blocks*).
+  - for use without an exchange (reading a dump file, the Schema Editor, the console offline), a data message is a group of an envelope root that holds an open choice with `midi.role="data"`, a tag that exists already, found with the open-choice lookups of Jacobi.BinarySerializer (`DeviceMessages`, for every kind of map). The address space follows from the `address` role of those data messages.
+  - the map tells a data message from any other (`IsData`), instead of a kind (see *Blocks*).
 - **Renamed:** `DeviceSession.Receive`/`Send` become `RequestData`/`SendData`, with their logic unchanged; they call `Execute` with the standard names.
 - **Removed:** `Receive`/`Send` on `MessageExchange`, `IExchangeProtocol`, `ExchangeProtocols` and its machines, `TransferSettings`, `ExchangeMessageKind`, `MessageExchangeOptions.Protocol` and `ResponseTimeout`, the tags `midi.message`, `midi.exchange` and `midi.messageInterval` (with `AddressMessage.Kind`, `AddressMessage.Interval`, the map root overrides, their checks and descriptions in `AddressMapTags`).
 - **Kept:** `midi.role`, `midi.unit` and `midi.maxDataSize`: they describe what a message holds and can carry, which is content. `Listen` keeps recognising data messages through the content.
@@ -313,13 +317,15 @@ exchange are the turns of a block, as in stage 1:
 `before`, the block and `after` are three separate machines: a `goto` stays within its own part.
 
 **The messages of `before` and `after`** are built for the whole range (widened to its atomic groups), not for a block:
-an `address` role gets the start of the range, a `size` role its size. They do not cut and they do not carry data:
+an `address` role gets the start of the range, a `size` role its size. They do not split and they do not carry data:
 a message with a `data` role, and a `receive`, are only allowed in the turns of a block.
 
 **Fixed messages** can be sent in any turn: in `before`, in a block and in `after`. A fixed message has no `address`,
 `size` or `data` role: the schema gives all its bytes, apart from the `device.<name>` roles (e.g. the device id). It
-does not depend on the range, and it never cuts. In a block turn it is sent once per block (this already works in
-stage 1); in `before` or `after` once per call.
+does not depend on the range. In a block turn it is sent once per block (this already works in stage 1); in `before`
+or `after` once per call. Note: the split message is the first message the block turns send, so a block that sends a
+fixed message *before* its request or data makes the fixed message the split message, which an address map rejects
+(it cannot split for it); such a message belongs in `before`.
 
 **The result:** `TransferResult` gets `Before` and `After`: the status and reason of each part, null when the exchange
 has no such part. `IsComplete` includes them: data that was sent but whose store request was rejected is not complete.
@@ -393,9 +399,9 @@ exchange for the temporary area, and `sendData` for the other areas:
 
 - The model: `ExchangeDefinition.Before` and `After` (lists of turns); the readers, `exchange.xsd` and `exchange.schema.json`.
 - `MessageExchange.Execute` runs `before`, the blocks and `after`; one inbox for the whole call, so a reply that arrives between two parts is not lost.
-- **Content:** build a message for the whole range (today a message is only built for a block).
+- **Content:** write a message for the whole range (today a message is only written for a block).
 - `TransferResult.Before` and `After`; `DeviceSession` reports them as they are.
-- The checks: a `goto` outside its part, a `data` message or a `receive` in `before` or `after`, an empty `before` or `after`. The cutting message is derived from the turns of the block only.
+- The checks: a `goto` outside its part, a `data` message or a `receive` in `before` or `after`, an empty `before` or `after`. The split message is derived from the turns of the block only.
 
 ## Stage 4: prompts
 
@@ -429,8 +435,8 @@ app asks the user before it calls `Execute`, as it decides when a transfer start
 
 ### Blocks when nothing is requested
 
-When the device sends on its own, the exchange sends no message that asks for or carries data. Then the cutting
-message is the data message the block turns receive; more than one is a problem, as for the messages sent.
+When the device sends on its own, the exchange sends no message. Then the split message is the first data message the
+block turns receive. *Implemented with revision 9* (see *Stage 1 as implemented*).
 
 ### Example: the user starts the dump
 
@@ -453,7 +459,7 @@ message is the data message the block turns receive; more than one is a problem,
 
 - The model: the prompt of a `receive`, `ExchangeTurn.ResponseTimeout`; the readers and the format descriptions.
 - `ExchangeData.Prompt` (`IExchangePrompt`); the runner shows the prompt on entry of the turn and ends it when the turns with that prompt are left.
-- The cutting message from a received data message when none is sent.
+- The split message from a received data message when none is sent (done with revision 9).
 - The check: a `Prompt` is given when the exchange prompts.
 
 ## Later stages
@@ -475,14 +481,14 @@ by the app, with an exchange of its own name, before it calls the exchange that 
 
 ## Decisions
 
-- No reference from a schema to a definition; a definition file names its map root (`for`) and the messages it uses. `midi.message`, `midi.exchange` and `midi.messageInterval` are removed. There are no message kinds; a request is a message like any other.
+- No reference from a schema to a definition; a definition file names its root (`for`) and the messages it uses. `midi.message`, `midi.exchange` and `midi.messageInterval` are removed. There are no message kinds; a request is a message like any other.
 - Several exchanges of one device in one file (`exchanges`), with the device's timing. The files are XML and JSON, read into the same model.
 - Standard names for the most important patterns (`ExchangeNames`: `requestData`, `sendData`); a file can add names of its own.
 - An exchange is a plain state machine of turns with `send` and `receive` actions (a `receive` can prompt the user, stage 4); no conditions, no values from replies, no extension.
 - No `reason` in the definition: the runner writes it.
 - Messages are named by their full schema name, so each device gets its own small file (copies per envelope).
 - The response timeout is set in the definition, with a default, and can be set per turn (stage 4); a run-time override comes later.
-- Blocks are cut by the content, for the cutting message: the one message the block turns send that asks for or carries data, else (stage 4) the one data message they receive.
+- Blocks are split by the root's message map, for the split message: the first message the block turns send, else the first data message they receive. The map checks whether it can split for it; the exchange knows nothing of what a message holds.
 - An exchange runs once per block; the first block that does not complete ends the call. There is no explicit loop and no way to go on after a failed block.
 - Retries are an attribute of the `on` (`retry`), followed by its own `goto` or `result`.
 - Messages once per call are in the optional `before` and `after`, built for the whole range; `after` only runs after all blocks completed. Fixed messages (no `address`, `size` or `data` role) can be sent in any turn.
