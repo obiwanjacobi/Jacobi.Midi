@@ -12,11 +12,13 @@ layout, framing and checksum, plus `midi.*` tags that say what the nodes *mean*.
 - A **vendor envelope schema** describes the messages (request, data, replies) and tags the nodes that hold the address, the size, the device values and the data.
 - The map root and its envelopes are linked by the open choice contract: the map root declares the `nodeDef` that is the `memberNodeDef` of the envelope's data open choice.
 
-The address map is internal: it is deduced from the plan of a range (`range.ExecutionPlan`) when the range is first
-used, and cached per plan (`AddressMaps`). Clients only see `PlanRange`s and the public types below.
+The address map is one kind of [message map](../Messages/readme.md): the address provider claims a root that has
+address-map tags or that a data message with the role `address` carries. The map is internal: it is deduced from the
+plan of a range (`range.ExecutionPlan`) when the range is first used, and cached per plan (`MessageMaps`; for the
+tools, `AddressMaps`). Clients only see `PlanRange`s and the public types below.
 
 Devices without addresses (e.g. Korg dumps selected by a function code) are not a concern of the address map: their
-dumps are ordinary schemas.
+dumps are ordinary schemas, transferred by the default dump map (see [Messages](../Messages/readme.md)).
 
 ## Schema properties
 
@@ -80,7 +82,8 @@ Everything else is already in the schema: constants (`value`) are written by the
 open choice with `midi.role="data"` whose `memberNodeDef` is the map root's `nodeDef`, the member group of the root
 that holds the choice (or the root itself when the choice is one of its members). Any other message is found by the
 name an exchange file gives it: the schema, the root and the path of the group, e.g. `Roland.Message16.RQ1`
-(`AddressMap.Message`).
+(`AddressMap.Message`). Finding them is the same for every kind of map (`DeviceMessages`, with the open-choice
+lookups of Jacobi.BinarySerializer); the address map checks them as address messages.
 
 ## Examples
 
@@ -230,15 +233,17 @@ one field, a few fields of a group, a group, or neighbouring groups.
   - *Roles:* `DescribeRole` tells how an envelope field with a role gets its value when a message carries the map (calculated, fixed by the map root), or null when the client supplies it.
   - *Writing:* the client selects map nodes (`MapOccurrence`: a group, a repeat or one repeat item, by path and instance). `PlanData` gives the blocks and addresses, `WriteData` the messages: split as the message exchange does (one data message, its unit and maximum data size, widened to atomic groups), each with the address and size of its block. The client's value model supplies the whole message: the device values the map root does not fix come from the envelope, the data from the body.
   - *Offline data of a map* (e.g. a dump in a .syx file), with a value model of the map only: `ReadData` decodes the data messages of the map for a device into the sink, as the exchange decodes what it receives (other messages are skipped with a warning); `EncodeData` writes a range of the map as the data messages the exchange would send (widened to atomic groups, the same choice of messages). The device values and the choice of messages are those of the exchange (`AddressMap.DeviceFor`, `AddressMap.SelectBlocks`).
-- **A value model of a device.** `FieldValueStore` keeps field values by the path and instance of the map plan: as a sink it stores what is read, as a source it gives what it holds. The device session keeps its state of a device in it; a client can use it to keep the values of a device (the console's device state).
+- **A value model of a device.** `FieldValueStore` keeps field values by the path and instance of the map plan: as a sink it stores what is read, as a source it gives what it holds. The device state of an address map (`AddressDeviceState`, which a device session keeps) holds its values in it, per field, with the access of each field and the atomic groups; a client can use it to keep the values of a device (the console's device state).
 - **Writing.** A data message carries any block of contiguous whole fields (`AddressMap.CreateData`): with the GP-8 every transfer is a whole, atomic patch; the individual temporary area of the GX-700 takes one parameter per message. A block with unmapped addresses inside is rejected (`ArgumentException`); `Split` never makes one.
-- **Messages without data** (e.g. an ack or nak an exchange file names) are recognised by their constants and device values alone (`AddressProtocol.TryRead`).
+- **Messages without data** (e.g. an ack or nak an exchange file names) are recognised by their constants and device values alone, as for every kind of map (`DeviceMessages.TryRecognise`).
+- **Message settings.** `midi.unit` and `midi.maxDataSize` are the address settings of a message (`AddressSettings`): the address map keeps them per message, with the map root's overrides applied, and splits with them. The message itself (`DeviceMessage`) only holds what the schema gives.
 
 ## Validation
 
 The map and its envelopes are validated when the map is first used (or prepared, see the
-[message exchange](../Exchange/readme.md)). All problems are reported together in an `AddressMapException`, each
-an `AddressMapProblem` located at its node (the document and the node path from a root, node defs expanded):
+[message exchange](../Exchange/readme.md)). All problems are reported together in a `MessageMapException`, each
+a `MessageMapProblem` located at its node (the document and the node path from a root, node defs expanded), as for
+every kind of [message map](../Messages/readme.md):
 
 - **Layout**: addresses in plan order without overlap, no `midi.address` inside a repeat item, constant field sizes, repeat counts (`midi.repeat` or a constant `count`), `midi.repeat` only on repeats, `midi.stride` not smaller than the content, valid address notation and access values, atomic groups not nested, the map within the address space. Choices and virtual fields (`byteOffset`) are not supported in a map.
 - **Envelope**: at least one data message carries the map; the data messages have an `address` field with a constant `byteLength`, agree on the address space and have no `size` role. A message an exchange file names is checked when it is first used: a `size` role only with an `address` role on a `range` message, which needs one.
@@ -250,7 +255,7 @@ all tags of all schemas of a serializer, also those that no map uses, and report
 - **Tags on their own** (`AddressMapTags.Validate`, also used per property): a known `midi.*` name and a valid value.
 - **Roles in context**: `data` only on an open choice, the other roles only on fields.
 - **Fulfilment**: a data message without a map root that conforms to its contract (information); a `device.<name>` role the map root does not fix, so the client supplies it (information); a `midi.device.<name>` on a map root that no message uses (warning).
-- **Every map** with its envelopes, as above.
+- **Every map root** with its envelopes, as above, created by the provider chain of the [message maps](../Messages/readme.md): a root without address tags is checked as a dump, so a data message without an `address` role is no error. The envelopes of a contract without a root are only checked as address envelopes when one of its data messages has an `address` role.
 
 ## Public types
 
@@ -260,16 +265,17 @@ Namespace `Jacobi.Midi.Device.Addressing`.
 |------|---------|
 | `AddressRange` | A contiguous range of linear addresses (one address is one encoded data byte). |
 | `AddressSpace` | How an address is encoded on the wire (byte count × bits per byte); converts between wire form and linear addresses and parses/formats the notation. |
-| `AddressBlock` | A unit of transfer: an address range plus the node range (`PlanRange`) whose data it holds. |
+| `AddressBlock` | The addresses and the node range (`PlanRange`) of a block of the map (the exchange only sees the node range). |
 | `AddressMatch` | The result of resolving an address range: the block of whole fields it covers, whether it is aligned to field boundaries, and the unmapped addresses. |
-| `AddressMessage`, `AddressUnit` | A message group of an envelope with its unit, maximum data size and role nodes; whether it carries data (`IsData`) or asks for it (`IsRequest`) follows from its roles. |
+| `AddressSettings`, `AddressUnit` | The address settings of a message: its unit (`midi.unit`) and maximum data size (`midi.maxDataSize`). |
 | `NodeAccess` | The access of an addressed node (`midi.access`). |
-| `DeviceValues` | The device values by name (`deviceId`, `modelId`, ...): those of the map root plus those of the client. |
-| `ReceivedData` | A recognised data message: its address, device values and block; `Decode` reads its values into a value model. |
-| `AddressMapException`, `AddressMapProblem`, `AddressMapProblemSeverity` | All problems found in a map and its envelopes, each located at its schema node. |
 | `AddressMapValidator`, `AddressMapTags` | Validate the use of the tags in all schemas, and the tags on their own (names, descriptions, values, the role of a node), for tools such as the Schema Editor. |
 | `AddressMapAdapter`, `MapOccurrence`, `DataPlan`, `EncodedDataMessage` | Reads and writes any message with the client's value model and lets the address maps in the schemas give the item counts, place the data of a message and calculate the addresses of the data messages for a selection of map nodes (for tools such as the Schema Editor); reads and writes the data of a map offline (a dump). |
-| `FieldValueStore` | A flat value model of field values by path and instance of the map plan. |
+
+The generic types (`DeviceMessage`, `DeviceValues`, `ReceivedData`, `FieldValueStore` and the problems) are in
+`Jacobi.Midi.Device.Messages` (see [Messages](../Messages/readme.md)). Internal: `AddressMap` (an `IMessageMap`),
+`AddressMapProvider`, `AddressDeviceState`, `AddressProtocol`, `AddressLayout` and `AddressMaps` (the cache of
+`AddressMapAdapter`).
 
 ## Limitations
 

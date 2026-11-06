@@ -3,14 +3,16 @@
 The message exchange transfers device settings between a value model and a MIDI device. The client works with
 **schema nodes only**: it says, as a range of an execution plan (`PlanRange`), which data it wants to receive or
 send, and with which **exchange**: a pattern of messages by name (e.g. `requestData`). The exchange file of the
-range's map root says how that pattern goes for the device; the [address map](../Addressing/readme.md) cuts the range
-into blocks and builds and recognises the messages.
+range's root says how that pattern goes for the device; the root's [message map](../Messages/readme.md) (an
+[address map](../Addressing/readme.md), or a dump) splits the range into blocks and writes and recognises the
+messages. The exchange is a layer on top of the message maps: it knows nothing of what a message holds (e.g.
+addresses).
 
 Principles:
 
 - The app decides *what* is transferred (the range), *how* (the exchange name) and *when* (the call). Neither the exchange file nor the messages decide which data is fetched or sent.
-- Three responsibilities: the **app** (range, exchange name, source and sink), the **content** (the schemas with the address map: what a message looks like, the blocks, when a block is complete) and the **exchange file** (the pattern: which message is sent, what is expected back, how long to wait, the time between messages, the outcome).
-- References go one way: an exchange file names its map root and the messages it uses; a schema never refers to an exchange file. A message has no kind in the schema: the same message can be used by several patterns.
+- Three responsibilities: the **app** (range, exchange name, source and sink), the **content** (the schemas, through the root's message map: what a message looks like, the blocks, when a block is complete) and the **exchange file** (the pattern: which message is sent, what is expected back, how long to wait, the time between messages, the outcome).
+- References go one way: an exchange file names its root and the messages it uses; a schema never refers to an exchange file. A message has no kind in the schema: the same message can be used by several patterns.
 - Before an exchange starts, the device is known (its device values, e.g. the Roland device id) and so is how to reach it (the MIDI session and endpoint). The exchange opens its own connection.
 
 The design and its later stages (messages once around the blocks, prompts) are in the
@@ -20,11 +22,11 @@ proposal: [exchange-definitions.md](exchange-definitions.md).
 
 ```csharp
 // once per application: the exchange files of the device assemblies (and files), and a factory on the MIDI session;
-// exchanges open their own connections, the address maps are deduced from the serializer's schemas when a range is used
+// exchanges open their own connections, the message maps are deduced from the serializer's schemas when a range is used
 var exchanges = new ExchangeDefinitions();
 exchanges.AddAssembly(typeof(Jacobi.Midi.Roland.Processors.ProcessorFactory).Assembly);   // returns the files it could not read
 var factory = new MessageExchangeFactory(session, serializer, exchanges);
-factory.PrepareAll();   // optional: build and validate all address maps up front
+factory.PrepareAll();   // optional: create and validate all message maps up front
 
 // once per connection to a device: what device (values the schema does not fix) and how to reach it
 var device = new DeviceValues { ["deviceId"] = 0x00 };
@@ -59,16 +61,17 @@ session.Invalidate(plan.CreateRange("AddressMap.Temporary"));
 
 An application that keeps its own copy of the device values can use a `MessageExchange` directly
 (`factory.Create`) with `Execute(name, range, data, ct)`: it then works out itself what to receive and what to send in
-one go (whole atomic groups). `Validate(name, range, data)` lists the problems that keep an exchange from running,
-without sending anything.
+one go (what the map transfers whole: atomic groups, a whole dump). `Validate(name, range, data)` lists the problems
+that keep an exchange from running, without sending anything.
 
-The value model sees the same paths and instances as with a normal read or write of the map plan: the root, the groups
-leading to the range (with their repeat items), then the fields. The range may be widened to whole addresses and to
-the atomic groups it overlaps: on receive, the sink then also gets the other fields of those groups.
+The value model sees the same paths and instances as with a normal read or write of the root's plan: the root, the
+groups leading to the range (with their repeat items), then the fields. The message map may widen the range (an
+address map to whole addresses and to the atomic groups it overlaps, a dump to the whole root): on receive, the sink
+then also gets the other fields of the widened range.
 
 ## Exchange files
 
-An exchange file holds the exchanges of one map root, each a plain state machine of turns. It is XML
+An exchange file holds the exchanges of one root, each a plain state machine of turns. It is XML
 (`*.exchange.xml`) or JSON (`*.exchange.json`). The files of a device are grouped together in one folder (e.g.
 `Boss/Gx700/` in the Roland assembly) and told apart by their sub-extension: `Gx700.schema.xml` is the schema,
 `Gx700.exchange.xml` the exchange file. They are embedded as resources of the assembly that owns them
@@ -104,10 +107,10 @@ and [Gx700.exchange.xml](../../Jacobi.Midi.Roland/Boss/Gx700/Gx700.exchange.xml)
 
 | Element | Attributes | Meaning |
 | ------- | ---------- | ------- |
-| `exchanges` | `for` (the map root, e.g. `Gx700.AddressMap`), `responseTimeout` (ms, default 1000), `messageInterval` (ms, default 0) | The file. `messageInterval` is the least time between two messages sent to the device. |
+| `exchanges` | `for` (the root, e.g. `Gx700.AddressMap`), `responseTimeout` (ms, default 1000), `messageInterval` (ms, default 0) | The file. `messageInterval` is the least time between two messages sent to the device. |
 | `exchange` | `name`, optional `responseTimeout`, `messageInterval` | One exchange; its timing overrides the file's. A standard name (`ExchangeNames`: `requestData`, `sendData`) or a name of the file's own. |
 | `turn` | `name` | A turn in the conversation with the device; the first one is the start. On entry it sends its message (if any), then waits for the events it has an `on` for, or a default (see below). |
-| `send` | `message` | The message to build for the block and send on entry: the schema name of the message group (document, root and path). |
+| `send` | `message` | The message to write for the block and send on entry: the schema name of the message group (document, root and path). |
 | `receive` | `message` | A data message whose data is accepted for the block while in the turn, and counts towards `received`. |
 | `on` | `event` (`sent`, `received`, `timeout`) or `message`; optional `retry` (1 or more, for `timeout` and messages); `goto` (a turn) or `result` (`completed`, `rejected`, `failed`, `timedOut`) | A transition; the first one that matches is taken. With `retry` it enters its turn again (sending its message again) at most that many times per block, then its `goto` or `result` is taken. A message without an `on` (or `receive`) is ignored. |
 
@@ -126,37 +129,41 @@ The reader (`ReadXml`, `ReadJson`, or `Read` from a stream by the extension) tur
 first, so the checks are the same: it checks the file on its own (elements, attributes, names, unknown and
 unreachable turns, `sent` without a `send`, `received` without a `receive`, `retry` on `sent` or `received`) and reports all problems, located by line
 (XML) or path (JSON), in an `ExchangeDefinitionException`. When an exchange
-is used, the exchange checks it against the schemas and the call (`ExchangeException`, before anything is sent): the
-messages exist and fit the map, there is exactly one message that asks for or carries data, the device values are
-known, and a source or sink is given when it sends or receives data.
+is used, the exchange checks it against the call (`ExchangeException`, before anything is sent): the messages exist
+and fit the root's message map, the messages it receives carry data, there is a message to split the range for, a
+source or sink is given when it sends or receives data; and it asks the message maps (`MessageMaps.Validate`) whether
+the range can be transferred with its messages: the device values they need are known, and the map can split the
+range for the split message (an address map: a message that asks for data, with a role `address`, or carries data).
 
 ## How a range is transferred
 
 1. **Finding the exchange:** the file whose `for` is the root of the range's plan, and in it the exchange with the name.
-2. **Blocks:** the range is widened to the atomic groups it overlaps and cut into blocks for the **cutting message**: the one message the exchange sends that asks for data (a role `address`, no data) or carries data (a role `data`). The address map cuts at unmapped gaps, at the message's `midi.maxDataSize`, per field or per atomic group (`midi.unit`), never inside an atomic group; blocks for a data message leave out read-only fields, other blocks write-only fields.
+2. **Blocks:** the root's message map splits the range into blocks for the **split message**: the first message the exchange sends, else the first data message it receives. The map may widen the range first. An address map widens to the atomic groups the range overlaps and splits at unmapped gaps, at the message's `midi.maxDataSize`, per field or per atomic group (`midi.unit`), never inside an atomic group; blocks for a data message leave out read-only fields, other blocks write-only fields. A dump is one block: the whole root.
 3. **Per block** the exchange runs from its first turn (`ExchangeMachine`); `MessageExchange` executes it:
-   - `send`: the address map builds the message for the block (address, size, device values, data from the source); the runner keeps the `messageInterval` since the previous message to the device, then sends it.
-   - waiting: a message from the device is recognised against the messages the exchange names (data inside the block, or a message without data its transitions wait for); data that a turn `receive`s is accepted and the timeout restarts; `received` follows when the block has all its data.
-   - the run ends with a `result`; the runner writes the reason (e.g. *"timeout in turn 'request' of 'requestData'."*, with *", after 2 retries"* when its retries were used). The accepted data of a completed block is decoded into the sink, in address order.
+   - `send`: the map writes the message for the block (e.g. the address and size of an address map, the device values, the data from the source); the runner keeps the `messageInterval` since the previous message to the device, then sends it.
+   - waiting: a message from the device is recognised by the map against the messages the exchange names (data inside the block, or a message without data its transitions wait for); data that a turn `receive`s is accepted and the timeout restarts; `received` follows when the map says the block has all its data.
+   - the run ends with a `result`; the runner writes the reason (e.g. *"timeout in turn 'request' of 'requestData'."*, with *", after 2 retries"* when its retries were used). The accepted data of a completed block is decoded into the sink, in the order it arrived.
 4. **The first block that does not complete ends the transfer**: the blocks after it are reported with the same status, as not transferred.
 
 **Listen:** data messages the device sends on its own are decoded into the sink when they overlap the range, until
 the call is cancelled. Data that belongs to a running transfer is not also delivered to a listener.
 
-Transfers to a device run **one at a time**, so a message without an address (an ack) belongs to the running transfer.
+Transfers to a device run **one at a time**, so a message without data (an ack) belongs to the running transfer.
 
 ## Device session
 
 A `DeviceSession` is the API for an application: it only says which nodes it is interested in, and the session makes
-the transfer work. It gets all it needs when it is created, and keeps the **state of the device** per address map
-(field values by path and instance of the map plan) for as long as the connection lasts.
+the transfer work. It gets all it needs when it is created, and keeps the **state of the device** per root for as long
+as the connection lasts: an `IDeviceState` the root's message map creates, which decides what it holds and what a send
+needs (an address map per field, with the access of each field and the atomic groups; a dump as a whole). The session
+only orchestrates: it answers from the state or fetches, sends, and raises `StateChanged`.
 
-- **`RequestData`:** per block of the widened range, the values come from the state when it holds them all (write-only fields aside); otherwise the block is requested with `requestData` and the state updated. The sink gets the values of the blocks (also the other fields of the atomic groups). The first block that does not complete ends the transfer.
-- **`SendData`:** the client's values of the range are taken as they are. The other fields of the atomic groups (the fields that are sent and can be received) come from the state; what it does not hold is requested first (`requestData`). When that fails, nothing is sent and the result holds the blocks that could not be received. The client's values then go into the state (read-only fields aside: the device keeps its own) and the widened range is sent from the state with `sendData`. A block that did not complete is invalidated: the device's values are no longer known.
+- **`RequestData`:** per block of the range, the values come from the state when it holds them all (for an address map: write-only fields aside); otherwise the block is requested with `requestData` and the state updated. The sink gets the values of the blocks (also the other fields the map widened the range with). The first block that does not complete ends the transfer.
+- **`SendData`:** the client's values of the range are taken as they are. What else the send needs comes from the state (an address map: the other fields of the atomic groups that are sent and can be received); what it does not hold is requested first (`requestData`). When that fails, nothing is sent and the result holds the blocks that could not be received. The client's values then go into the state (an address map leaves out read-only fields: the device keeps its own) and the range is sent from the state with `sendData`. A block that did not complete is invalidated: the device's values are no longer known. A dump is sent whole from the client's values (see [Messages](../Messages/readme.md)).
 - **`Execute`:** another exchange of the device's file, with the state: one that sends data runs as `SendData`, one that receives data always requests and updates the state; one that does neither runs as it is.
 - **`SessionData`:** `Session` (the default) uses the state as above; `Device` always requests (a fresh copy for a receive, a read-modify-write for a send) and updates the state. Per session (`DeviceSessionOptions.Data`) and per call.
-- **Data the device sends on its own:** the first use of a map starts listening to all of it; what arrives goes into the state.
-- **`Invalidate(range)` / `Clear()`:** forget values (widened to whole addresses) that the device changed without telling; the next transfer requests them.
+- **Data the device sends on its own:** the first use of a root starts listening to all of it; what arrives goes into the state.
+- **`Invalidate(range)` / `Clear()`:** forget values that the device changed without telling (the state may widen the range: an address map to whole addresses, a dump to the whole root); the next transfer requests them.
 - **`Probe(range)`:** requests the range with `requestData` and discards it: a check that the device answers, without changing anything.
 - **`StateChanged`:** the nodes that changed and how: `Received` (requested or sent by the device), `Sent`, `Invalidated`. Raised on the caller's flow, or on a background thread for data the device sends on its own.
 - **Connection:** when the connection is lost (`Closed` or `Faulted`), the session is disconnected for good: `IsConnected` is false, `Disconnected` is raised once, and every call throws. The client disposes it and creates a new session; the state is not carried over.
@@ -167,17 +174,17 @@ Namespace `Jacobi.Midi.Device.Exchange`.
 
 | Type | Purpose |
 | ---- | ------- |
-| `MessageExchangeFactory` | Creates sessions (`CreateSession`) and exchanges (`Create`) on an `IMidiSession` with the serializer whose schemas describe the devices and the exchange files; each gets its own connection. `Prepare(root)` / `PrepareAll()` build and validate address maps up front. |
+| `MessageExchangeFactory` | Creates sessions (`CreateSession`) and exchanges (`Create`) on an `IMidiSession` with the serializer whose schemas describe the devices and the exchange files; each gets its own connection. `Prepare(root)` / `PrepareAll()` create and validate message maps up front. |
 | `DeviceSession` | `RequestData`, `SendData`, `Execute`, `Probe`, `Invalidate` and `Clear` for one connected device, with the state of the device kept between calls. `IsConnected`, `Disconnected` and `StateChanged`. Lives as long as its connection; disposing it closes the connection. |
 | `DeviceSessionOptions`, `SessionData`, `DeviceStateChangedEventArgs`, `DeviceStateChange` | Where a transfer takes the values the client does not give, and what changed in the state. |
-| `MessageExchange` | The runner: `Execute`, `Validate` and `Listen` for one device (connection and device values), without state; a device with several map roots works through one exchange. `ConnectionState` and `ConnectionStateChanged`. Disposing it closes the connection. |
+| `MessageExchange` | The runner: `Execute`, `Validate` and `Listen` for one device (connection and device values), without state; a device with several roots works through one exchange. `ConnectionState` and `ConnectionStateChanged`. Disposing it closes the connection. |
 | `MessageExchangeOptions` | Runtime settings that belong neither in the schema nor in the exchange file: the UMP `Groups` (a `MidiGroupPair`: the group to send on and the group to receive on). |
 | `ExchangeData` | What an exchange needs from the app: a `Source` for data that is sent, a `Sink` for data that is received. |
 | `ExchangeNames` | The standard names of the most important patterns: `requestData`, `sendData`. |
-| `ExchangeDefinitions`, `ExchangeDefinitionSet`, `ExchangeDefinition`, `ExchangeState`, `ExchangeTransition`, `ExchangeEvent` | The exchange files by map root, and their content. |
+| `ExchangeDefinitions`, `ExchangeDefinitionSet`, `ExchangeDefinition`, `ExchangeState`, `ExchangeTransition`, `ExchangeEvent` | The exchange files by root, and their content. |
 | `ExchangeDefinitionReader`, `ExchangeDefinitionException` | Reads an exchange file (XML or JSON) and reports all its problems. |
 | `ExchangeException` | An exchange that cannot run for a range, with all problems; thrown before anything is sent. |
-| `TransferResult`, `BlockResult`, `BlockStatus` | The outcome per block: `Completed`, `TimedOut`, `Rejected` or `Failed`, with the `Reason` the runner writes and the exception, if any. `Execute` also reports each block to an optional `IProgress<BlockResult>`. |
+| `TransferResult`, `BlockResult`, `BlockStatus` | The outcome per block (the block is the `PlanRange` of the nodes one message asks for or carries): `Completed`, `TimedOut`, `Rejected` or `Failed`, with the `Reason` the runner writes and the exception, if any. `Execute` also reports each block to an optional `IProgress<BlockResult>`. |
 | `DeviceIdentity` | A universal Identity Request on an endpoint and UMP group, over a connection of its own, and the Identity Replies that arrive within a wait. Independent of the schemas (a test whether a device is there); older devices do not answer it. |
 
 ## Transport

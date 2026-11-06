@@ -11,7 +11,8 @@ names of its time: its `state` is a `turn` since stage 2.
 
 **Stage 1 as implemented**, where it differs from or adds to this proposal:
 
-- **No separate content binding yet.** The runner uses the address map directly (`AddressMap.Split`, `Message`, `CreateData`, `Protocol.CreateMessage`, `TryReadData`, `BlockCoverage`). These are the operations the content binding will have; turning them into an interface belongs with the *message exchange for schemas without an address map* item of the [Device todo](../todo.md), where the types become generic too.
+- **The content binding is the message map** (`IMessageMap`, see [Messages](../Messages/readme.md)): the runner splits, writes and recognises through the map of the range's root and asks it when a block is complete (`Split`, `Write`, `TryRead`, `IsComplete`); an ordered chain of providers creates the map (the address map, else a dump). Added later, with the *message exchange for schemas without an address map* item of the [Device todo](../todo.md); the reasons are in [decisions.md](../../../docs/decisions.md).
+- **The split message** (called the *cutting message* below) is the first message the exchange sends, else the first data message it receives; the map checks whether it can split for it (an address map: a message with an `address` role or data). Received data is decoded in the order it arrived.
 - **A timeout without an `on`** ends the run as `timedOut` (with the reason), instead of being a check error.
 - **Exchange files as files:** `ExchangeDefinitions.AddFile` reads them, but the console only loads the files embedded in its assemblies; files next to the schema files of a rig or device are not loaded yet.
 - **Not in the proposal:** `MessageExchange.Validate` lists the problems without sending anything.
@@ -26,10 +27,10 @@ names of its time: its `state` is a `turn` since stage 2.
    | Who | Decides |
    | --- | ------- |
    | **App** | *What* is transferred (the plan range), *how* (the exchange name) and *when* (the call). It gives what the exchange needs: a source for data that is sent, a sink for data that is received. |
-   | **Content**: the schemas, with a content binding (the address map today) | What a message looks like. It cuts a range or a block into blocks for a message, builds a message (the `address`, `size`, `device.<name>` and `data` roles), recognises a message of the device and whether it belongs to the block, and tells when the data of a block is **complete**. |
+   | **Content**: the schemas, with a content binding (the message map: an address map or a dump) | What a message looks like. It cuts a range or a block into blocks for a message, builds a message (the `address`, `size`, `device.<name>` and `data` roles), recognises a message of the device and whether it belongs to the block, and tells when the data of a block is **complete**. |
    | **Exchange definition** | The pattern: which message is sent, which messages are expected back, how long to wait, the time between messages, retries, and what a failure means for the rest of the exchange. |
 
-5. **Not bound to addresses.** The definition only knows messages, blocks and events such as *complete*. A content binding without an address map (dumps selected by a function code, see the [Device todo](../todo.md)) uses the same definitions.
+5. **Not bound to addresses.** The definition only knows messages, blocks and events such as *complete*. A content binding without an address map (the dump map, for dumps selected by a function code, see [Messages](../Messages/readme.md)) uses the same definitions.
 6. **No message kinds.** A message is a group of the schemas; the definition gives it its part in the pattern. The only distinction the content makes is whether a message has a `data` role (it carries data of the range) or not (a request, a WSD, an ack, a store request: they are all just messages).
 7. **The exchange makes it work; explicit only when needed.** Technical structure (such as the loop over the blocks) stays out of a definition as long as one clear rule covers it. Where the rule is not enough, the definition must say it, and the checks require that: nothing is guessed.
 8. **No extension.** A definition stands on its own. A device that needs other messages or timing gets its own file; definitions are small.
@@ -108,7 +109,7 @@ a `BlockResult` per block). The content cuts them, to honour what the device and
 For example, a whole GX-700 patch cut for `RQ1` (unit `range`) gives one block per section: a section takes 128
 addresses but holds fewer fields, so there is a gap after each one. That gives 14 blocks, so 14 `RQ1`/`DT1` pairs. A
 device with another layout comes out differently from the same code (`AddressMap.Split`). For content without an
-address map, a block would be one dump message.
+address map, a block is one dump message (the dump map).
 
 **The rule:** an exchange runs **once per block**, from its first state. The blocks are cut for the **cutting
 message**: the first message the exchange sends that asks for data (an `address`/`size` role) or carries it (a `data`

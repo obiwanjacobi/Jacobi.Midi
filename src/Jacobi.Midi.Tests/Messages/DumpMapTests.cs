@@ -74,7 +74,7 @@ public class DumpMapTests
     private static PlanRange Range(Serializer serializer, string path)
         => serializer.GetPlan(VoiceName).CreateRange(path, path);
 
-    private static MessageExchange CreateExchange(Serializer serializer, VoiceDevice device, byte deviceId = 0)
+    private static MessageExchange CreateExchange(Serializer serializer, DumpDevice device, byte deviceId = 0)
     {
         var exchanges = new ExchangeDefinitions();
         exchanges.Add(ExchangeDefinitionReader.ReadXml(Exchanges, "test"));
@@ -124,7 +124,7 @@ public class DumpMapTests
     public async Task RequestData_OneField_ReceivesTheWholeDump()
     {
         var serializer = CreateSerializer();
-        var device = new VoiceDevice { Voice = VoiceDump(100, 20) };
+        var device = new DumpDevice { Reply = VoiceDump(100, 20) };
         await using var exchange = CreateExchange(serializer, device);
         var sink = new FieldValueStore();
 
@@ -141,7 +141,7 @@ public class DumpMapTests
     public async Task RequestData_DumpOfAnotherDevice_TimesOut()
     {
         var serializer = CreateSerializer();
-        var device = new VoiceDevice { Voice = VoiceDump(100, 20, deviceId: 1) };
+        var device = new DumpDevice { Reply = VoiceDump(100, 20, deviceId: 1) };
         var exchanges = new ExchangeDefinitions();
         exchanges.Add(ExchangeDefinitionReader.ReadXml(Exchanges.Replace("responseTimeout=\"1000\"", "responseTimeout=\"50\""), "test"));
         await using var exchange = new MessageExchange(new MessageMaps(serializer), exchanges, device, new DeviceValues { ["deviceId"] = 0 });
@@ -155,7 +155,7 @@ public class DumpMapTests
     public async Task SendData_WritesTheWholeDump()
     {
         var serializer = CreateSerializer();
-        var device = new VoiceDevice();
+        var device = new DumpDevice();
         await using var exchange = CreateExchange(serializer, device, deviceId: 3);
 
         var result = await exchange.Execute(ExchangeNames.SendData, Range(serializer, "Voice"), new ExchangeData { Source = Voice(5, 6) }, TestContext.Current.CancellationToken);
@@ -168,7 +168,7 @@ public class DumpMapTests
     public async Task Session_SecondRequest_IsAnsweredFromTheState()
     {
         var serializer = CreateSerializer();
-        var device = new VoiceDevice { Voice = VoiceDump(100, 20) };
+        var device = new DumpDevice { Reply = VoiceDump(100, 20) };
         await using var session = new DeviceSession(CreateExchange(serializer, device), new DeviceSessionOptions());
         var ct = TestContext.Current.CancellationToken;
 
@@ -184,7 +184,7 @@ public class DumpMapTests
     public async Task Session_SendData_KeepsTheSentDumpAsState()
     {
         var serializer = CreateSerializer();
-        var device = new VoiceDevice();
+        var device = new DumpDevice();
         await using var session = new DeviceSession(CreateExchange(serializer, device), new DeviceSessionOptions());
         var ct = TestContext.Current.CancellationToken;
 
@@ -201,7 +201,7 @@ public class DumpMapTests
     public async Task Session_SendData_ASourceWithoutAllValues_Throws()
     {
         var serializer = CreateSerializer();
-        await using var session = new DeviceSession(CreateExchange(serializer, new VoiceDevice()), new DeviceSessionOptions());
+        await using var session = new DeviceSession(CreateExchange(serializer, new DumpDevice()), new DeviceSessionOptions());
         var level = new FieldValueStore();
         level.Set("Voice.Level", InstancePath.Empty, new LogicalField("Level", typeof(byte), (byte)7));
 
@@ -213,7 +213,7 @@ public class DumpMapTests
     public async Task Listen_ADumpTheDeviceSendsOnItsOwn_IsDecoded()
     {
         var serializer = CreateSerializer();
-        var device = new VoiceDevice();
+        var device = new DumpDevice();
         await using var exchange = CreateExchange(serializer, device);
         using var cancel = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var received = new TaskCompletionSource<ReceivedData>();
@@ -227,67 +227,5 @@ public class DumpMapTests
         var sink = new FieldValueStore();
         data.Decode(sink);
         Assert.Equal(42, Value(sink, "Voice.Level"));
-    }
-
-    [Fact]
-    public void ARootCarriedByADataMessageWithoutAddress_IsNotSupportedYet()
-    {
-        var serializer = CreateSerializer("""
-            <schema name="Carried">
-              <includes>
-                <include schema="midi" />
-              </includes>
-              <nodeDefs>
-                <group name="body" />
-              </nodeDefs>
-              <members>
-                <group name="Dump">
-                  <processors>
-                    <processor name="midi.sysex" />
-                  </processors>
-                  <members>
-                    <field name="Id" datatype="sys.uint8" value="0x7D" />
-                    <choice name="Body" memberNodeDef="body" midi.role="data" />
-                  </members>
-                </group>
-                <group name="Program" nodeDef="body">
-                  <members>
-                    <field name="Level" datatype="sys.uint8" />
-                  </members>
-                </group>
-              </members>
-            </schema>
-            """);
-
-        var exception = Assert.Throws<MessageMapException>(() => new MessageMaps(serializer).Get(serializer.GetPlan(new SchemaName("Carried.Program"))));
-        Assert.Contains(exception.Errors, error => error.Contains("not supported yet", StringComparison.Ordinal));
-    }
-
-    /// <summary>Plays the device: answers a voice request (function 10) with <see cref="Voice"/> and records what it gets.</summary>
-    private sealed class VoiceDevice : ISysExPort
-    {
-        public byte[]? Voice { get; init; }
-        public List<byte[]> Sent { get; } = [];
-
-        public event SysExReceivedHandler? Received;
-
-        public MidiConnectionState State => MidiConnectionState.Open;
-
-        public event EventHandler<MidiConnectionStateChangedArgs>? StateChanged { add { } remove { } }
-
-        public void Transmit(byte[] sysEx) => Received?.Invoke(sysEx);
-
-        public ValueTask Send(ReadOnlyMemory<byte> sysEx, CancellationToken ct)
-        {
-            var bytes = sysEx.ToArray();
-            Sent.Add(bytes);
-            if (bytes[3] == 0x10 && Voice is { } voice)
-            {
-                _ = Task.Run(() => Received?.Invoke(voice), ct);
-            }
-            return ValueTask.CompletedTask;
-        }
-
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

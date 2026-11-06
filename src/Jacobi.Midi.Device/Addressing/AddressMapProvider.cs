@@ -29,9 +29,12 @@ internal sealed class AddressMapProvider : IMessageMapProvider
         {
             return false;
         }
-        var contract = nodeDef.Qualify(root.Namespace);
-        return DeviceMessages.FindDataMessageGroups(serializer, contract).Any(message => HasAddressRole(message.Group));
+        return CarriesAddress(serializer, nodeDef.Qualify(root.Namespace));
     }
+
+    /// <summary>True when a data message of the contract has the role <c>address</c>: its roots are address maps.</summary>
+    internal static bool CarriesAddress(Serializer serializer, SchemaName contract)
+        => DeviceMessages.FindDataMessageGroups(serializer, contract).Any(message => HasAddressRole(message.Group));
 
     private static bool HasMapTag(NodeInfo node)
         => MapTags.Any(tag => MidiProperties.Find(node, tag) is not null)

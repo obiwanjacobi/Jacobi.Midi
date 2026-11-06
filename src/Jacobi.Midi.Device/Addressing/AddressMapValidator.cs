@@ -28,7 +28,8 @@ public static class AddressMapValidator
             }
         }
 
-        var mapRoots = AddressProtocol.FindMapRoots(serializer.Schemas);
+        var maps = new MessageMaps(serializer);
+        var mapRoots = DeviceMessages.FindCarriedRoots(serializer.Schemas);
         foreach (var contract in dataChoices.Select(choice => choice.Contract).Distinct())
         {
             var roots = mapRoots.Where(root => ConformsTo(serializer.Schemas, root, contract)).ToList();
@@ -37,14 +38,21 @@ public static class AddressMapValidator
                 foreach (var (document, path, _) in dataChoices.Where(choice => choice.Contract == contract))
                 {
                     problems.Information(document, path,
-                        $"no group conforms to the contract '{contract}' (a root with nodeDef=\"{contract}\"): the roles of this message are not fulfilled by an address map.");
+                        $"no group conforms to the contract '{contract}' (a root with nodeDef=\"{contract}\"): the roles of this message are not fulfilled by a map root.");
                 }
-                Guarded(problems, () => AddressProtocol.Create(serializer.Schemas, serializer, contract, problems));
+                // without a root, only the envelopes of an address map can be checked (as the messages of a map)
+                Guarded(problems, () =>
+                {
+                    if (AddressMapProvider.CarriesAddress(serializer, contract))
+                    {
+                        AddressProtocol.Create(serializer.Schemas, serializer, contract, problems);
+                    }
+                });
                 continue;
             }
             foreach (var root in roots)
             {
-                ValidateMap(serializer, root, problems);
+                ValidateMap(maps, root, contract, problems);
             }
         }
         return [.. problems.Distinct()];
@@ -87,13 +95,13 @@ public static class AddressMapValidator
         }
     }
 
-    // the map with its envelopes, and how its device roles are fulfilled
-    private static void ValidateMap(Serializer serializer, SchemaName root, MessageMapProblems problems)
+    // the map (of whatever kind its root is: the provider chain decides) with its envelopes, and how its device roles are fulfilled
+    private static void ValidateMap(MessageMaps maps, SchemaName root, SchemaName contract, MessageMapProblems problems)
     {
-        AddressMap map;
+        IMessageMap map;
         try
         {
-            map = AddressMap.Create(serializer, root);
+            map = maps.Get(maps.Serializer.GetPlan(root));
         }
         catch (MessageMapException exception)
         {
@@ -102,12 +110,11 @@ public static class AddressMapValidator
         }
         catch (Exception exception) when (exception is ExecutionPlanException or InvalidOperationException or ArgumentException)
         {
-            problems.Error(root.Namespace, new SchemaPath(root.Name), $"the address map cannot be built: {exception.Message}");
+            problems.Error(root.Namespace, new SchemaPath(root.Name), $"the message map cannot be built: {exception.Message}");
             return;
         }
 
-        var protocol = map.Protocol;
-        var messages = protocol.DataMessages;
+        var messages = map.DataMessages;
         foreach (var message in messages)
         {
             var document = message.Range.ExecutionPlan.Name?.Namespace ?? String.Empty;
@@ -126,7 +133,7 @@ public static class AddressMapValidator
         foreach (var (name, _) in map.Device.Where(value => !used.Contains(value.Key)))
         {
             problems.Warning(root.Namespace, new SchemaPath(root.Name),
-                $"'{MidiProperties.DevicePrefix}{name}' is not used: no message of the contract '{protocol.Contract}' has the role '{MidiProperties.RoleDevicePrefix}{name}'.");
+                $"'{MidiProperties.DevicePrefix}{name}' is not used: no message of the contract '{contract}' has the role '{MidiProperties.RoleDevicePrefix}{name}'.");
         }
     }
 

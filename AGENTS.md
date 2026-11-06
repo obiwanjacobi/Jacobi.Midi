@@ -44,7 +44,7 @@ Treat the code itself as the source of truth and check the readme files for curr
 - **Core** — platform-neutral MIDI abstractions: API, sessions, endpoint discovery, connections and universal (UMP) packets.
 - **Windows** — implementation of the Core contracts on Windows MIDI Services (MIDI 2.0 SDK preview). Windows-only target.
 - **Messages** — typed MIDI message models: MIDI 1.0 channel/system/SysEx/meta messages, MIDI 2.0 UMP messages (`V2` namespace), and byte-stream event reading/writing. See its readme.
-- **Device** — base `midi` schema (embedded resource) shared by device schemas, and the MIDI-specific BinarySerializer processors (e.g. SysEx framing) under the `midi` namespace (see `Processors/readme.md` for design notes). Will contain the main API to work with MIDI device capabilities.
+- **Device** — base `midi` schema (embedded resource) shared by device schemas, and the MIDI-specific BinarySerializer processors (e.g. SysEx framing) under the `midi` namespace (see `Processors/readme.md` for design notes). The API to work with MIDI devices, in layers: `Messages` (the base: message maps per schema root, chosen by providers; see `Messages/readme.md`), `Addressing` (the address map, one kind of message map) and `Exchange` (the message exchange and device session on top).
 - **Roland** — Roland-specific processors (e.g. checksum) and embedded schemas for the Roland message format and specific devices.
 - **File** — placeholder for Standard MIDI File support (MIDI v1 & v2).
 - **Cli** — prototype command line tool.
