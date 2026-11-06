@@ -39,29 +39,26 @@ internal sealed class AddressProtocol
     /// <summary>
     /// Finds the data messages of a contract in the schemas: in an envelope root that holds an open choice with
     /// <c>midi.role="data"</c> whose memberNodeDef is the contract, the member group of the root that holds the choice
-    /// (or the root itself when the choice is a member of the root). Problems are added to <paramref name="problems"/>.
+    /// (or the root itself when the choice is a member of the root). The open choices and the groups that conform to
+    /// the contract are found with the lookups of the serializer. Problems are added to <paramref name="problems"/>.
     /// </summary>
     internal static AddressProtocol Create(SchemaSet schemas, Serializer serializer, SchemaName contract, AddressMapProblems problems)
     {
-        var dataMessages = new List<AddressMessage>();
         var bodies = new List<BodyCandidate>();
+        foreach (var body in schemas.FindConformingGroups(contract))
+        {
+            var document = DocumentOf(schemas, body).Name;
+            bodies.Add(new BodyCandidate(new SchemaName($"{document}.{body.Name}"), DeviceValues.FromProperties(body, document, new SchemaPath(body.Name), problems)));
+        }
 
-        foreach (var document in schemas.Documents)
+        var dataMessages = new List<AddressMessage>();
+        var choices = schemas.FindOpenChoices(contract).Where(choice => IsRole(choice, MidiProperties.RoleData)).ToList();
+        foreach (var document in choices.Select(choice => DocumentOf(schemas, choice)).Distinct())
         {
             foreach (var root in document.Roots)
             {
-                if (root.NodeDef is { } nodeDef && SameName(Qualify(nodeDef, document.Name), contract))
-                {
-                    bodies.Add(new BodyCandidate(new SchemaName($"{document.Name}.{root.Name}"), DeviceValues.FromProperties(root, document.Name, new SchemaPath(root.Name), problems)));
-                }
-
-                if (!CarriesContract(root, document.Name, contract))
-                {
-                    continue;
-                }
-
                 var plan = serializer.GetPlan(new SchemaName($"{document.Name}.{root.Name}"));
-                foreach (var group in DataMessageGroups(plan.Root, document.Name, contract))
+                foreach (var group in DataMessageGroups(plan, choices))
                 {
                     var message = CreateMessage(plan, group, document.Name, problems);
                     Validate(document.Name, group.Path, message, problems);
@@ -215,21 +212,12 @@ internal sealed class AddressProtocol
     /// </summary>
     internal static IReadOnlyList<SchemaName> FindMapRoots(SchemaSet schemas)
     {
-        var contracts = new List<SchemaName>();
-        foreach (var document in schemas.Documents)
-        {
-            foreach (var root in document.Roots)
-            {
-                CollectContracts(root, document.Name, contracts);
-            }
-        }
-
         var roots = new List<SchemaName>();
         foreach (var document in schemas.Documents)
         {
             foreach (var root in document.Roots)
             {
-                if (root.NodeDef is { } nodeDef && contracts.Any(c => SameName(c, Qualify(nodeDef, document.Name))))
+                if (schemas.FindOpenChoices(root).Any(choice => IsRole(choice, MidiProperties.RoleData)))
                 {
                     roots.Add(new SchemaName($"{document.Name}.{root.Name}"));
                 }
@@ -238,43 +226,35 @@ internal sealed class AddressProtocol
         return roots;
     }
 
-    private static void CollectContracts(SchemaGroup group, string documentName, List<SchemaName> contracts)
+    // the groups of an envelope root that are data messages: per data open choice in the root's own tree (not in a
+    // body), the member group of the root that holds it, or the root itself when the choice is one of its members
+    private static IEnumerable<GroupInfo> DataMessageGroups(ExecutionPlan plan, IReadOnlyList<SchemaChoice> dataChoices)
     {
-        foreach (var member in group.Members)
+        var groups = new List<GroupInfo>();
+        foreach (var choice in plan.OpenChoices.Where(choice => dataChoices.Any(data => ReferenceEquals(data, choice.Group))))
         {
-            if (member is SchemaChoice { MemberNodeDef: { } nodeDef } choice && IsRole(choice, MidiProperties.RoleData))
+            if (!ReferenceEquals(plan.Find(choice.Path), choice))
             {
-                contracts.Add(Qualify(nodeDef, documentName));
+                // an open choice inside a body of the plan: it does not make the root a message
+                continue;
             }
-            else if (member is SchemaGroup child)
+
+            var segments = choice.Path.Segments.ToList();
+            var group = segments.Count == 2
+                ? plan.Root
+                : plan.Find(new SchemaPath($"{segments[0]}{SchemaPath.Separator}{segments[1]}")) as GroupInfo;
+            if (group is not null and not ChoiceInfo && !groups.Contains(group))
             {
-                CollectContracts(child, documentName, contracts);
+                groups.Add(group);
             }
         }
+
+        // the root itself when it holds a choice as a member: then it is the only message of the root
+        return groups.Contains(plan.Root) ? [plan.Root] : groups;
     }
 
-    // the groups of an envelope root that are data messages of the contract: the member group that holds the data
-    // open choice, or the root itself when the choice is one of its members
-    private static IEnumerable<GroupInfo> DataMessageGroups(GroupInfo root, string documentName, SchemaName contract)
-    {
-        if (root.Members.OfType<ChoiceInfo>().Any(member => member.Group is SchemaChoice choice && IsDataOf(choice, documentName, contract)))
-        {
-            return [root];
-        }
-        return root.Members.OfType<GroupInfo>()
-            .Where(member => member is not ChoiceInfo && CarriesContract(member.Group, documentName, contract));
-    }
-
-    private static bool CarriesContract(SchemaGroup group, string documentName, SchemaName contract)
-        => group.Members.Any(member => member switch
-        {
-            SchemaChoice choice when IsDataOf(choice, documentName, contract) => true,
-            SchemaGroup child => CarriesContract(child, documentName, contract),
-            _ => false,
-        });
-
-    private static bool IsDataOf(SchemaChoice choice, string documentName, SchemaName contract)
-        => choice.MemberNodeDef is { } nodeDef && IsRole(choice, MidiProperties.RoleData) && SameName(Qualify(nodeDef, documentName), contract);
+    private static SchemaDocument DocumentOf(SchemaSet schemas, SchemaNode node)
+        => schemas.FindDocument(node) ?? throw new InvalidOperationException($"'{node.Name}' is not part of the schemas.");
 
     private static AddressMessage CreateMessage(ExecutionPlan plan, GroupInfo group, string documentName, AddressMapProblems problems)
     {
@@ -396,13 +376,6 @@ internal sealed class AddressProtocol
 
     private static bool IsRole(SchemaNode node, string role)
         => String.Equals(MidiProperties.Find(node, MidiProperties.Role), role, StringComparison.OrdinalIgnoreCase);
-
-    private static SchemaName Qualify(SchemaName name, string documentName)
-        => String.IsNullOrEmpty(name.Namespace) ? new SchemaName($"{documentName}.{name.Name}") : name;
-
-    private static bool SameName(SchemaName left, SchemaName right)
-        => String.Equals(left.Namespace, right.Namespace, StringComparison.OrdinalIgnoreCase)
-        && String.Equals(left.Name, right.Name, StringComparison.OrdinalIgnoreCase);
 
     private static string Format(DeviceValues values)
         => "{" + String.Join(", ", values.Select(v => $"{v.Key}=0x{v.Value:X}")) + "}";
