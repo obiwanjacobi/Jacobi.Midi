@@ -251,20 +251,23 @@ public sealed class DeviceSession : IAsyncDisposable
         _listening.Dispose();
     }
 
-    // per block: from the state, or requested with the exchange; the first block that does not complete ends it
+    // per block: from the state, or requested with the exchange (with its turns before and after, around that block);
+    // the first block that does not complete, or turns before or after it that do not, end it
     private async Task<TransferResult> Receive(string name, PlanRange range, IValueSink sink, bool fresh, IProgress<BlockResult>? progress, CancellationToken ct)
     {
         var state = StateOf(_exchange.MapOf(range));
 
         var results = new List<BlockResult>();
+        BlockResult? before = null;
+        BlockResult? after = null;
         var blocks = _exchange.Blocks(name, range);
         for (var index = 0; index < blocks.Count; index++)
         {
             var block = blocks[index];
-            IReadOnlyList<BlockResult> done = fresh || !state.Contains(block)
+            var done = fresh || !state.Contains(block)
                 ? await Fetch(name, state, block, ct)
-                : [new BlockResult(block, BlockStatus.Completed)];
-            foreach (var result in done)
+                : new TransferResult([new BlockResult(block, BlockStatus.Completed)]);
+            foreach (var result in done.Blocks)
             {
                 if (result.Status == BlockStatus.Completed)
                 {
@@ -272,7 +275,12 @@ public sealed class DeviceSession : IAsyncDisposable
                 }
                 Report(result);
             }
-            if (done.FirstOrDefault(result => result.Status != BlockStatus.Completed) is { } failed)
+            // the first that did not complete is reported, else the last that ran
+            before = Pick(before, done.Before);
+            after = Pick(after, done.After);
+            var failed = done.Blocks.FirstOrDefault(result => result.Status != BlockStatus.Completed)
+                ?? (done.After is { Status: not BlockStatus.Completed } failedAfter ? failedAfter : null);
+            if (failed is not null)
             {
                 foreach (var skipped in blocks.Skip(index + 1))
                 {
@@ -281,7 +289,10 @@ public sealed class DeviceSession : IAsyncDisposable
                 break;
             }
         }
-        return new TransferResult(results);
+        return new TransferResult(results) { Before = before, After = after };
+
+        static BlockResult? Pick(BlockResult? kept, BlockResult? next)
+            => kept is { Status: not BlockStatus.Completed } ? kept : next ?? kept;
 
         void Report(BlockResult result)
         {
@@ -301,7 +312,8 @@ public sealed class DeviceSession : IAsyncDisposable
         {
             foreach (var block in _exchange.Blocks(ExchangeNames.RequestData, range).Where(block => !state.Completes(block, client, fresh)))
             {
-                var failed = (await Fetch(ExchangeNames.RequestData, state, block, ct)).Where(result => result.Status != BlockStatus.Completed).ToList();
+                // the data is what completes the send; a failed 'before' leaves its blocks not transferred
+                var failed = (await Fetch(ExchangeNames.RequestData, state, block, ct)).Blocks.Where(result => result.Status != BlockStatus.Completed).ToList();
                 if (failed.Count > 0)
                 {
                     return new TransferResult(failed);
@@ -344,14 +356,14 @@ public sealed class DeviceSession : IAsyncDisposable
         }
     }
 
-    private async Task<IReadOnlyList<BlockResult>> Fetch(string name, IDeviceState state, PlanRange block, CancellationToken ct)
+    private async Task<TransferResult> Fetch(string name, IDeviceState state, PlanRange block, CancellationToken ct)
     {
         var result = await _exchange.Execute(name, block, new ExchangeData { Sink = state }, ct);
         foreach (var received in result.Blocks.Where(r => r.Status == BlockStatus.Completed))
         {
             Raise(received.Block, DeviceStateChange.Received);
         }
-        return result.Blocks;
+        return result;
     }
 
     private static ExchangeException Missing(string name, PlanRange range, string problem)

@@ -37,7 +37,8 @@ public sealed class ExchangeDefinitionSet
 /// <summary>
 /// One exchange: a plain state machine of turns that transfers one block of a range. It runs once per block, from its
 /// first turn; the root's message map splits the range into blocks for its split message (the first message it sends,
-/// else the first data message it receives).
+/// else the first data message it receives). Optional turns run once per call around the blocks (<see cref="Before"/>
+/// and <see cref="After"/>); a <c>goto</c> stays in its part.
 /// It names messages and events only: building and recognising the messages is the content's job.
 /// </summary>
 public sealed record ExchangeDefinition
@@ -51,16 +52,34 @@ public sealed record ExchangeDefinition
     /// <summary>The least time between two messages sent to the device.</summary>
     public required TimeSpan MessageInterval { get; init; }
 
-    /// <summary>The turns; the first one is the start.</summary>
+    /// <summary>The turns that run once per block; the first one is the start.</summary>
     public required IReadOnlyList<ExchangeTurn> Turns { get; init; }
 
-    /// <summary>The turn with the name (case-insensitive); null when there is none.</summary>
-    public ExchangeTurn? Find(string turn)
-        => Turns.FirstOrDefault(candidate => String.Equals(candidate.Name, turn, StringComparison.OrdinalIgnoreCase));
+    /// <summary>
+    /// The turns that run once per call, before the blocks (e.g. a bulk header); empty: none. Their messages are built
+    /// for the whole range and carry no data; they receive no data. When they do not complete, no block is transferred.
+    /// </summary>
+    public IReadOnlyList<ExchangeTurn> Before { get; init; } = [];
 
-    /// <summary>The messages the exchange names: sent, received and expected.</summary>
+    /// <summary>
+    /// The turns that run once per call, after the blocks, only when all blocks completed (e.g. a store request or a
+    /// bulk footer); empty: none. Their messages are built for the whole range and carry no data; they receive no data.
+    /// </summary>
+    public IReadOnlyList<ExchangeTurn> After { get; init; } = [];
+
+    /// <summary>The turn of <see cref="Turns"/> with the name (case-insensitive); null when there is none.</summary>
+    public ExchangeTurn? Find(string turn) => Find(Turns, turn);
+
+    /// <summary>The turn of a part (<see cref="Turns"/>, <see cref="Before"/> or <see cref="After"/>) with the name (case-insensitive); null when there is none.</summary>
+    public static ExchangeTurn? Find(IReadOnlyList<ExchangeTurn> turns, string turn)
+        => turns.FirstOrDefault(candidate => String.Equals(candidate.Name, turn, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The turns of all parts: <see cref="Before"/>, <see cref="Turns"/> and <see cref="After"/>.</summary>
+    public IEnumerable<ExchangeTurn> AllTurns => Before.Concat(Turns).Concat(After);
+
+    /// <summary>The messages the exchange names, in all its parts: sent, received and expected.</summary>
     public IEnumerable<SchemaName> Messages
-        => Turns.SelectMany(turn => (turn.Send is { } send ? [send] : Enumerable.Empty<SchemaName>())
+        => AllTurns.SelectMany(turn => (turn.Send is { } send ? [send] : Enumerable.Empty<SchemaName>())
             .Concat(turn.Receive)
             .Concat(turn.Transitions.Where(transition => transition.Message is not null).Select(transition => transition.Message!.Value)))
             .Distinct();

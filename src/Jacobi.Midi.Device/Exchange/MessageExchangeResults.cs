@@ -75,9 +75,19 @@ public sealed record BlockResult(PlanRange Block, BlockStatus Status, Exception?
 
 /// <summary>
 /// The outcome of a transfer per block. The first block that does not complete ends the transfer: the blocks after it
-/// are reported with the same status, as not transferred.
+/// are reported with the same status, as not transferred. The turns once per call of the exchange (its 'before' and
+/// 'after') have a result of their own, for the whole range; they count in <see cref="IsComplete"/>.
 /// </summary>
 public sealed record TransferResult(IReadOnlyList<BlockResult> Blocks)
 {
-    public bool IsComplete => Blocks.All(b => b.Status == BlockStatus.Completed);
+    /// <summary>The run of the exchange's turns before the blocks; null when it has none. When it does not complete, no block is transferred.</summary>
+    public BlockResult? Before { get; init; }
+
+    /// <summary>The run of the exchange's turns after the blocks; null when it has none, or when not all blocks completed (it did not run).</summary>
+    public BlockResult? After { get; init; }
+
+    /// <summary>True when every block, and the turns before and after them, completed.</summary>
+    public bool IsComplete => Blocks.All(b => b.Status == BlockStatus.Completed)
+        && Before?.Status is null or BlockStatus.Completed
+        && After?.Status is null or BlockStatus.Completed;
 }

@@ -175,3 +175,10 @@ exchange patterns*, and the [Exchange readme](../src/Jacobi.Midi.Device/Exchange
 16. **`MessageExchange.Execute` replaces `Receive`/`Send`; `DeviceSession` gets everything when it is created** and
     has `Execute`, `RequestData` and `SendData`. *Why:* one entry point per layer.
 17. **The Schema Editor's *Send* through the runner is a separate item.** *Why:* not needed for the exchange itself.
+18. **`before` and `after` are built together (2026-11-09)**, `before` with tests of its own, though no device uses it
+    yet (the Yamaha Bulk Header also needs the address map indirection). They hold turns, like the blocks, so they can
+    wait for an ack, retry and `goto` within their part. *Why:* decision 13 as one piece; the same turn model everywhere.
+19. **An `after` that fails after a send leaves the sent values in the session's state** (2026-11-09); the result
+    reports the failure. *Why:* the data reached the device.
+20. **A message can be a root of its own** (named `document.root`, e.g. `Gx700.SoundChangeRequest`), a fixed
+    message next to the address map. *Why:* a fixed message is not part of the device's memory.

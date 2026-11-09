@@ -1,5 +1,5 @@
 <dashboard format="jacobi.midi.dashboard/1" name="GX-700" cellSize="20" look="Foundry">
-  <device alias="gx700" mapRoot="Gx700.AddressMap" receive="requestData" />
+  <device alias="gx700" mapRoot="Gx700.AddressMap" receive="requestData" send="sendTemporary" />
   <grid label="GX-700" size="83,197" color="#6E8FB3" plateColor="#C9A55A" device="gx700" base="AddressMap.Temporary">
     <section label="Common" size="48,21" at="0,0" base="AddressMap.Temporary.Common">
       <knob size="5,7" at="0,0">

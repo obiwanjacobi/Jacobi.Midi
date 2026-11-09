@@ -5,6 +5,7 @@ Known gaps and loose ends of the address map and the message exchange (see [Addr
 ## General
 
 - [ ] Add universal sysex definitions to midi.schema.xml
+- [ ] Add documentation to schema fields (and groups?) `midi.doc`. Copy text from the manual to show in editor and/or console.
 
 ## Device messages
 
@@ -37,10 +38,10 @@ Known gaps and loose ends of the address map and the message exchange (see [Addr
   - [x] The exchange files in XML (`*.exchange.xml`) and JSON (`*.exchange.json`), read into the same tree so the checks are the same; the formats described by `Exchange/exchange.xsd` and `Exchange/exchange.schema.json`.
   - [x] Stage 2: `state` renamed to `turn` (`ExchangeTurn`); retries with a limit per block (`on/@retry`), the reason names the retries.
   - [ ] `DeviceSession.Execute` for an exchange that both sends and receives data: today it throws `NotSupportedException`. Apply both state rules: complete the atomic groups from the state before sending, and put the received data into the state.
-  - [ ] Stage 3: `before` and `after`: optional turns once per call, around the blocks. Their messages are built for the whole range (`address` = its start, `size` = its size), no `data` message or `receive`; a `goto` stays in its part; `after` only runs when all blocks completed; `TransferResult.Before`/`After` count in `IsComplete`. Fixed messages (no `address`, `size` or `data` role) can be sent in any turn. Covers:
+  - [x] Stage 3: `before` and `after`: optional turns once per call, around the blocks. Their messages are built for the whole range (`address` = its start, `size` = its size), no `data` message or `receive`; a `goto` stays in its part; `after` only runs when all blocks completed; `TransferResult.Before`/`After` count in `IsComplete`. Fixed messages (no `address`, `size` or `data` role) can be sent in any turn. *Done:* `ExchangeDefinition.Before`/`After`, read from XML and JSON (`exchange.xsd`, `exchange.schema.json`), run by `MessageExchange.Execute` as one transfer; a message name may be a root that is a message itself (`document.root`). Covers:
     - [ ] Yamaha Bulk Header → blocks → Bulk Footer (stored Live Set Sounds of the CP88, CK88, YC). Also needs the Bulk Header/Footer indirection of the address map (`docs/analysis/yamaha.md`).
     - [ ] Store requests after the data (Korg Program Write Request, Yamaha Store To Flash) with their completed/error replies.
-    - [ ] GX-700 Sound Change Request after a write to the temporary area: a fixed message in the GX-700 schema (`Gx700.SoundChangeRequest`, a root of its own next to the address map: done), sent in the `after` of an exchange of its own (e.g. `sendTemporary`).
+    - [x] GX-700 Sound Change Request after a write to the temporary area: a fixed message in the GX-700 schema (`Gx700.SoundChangeRequest`, a root of its own next to the address map: done), sent in the `after` of an exchange of its own: `sendTemporary` in `Gx700.exchange.xml`.
   - [ ] Stage 4: prompts for a manual operation (e.g. "press the bulk dump key"): `receive/@prompt` (literal text), shown through `ExchangeData.Prompt` (`IExchangePrompt.Show(text, ended)`) on entry of the turn and ended when the turns with that prompt are left; cancel through the `CancellationToken`; `turn/@responseTimeout`; a check that a `Prompt` is given.
   - [ ] Roland handshake for sending: two levels of blocks (WSD per section, DAT per piece): WSD/RQD → ACK → DAT → ACK … EOD, ERR → resend, RJC → abort. Receiving with the handshake fits today, once its messages are in the schemas.
   - [ ] Device modes: requests that are only accepted in some modes (Korg i5M, DS-8 panel modes). The app switches the mode with an exchange of its own name before the exchange that needs it.

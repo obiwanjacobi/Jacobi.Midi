@@ -316,9 +316,14 @@ internal sealed class MidiViewModel : ViewModelBase, IAsyncDisposable
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>The blocks of a transfer that did not complete, with their status and reason, in words.</summary>
+    /// <summary>
+    /// What did not complete in a transfer, with the status and reason, in words: the turns before the blocks, the blocks
+    /// and the turns after them.
+    /// </summary>
     public static string Describe(TransferResult result)
-        => String.Join("; ", result.Blocks.Where(block => block.Status != BlockStatus.Completed)
+        => String.Join("; ", new[] { result.Before }.Concat(result.Blocks).Append(result.After)
+            .OfType<BlockResult>()
+            .Where(block => block.Status != BlockStatus.Completed)
             .Select(block => (block.Reason ?? block.Error?.Message) is { } reason ? $"{block.Status}: {reason}" : block.Status.ToString()));
 
     private static string Describe(IdentityReplyMessage reply)

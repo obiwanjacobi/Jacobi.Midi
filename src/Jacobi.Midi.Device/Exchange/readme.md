@@ -110,6 +110,7 @@ and [Gx700.exchange.xml](../../Jacobi.Midi.Roland/Boss/Gx700/Gx700.exchange.xml)
 | `exchanges` | `for` (the root, e.g. `Gx700.AddressMap`), `responseTimeout` (ms, default 1000), `messageInterval` (ms, default 0) | The file. `messageInterval` is the least time between two messages sent to the device. |
 | `exchange` | `name`, optional `responseTimeout`, `messageInterval` | One exchange; its timing overrides the file's. A standard name (`ExchangeNames`: `requestData`, `sendData`) or a name of the file's own. |
 | `turn` | `name` | A turn in the conversation with the device; the first one is the start. On entry it sends its message (if any), then waits for the events it has an `on` for, or a default (see below). |
+| `before`, `after` | | Optional, at most one of each: turns that run once per call, before the blocks and (only when all blocks completed) after them, e.g. a bulk header and footer, or a store request. Their messages are built for the whole range (an address map: the address of its start, the size of the range) and carry no data; they have no `receive`. The first turn of the part is its start; a `goto` stays in the part. In JSON: arrays of turns. |
 | `send` | `message` | The message to write for the block and send on entry: the schema name of the message group (document, root and path). |
 | `receive` | `message` | A data message whose data is accepted for the block while in the turn, and counts towards `received`. |
 | `on` | `event` (`sent`, `received`, `timeout`) or `message`; optional `retry` (1 or more, for `timeout` and messages); `goto` (a turn) or `result` (`completed`, `rejected`, `failed`, `timedOut`) | A transition; the first one that matches is taken. With `retry` it enters its turn again (sending its message again) at most that many times per block, then its `goto` or `result` is taken. A message without an `on` (or `receive`) is ignored. |
@@ -144,6 +145,19 @@ range for the split message (an address map: a message that asks for data, with 
    - waiting: a message from the device is recognised by the map against the messages the exchange names (data inside the block, or a message without data its transitions wait for); data that a turn `receive`s is accepted and the timeout restarts; `received` follows when the map says the block has all its data.
    - the run ends with a `result`; the runner writes the reason (e.g. *"timeout in turn 'request' of 'requestData'."*, with *", after 2 retries"* when its retries were used). The accepted data of a completed block is decoded into the sink, in the order it arrived.
 4. **The first block that does not complete ends the transfer**: the blocks after it are reported with the same status, as not transferred.
+
+**Before and after.** The turns of `before` run once, before the first block, for the whole range; when they do not
+complete, no block is transferred (each is reported with their status). The turns of `after` run once, after the last
+block, only when all blocks completed. Both have a result of their own (`TransferResult.Before`, `After`; the reason
+names the part, e.g. *"timeout in turn 'store' (after) of 'sendTemporary'."*) that counts in `IsComplete`. The whole
+call is one transfer: nothing else is sent to the device between the turns before, the blocks and the turns after. A
+`DeviceSession` receive requests per block that its state does not hold, so there the turns before and after run
+around each requested block; an `after` that fails after a send leaves the sent values in the session's state (the
+data reached the device). The GX-700's `sendTemporary` is an example: the data, then the sound change request
+(`Gx700.SoundChangeRequest`, a fixed message) in its `after`.
+
+A message without an `address`, `size` or `data` role (a fixed message, e.g. an ack or the GX-700's sound change
+request) can be sent in any turn; it may be a root of its own (named by document and root).
 
 **Listen:** data messages the device sends on its own are decoded into the sink when they overlap the range, until
 the call is cancelled. Data that belongs to a running transfer is not also delivered to a listener.
@@ -184,7 +198,7 @@ Namespace `Jacobi.Midi.Device.Exchange`.
 | `ExchangeDefinitions`, `ExchangeDefinitionSet`, `ExchangeDefinition`, `ExchangeTurn`, `ExchangeTransition`, `ExchangeEvent` | The exchange files by root, and their content. |
 | `ExchangeDefinitionReader`, `ExchangeDefinitionException` | Reads an exchange file (XML or JSON) and reports all its problems. |
 | `ExchangeException` | An exchange that cannot run for a range, with all problems; thrown before anything is sent. |
-| `TransferResult`, `BlockResult`, `BlockStatus` | The outcome per block (the block is the `PlanRange` of the nodes one message asks for or carries): `Completed`, `TimedOut`, `Rejected` or `Failed`, with the `Reason` the runner writes and the exception, if any. `Execute` also reports each block to an optional `IProgress<BlockResult>`. |
+| `TransferResult`, `BlockResult`, `BlockStatus` | The outcome per block (the block is the `PlanRange` of the nodes one message asks for or carries): `Completed`, `TimedOut`, `Rejected` or `Failed`, with the `Reason` the runner writes and the exception, if any; `Before` and `After` for the turns once per call (for the whole range). `Execute` also reports each block to an optional `IProgress<BlockResult>`. |
 | `DeviceIdentity` | A universal Identity Request on an endpoint and UMP group, over a connection of its own, and the Identity Replies that arrive within a wait. Independent of the schemas (a test whether a device is there); older devices do not answer it. |
 
 ## Transport
@@ -200,7 +214,7 @@ The Schema Editor's *Send* does not go through the runner yet: it keeps the `mes
 ## Not yet supported
 
 See the [Device todo](../todo.md) (*Message exchange patterns*):
-messages once around the blocks (Yamaha Bulk Header/Footer, a store request after the data), prompts for a manual
-operation on the device, two levels of blocks (the Roland handshake for sending), patterns the device starts,
+the Yamaha Bulk Header/Footer (the `before` and `after` are there, the address map indirection is not), prompts for a
+manual operation on the device, two levels of blocks (the Roland handshake for sending), patterns the device starts,
 commands without data and without a range, a choice between messages per block, and areas of the session state that
 depend on others.

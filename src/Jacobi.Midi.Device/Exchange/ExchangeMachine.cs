@@ -23,30 +23,51 @@ internal readonly record struct Complete(BlockStatus Status, string? Reason = nu
 /// </summary>
 internal union ExchangeAction(SendMessage, WaitForMessage, Ignore, Complete);
 
-/// <summary>
-/// Runs an <see cref="ExchangeDefinition"/> for one block: it gets events and answers with the next action. It never
-/// touches the connection, timers or message bytes; <see cref="MessageExchange"/> executes the actions. It counts the
-/// retries of the transitions (per block, as a machine is used for one block) and writes the reason of a run that does
-/// not complete from the event and the turn. Used for one block, from one thread at a time.
-/// </summary>
-internal sealed class ExchangeMachine(ExchangeDefinition definition, IReadOnlyDictionary<SchemaName, DeviceMessage> messages)
+/// <summary>The part of an exchange a run is for: the turns per block, or the turns once per call around the blocks.</summary>
+internal enum ExchangePart
 {
-    private ExchangeTurn _turn = definition.Turns[0];
+    /// <summary><see cref="ExchangeDefinition.Turns"/>: once per block.</summary>
+    Block,
+    /// <summary><see cref="ExchangeDefinition.Before"/>: once per call, before the blocks.</summary>
+    Before,
+    /// <summary><see cref="ExchangeDefinition.After"/>: once per call, after the blocks.</summary>
+    After,
+}
+
+/// <summary>
+/// Runs one part of an <see cref="ExchangeDefinition"/> (<see cref="ExchangePart"/>: the turns of a block, or the
+/// turns before or after the blocks): it gets events and answers with the next action. It never touches the connection,
+/// timers or message bytes; <see cref="MessageExchange"/> executes the actions. It counts the retries of the transitions
+/// (per run, as a machine is used for one run) and writes the reason of a run that does not complete from the event and
+/// the turn. A <c>goto</c> stays in the part. Used for one run, from one thread at a time.
+/// </summary>
+internal sealed class ExchangeMachine(ExchangeDefinition definition, IReadOnlyDictionary<SchemaName, DeviceMessage> messages,
+    ExchangePart part = ExchangePart.Block)
+{
+    private readonly IReadOnlyList<ExchangeTurn> _turns = part switch
+    {
+        ExchangePart.Before => definition.Before,
+        ExchangePart.After => definition.After,
+        _ => definition.Turns,
+    };
+    private ExchangeTurn? _turn;
     private readonly Dictionary<ExchangeTransition, int> _retries = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>The current turn.</summary>
-    public ExchangeTurn Turn => _turn;
+    public ExchangeTurn Turn => _turn ?? _turns[0];
 
-    /// <summary>The first action: enter the first turn.</summary>
-    public ExchangeAction Start() => Enter(definition.Turns[0]);
+    /// <summary>The first action: enter the first turn of the part.</summary>
+    /// <exception cref="InvalidOperationException">The part has no turns.</exception>
+    public ExchangeAction Start()
+        => _turns.Count > 0 ? Enter(_turns[0]) : throw new InvalidOperationException($"'{definition.Name}' has no '{PartName}' turns.");
 
     /// <summary>True when the current turn accepts the data of the message for the block (<c>receive</c>).</summary>
     public bool Receives(DeviceMessage message)
-        => _turn.Receive.Any(name => ReferenceEquals(messages[name], message));
+        => Turn.Receive.Any(name => ReferenceEquals(messages[name], message));
 
     /// <summary>The message of the turn was sent; without a transition for it the turn waits for its other events.</summary>
     public ExchangeAction OnSent()
-        => _turn.Transition(ExchangeEvent.Sent) is { } transition
+        => Turn.Transition(ExchangeEvent.Sent) is { } transition
             ? Apply(transition, "'sent'")
             : new WaitForMessage(definition.ResponseTimeout);
 
@@ -56,7 +77,7 @@ internal sealed class ExchangeMachine(ExchangeDefinition definition, IReadOnlyDi
     /// </summary>
     public ExchangeAction OnReceived(ExchangeMessage message, bool complete)
     {
-        if (complete && _turn.Transition(ExchangeEvent.Received) is { } done)
+        if (complete && Turn.Transition(ExchangeEvent.Received) is { } done)
         {
             return Apply(done, "'received'");
         }
@@ -73,7 +94,7 @@ internal sealed class ExchangeMachine(ExchangeDefinition definition, IReadOnlyDi
 
     /// <summary>The timeout elapsed; without a transition of its own the turn's default ends the run as timed out.</summary>
     public ExchangeAction OnElapsed()
-        => Apply(_turn.Transition(ExchangeEvent.Timeout)!, "timeout");
+        => Apply(Turn.Transition(ExchangeEvent.Timeout)!, "timeout");
 
     private ExchangeAction Enter(ExchangeTurn turn)
     {
@@ -90,13 +111,14 @@ internal sealed class ExchangeMachine(ExchangeDefinition definition, IReadOnlyDi
         if (retries < transition.Retry)
         {
             _retries[transition] = retries + 1;
-            return Enter(_turn);
+            return Enter(Turn);
         }
 
         if (transition.Goto is { } target)
         {
-            return Enter(definition.Find(target)
-                ?? throw new InvalidOperationException($"'{definition.Name}', turn '{_turn.Name}': there is no turn '{target}'."));
+            // a goto stays in its part
+            return Enter(ExchangeDefinition.Find(_turns, target)
+                ?? throw new InvalidOperationException($"'{definition.Name}', turn '{Turn.Name}'{PartText}: there is no turn '{target}'."));
         }
         var status = transition.Result ?? BlockStatus.Failed;
         return new Complete(status, status == BlockStatus.Completed ? null : Reason(happened, retries));
@@ -104,10 +126,15 @@ internal sealed class ExchangeMachine(ExchangeDefinition definition, IReadOnlyDi
 
     private string Reason(string happened, int retries = 0)
         => retries == 0
-            ? $"{happened} in turn '{_turn.Name}' of '{definition.Name}'."
-            : $"{happened} in turn '{_turn.Name}' of '{definition.Name}', after {retries} {(retries == 1 ? "retry" : "retries")}.";
+            ? $"{happened} in turn '{Turn.Name}'{PartText} of '{definition.Name}'."
+            : $"{happened} in turn '{Turn.Name}'{PartText} of '{definition.Name}', after {retries} {(retries == 1 ? "retry" : "retries")}.";
+
+    private string PartName => part == ExchangePart.Before ? "before" : "after";
+
+    // the part in a reason: the turns before or after the blocks are named as such
+    private string PartText => part == ExchangePart.Block ? String.Empty : $" ({PartName})";
 
     private ExchangeTransition? Find(DeviceMessage message)
-        => _turn.Transitions.FirstOrDefault(transition => transition.Event == ExchangeEvent.Message
+        => Turn.Transitions.FirstOrDefault(transition => transition.Event == ExchangeEvent.Message
             && transition.Message is { } name && ReferenceEquals(messages[name], message));
 }

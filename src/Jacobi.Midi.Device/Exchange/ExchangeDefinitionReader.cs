@@ -115,19 +115,10 @@ public static class ExchangeDefinitionReader
         var timeout = Milliseconds(node, "responseTimeout", problems) ?? responseTimeout;
         var interval = Milliseconds(node, "messageInterval", problems) ?? messageInterval;
 
-        var turns = new List<ExchangeTurn>();
-        foreach (var turnNode in Children(node, problems, "turn"))
-        {
-            var turn = ReadTurn(turnNode, problems);
-            if (turn is not null)
-            {
-                if (turns.Any(existing => String.Equals(existing.Name, turn.Name, StringComparison.OrdinalIgnoreCase)))
-                {
-                    problems.Add($"{turnNode.Location}the turn '{turn.Name}' is defined more than once.");
-                }
-                turns.Add(turn);
-            }
-        }
+        var children = Children(node, problems, "turn", "before", "after").ToList();
+        var turns = ReadTurns(children.Where(child => child.Name == "turn"), problems);
+        var before = ReadPart(node, children, "before", problems);
+        var after = ReadPart(node, children, "after", problems);
         if (turns.Count == 0)
         {
             problems.Add($"{node.Location}the exchange '{name}' has no turn.");
@@ -144,9 +135,58 @@ public static class ExchangeDefinitionReader
             ResponseTimeout = TimeSpan.FromMilliseconds(timeout),
             MessageInterval = TimeSpan.FromMilliseconds(interval),
             Turns = turns,
+            Before = before,
+            After = after,
         };
-        CheckTurns(node, exchange, problems);
+        CheckTurns(node, exchange.Name, null, exchange.Turns, problems);
+        CheckTurns(node, exchange.Name, "before", exchange.Before, problems);
+        CheckTurns(node, exchange.Name, "after", exchange.After, problems);
         return problems.Count > count ? null : exchange;
+    }
+
+    // the turns once per call (a 'before' or 'after'), at most one of each; they receive no data
+    private static IReadOnlyList<ExchangeTurn> ReadPart(Node exchange, List<Node> children, string part, List<string> problems)
+    {
+        var parts = children.Where(child => child.Name == part).ToList();
+        if (parts.Count == 0)
+        {
+            return [];
+        }
+        if (parts.Count > 1)
+        {
+            problems.Add($"{parts[1].Location}an exchange has one '{part}': there is more than one.");
+        }
+        var node = parts[0];
+        Attributes(node, problems);
+        var turns = ReadTurns(Children(node, problems, "turn"), problems);
+        if (turns.Count == 0)
+        {
+            problems.Add($"{node.Location}'{part}' has no turn.");
+        }
+        foreach (var turn in turns.Where(turn => turn.Receive.Count > 0))
+        {
+            problems.Add($"{node.Location}'{part}', turn '{turn.Name}': a 'receive' is not possible: the turns {part} the blocks receive no data.");
+        }
+        return turns;
+    }
+
+    // the turns of one part, each name once
+    private static List<ExchangeTurn> ReadTurns(IEnumerable<Node> nodes, List<string> problems)
+    {
+        var turns = new List<ExchangeTurn>();
+        foreach (var turnNode in nodes)
+        {
+            var turn = ReadTurn(turnNode, problems);
+            if (turn is not null)
+            {
+                if (turns.Any(existing => String.Equals(existing.Name, turn.Name, StringComparison.OrdinalIgnoreCase)))
+                {
+                    problems.Add($"{turnNode.Location}the turn '{turn.Name}' is defined more than once.");
+                }
+                turns.Add(turn);
+            }
+        }
+        return turns;
     }
 
     private static ExchangeTurn? ReadTurn(Node node, List<string> problems)
@@ -237,30 +277,37 @@ public static class ExchangeDefinitionReader
             : new ExchangeTransition { Event = @event, Message = message is null ? (SchemaName?)null : new SchemaName(message), Retry = retry, Goto = target, Result = result };
     }
 
-    // the targets of the transitions exist, every turn can be reached, and an event fits its turn
-    private static void CheckTurns(Node node, ExchangeDefinition exchange, List<string> problems)
+    // per part (the turns per block, 'before' or 'after'): the targets of the transitions are turns of the same part,
+    // every turn can be reached from its first one, and an event fits its turn
+    private static void CheckTurns(Node node, string exchange, string? part, IReadOnlyList<ExchangeTurn> turns, List<string> problems)
     {
-        foreach (var turn in exchange.Turns)
+        if (turns.Count == 0)
+        {
+            return;
+        }
+        var of = part is null ? $"'{exchange}'" : $"'{exchange}' ({part})";
+        foreach (var turn in turns)
         {
             foreach (var transition in turn.Transitions)
             {
-                if (transition.Goto is { } target && exchange.Find(target) is null)
+                if (transition.Goto is { } target && ExchangeDefinition.Find(turns, target) is null)
                 {
-                    problems.Add($"{node.Location}'{exchange.Name}', turn '{turn.Name}': there is no turn '{target}' to go to.");
+                    problems.Add($"{node.Location}{of}, turn '{turn.Name}': there is no turn '{target}' to go to"
+                        + (part is null ? "." : $" in '{part}' (a 'goto' stays in its part)."));
                 }
                 if (transition.Event == ExchangeEvent.Sent && turn.Send is null)
                 {
-                    problems.Add($"{node.Location}'{exchange.Name}', turn '{turn.Name}': 'sent' needs a 'send' in the turn.");
+                    problems.Add($"{node.Location}{of}, turn '{turn.Name}': 'sent' needs a 'send' in the turn.");
                 }
                 if (transition.Event == ExchangeEvent.Received && turn.Receive.Count == 0)
                 {
-                    problems.Add($"{node.Location}'{exchange.Name}', turn '{turn.Name}': 'received' needs a 'receive' in the turn.");
+                    problems.Add($"{node.Location}{of}, turn '{turn.Name}': 'received' needs a 'receive' in the turn.");
                 }
             }
         }
 
         var reached = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var next = new Stack<ExchangeTurn>([exchange.Turns[0]]);
+        var next = new Stack<ExchangeTurn>([turns[0]]);
         while (next.TryPop(out var turn))
         {
             if (!reached.Add(turn.Name))
@@ -269,15 +316,15 @@ public static class ExchangeDefinitionReader
             }
             foreach (var target in turn.Transitions.Select(transition => transition.Goto).OfType<string>())
             {
-                if (exchange.Find(target) is { } found)
+                if (ExchangeDefinition.Find(turns, target) is { } found)
                 {
                     next.Push(found);
                 }
             }
         }
-        foreach (var turn in exchange.Turns.Where(turn => !reached.Contains(turn.Name)))
+        foreach (var turn in turns.Where(turn => !reached.Contains(turn.Name)))
         {
-            problems.Add($"{node.Location}'{exchange.Name}', turn '{turn.Name}' is never reached.");
+            problems.Add($"{node.Location}{of}, turn '{turn.Name}' is never reached.");
         }
     }
 
@@ -396,9 +443,10 @@ public static class ExchangeDefinitionReader
 
     /// <summary>
     /// Turns JSON into <see cref="Node"/>s, as the XML would be: the root object is 'exchanges'; its 'exchanges' array
-    /// holds the 'exchange' children, an exchange's 'turns' array the 'turn' children. In a turn, 'send' is a message
-    /// name, 'receive' an array of message names and 'on' an array of transitions. Other values are attributes (as text);
-    /// other arrays and objects are children with their own name, which the checks report as not expected.
+    /// holds the 'exchange' children, an exchange's 'turns' array the 'turn' children, and its 'before' and 'after'
+    /// arrays (of turns) a 'before' and 'after' child with those turns. In a turn, 'send' is a message name, 'receive' an
+    /// array of message names and 'on' an array of transitions. Other values are attributes (as text); other arrays and
+    /// objects are children with their own name, which the checks report as not expected.
     /// The root's '$schema' is left out.
     /// </summary>
     private static class JsonNodes
@@ -441,6 +489,11 @@ public static class ExchangeDefinitionReader
                 else if (name == "turn" && property.Name == "send")
                 {
                     children.Add(MessageNode("send", property.Value, at, problems));
+                }
+                else if (name == "exchange" && property.Name is "before" or "after")
+                {
+                    // the turns once per call: a part with its turns, as the XML element holds them
+                    children.Add(new Node(property.Name, new Dictionary<string, string>(), [.. Items("turn", property.Value, at, problems)], $"{at}: "));
                 }
                 else if (property.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
                 {

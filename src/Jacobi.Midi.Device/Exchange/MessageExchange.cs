@@ -105,22 +105,50 @@ public sealed class MessageExchange : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(data);
         var prepared = Prepare(name, range, data);
         var blocks = Split(prepared, range);
+        var definition = prepared.Definition;
 
         var results = new List<BlockResult>();
-        for (var index = 0; index < blocks.Count; index++)
+
+        // the whole call is one transfer: nothing else gets between the turns before, the blocks and the turns after
+        await _transfers.WaitAsync(ct);
+        try
         {
-            var result = await Run(prepared, blocks[index], data, ct);
-            Report(result);
-            if (result.Status != BlockStatus.Completed)
+            BlockResult? before = null;
+            if (definition.Before.Count > 0)
             {
-                foreach (var block in blocks.Skip(index + 1))
+                before = await Run(prepared, ExchangePart.Before, range, data, ct);
+                if (before.Status != BlockStatus.Completed)
                 {
-                    Report(BlockResult.NotTransferred(block, result));
+                    foreach (var block in blocks)
+                    {
+                        Report(BlockResult.NotTransferred(block, before));
+                    }
+                    return new TransferResult(results) { Before = before };
                 }
-                break;
             }
+
+            for (var index = 0; index < blocks.Count; index++)
+            {
+                var result = await Run(prepared, ExchangePart.Block, blocks[index], data, ct);
+                Report(result);
+                if (result.Status != BlockStatus.Completed)
+                {
+                    foreach (var block in blocks.Skip(index + 1))
+                    {
+                        Report(BlockResult.NotTransferred(block, result));
+                    }
+                    return new TransferResult(results) { Before = before };
+                }
+            }
+
+            // only when all blocks completed
+            var after = definition.After.Count > 0 ? await Run(prepared, ExchangePart.After, range, data, ct) : null;
+            return new TransferResult(results) { Before = before, After = after };
         }
-        return new TransferResult(results);
+        finally
+        {
+            _transfers.Release();
+        }
 
         void Report(BlockResult result)
         {
@@ -278,6 +306,13 @@ public sealed class MessageExchange : IAsyncDisposable
             problems.AddRange(_maps.Validate(range, splitBy, messages.Values, _device));
         }
 
+        // the turns once per call are built for the whole range: they send no data
+        foreach (var once in definition.Before.Concat(definition.After).Select(turn => turn.Send).OfType<SchemaName>().Distinct()
+            .Where(send => map.IsData(messages[send])))
+        {
+            problems.Add($"'{once}' carries data of '{map.Root}': the turns before and after the blocks send no data.");
+        }
+
         var sendsData = sent.Any(map.IsData);
         var receivesData = definition.Turns.Any(turn => turn.Receive.Count > 0);
         if (data is not null && sendsData && data.Source is null)
@@ -292,7 +327,7 @@ public sealed class MessageExchange : IAsyncDisposable
         if (problems.Count == 0)
         {
             var receivable = messages.Values.Where(message => map.IsData(message) && !sent.Contains(message)).Distinct().ToList();
-            var others = definition.Turns.SelectMany(turn => turn.Transitions)
+            var others = definition.AllTurns.SelectMany(turn => turn.Transitions)
                 .Select(transition => transition.Message).OfType<SchemaName>()
                 .Select(message => messages[message]).Where(message => !map.IsData(message)).Distinct().ToList();
             prepared = new PreparedExchange(map, definition, map.Device.With(_device), messages, splitBy!, sendsData, receivesData, receivable, others);
@@ -303,11 +338,11 @@ public sealed class MessageExchange : IAsyncDisposable
     private void OnStateChanged(object? sender, MidiConnectionStateChangedArgs args)
         => ConnectionStateChanged?.Invoke(this, args);
 
-    // Runs the exchange for one block: executes the actions of its machine and feeds it the events, then decodes the
-    // data it accepted. One transfer at a time, so messages without an address (an ack) belong to it.
-    private async Task<BlockResult> Run(PreparedExchange prepared, PlanRange block, ExchangeData data, CancellationToken ct)
+    // Runs a part of the exchange for one block (the turns per block), or for the whole range (the turns before or after
+    // the blocks): executes the actions of its machine and feeds it the events, then decodes the data it accepted. The
+    // caller holds the transfer (one at a time), so messages without an address (an ack) belong to it.
+    private async Task<BlockResult> Run(PreparedExchange prepared, ExchangePart part, PlanRange block, ExchangeData data, CancellationToken ct)
     {
-        await _transfers.WaitAsync(ct);
         var active = new ActiveTransfer(prepared, block);
         lock (_lock)
         {
@@ -316,7 +351,7 @@ public sealed class MessageExchange : IAsyncDisposable
 
         try
         {
-            var machine = new ExchangeMachine(prepared.Definition, prepared.Messages);
+            var machine = new ExchangeMachine(prepared.Definition, prepared.Messages, part);
             var received = new List<ReceivedData>();
             var action = machine.Start();
             while (true)
@@ -361,7 +396,6 @@ public sealed class MessageExchange : IAsyncDisposable
             {
                 _active = null;
             }
-            _transfers.Release();
         }
     }
 

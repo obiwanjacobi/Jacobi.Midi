@@ -6,10 +6,12 @@
   Rules the reader checks that XSD 1.0 cannot express:
   - a turn has at most one <send>;
   - an <on> has either an 'event' or a 'message', and either a 'goto' or a 'result';
-  - 'goto' names a turn of the same exchange; every turn can be reached from the first one;
+  - 'goto' names a turn of the same part (the turns per block, <before> or <after>); every turn can be reached from
+    the first one of its part;
+  - the turns of <before> and <after> have no <receive>, and their messages carry no data (checked when used);
   - 'sent' needs a <send> in the turn, 'received' a <receive>;
   - 'retry' is only for 'timeout' and messages, not for 'sent' or 'received';
-  - names of exchanges (in the file) and of turns (in an exchange) are unique, ignoring case.
+  - names of exchanges (in the file) and of turns (in a part of an exchange) are unique, ignoring case.
   The reader accepts the event and result values in any case; the values below are the canonical spelling.
 
   Defaults, for a turn without an <on> for the event:
@@ -51,10 +53,20 @@
 
   <xs:complexType name="exchange">
     <xs:annotation>
-      <xs:documentation>One exchange: a state machine of turns that runs once per block of the range; the first turn is the start.</xs:documentation>
+      <xs:documentation>One exchange: a state machine of turns that runs once per block of the range; the first turn is the start. Optional turns run once per call, before and after the blocks.</xs:documentation>
     </xs:annotation>
     <xs:sequence>
+      <xs:element name="before" type="part" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>Turns that run once per call, before the blocks (e.g. a bulk header); when they do not complete, no block is transferred.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
       <xs:element name="turn" type="turn" maxOccurs="unbounded" />
+      <xs:element name="after" type="part" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>Turns that run once per call, after the blocks, only when all blocks completed (e.g. a store request or a bulk footer).</xs:documentation>
+        </xs:annotation>
+      </xs:element>
     </xs:sequence>
     <xs:attribute name="name" type="xs:string" use="required">
       <xs:annotation>
@@ -62,6 +74,15 @@
       </xs:annotation>
     </xs:attribute>
     <xs:attributeGroup ref="timing" />
+  </xs:complexType>
+
+  <xs:complexType name="part">
+    <xs:annotation>
+      <xs:documentation>Turns once per call: their messages are built for the whole range (address: its start, size: its size) and carry no data; they receive no data. The first turn is the start; a 'goto' stays in the part.</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="turn" type="turn" maxOccurs="unbounded" />
+    </xs:sequence>
   </xs:complexType>
 
   <xs:complexType name="turn">
@@ -114,10 +135,10 @@
 
   <xs:simpleType name="messageName">
     <xs:annotation>
-      <xs:documentation>The schema name of a message group: document, root and path, e.g. 'Roland.Message32.RQ1'.</xs:documentation>
+      <xs:documentation>The schema name of a message group: document, root and path, e.g. 'Roland.Message32.RQ1'; or document and root for a root that is a message itself, e.g. 'Gx700.SoundChangeRequest'.</xs:documentation>
     </xs:annotation>
     <xs:restriction base="xs:string">
-      <xs:pattern value="[^.\s]+(\.[^.\s]+){2,}" />
+      <xs:pattern value="[^.\s]+(\.[^.\s]+)+" />
     </xs:restriction>
   </xs:simpleType>
 

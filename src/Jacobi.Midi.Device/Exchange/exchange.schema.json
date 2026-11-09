@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/obiwanjacobi/Jacobi.Midi/exchange/exchange.schema.json",
   "title": "Jacobi.Midi exchange file",
-  "description": "The message exchange patterns of one map root (see readme.md). The same content as the XML format (exchange.xsd): elements that repeat are arrays. Not expressed here, checked by the reader: 'goto' names a turn of the same exchange, every turn can be reached from the first one, 'sent' needs a 'send' in the turn, 'received' a 'receive', 'retry' is only for 'timeout' and messages, and names of exchanges and turns are unique, ignoring case. Defaults, for a turn without an 'on' for the event: 'received' (a turn with a 'receive') and 'sent' (a turn with a 'send' that waits for nothing: no 'receive' and no 'on') give the result 'completed', 'timeout' gives 'timedOut'.",
+  "description": "The message exchange patterns of one map root (see readme.md). The same content as the XML format (exchange.xsd): elements that repeat are arrays. Not expressed here, checked by the reader: 'goto' names a turn of the same part ('turns', 'before' or 'after'), every turn can be reached from the first one of its part, the turns of 'before' and 'after' have no 'receive' and their messages carry no data (checked when used), 'sent' needs a 'send' in the turn, 'received' a 'receive', 'retry' is only for 'timeout' and messages, and names of exchanges and of the turns of a part are unique, ignoring case. Defaults, for a turn without an 'on' for the event: 'received' (a turn with a 'receive') and 'sent' (a turn with a 'send' that waits for nothing: no 'receive' and no 'on') give the result 'completed', 'timeout' gives 'timedOut'.",
   "type": "object",
   "required": [ "for", "exchanges" ],
   "properties": {
@@ -37,12 +37,12 @@
       "pattern": "^[^.\\s]+(\\.[^.\\s]+)+$"
     },
     "messageName": {
-      "description": "The schema name of a message group: document, root and path, e.g. 'Roland.Message32.RQ1'.",
+      "description": "The schema name of a message group: document, root and path, e.g. 'Roland.Message32.RQ1'; or document and root for a root that is a message itself, e.g. 'Gx700.SoundChangeRequest'.",
       "type": "string",
-      "pattern": "^[^.\\s]+(\\.[^.\\s]+){2,}$"
+      "pattern": "^[^.\\s]+(\\.[^.\\s]+)+$"
     },
     "exchange": {
-      "description": "One exchange: a state machine of turns that runs once per block of the range; the first turn is the start.",
+      "description": "One exchange: a state machine of turns that runs once per block of the range; the first turn is the start. Optional turns run once per call, before and after the blocks.",
       "type": "object",
       "required": [ "name", "turns" ],
       "properties": {
@@ -54,6 +54,18 @@
         "responseTimeout": { "$ref": "#/$defs/responseTimeout" },
         "messageInterval": { "$ref": "#/$defs/messageInterval" },
         "turns": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/turn" }
+        },
+        "before": {
+          "description": "Turns that run once per call, before the blocks (e.g. a bulk header); when they do not complete, no block is transferred. Their messages are built for the whole range and carry no data; a 'goto' stays in the part.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/turn" }
+        },
+        "after": {
+          "description": "Turns that run once per call, after the blocks, only when all blocks completed (e.g. a store request or a bulk footer). Their messages are built for the whole range and carry no data; a 'goto' stays in the part.",
           "type": "array",
           "minItems": 1,
           "items": { "$ref": "#/$defs/turn" }

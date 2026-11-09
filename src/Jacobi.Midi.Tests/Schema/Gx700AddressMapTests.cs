@@ -1,7 +1,9 @@
 using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.Core;
 using Jacobi.Midi.Device.Addressing;
+using Jacobi.Midi.Device.Exchange;
 using Xunit;
 using Jacobi.Midi.Device.Messages;
 
@@ -53,6 +55,63 @@ public class Gx700AddressMapTests
         // a DT1 of 00 to 04 7F 7F 7F, with the device id and the checksum
         Assert.Equal("F041027912047F7F7F007FF7", Convert.ToHexString(sysEx));
         Assert.Throws<ArgumentException>(() => CreateMap().CreateRange("AddressMap.SoundChangeRequest"));
+    }
+
+    [Fact]
+    public async Task SendTemporary_SendsTheSoundChangeRequestAfterTheData()
+    {
+        var serializer = new SerializerBuilder()
+            .AddSchemas(TestHelpers.CreateSchemas())
+            .AddProcessors(TestHelpers.CreateProcessors())
+            .Build();
+        var exchanges = new ExchangeDefinitions();
+        Assert.Empty(exchanges.AddAssembly(typeof(Jacobi.Midi.Roland.Processors.ProcessorFactory).Assembly));
+        var port = new RecordingPort();
+        await using var exchange = new MessageExchange(new MessageMaps(serializer), exchanges, port, Device);
+
+        // the Reverb section of the patch dump, as written to the Temporary area (04 00 0D 00)
+        var reverb = DumpMessages("gx700-sysex-patch1.syx").Single(message => message[7] == 0x0D).ToArray();
+        reverb[5] = 0x04;
+        reverb[^2] = RolandChecksum(reverb.AsSpan(5, reverb.Length - 7));
+        var values = Decode(CreateMap(), reverb);
+        var range = serializer.GetPlan(new SchemaName("Gx700.AddressMap")).CreateRange("AddressMap.Temporary.Reverb", "AddressMap.Temporary.Reverb");
+
+        var result = await exchange.Execute("sendTemporary", range, new ExchangeData { Source = values }, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsComplete);
+        Assert.Equal(BlockStatus.Completed, result.After!.Status);
+        // the data, then the sound change request
+        Assert.Equal([Convert.ToHexString(reverb), "F041007912047F7F7F007FF7"], port.Sent.Select(Convert.ToHexString));
+    }
+
+    private static byte RolandChecksum(ReadOnlySpan<byte> bytes)
+    {
+        var sum = 0;
+        foreach (var b in bytes)
+        {
+            sum += b;
+        }
+        return (byte)((128 - sum % 128) % 128);
+    }
+
+    /// <summary>A port to a device that answers nothing: records what is sent.</summary>
+    private sealed class RecordingPort : ISysExPort
+    {
+        public List<byte[]> Sent { get; } = [];
+
+        public event SysExReceivedHandler? Received { add { } remove { } }
+
+        public MidiConnectionState State => MidiConnectionState.Open;
+
+        public event EventHandler<MidiConnectionStateChangedArgs>? StateChanged { add { } remove { } }
+
+        public ValueTask Send(ReadOnlyMemory<byte> sysEx, CancellationToken ct)
+        {
+            Sent.Add(sysEx.ToArray());
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     // the dump files hold one DT1 per section

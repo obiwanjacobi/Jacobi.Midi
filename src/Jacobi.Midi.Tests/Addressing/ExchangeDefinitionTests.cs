@@ -267,6 +267,130 @@ public class ExchangeDefinitionTests
         Assert.All(expected, text => Assert.Contains(exception.Problems, problem => problem.Contains(text, StringComparison.Ordinal)));
     }
 
+    // an exchange with turns once per call around the blocks
+    private const string BeforeAfterXml = """
+        <exchanges for="Device.Map">
+          <exchange name="sendData">
+            <before>
+              <turn name="header">
+                <send message="Envelope.Message.Header" />
+                <on message="Envelope.Message.Ack" goto="ready" />
+                <on event="timeout" retry="2" result="timedOut" />
+              </turn>
+              <turn name="ready">
+                <on event="timeout" result="completed" />
+              </turn>
+            </before>
+            <turn name="write">
+              <send message="Envelope.Message.Data" />
+            </turn>
+            <after>
+              <turn name="footer">
+                <send message="Envelope.Message.Footer" />
+              </turn>
+            </after>
+          </exchange>
+        </exchanges>
+        """;
+
+    [Fact]
+    public void Read_BeforeAndAfter_TheSameInXmlAndJson()
+    {
+        var xml = ExchangeDefinitionReader.ReadXml(BeforeAfterXml, "frame.exchange.xml");
+        var json = ExchangeDefinitionReader.ReadJson("""
+            {
+              "for": "Device.Map",
+              "exchanges": [
+                {
+                  "name": "sendData",
+                  "before": [
+                    { "name": "header", "send": "Envelope.Message.Header",
+                      "on": [ { "message": "Envelope.Message.Ack", "goto": "ready" }, { "event": "timeout", "retry": 2, "result": "timedOut" } ] },
+                    { "name": "ready", "on": [ { "event": "timeout", "result": "completed" } ] }
+                  ],
+                  "turns": [ { "name": "write", "send": "Envelope.Message.Data" } ],
+                  "after": [ { "name": "footer", "send": "Envelope.Message.Footer" } ]
+                }
+              ]
+            }
+            """, "frame.exchange.json");
+
+        var exchange = Assert.Single(xml.Exchanges);
+        Assert.Equal(["header", "ready"], exchange.Before.Select(turn => turn.Name));
+        Assert.Equal(["write"], exchange.Turns.Select(turn => turn.Name));
+        Assert.Equal(["footer"], exchange.After.Select(turn => turn.Name));
+        Assert.Contains(new SchemaName("Envelope.Message.Header"), exchange.Messages);
+        Assert.Contains(new SchemaName("Envelope.Message.Footer"), exchange.Messages);
+        // the same turns, with the same messages and transitions
+        var other = Assert.Single(json.Exchanges);
+        Assert.Equal(Describe(exchange), Describe(other));
+
+        static string Describe(ExchangeDefinition exchange)
+            => String.Join(" | ", new[] { exchange.Before, exchange.Turns, exchange.After }.Select(part => String.Join("; ",
+                part.Select(turn => $"{turn.Name} {turn.Send} [{String.Join(",", turn.Receive)}] [{String.Join(",", turn.Transitions)}]"))));
+    }
+
+    [Fact]
+    public void Read_WithoutBeforeAndAfter_HasNone()
+    {
+        var exchange = ExchangeDefinitionReader.ReadXml(TestDevice.ExchangeXml, "test.exchange.xml").Exchanges[0];
+
+        Assert.Empty(exchange.Before);
+        Assert.Empty(exchange.After);
+    }
+
+    [Fact]
+    public void Read_TheTurnsBeforeAndAfterAreChecked()
+    {
+        var exception = Assert.Throws<ExchangeDefinitionException>(() => ExchangeDefinitionReader.ReadXml("""
+            <exchanges for="Device.Map">
+              <exchange name="framed">
+                <before>
+                  <turn name="header">
+                    <send message="Envelope.Message.Header" />
+                    <receive message="Envelope.Message.Data" />
+                    <on message="Envelope.Message.Ack" goto="write" />
+                  </turn>
+                  <turn name="lonely">
+                    <on event="timeout" result="failed" />
+                  </turn>
+                </before>
+                <before>
+                  <turn name="second">
+                    <send message="Envelope.Message.Header" />
+                  </turn>
+                </before>
+                <turn name="write">
+                  <send message="Envelope.Message.Data" />
+                </turn>
+                <after />
+              </exchange>
+            </exchanges>
+            """, "framed.xml"));
+
+        string[] expected =
+        [
+            "'before', turn 'header': a 'receive' is not possible",
+            "there is no turn 'write' to go to in 'before' (a 'goto' stays in its part)",
+            "'framed' (before), turn 'lonely' is never reached",
+            "an exchange has one 'before': there is more than one",
+            "'after' has no turn",
+        ];
+        Assert.All(expected, text => Assert.Contains(exception.Problems, problem => problem.Contains(text, StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void Xsd_BeforeAndAfterAreValid()
+    {
+        var schemas = new XmlSchemaSet();
+        schemas.Add(null, TestHelpers.PathOf("exchange.xsd"));
+        var errors = new List<string>();
+
+        XDocument.Parse(BeforeAfterXml).Validate(schemas, (_, args) => errors.Add(args.Message));
+
+        Assert.Empty(errors);
+    }
+
     [Fact]
     public void ReadJson_TheSameAsTheXml()
     {
@@ -380,7 +504,7 @@ public class ExchangeDefinitionTests
 
         // the properties the JSON reader knows, and no others
         Assert.Equal(["$schema", "for", "responseTimeout", "messageInterval", "exchanges"], Names(root.GetProperty("properties")));
-        Assert.Equal(["name", "responseTimeout", "messageInterval", "turns"], Names(definitions.GetProperty("exchange").GetProperty("properties")));
+        Assert.Equal(["name", "responseTimeout", "messageInterval", "turns", "before", "after"], Names(definitions.GetProperty("exchange").GetProperty("properties")));
         Assert.Equal(["name", "send", "receive", "on"], Names(definitions.GetProperty("turn").GetProperty("properties")));
         Assert.Equal(["event", "message", "retry", "goto", "result"], Names(definitions.GetProperty("transition").GetProperty("properties")));
 

@@ -20,8 +20,11 @@
     <turn name="write">
       <send message="Roland.Message32.DT1" />
     </turn>
+    <!-- the GX-700 applies data written to the Temporary area only after the sound change request -->
     <after>
-      <send message="Gx700.SoundChangeRequest" />
+      <turn name="apply">
+        <send message="Gx700.SoundChangeRequest" />
+      </turn>
     </after>
   </exchange>
 </exchanges>
