@@ -9,7 +9,8 @@ What is planned for the console, and what was done. What the console does now is
 - [ ] Allow drag-drop of schema group onto dashboard parameter to fill paths (base path)
 - [ ] Edit/Play switch also switches when pressing on the selected option. When in Play, clicking on Play switches to Edit.
 - [ ] A dashboard file should have references to its dependent files and assembly resources. Loading a dashboard file should make everything work and prompt the user if files cannot be found.
-- [ ] Rig device values not as a string, but a list with possibile keys from droplist.
+- [x] Rig device values not as a string, but a list with possibile keys from droplist.
+- [ ] Phase out `AddressMapAdapter` in `SchemaLibrary` (`Maps`: `IsMap`, `ItemCount`, the order of `Roots`) in favour of the generic `MessageMaps`/`MessageMapInfo`; first decide what these mean for every kind of map (every root has a map now, a dump by default).
 - [ ] Add a clear button to the problems window and a X-button to each item.
 - [ ] Control label should not determine scale of control. Cutoff text... Controls with long (default) names now show very small knobs.
 - [ ] Display schema documentation for each control.

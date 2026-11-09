@@ -87,18 +87,24 @@ checks a transfer before anything is sent: the device values the messages need a
 range for the message (`IMessageMap.Validate`). A map that is not valid throws a `MessageMapException` with all its
 problems (`MessageMapProblem`), each located at a schema node, whatever the kind of map.
 
+A client outside Midi.Device sees a map through `MessageMaps.Info(root)`: a `MessageMapInfo`, a read-only view of
+what a client needs to know about a root, whatever the kind of map (for now: the device values the root fixes and the
+`RequiredDeviceValues` the client supplies, e.g. `deviceId`). The map's operations stay internal.
+
 ## Types
 
 Namespace `Jacobi.Midi.Device.Messages`.
 
 | Type | Purpose |
 | ---- | ------- |
+| `MessageMaps` | The message maps of a serializer's roots, created on first use and cached; `Info(root)` for a client. |
+| `MessageMapInfo` | A read-only view of the map of one root: the device values it fixes and the ones the client must supply. |
 | `DeviceValues` | The device values by name (`deviceId`, `modelId`, ...): those of the root plus those of the client. |
 | `FieldValueStore` | A flat value model of field values by path and instance of a root's plan. |
 | `DeviceMessage` | A message group of the schemas with its role nodes. |
 | `ReceivedData` | A recognised data message: its device values and block; `Decode` reads its values into a value model. |
 | `MessageMapException`, `MessageMapProblem`, `MessageMapProblemSeverity` | All problems found in a map and its messages, each located at its schema node. |
 
-Internal: `IMessageMap`, `IMessageMapProvider`, `IDeviceState`, `MessageMaps` (the registry and provider chain),
+Internal: `IMessageMap`, `IMessageMapProvider`, `IDeviceState`, the members of `MessageMaps` that hand out an `IMessageMap`,
 `DumpMap`, `DumpMapProvider`, `DumpDeviceState`, and the shared helpers `DeviceMessages`, `ConformingBodies`,
 `EnvelopeSource`/`EnvelopeSink` and `MidiProperties`.

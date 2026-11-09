@@ -11,8 +11,10 @@ namespace Jacobi.Midi.Device.Messages;
 /// provider of a fixed, ordered chain that claims the root, and cached per plan, so a client only needs a
 /// <see cref="PlanRange"/>. <see cref="Prepare"/> and <see cref="PrepareAll"/> create and validate maps up front so
 /// schema errors surface early; <see cref="Validate"/> checks a transfer before anything is sent. Thread-safe.
+/// A client outside Midi.Device sees a map through <see cref="Info"/>: what it needs to know about a root, whatever
+/// its kind (address map or dump).
 /// </summary>
-internal sealed class MessageMaps(Serializer serializer)
+public sealed class MessageMaps(Serializer serializer)
 {
     // the providers in the order they get to claim a root
     private static readonly IReadOnlyList<IMessageMapProvider> Providers = [new AddressMapProvider(), new DumpMapProvider()];
@@ -22,7 +24,7 @@ internal sealed class MessageMaps(Serializer serializer)
     public Serializer Serializer { get; } = serializer ?? throw new ArgumentNullException(nameof(serializer));
 
     /// <summary>The map of the plan the range belongs to; created and validated on first use.</summary>
-    public IMessageMap Get(PlanRange range)
+    internal IMessageMap Get(PlanRange range)
     {
         ArgumentNullException.ThrowIfNull(range);
         return Get(range.ExecutionPlan);
@@ -30,8 +32,14 @@ internal sealed class MessageMaps(Serializer serializer)
 
     /// <summary>The map of a plan; created and validated on first use.</summary>
     /// <exception cref="InvalidOperationException">No provider claims the root.</exception>
-    public IMessageMap Get(ExecutionPlan plan)
+    internal IMessageMap Get(ExecutionPlan plan)
         => _maps.GetOrAdd(plan, p => new Lazy<IMessageMap>(() => Create(p))).Value;
+
+    /// <summary>What a client needs to know about the message map of a root; the map is created and validated on first use.</summary>
+    /// <exception cref="MessageMapException">The map of the root is not valid.</exception>
+    /// <exception cref="InvalidOperationException">No provider claims the root.</exception>
+    public MessageMapInfo Info(SchemaName root)
+        => new(Get(Serializer.GetPlan(root)));
 
     /// <summary>Creates and validates the map of a root; throws the provider's exception when it is not valid.</summary>
     public void Prepare(SchemaName root)
@@ -54,7 +62,7 @@ internal sealed class MessageMaps(Serializer serializer)
     /// device; empty when it can: the device values the messages need are known (the root's with the client's over
     /// them), and the map can split the range for the message.
     /// </summary>
-    public IReadOnlyList<string> Validate(PlanRange range, DeviceMessage splitBy, IEnumerable<DeviceMessage> messages, DeviceValues device)
+    internal IReadOnlyList<string> Validate(PlanRange range, DeviceMessage splitBy, IEnumerable<DeviceMessage> messages, DeviceValues device)
     {
         ArgumentNullException.ThrowIfNull(range);
         var map = Get(range);
@@ -72,7 +80,7 @@ internal sealed class MessageMaps(Serializer serializer)
     /// The device values of the map's root with the client's values over them; all values the data messages need must be known.
     /// </summary>
     /// <exception cref="InvalidOperationException">A device value the data messages need is not known.</exception>
-    public static DeviceValues DeviceFor(IMessageMap map, DeviceValues client)
+    internal static DeviceValues DeviceFor(IMessageMap map, DeviceValues client)
     {
         var device = map.Device.With(client);
         var missing = DeviceValues.Missing(map.DataMessages, device);

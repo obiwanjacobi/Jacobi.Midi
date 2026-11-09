@@ -3,6 +3,26 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## Device values in the console's device panel (2026-11-09)
+
+Issue: the device values of a rig device were one text (`name=value, …`); the user should pick the names the schema
+knows. The console only had `SchemaLibrary.Maps` (`AddressMapAdapter`); the generic `IMessageMap` and `MessageMaps` were
+internal.
+
+1. **A list of device values, a name and a value per row; the droplist offers the names the map root needs from the
+   client** (`deviceId`), not the ones it fixes. Any other name can be typed; a name the map root does not need is
+   marked, not dropped. *Why:* start with what the user must supply; a value kept from another map root stays visible.
+2. **A client sees a message map through a public, read-only wrapper, `MessageMapInfo`; `IMessageMap` stays
+   internal.** It exposes only what a client needs (now: `Root`, `Device`, `RequiredDeviceValues`) and grows with real
+   needs. *Why:* `IMessageMap` is the generic abstraction over address maps and dumps, but its operations (and
+   `IDeviceState`) are for the exchange; `IMessageMap.Device` alone holds only the values the root fixes.
+3. **The entry point is a public `MessageMaps`, created per serializer by its owner: `maps.Info(root)`.** The members
+   that hand out an `IMessageMap` stay internal. *Why:* the owner (e.g. `SchemaLibrary`) controls the cache's lifetime;
+   no hidden static cache, as a static factory or an extension on `Serializer` would need.
+4. **`AddressMapAdapter` is to be phased out of the console** in favour of `MessageMaps`; `SchemaLibrary` keeps `Maps`
+   for `IsMap`/`ItemCount` until it is decided what they mean for every kind of map (Console todo). *Why:* one generic
+   mechanism instead of address-only code in the console.
+
 ## Message exchange in the console (2026-11-09)
 
 Issue: the console has a value model per device (`DeviceState`) and MIDI connections with a `DeviceSession` per

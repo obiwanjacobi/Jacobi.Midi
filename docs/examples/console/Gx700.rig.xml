@@ -1,7 +1,6 @@
 <rig format="jacobi.midi.rig/1">
   <device alias="gx700" name="Boss GX-700" mapRoot="Gx700.AddressMap">
     <deviceValue name="deviceId" value="0x00" />
-    <deviceValue name="modelId" value="0x79" />
     <endpoint name="MIDIMATE II" sendGroup="0" receiveGroup="1" />
   </device>
 </rig>

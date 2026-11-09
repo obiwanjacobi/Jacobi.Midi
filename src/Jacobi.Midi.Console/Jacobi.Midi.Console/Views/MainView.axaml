@@ -323,8 +323,28 @@
                                     <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" PlaceholderText="e.g. the product name" />
                                     <TextBlock Text="Map root (the address map of the device)" Classes="caption" />
                                     <ComboBox ItemsSource="{Binding MapRoots}" SelectedItem="{Binding MapRoot}" HorizontalAlignment="Stretch" />
-                                    <TextBlock Text="Device values" Classes="caption" />
-                                    <TextBox Text="{Binding DeviceValues, UpdateSourceTrigger=LostFocus}" PlaceholderText="name=value, … e.g. deviceId=0x10" />
+                                    <!-- the device values: a name (the map root's required names, or any other) and a value per row -->
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="Device values" Classes="caption" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="+" FontSize="12" Padding="6,0" ToolTip.Tip="Add a device value" Command="{Binding AddDeviceValueCommand}" />
+                                    </Grid>
+                                    <ItemsControl ItemsSource="{Binding DeviceValues}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:DeviceValueViewModel">
+                                                <StackPanel Spacing="2" Margin="0,0,0,4">
+                                                    <Grid ColumnDefinitions="*,80,Auto" ColumnSpacing="4">
+                                                        <ComboBox IsEditable="True" ItemsSource="{Binding Names}" Text="{Binding Name, UpdateSourceTrigger=LostFocus}"
+                                                                  HorizontalAlignment="Stretch" PlaceholderText="name, e.g. deviceId" />
+                                                        <TextBox Grid.Column="1" Text="{Binding Value, UpdateSourceTrigger=LostFocus}" PlaceholderText="0x10" />
+                                                        <Button Grid.Column="2" Content="✕" ToolTip.Tip="Remove the device value" Command="{Binding RemoveCommand}" />
+                                                    </Grid>
+                                                    <TextBlock Text="{Binding Mark}" IsVisible="{Binding HasMark}" FontSize="11" Opacity="0.7" FontStyle="Italic" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Text="{Binding DeviceValuesProblem}" IsVisible="{Binding DeviceValuesProblem, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                               TextWrapping="Wrap" FontSize="12" Opacity="0.8" />
                                     <TextBlock Text="MIDI" Classes="heading" />
                                     <TextBlock Text="Endpoint" Classes="caption" />
                                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">

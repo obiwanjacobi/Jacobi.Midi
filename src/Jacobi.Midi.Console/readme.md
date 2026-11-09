@@ -344,7 +344,10 @@ selection, and a press on the dashboard first takes the text being typed in it, 
 taken for the next.
 
 **The device panel** (right panel, when a device is selected in the rig): alias, name, map root (one of the root groups
-of the library, `SchemaLibrary.Roots`, address maps first), device values, the MIDI endpoint and UMP groups with the
+of the library, `SchemaLibrary.Roots`, address maps first), device values (a list: a name per row, chosen from the
+device values the map root needs (`MessageMapInfo.RequiredDeviceValues`, e.g. `deviceId`) or typed, and a value; a name
+the map root does not need is marked, and so are the required ones still without a value, or why the map root's are
+not known), the MIDI endpoint and UMP groups with the
 device's connection and its tests (see [MIDI](#midi)), colors and its own schemas (schema files and assemblies, added
 and removed there); *Remove* takes it out. The *+* of the rig adds a device for an address map of the library (the
 other root groups in a submenu; named after it: `Gp8.AddressMap` is `gp8`), or from a schema file or an assembly the

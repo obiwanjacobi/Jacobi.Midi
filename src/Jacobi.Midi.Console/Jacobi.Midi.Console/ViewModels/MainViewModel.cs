@@ -14,6 +14,7 @@ using Jacobi.Midi.Console.Dashboards;
 using Jacobi.Midi.Console.Looks;
 using Jacobi.Midi.Core;
 using Jacobi.Midi.Device.Exchange;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Console.ViewModels;
 
@@ -264,6 +265,34 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
 
     /// <summary>True when a root of the schema library is an address map: a root data messages carry.</summary>
     public bool IsAddressMap(string root) => Rig?.Library.Maps?.IsMap(new BinarySerializer.Schema.SchemaName(root)) == true;
+
+    /// <summary>
+    /// The message map of a root of the schema library, any kind (address map or dump): what a device of the root
+    /// needs, e.g. the device values to supply. Null when there is none, with the reason in <paramref name="problem"/>.
+    /// </summary>
+    public MessageMapInfo? MessageMapOf(string root, out string? problem)
+    {
+        var name = new BinarySerializer.Schema.SchemaName(root);
+        problem = null;
+        if (Rig?.Library is not { } library)
+            problem = "No rig is open.";
+        else if (library.MessageMaps is not { } maps)
+            problem = "The schemas do not compile; see the notifications.";
+        else if (!library.HasRoot(name))
+            problem = $"'{root}' is not a root group of the schemas.";
+        else
+        {
+            try
+            {
+                return maps.Info(name);
+            }
+            catch (Exception exception) when (exception is MessageMapException or InvalidOperationException)
+            {
+                problem = exception.Message;
+            }
+        }
+        return null;
+    }
 
     /// <summary>The control selected in Edit mode; null when none is.</summary>
     [ObservableProperty]

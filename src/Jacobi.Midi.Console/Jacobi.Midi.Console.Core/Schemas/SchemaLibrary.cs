@@ -25,6 +25,7 @@ public sealed class SchemaLibrary
         Schemas = schemas;
         Serializer = serializer;
         Maps = serializer is null ? null : new AddressMapAdapter(serializer);
+        MessageMaps = serializer is null ? null : new MessageMaps(serializer);
         Problems = problems;
         DocumentSources = documentSources;
     }
@@ -107,6 +108,12 @@ public sealed class SchemaLibrary
 
     /// <summary>The address maps of the schemas (item counts of map repeats); null when the schemas do not compile.</summary>
     public AddressMapAdapter? Maps { get; }
+
+    /// <summary>
+    /// The message maps of the roots, any kind (address map or dump), created on first use: what a device of a root
+    /// needs (e.g. the device values to supply); null when the schemas do not compile.
+    /// </summary>
+    public MessageMaps? MessageMaps { get; }
 
     public IReadOnlyList<SchemaLibraryProblem> Problems { get; }
 

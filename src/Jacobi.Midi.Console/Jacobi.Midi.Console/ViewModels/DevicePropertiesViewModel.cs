@@ -24,6 +24,11 @@ namespace Jacobi.Midi.Console.ViewModels;
 /// </summary>
 internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, DeviceInstance device) : ViewModelBase
 {
+    // the message map of the map root (see MapInfo)
+    private MessageMapInfo? _mapInfo;
+    private bool _mapInfoKnown;
+    private string? _mapProblem;
+
     public DeviceInstance Device => device;
 
     /// <summary>The name dashboards use for the device; unique in the rig.</summary>
@@ -61,28 +66,107 @@ internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, Dev
         }
     }
 
-    /// <summary>The device values as <c>name=value</c>, separated by commas (decimal, <c>0x..</c> or <c>..H</c>).</summary>
-    public string DeviceValues
+    /// <summary>
+    /// The device values of the device, one row each, in the order they were given; a row that has no name or value
+    /// yet is kept here until it has both (it is not part of the rig before that).
+    /// </summary>
+    public IReadOnlyList<DeviceValueViewModel> DeviceValues
     {
-        get => String.Join(", ", device.DeviceValues.Select(value => $"{value.Key}=0x{value.Value.ToString("X2", CultureInfo.InvariantCulture)}"));
-        set
+        get => field ??= [.. device.DeviceValues.Select(value => new DeviceValueViewModel(this, value.Key, FormatValue(value.Value)))];
+        private set => SetProperty(ref field, value);
+    }
+
+    /// <summary>The names of the device values the map root needs from the device instance (e.g. <c>deviceId</c>), for the droplist.</summary>
+    public IReadOnlyList<string> RequiredDeviceValues => MapInfo?.RequiredDeviceValues ?? [];
+
+    /// <summary>
+    /// The required device values the device has no value for yet, or why the map root's device values are not known
+    /// (its message map is not valid); null when nothing is missing.
+    /// </summary>
+    public string? DeviceValuesProblem
+    {
+        get
         {
-            var values = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-            foreach (var part in (value ?? String.Empty).Split([',', ';', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                var equals = part.IndexOf('=');
-                var name = equals < 0 ? String.Empty : part[..equals].Trim();
-                if (name.Length == 0)
-                    throw new DataValidationException($"'{part}' is not 'name=value'.");
-                if (!AddressSpace.TryParseNumber(part[(equals + 1)..].Trim(), out var number) || number > Int64.MaxValue)
-                    throw new DataValidationException($"'{part}': the value is not a number (decimal, 0x.. or ..H).");
-                if (!values.TryAdd(name, (long)number))
-                    throw new DataValidationException($"'{name}' is given more than once.");
-            }
-            if (values.Count != device.DeviceValues.Count || values.Any(entry => device.DeviceValues.GetValueOrDefault(entry.Key, -1) != entry.Value))
-                owner.EditDevice(device, "device values", () => device.DeviceValues, deviceValues => device.DeviceValues = deviceValues, values, DeviceValuesText(values));
+            var info = MapInfo;
+            if (info is null)
+                return $"The device values of the map root are not known: {_mapProblem}";
+            var missing = info.RequiredDeviceValues.Where(name => !device.DeviceValues.ContainsKey(name)).ToList();
+            return missing.Count == 0 ? null : $"The map root needs a value for {String.Join(", ", missing)}.";
         }
     }
+
+    /// <summary>Adds a row for a device value: the first one the map root needs that the device has no row for.</summary>
+    [RelayCommand]
+    private void AddDeviceValue()
+    {
+        var name = RequiredDeviceValues.FirstOrDefault(required => !DeviceValues.Any(row => String.Equals(row.Name, required, StringComparison.OrdinalIgnoreCase)));
+        DeviceValues = [.. DeviceValues, new DeviceValueViewModel(this, name, null)];
+    }
+
+    /// <summary>How the map root uses a device value name: nothing to mark when it needs it; null without a known map.</summary>
+    internal string? MarkOf(string name)
+    {
+        if (MapInfo is not { } info || info.RequiredDeviceValues.Contains(name, StringComparer.OrdinalIgnoreCase))
+            return null;
+        return info.Device.TryGet(name, out var fixedValue)
+            ? $"overrides the map root's {FormatValue(fixedValue)}"
+            : "not used by the map root";
+    }
+
+    /// <summary>True when another row has the name already.</summary>
+    internal bool IsTaken(DeviceValueViewModel row, string name)
+        => DeviceValues.Any(other => other != row && String.Equals(other.Name, name, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>A row was changed: the rows that have a name and a value are the device values of the device (one edit of the rig).</summary>
+    internal void CommitDeviceValues()
+    {
+        var values = DeviceValues.Where(row => row.IsComplete).ToDictionary(row => row.Name!, row => row.Number!.Value, StringComparer.OrdinalIgnoreCase);
+        if (values.Count != device.DeviceValues.Count || values.Any(entry => device.DeviceValues.GetValueOrDefault(entry.Key, -1) != entry.Value))
+            owner.EditDevice(device, "device values", () => device.DeviceValues, deviceValues => device.DeviceValues = deviceValues, values, DeviceValuesText(values));
+        else
+            OnDeviceValuesChanged();
+    }
+
+    /// <summary>Takes a row out; when it was a device value, the device does not have it any more.</summary>
+    internal void RemoveDeviceValue(DeviceValueViewModel row)
+    {
+        var wasComplete = row.IsComplete;
+        DeviceValues = [.. DeviceValues.Where(other => other != row)];
+        if (wasComplete)
+            CommitDeviceValues();
+    }
+
+    // the message map of the map root, asked once per refresh (the map root or the schemas may have changed)
+    private MessageMapInfo? MapInfo
+    {
+        get
+        {
+            if (!_mapInfoKnown)
+            {
+                _mapInfo = owner.MessageMapOf(device.MapRoot, out _mapProblem);
+                _mapInfoKnown = true;
+            }
+            return _mapInfo;
+        }
+    }
+
+    // the device values were edited, undone or the map root changed: the rows show the device again, the rows still
+    // without a name or value stay
+    private void RefreshDeviceValues()
+    {
+        _mapInfoKnown = false;
+        DeviceValues = [.. device.DeviceValues.Select(value => new DeviceValueViewModel(this, value.Key, FormatValue(value.Value))),
+            .. DeviceValues.Where(row => !row.IsComplete)];
+    }
+
+    private void OnDeviceValuesChanged()
+    {
+        foreach (var row in DeviceValues)
+            row.RefreshMark();
+        OnPropertyChanged(nameof(DeviceValuesProblem));
+    }
+
+    internal static string FormatValue(long value) => $"0x{value.ToString("X2", CultureInfo.InvariantCulture)}";
 
     /// <summary>
     /// The names to choose the endpoint from: the endpoints MIDI reaches (in MIDI mode), and the device's own endpoint
@@ -243,7 +327,11 @@ internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, Dev
     private Task AddAssembly() => owner.AddDeviceSource(device, SchemaSourceKind.Assembly);
 
     /// <summary>Shows the values as they are now: after an edit or undo.</summary>
-    public void Refresh() => OnPropertyChanged(String.Empty);
+    public void Refresh()
+    {
+        RefreshDeviceValues();
+        OnPropertyChanged(String.Empty);
+    }
 
     private void SetEndpoint(EndpointReference? endpoint)
         => owner.EditDevice(device, "endpoint", () => device.Endpoint, value => device.Endpoint = value, endpoint, endpoint is null ? "not connected" : $"{endpoint.Name} ({endpoint.GroupsText})");
@@ -266,4 +354,78 @@ internal sealed partial class SourceViewModel(string path, string kind, Action r
 
     [RelayCommand]
     private void Remove() => remove();
+}
+
+/// <summary>
+/// One device value of the selected device, in the device panel: its name (one of the map root's required names, or
+/// any other) and its value (decimal, <c>0x..</c> or <c>..H</c>), marked when the map root does not need it. A row
+/// with a name and a value is part of the device's values; a value that cannot be taken is a validation error.
+/// </summary>
+internal sealed partial class DeviceValueViewModel(DevicePropertiesViewModel owner, string? name, string? text) : ViewModelBase
+{
+    private string? _name = name;
+    private string? _value = text;
+
+    public string? Name
+    {
+        get => _name;
+        set
+        {
+            var trimmed = String.IsNullOrWhiteSpace(value) ? null : value.Trim();
+            if (String.Equals(trimmed, _name, StringComparison.Ordinal))
+                return;
+            if (trimmed is not null && owner.IsTaken(this, trimmed))
+                throw new DataValidationException($"'{trimmed}' is given already.");
+            _name = trimmed;
+            RefreshMark();
+            owner.CommitDeviceValues();
+        }
+    }
+
+    public string? Value
+    {
+        get => _value;
+        set
+        {
+            var trimmed = String.IsNullOrWhiteSpace(value) ? null : value.Trim();
+            if (String.Equals(trimmed, _value, StringComparison.Ordinal))
+                return;
+            long? number = null;
+            if (trimmed is not null)
+            {
+                if (!AddressSpace.TryParseNumber(trimmed, out var parsed) || parsed > Int64.MaxValue)
+                    throw new DataValidationException($"'{trimmed}' is not a number (decimal, 0x.. or ..H).");
+                number = (long)parsed;
+            }
+            _value = trimmed;
+            Number = number;
+            owner.CommitDeviceValues();
+        }
+    }
+
+    /// <summary>The value as a number; null when there is none.</summary>
+    public long? Number { get; private set; } = Parse(text);
+
+    /// <summary>True when the row has a name and a value: it is one of the device's values.</summary>
+    public bool IsComplete => _name is not null && Number is not null;
+
+    /// <summary>The names the map root needs, to choose from; any other name can be typed.</summary>
+    public IReadOnlyList<string> Names => owner.RequiredDeviceValues;
+
+    /// <summary>How the map root uses the name when it does not need it (e.g. "not used by the map root"); null otherwise.</summary>
+    public string? Mark => _name is null ? null : owner.MarkOf(_name);
+
+    public bool HasMark => Mark is not null;
+
+    [RelayCommand]
+    private void Remove() => owner.RemoveDeviceValue(this);
+
+    internal void RefreshMark()
+    {
+        OnPropertyChanged(nameof(Mark));
+        OnPropertyChanged(nameof(HasMark));
+    }
+
+    private static long? Parse(string? text)
+        => text is not null && AddressSpace.TryParseNumber(text, out var parsed) && parsed <= Int64.MaxValue ? (long)parsed : null;
 }

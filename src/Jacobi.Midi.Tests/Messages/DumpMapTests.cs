@@ -108,6 +108,19 @@ public class DumpMapTests
     }
 
     [Fact]
+    public void Info_AnyKindOfMap_GivesTheRequiredDeviceValues()
+    {
+        var maps = new MessageMaps(CreateSerializer());
+
+        var dump = maps.Info(VoiceName);
+        var address = maps.Info(TestDevice.MapName);
+
+        Assert.Equal(VoiceName, dump.Root);
+        Assert.Equal(["deviceId"], dump.RequiredDeviceValues);
+        Assert.Equal(["deviceId"], address.RequiredDeviceValues);
+    }
+
+    [Fact]
     public void Split_AnyRange_IsTheWholeRoot()
     {
         var serializer = CreateSerializer();
