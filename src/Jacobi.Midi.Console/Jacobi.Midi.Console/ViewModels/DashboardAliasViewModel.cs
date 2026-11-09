@@ -43,6 +43,26 @@ internal sealed class DashboardAliasViewModel(MainViewModel owner, Dashboard das
         }
     }
 
+    /// <summary>
+    /// The exchange the dashboard sends the changes of the device's values with in Play mode with MIDI (e.g.
+    /// <c>sendData</c>, see <see cref="DashboardDevice.Send"/>); empty: none, changes stay in the console.
+    /// </summary>
+    public string? Send
+    {
+        get => dashboard.FindDevice(alias)?.Send;
+        set
+        {
+            try
+            {
+                owner.SetDashboardSend(dashboard, alias, value);
+            }
+            catch (ArgumentException exception)
+            {
+                throw new DataValidationException(exception.Message);
+            }
+        }
+    }
+
     /// <summary>True when the rig has a device with the alias; otherwise the controls that use it do not work.</summary>
     public bool IsInRig => owner.IsDeviceOfRig(alias);
 }

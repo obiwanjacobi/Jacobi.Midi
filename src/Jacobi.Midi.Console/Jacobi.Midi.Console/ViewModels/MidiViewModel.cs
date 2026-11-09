@@ -41,6 +41,7 @@ internal sealed class MidiViewModel : ViewModelBase, IAsyncDisposable
             return;
         _connections = new RigConnections(api, SessionName);
         _connections.Changed += (_, _) => Dispatcher.UIThread.Post(OnConnectionsChanged);
+        _connections.Sent += (_, result) => Dispatcher.UIThread.Post(() => OnSent(result));
     }
 
     /// <summary>MIDI can be used: the platform has a MIDI backend.</summary>
@@ -225,6 +226,38 @@ internal sealed class MidiViewModel : ViewModelBase, IAsyncDisposable
             _notify($"Receiving '{alias}' with '{exchange}'", exception.Message, true);
         }
         return null;
+    }
+
+    /// <summary>
+    /// Queues a changed parameter to be sent to the device with the exchange (see <see cref="RigConnections.Send"/>); a
+    /// send that does not complete is reported in the notifications.
+    /// </summary>
+    public void Send(string alias, string exchange, ParameterReference parameter)
+    {
+        if (_connections is null)
+            return;
+        try
+        {
+            _connections.Send(alias, exchange, parameter);
+        }
+        catch (InvalidOperationException exception)
+        {
+            _notify($"Sending '{alias}' with '{exchange}'", exception.Message, true);
+        }
+    }
+
+    // on the UI thread: only what did not complete is told
+    private void OnSent(SendResult result)
+    {
+        if (result.IsComplete)
+            return;
+        var reason = result.Error switch
+        {
+            ExchangeException exchange => String.Join(" ", exchange.Problems),
+            { } error => error.Message,
+            null => Describe(result.Result!),
+        };
+        _notify($"Sending '{result.Parameter.Device}' with '{result.Exchange}'", $"{result.Parameter.Path}{result.Parameter.Instance}: {reason}", true);
     }
 
     public async ValueTask DisposeAsync()

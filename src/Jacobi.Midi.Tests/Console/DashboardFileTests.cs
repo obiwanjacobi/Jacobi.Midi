@@ -13,7 +13,7 @@ public class DashboardFileTests
 {
     private const string Xml = """
         <dashboard format="jacobi.midi.dashboard/1" name="Lead sound" cellSize="40" look="Anodized">
-          <device alias="synth" mapRoot="Acme.AddressMap" receive="requestData" color="#3D8BFD" />
+          <device alias="synth" mapRoot="Acme.AddressMap" receive="requestData" send="sendData" color="#3D8BFD" />
           <device alias="pedalboard" mapRoot="Gx.AddressMap" />
           <assembly path="Custom.dll" />
           <row gap="1" wrap="true">
@@ -52,7 +52,7 @@ public class DashboardFileTests
           "cellSize": 40,
           "look": "Anodized",
           "devices": [
-            { "alias": "synth", "mapRoot": "Acme.AddressMap", "receive": "requestData", "color": "#3D8BFD" },
+            { "alias": "synth", "mapRoot": "Acme.AddressMap", "receive": "requestData", "send": "sendData", "color": "#3D8BFD" },
             { "alias": "pedalboard", "mapRoot": "Gx.AddressMap" },
           ],
           "assemblies": [ "Custom.dll" ],
@@ -91,7 +91,7 @@ public class DashboardFileTests
         Assert.Equal("Lead sound", dashboard.Name);
         Assert.Equal(40, dashboard.CellSize);
         Assert.Equal("Anodized", dashboard.Look);
-        Assert.Equal([new DashboardDevice("synth", "Acme.AddressMap") { Colors = new("#3D8BFD"), Receive = "requestData" }, new DashboardDevice("pedalboard", "Gx.AddressMap")], dashboard.Devices);
+        Assert.Equal([new DashboardDevice("synth", "Acme.AddressMap") { Colors = new("#3D8BFD"), Receive = "requestData", Send = "sendData" }, new DashboardDevice("pedalboard", "Gx.AddressMap")], dashboard.Devices);
         Assert.Equal(["Custom.dll"], dashboard.Sources.Assemblies);
 
         var row = dashboard.Layout;

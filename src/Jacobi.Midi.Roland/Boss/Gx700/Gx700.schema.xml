@@ -16,7 +16,8 @@
     ss   section (block): the patch has 14 sections (Table-1 - Table-14), the system 3 (Table-17, Table-18)
     oo   offset of the parameter in the section
   The sound change request (SCR) is at 04 7F 7F 7F: after a bulk write to the temporary area, the GX-700 only
-  applies the data after a write of 00 to the SCR address.
+  applies the data after a write of 00 to the SCR address. It is the fixed message SoundChangeRequest, a root of its
+  own next to the address map.
 
   The bulk areas transfer a section as a whole (one DT1 per section in the bulk dump), so their sections are atomic.
   In the individual temporary area every parameter can be sent on its own, but a message must hold the complete value
@@ -1541,15 +1542,8 @@
           </members>
         </repeat>
         <group name="System" nodeDef="system" midi.address="0x02-00-00-00" />
-        <!-- The temporary buffer, written in bulk: send the SoundChangeRequest after the data. -->
+        <!-- The temporary buffer, written in bulk: send the SoundChangeRequest (below the address map) after the data. -->
         <group name="Temporary" nodeDef="patch" midi.address="0x04-00-00-00" />
-        <!-- Table-19: applies the data written to the Temporary area. -->
-        <group name="SoundChangeRequest" midi.address="0x04-7F-7F-7F" midi.access="write">
-          <members>
-            <!-- 0x00: 00 -->
-            <field name="Request" datatype="sys.uint8" value="0" />
-          </members>
-        </group>
         <!-- The temporary buffer, written per parameter. -->
         <group name="IndividualTemporary" nodeDef="individualPatch" midi.address="0x08-00-00-00" />
         <!-- Table-20: the 2 lines of the display. -->
@@ -1559,6 +1553,36 @@
             <field name="Line1" datatype="text" byteLength="16" />
             <!-- 0x10-0x1F: Table-1.4 -->
             <field name="Line2" datatype="text" byteLength="16" />
+          </members>
+        </group>
+      </members>
+    </group>
+
+    <!--
+      Table-19: the sound change request (SCR), a fixed message: a DT1 of 00 to 04 7F 7F 7F. It applies the data
+      written to the Temporary area. Not part of the address map: everything but the device id is constant.
+        F0 41 <dev> 79 12 04 7F 7F 7F 00 7F F7
+    -->
+    <group name="SoundChangeRequest" midi.device.modelId="0x79">
+      <processors>
+        <processor name="midi.sysex" />
+      </processors>
+      <members>
+        <field name="RolandId" datatype="sys.uint8" value="0x41" />
+        <field name="DeviceId" datatype="sys.uint8" midi.role="device.deviceId" />
+        <field name="ModelId" datatype="sys.uint8" midi.role="device.modelId" />
+        <field name="Command" datatype="sys.uint8" value="0x12" />
+        <group name="ChecksumScope">
+          <processors>
+            <processor name="roland.checksum" />
+          </processors>
+          <members>
+            <!-- the address 04 7F 7F 7F, as sent -->
+            <field name="Area" datatype="sys.uint8" value="0x04" />
+            <field name="Patch" datatype="sys.uint8" value="0x7F" />
+            <field name="Section" datatype="sys.uint8" value="0x7F" />
+            <field name="Offset" datatype="sys.uint8" value="0x7F" />
+            <field name="Request" datatype="sys.uint8" value="0x00" />
           </members>
         </group>
       </members>

@@ -3,6 +3,7 @@ using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Jacobi.Midi.Console.Core.Dashboards;
+using Jacobi.Midi.Console.Core.Devices;
 using Jacobi.Midi.Console.Core.Editing;
 using Jacobi.Midi.Console.Core.Files;
 using Jacobi.Midi.Console.Core.Palettes;
@@ -817,21 +818,48 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     /// <exception cref="ArgumentException">The dashboard does not list the device and the rig has no device with the alias.</exception>
     public void SetDashboardReceive(Dashboard dashboard, string alias, string? exchange)
     {
-        if (Dashboards.FirstOrDefault(entry => entry.Dashboard == dashboard) is not { } entry)
-            return;
         exchange = String.IsNullOrWhiteSpace(exchange) ? null : exchange.Trim();
-        var device = dashboard.FindDevice(alias)
+        if (EditDashboardDevice(dashboard, alias, $"receive of '{alias}'", device => device with { Receive = exchange }))
+        {
+            Status = (exchange is null ? $"'{alias}' is not received from on '{dashboard.Name}'" : $"'{alias}' is received with '{exchange}' on '{dashboard.Name}'")
+                + ". Save to keep it.";
+        }
+    }
+
+    /// <summary>
+    /// Sets the exchange the dashboard sends the changes of a device's values with (<see cref="DashboardDevice.Send"/>), as
+    /// an edit of the dashboard; null or empty: none. A device the dashboard does not list yet is added, with the map root
+    /// of the rig's device.
+    /// </summary>
+    /// <exception cref="ArgumentException">The dashboard does not list the device and the rig has no device with the alias.</exception>
+    public void SetDashboardSend(Dashboard dashboard, string alias, string? exchange)
+    {
+        exchange = String.IsNullOrWhiteSpace(exchange) ? null : exchange.Trim();
+        if (EditDashboardDevice(dashboard, alias, $"send of '{alias}'", device => device with { Send = exchange }))
+        {
+            Status = (exchange is null ? $"'{alias}' is not sent to on '{dashboard.Name}'" : $"'{alias}' is sent to with '{exchange}' on '{dashboard.Name}'")
+                + ". Save to keep it.";
+        }
+    }
+
+    // changes a device of the dashboard as one edit; one the dashboard does not list yet is added with the rig's map root;
+    // false when nothing changed
+    private bool EditDashboardDevice(Dashboard dashboard, string alias, string what, Func<DashboardDevice, DashboardDevice> change)
+    {
+        if (Dashboards.FirstOrDefault(entry => entry.Dashboard == dashboard) is not { } entry)
+            return false;
+        var listed = dashboard.FindDevice(alias);
+        var device = listed
             ?? (_rig?.Find(alias) is { } instance ? new DashboardDevice(instance.Alias, instance.MapRoot) : null)
             ?? throw new ArgumentException($"The dashboard does not list '{alias}' and the rig has no device with this alias.", nameof(alias));
-        if (device.Receive == exchange && dashboard.Devices.Contains(device))
-            return;
-        var changed = device with { Receive = exchange };
-        IReadOnlyList<DashboardDevice> devices = dashboard.Devices.Contains(device)
-            ? [.. dashboard.Devices.Select(other => other == device ? changed : other)]
+        var changed = change(device);
+        if (listed is not null && changed == listed)
+            return false;
+        IReadOnlyList<DashboardDevice> devices = listed is not null
+            ? [.. dashboard.Devices.Select(other => other == listed ? changed : other)]
             : [.. dashboard.Devices, changed];
-        DoDashboardEdit(entry, new ValueEdit<IReadOnlyList<DashboardDevice>>($"receive of '{alias}'", () => dashboard.Devices, value => dashboard.Devices = value, devices));
-        Status = (exchange is null ? $"'{alias}' is not received from on '{dashboard.Name}'" : $"'{alias}' is received with '{exchange}' on '{dashboard.Name}'")
-            + ". Save to keep it.";
+        DoDashboardEdit(entry, new ValueEdit<IReadOnlyList<DashboardDevice>>(what, () => dashboard.Devices, value => dashboard.Devices = value, devices));
+        return true;
     }
 
     /// <summary>
@@ -1066,6 +1094,26 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
 
     // every rig session that is opened is connected, when MIDI is
     partial void OnRigChanged(RigSession? value) => Midi.SetRig(value);
+
+    // the changes the user makes to the values of the rig's devices are sent to them
+    partial void OnRigChanged(RigSession? oldValue, RigSession? newValue)
+    {
+        foreach (var state in oldValue?.Devices.Values ?? [])
+            state.ValueChanged -= OnDeviceValueChanged;
+        foreach (var state in newValue?.Devices.Values ?? [])
+            state.ValueChanged += OnDeviceValueChanged;
+    }
+
+    // Play mode with MIDI: a value the user changed is sent to the device with the exchange the dashboard shown names
+    // for it; values from the device or a dump file are not sent back
+    private void OnDeviceValueChanged(object? sender, ValueChangedEventArgs change)
+    {
+        if (change.Origin != ValueOrigin.User || sender is not DeviceState state)
+            return;
+        if (IsEditing || !Midi.IsMidi || SelectedSession?.Dashboard.FindDevice(state.Alias)?.Send is not { } exchange)
+            return;
+        Midi.Send(state.Alias, exchange, new ParameterReference(state.Alias, change.Path, change.Instance));
+    }
 
     // Edit mode is always connected; Play mode as chosen
     // a dashboard without a look gets one in Edit mode

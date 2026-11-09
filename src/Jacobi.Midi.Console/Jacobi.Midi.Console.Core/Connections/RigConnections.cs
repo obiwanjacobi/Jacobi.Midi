@@ -239,6 +239,35 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
         return new ReceiveResult(alias, exchange, requested, results);
     }
 
+    /// <summary>
+    /// The outcome of each parameter that was sent (<see cref="Send"/>), raised on a background thread. Not raised for
+    /// what was dropped because the connection was closed.
+    /// </summary>
+    public event EventHandler<SendResult>? Sent;
+
+    /// <summary>
+    /// Queues a parameter to be sent to the device with the exchange <paramref name="exchange"/> of the exchange file of
+    /// its map root (e.g. <see cref="ExchangeNames.SendData"/>), and returns at once; the outcome is raised with
+    /// <see cref="Sent"/>. The value is read from the device state when it is sent, so a parameter that changes again
+    /// before is sent once, with its latest value. With <see cref="ExchangeNames.SendData"/> the session completes an
+    /// atomic group from what it holds (requesting what it does not hold first).
+    /// </summary>
+    /// <param name="exchange">The name of the exchange, as the dashboard names it (<see cref="Dashboards.DashboardDevice.Send"/>).</param>
+    /// <exception cref="InvalidOperationException">The device is not online or has no state.</exception>
+    public void Send(string alias, string exchange, ParameterReference parameter)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(exchange);
+        ArgumentNullException.ThrowIfNull(parameter);
+        SendQueue queue;
+        DeviceState state;
+        lock (_lock)
+        {
+            queue = _links.GetValueOrDefault(alias)?.Queue ?? throw new InvalidOperationException($"'{alias}' is not online.");
+            state = _rig?.Devices.GetValueOrDefault(alias) ?? throw new InvalidOperationException($"'{alias}' has no parameters: see the problems of the rig.");
+        }
+        queue.Enqueue(exchange, parameter, state);
+    }
+
     public async ValueTask DisposeAsync()
     {
         await Stop();
@@ -328,6 +357,7 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
             var options = new MessageExchangeOptions { Groups = reference.Groups };
             var session = await _factory.CreateSession(endpoint.Id, link.DeviceValues, options, null, ct);
             link.Session = session;
+            link.Queue = new SendQueue(session, result => Sent?.Invoke(this, result));
             session.Disconnected += (_, args) => _ = OnDisconnected(link, session, args);
             if (session.IsConnected)
                 SetConnection(link, DeviceConnectionStatus.Online, endpoint);
@@ -432,6 +462,8 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
     {
         var session = link.Session;
         link.Session = null;
+        link.Queue?.Close();
+        link.Queue = null;
         if (session is not null)
             await session.DisposeAsync();
     }
@@ -504,6 +536,9 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
         public DeviceValues DeviceValues { get; }
 
         public DeviceSession? Session { get; set; }
+
+        /// <summary>The changes waiting to be sent on <see cref="Session"/>; null when not connected.</summary>
+        public SendQueue? Queue { get; set; }
 
         public DeviceConnection Connection { get; set; }
 

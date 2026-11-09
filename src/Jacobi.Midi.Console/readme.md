@@ -384,8 +384,18 @@ parameters one after the other into the device state (origin `Device`); a parame
 (the same address, an atomic group) is not requested again. The first parameter that does not complete ends the
 receive; it is reported with its reason and the number of parameters not requested after it. **⟳ Request data** in
 the toolbar (Play mode with MIDI) requests them again, fresh from the devices (`SessionData.Device`; a device that is not online is reported), e.g. after
-a change on the device that it did not send. Sending changes,
-following the device and the other steps of the synchronisation are on the [todo list](todo.md).
+a change on the device that it did not send.
+
+**Sending the changes.** In Play mode with MIDI, a value the user changes with a control is sent to the device with
+the exchange the dashboard names for it (`send` on its `device`, e.g. `sendData`); values received from the device or
+loaded from a dump file are not sent back (`ValueOrigin`). `RigConnections.Send` queues the parameter per device
+(`SendQueue`) and returns at once: a parameter is queued once, and its value is read from the device state when it is
+sent, so a dragged knob sends its latest value, not every step; the exchange keeps the time between the messages
+(`messageInterval`). With `sendData` the session completes an atomic group from what it received. A send that does
+not complete is reported in the notifications (`RigConnections.Sent`). Following the device and the other steps of
+the synchronisation are on the [todo list](todo.md).
+
+Both exchanges can be set per device in the dashboard properties of Edit mode (*Receive with*, *Send with*).
 
 **Connections** (`RigConnections` in Console.Core). One MIDI session and the endpoints it reaches (watched, so the list
 follows the endpoints that come and go), and a `DeviceSession` of the [message exchange](../Jacobi.Midi.Device/Exchange/readme.md)

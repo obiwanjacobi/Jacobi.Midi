@@ -18,7 +18,6 @@ public class Gx700AddressMapTests
     private const int PresetStart = 0x200000;                // wire 01 00 00 00
     private const int SystemStart = 0x400000;                // wire 02 00 00 00
     private const int TemporaryStart = 0x800000;             // wire 04 00 00 00
-    private const int SoundChangeRequest = 0x9FFFFF;        // wire 04 7F 7F 7F
     private const int IndividualStart = 0x1000000;           // wire 08 00 00 00
     private const int DisplayStart = 0x2000000;              // wire 10 00 00 00
 
@@ -31,6 +30,29 @@ public class Gx700AddressMapTests
             .AddProcessors(TestHelpers.CreateProcessors())
             .Build();
         return AddressMap.Create(serializer, new SchemaName("Gx700.AddressMap"));
+    }
+
+    [Fact]
+    public void SoundChangeRequest_IsAFixedMessage_OutsideTheAddressMap()
+    {
+        var serializer = new SerializerBuilder()
+            .AddSchemas(TestHelpers.CreateSchemas())
+            .AddProcessors(TestHelpers.CreateProcessors())
+            .Build();
+        var plan = serializer.GetPlan(new SchemaName("Gx700.SoundChangeRequest"));
+        var map = new MessageMaps(serializer).Get(plan);
+        var message = Assert.Single(map.DataMessages);
+        var whole = plan.CreateRange("SoundChangeRequest", "SoundChangeRequest");
+
+        // the device values of the root (the model id) with the client's
+        var device = MessageMaps.DeviceFor(map, new DeviceValues { ["deviceId"] = 0x02 });
+
+        var sysEx = map.Write(message, whole, new FieldValueStore(), device);
+
+        Assert.IsType<DumpMap>(map);
+        // a DT1 of 00 to 04 7F 7F 7F, with the device id and the checksum
+        Assert.Equal("F041027912047F7F7F007FF7", Convert.ToHexString(sysEx));
+        Assert.Throws<ArgumentException>(() => CreateMap().CreateRange("AddressMap.SoundChangeRequest"));
     }
 
     // the dump files hold one DT1 per section
@@ -98,9 +120,6 @@ public class Gx700AddressMapTests
 
         var temporary = map.CreateRange("AddressMap.Temporary.Reverb");
         Assert.Equal(new AddressRange(TemporaryStart + 0x0D * SectionStride, 0x09), map.GetAddressRange(temporary));
-
-        var scr = map.CreateRange("AddressMap.SoundChangeRequest");
-        Assert.Equal(new AddressRange(SoundChangeRequest, 1), map.GetAddressRange(scr));
 
         var individual = map.CreateRange("AddressMap.IndividualTemporary.Modulation");
         Assert.Equal(new AddressRange(IndividualStart + 0x09 * SectionStride, 0x4D), map.GetAddressRange(individual));

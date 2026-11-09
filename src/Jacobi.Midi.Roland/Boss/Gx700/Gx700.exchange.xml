@@ -16,4 +16,12 @@
       <send message="Roland.Message32.DT1" />
     </turn>
   </exchange>
+  <exchange name="sendTemporary">
+    <turn name="write">
+      <send message="Roland.Message32.DT1" />
+    </turn>
+    <after>
+      <send message="Gx700.SoundChangeRequest" />
+    </after>
+  </exchange>
 </exchanges>

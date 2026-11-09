@@ -305,6 +305,99 @@ public class RigConnectionsTests
             [PatchParameter("MasterVolume", 0)], data: null, TestContext.Current.CancellationToken));
     }
 
+    // the data of the DT1s (data sets) sent to the GP-8, in order
+    private static List<byte[]> DataSent(FakeMidiApi api)
+        => [.. api.Connections.SelectMany(connection => connection.Sent)
+            .Where(sent => sent.SysEx is [0xF0, 0x41, 0x00, 0x13, 0x12, ..])
+            .Select(sent => sent.SysEx[7..^2])];
+
+    // a GP-8 that answers requests, with MasterVolume of patch 2 received into the device state
+    private static async Task<(FakeMidiApi Api, RigSession Rig, RigConnections Connections)> StartReceived()
+    {
+        var api = new FakeMidiApi();
+        api.Endpoints.Add(FakeMidiApi.Endpoint(Port));
+        api.Responder = (_, _, sysEx) => sysEx is [0xF0, 0x41, 0x00, 0x13, 0x11, ..] ? DataAt(sysEx[5], sysEx[6], sysEx[8]) : null;
+        var rig = Open(Gp8(endpoint: new EndpointReference(Port)));
+        var connections = await Start(api, rig);
+        await connections.Receive("gp8", ExchangeNames.RequestData, [PatchParameter("MasterVolume", 2)], data: null, TestContext.Current.CancellationToken);
+        return (api, rig, connections);
+    }
+
+    // the user sets MasterVolume of patch 2
+    private static void SetVolume(RigSession rig, int value)
+    {
+        var state = rig.Devices["gp8"];
+        var parameter = PatchParameter("MasterVolume", 2);
+        Assert.True(state.TryGetValue(parameter, out var known));
+        state.SetValue(parameter.Path, parameter.Instance, known with { Value = Convert.ChangeType(value, known.Value!.GetType()) }, ValueOrigin.User);
+    }
+
+    // waits until the condition holds, or fails
+    private static async Task WaitUntil(Func<bool> condition)
+    {
+        for (var tries = 0; tries < 300 && !condition(); tries++)
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        Assert.True(condition());
+    }
+
+    [Fact]
+    public async Task Send_AChangedParameter_WritesItsValue()
+    {
+        var (api, rig, connections) = await StartReceived();
+        await using var _ = connections;
+        var results = new List<SendResult>();
+        connections.Sent += (_, result) => { lock (results) results.Add(result); };
+
+        SetVolume(rig, 42);
+        connections.Send("gp8", ExchangeNames.SendData, PatchParameter("MasterVolume", 2));
+
+        await WaitUntil(() => { lock (results) return results.Count == 1; });
+        Assert.True(results[0].IsComplete);
+        Assert.Equal([42], Assert.Single(DataSent(api)));
+    }
+
+    [Fact]
+    public async Task Send_ChangesWhileSending_SendTheLatestValue_NotEveryStep()
+    {
+        var (api, rig, connections) = await StartReceived();
+        await using var _ = connections;
+
+        for (var value = 1; value <= 10; value++)
+        {
+            SetVolume(rig, value);
+            connections.Send("gp8", ExchangeNames.SendData, PatchParameter("MasterVolume", 2));
+        }
+
+        await WaitUntil(() => DataSent(api) is { Count: > 0 } sent && sent[^1] is [10]);
+        // the first send may start before the next change; the others wait in the queue as one
+        Assert.InRange(DataSent(api).Count, 1, 2);
+    }
+
+    [Fact]
+    public async Task Send_WithAnExchangeTheFileDoesNotHave_ReportsTheProblems()
+    {
+        var (api, rig, connections) = await StartReceived();
+        await using var _ = connections;
+        SendResult? reported = null;
+        connections.Sent += (_, result) => reported = result;
+
+        SetVolume(rig, 42);
+        connections.Send("gp8", "noSuchExchange", PatchParameter("MasterVolume", 2));
+
+        await WaitUntil(() => reported is not null);
+        Assert.False(reported!.IsComplete);
+        Assert.IsType<ExchangeException>(reported.Error);
+        Assert.Empty(DataSent(api));
+    }
+
+    [Fact]
+    public async Task Send_NotOnline_Throws()
+    {
+        await using var connections = await Start(new FakeMidiApi(), Open(Gp8(endpoint: new EndpointReference(Port))));
+
+        Assert.Throws<InvalidOperationException>(() => connections.Send("gp8", ExchangeNames.SendData, PatchParameter("MasterVolume", 0)));
+    }
+
     // a DT1 with the requested addresses of a patch (the first patch of the dump, as every patch), with its checksum
     private static byte[] DataAt(byte msb, byte lsb, byte size)
     {

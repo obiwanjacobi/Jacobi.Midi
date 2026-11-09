@@ -59,4 +59,10 @@ public sealed record DashboardDevice(string Alias, string MapRoot)
     /// the exchange file of the device's map root. Null when the dashboard does not receive values from the device.
     /// </summary>
     public string? Receive { get; init; }
+
+    /// <summary>
+    /// The name of the exchange the dashboard sends the changes of the device's values with (e.g. <c>sendData</c>): an
+    /// exchange of the exchange file of the device's map root. Null when the dashboard does not send to the device.
+    /// </summary>
+    public string? Send { get; init; }
 }
