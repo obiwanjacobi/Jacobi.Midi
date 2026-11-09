@@ -12,7 +12,7 @@ namespace Jacobi.Midi.Tests.Console;
 public class DashboardFileTests
 {
     private const string Xml = """
-        <dashboard format="jacobi.midi.dashboard/1" name="Lead sound" cellSize="40" look="Anodized">
+        <dashboard format="jacobi.midi.dashboard/1" name="Lead sound" cellSize="40" look="Anodized" rig="../Rigs/Studio.rig.xml">
           <device alias="synth" mapRoot="Acme.AddressMap" receive="requestData" send="sendData" color="#3D8BFD" />
           <device alias="pedalboard" mapRoot="Gx.AddressMap" />
           <assembly path="Custom.dll" />
@@ -51,6 +51,7 @@ public class DashboardFileTests
           "name": "Lead sound",
           "cellSize": 40,
           "look": "Anodized",
+          "rig": "../Rigs/Studio.rig.xml",
           "devices": [
             { "alias": "synth", "mapRoot": "Acme.AddressMap", "receive": "requestData", "send": "sendData", "color": "#3D8BFD" },
             { "alias": "pedalboard", "mapRoot": "Gx.AddressMap" },
@@ -91,6 +92,7 @@ public class DashboardFileTests
         Assert.Equal("Lead sound", dashboard.Name);
         Assert.Equal(40, dashboard.CellSize);
         Assert.Equal("Anodized", dashboard.Look);
+        Assert.Equal("../Rigs/Studio.rig.xml", dashboard.RigPath);
         Assert.Equal([new DashboardDevice("synth", "Acme.AddressMap") { Colors = new("#3D8BFD"), Receive = "requestData", Send = "sendData" }, new DashboardDevice("pedalboard", "Gx.AddressMap")], dashboard.Devices);
         Assert.Equal(["Custom.dll"], dashboard.Sources.Assemblies);
 

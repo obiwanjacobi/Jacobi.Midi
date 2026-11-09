@@ -3,6 +3,7 @@ using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.Console.Core.Files;
 using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Device.Exchange;
 using Jacobi.Midi.Device.Messages;
@@ -218,9 +219,9 @@ public sealed class SchemaLibraryBuilder
     {
         ArgumentNullException.ThrowIfNull(sources);
         foreach (var assembly in sources.Assemblies)
-            AddAssembly(Resolve(assembly, baseDirectory));
+            AddAssembly(FilePaths.Resolve(assembly, baseDirectory));
         foreach (var schema in sources.Schemas)
-            AddSchemaFile(Resolve(schema, baseDirectory));
+            AddSchemaFile(FilePaths.Resolve(schema, baseDirectory));
         return this;
     }
 
@@ -273,7 +274,4 @@ public sealed class SchemaLibraryBuilder
     private static bool IsSchema(string resource)
         => SchemaExtensions.Any(extension => resource.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
         && !ExchangeDefinitions.IsDefinitionResource(resource);
-
-    private static string Resolve(string path, string? baseDirectory)
-        => baseDirectory is null || Path.IsPathRooted(path) ? path : Path.Combine(baseDirectory, path);
 }

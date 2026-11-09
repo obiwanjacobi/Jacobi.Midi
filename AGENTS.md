@@ -18,6 +18,7 @@
 - Always look for or think in generic solutions. This project is a data-driven mechanism. When solving bugs/problems do not just look at where the specific problem exists. Look with a wider view to see if there are other places that should behave the same. Perhaps a specific piece of code needs to be extracted, made more generic and reused. Aim for a single place of truth.
 - Make new types `internal` unless explicitly required outside of the assembly and `sealed` unless explicitly required for inheritance. Consider the new `closed` keyword for abstract base classes that are only inherited inside the same assembly.
 - When analyzing or proposing new functionality or changes, work with the user in small incremental steps: one concept per step, kept short, ending with one or two concrete questions. Build a shared mental picture first (how the code works now, then what changes), before going into types and members. Propose a minimal API that covers the known cases and extend it when a real need arises; do not cover theoretical options.
+- When discussing code options, also provide clickable-links to the code being discussed next to the usual `type` references.
 - Record the design decisions made with the user in [docs/decisions.md](docs/decisions.md): per decision a short summary of the issue, the decided direction and briefly why. Add them as they are made; check the file before proposing a change in an area it covers.
 
 ## Project Overview

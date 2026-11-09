@@ -3,6 +3,24 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## A dashboard refers to its rig (2026-11-09)
+
+Issue: a dashboard file did not say what it depends on; the user had to open the right rig first. The idea was to
+reference every schema and exchange document (files, and resources of assemblies) from the dashboard.
+
+1. **The dashboard refers only to the rig it was made with (`rig`, `Dashboard.RigPath`), not to the documents.** The
+   rig has the schema sources and, through its assemblies, the exchange files. *Why:* simpler; the rig stays the one
+   place that decides what is loaded.
+2. **The rig is opened only when the references do not resolve:** the open rig does not have the dashboard's devices
+   with their map roots (`Dashboard.DeviceProblems`, also used by `BindingResolver`), or no rig is open. Replacing an
+   open rig is confirmed; a rig that is not found is located by the user. *Why:* a dashboard is portable between rigs
+   that have its devices.
+3. **An open rig with the devices that is another file than the reference is used; the notifications say so (info).**
+   *Why:* nothing happens silently, but nothing is in the way either.
+4. **A located rig updates the reference** (the dashboard counts as changed), and saving writes the open rig as the
+   reference, relative to the dashboard file (`FilePaths`, also used for the source paths). *Why:* the file follows
+   where the user keeps the rig.
+
 ## Device values in the console's device panel (2026-11-09)
 
 Issue: the device values of a rig device were one text (`name=value, …`); the user should pick the names the schema

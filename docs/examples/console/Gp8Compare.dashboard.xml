@@ -1,4 +1,4 @@
-<dashboard format="jacobi.midi.dashboard/1" name="GP-8 compare" cellSize="24">
+<dashboard format="jacobi.midi.dashboard/1" name="GP-8 compare" cellSize="24" rig="Gp8.rig.xml">
   <device alias="gp8" mapRoot="Gp8.AddressMap" receive="requestData" send="sendData" />
   <!-- two patches side by side: each section has its own 'patch' -->
   <grid device="gp8" size="45,14">

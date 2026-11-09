@@ -1,0 +1,13 @@
+<dashboard format="jacobi.midi.dashboard/1" name="GX-700 Display" cellSize="30" look="Anodized" rig="Gx700.rig.xml">
+  <device alias="gx700" mapRoot="Gx700.AddressMap" receive="requestData" />
+  <grid size="48,30" device="gx700">
+    <section label="Display" size="20,7" at="0,0" device="gx700" base="AddressMap.Display">
+      <text size="9,4" at="0,0">
+        <bind slot="value" parameter="Line1" />
+      </text>
+      <text size="9,4" at="9,0">
+        <bind slot="value" parameter="Line2" />
+      </text>
+    </section>
+  </grid>
+</dashboard>

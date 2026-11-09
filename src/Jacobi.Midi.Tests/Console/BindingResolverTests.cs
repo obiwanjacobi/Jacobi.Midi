@@ -282,6 +282,17 @@ public class BindingResolverTests
     }
 
     [Fact]
+    public void DeviceProblems_ARigWithTheDevicesAndMapRoots_HasNone()
+    {
+        var rig = new Rig
+        {
+            Devices = [new DeviceInstance { Alias = "SYNTH", MapRoot = "Acme.AddressMap" }, new DeviceInstance { Alias = "pedalboard", MapRoot = "Gx.AddressMap" }, new DeviceInstance { Alias = "extra", MapRoot = "Other.AddressMap" }],
+        };
+
+        Assert.Empty(Dashboard().DeviceProblems(rig));
+    }
+
+    [Fact]
     public void ValueControl_IsNotAnEnvelope()
     {
         Assert.Throws<ArgumentException>(() => new ValueControl(ParameterControlKind.Envelope));

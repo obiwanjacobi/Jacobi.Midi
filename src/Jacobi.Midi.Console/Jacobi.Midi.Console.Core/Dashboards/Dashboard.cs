@@ -1,4 +1,6 @@
 using Jacobi.Midi.Console.Core.Palettes;
+using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.Console.Core.Rigs;
 using Jacobi.Midi.Console.Core.Schemas;
 
 namespace Jacobi.Midi.Console.Core.Dashboards;
@@ -32,6 +34,13 @@ public sealed class Dashboard
     /// </summary>
     public string? Look { get; set; }
 
+    /// <summary>
+    /// The path of the rig file the dashboard was made with, as written in the dashboard file: relative to the
+    /// dashboard file, or absolute. When the open rig does not have the dashboard's devices (see
+    /// <see cref="DeviceProblems"/>), the console opens this rig. Null when the dashboard does not name one.
+    /// </summary>
+    public string? RigPath { get; set; }
+
     /// <summary>The device aliases the dashboard needs, with the map root each must have.</summary>
     public IReadOnlyList<DashboardDevice> Devices { get; set; } = [];
 
@@ -40,6 +49,24 @@ public sealed class Dashboard
 
     /// <summary>The root of the control tree.</summary>
     public required LayoutControl Layout { get; init; }
+
+    /// <summary>
+    /// What the rig lacks for this dashboard: a device alias it does not have, or a device with another map root.
+    /// Empty when the rig has all the dashboard's devices.
+    /// </summary>
+    public IReadOnlyList<string> DeviceProblems(Rig rig)
+    {
+        ArgumentNullException.ThrowIfNull(rig);
+        var problems = new List<string>();
+        foreach (var device in Devices)
+        {
+            if (rig.Find(device.Alias) is not { } instance)
+                problems.Add($"The device '{device.Alias}' is not in the rig.");
+            else if (!new SchemaName(instance.MapRoot).Equals(new SchemaName(device.MapRoot)))
+                problems.Add($"The device '{device.Alias}' of the rig is a '{instance.MapRoot}', the dashboard needs a '{device.MapRoot}'.");
+        }
+        return problems;
+    }
 
     /// <summary>The device with the alias (case-insensitive), or null.</summary>
     public DashboardDevice? FindDevice(string alias)

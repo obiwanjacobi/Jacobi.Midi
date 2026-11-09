@@ -516,6 +516,7 @@ The same rig in XML:
   "name": "Lead sound",
   "cellSize": 24,
   "look": "Foundry",
+  "rig": "Studio.rig.json",
   "devices": [ { "alias": "synth", "mapRoot": "Acme.AddressMap", "receive": "requestData" } ],
   "layout": {
     "type": "grid", "size": [37, 10],
@@ -548,7 +549,7 @@ The same rig in XML:
 The same dashboard in XML:
 
 ```xml
-<dashboard format="jacobi.midi.dashboard/1" name="Lead sound" cellSize="24" look="Foundry">
+<dashboard format="jacobi.midi.dashboard/1" name="Lead sound" cellSize="24" look="Foundry" rig="Studio.rig.xml">
   <device alias="synth" mapRoot="Acme.AddressMap" receive="requestData" />
   <grid size="37,10">
     <section label="Filter" at="0,0" size="12,10" device="synth" base="AddressMap.Edit.Filter">
@@ -577,6 +578,7 @@ The same dashboard in XML:
 </dashboard>
 ```
 
+- `rig`: the rig file the dashboard was made with, relative to the dashboard file (absolute on another drive); written on save, from the open rig (`Dashboard.RigPath`). When a dashboard is opened and the open rig does not have its devices with their map roots (`Dashboard.DeviceProblems`), or no rig is open, the console opens this rig: replacing an open rig is confirmed first (and its unsaved changes), a rig that is not found is located by the user, after which the dashboard refers to it there (a change of the dashboard, kept when it is saved). Without its rig the dashboard opens as it is and the problems are reported. When the open rig has the devices but is another file, the notifications say so.
 - `devices` lists the aliases the dashboard needs with the map root they must have, and optionally colors (`color`, `plateColor`, `panelColor`) that override the rig's on this dashboard. An alias that is not in the rig, or has another map root there, is reported.
 - A binding is written as `[device:]path`. The path is a schema path in the notation of the serializer's node references: a repeat item is given by its index (`Programs[5].Program.Level`) or by an index variable (`Programs[$patch].Program.Level`), so the instance is part of the path. The device and the start of the path may come from the `device` and `base` of the control or of a layout control around it; a binding with its own device (`pedalboard:AddressMap.Temporary.Compressor.Attack`) has a full path.
 - `variables` of a layout control: the index variables with their starting value (zero based); see [Index variables](#index-variables).

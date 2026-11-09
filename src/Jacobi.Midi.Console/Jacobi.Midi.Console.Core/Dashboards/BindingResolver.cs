@@ -46,13 +46,8 @@ public static class BindingResolver
         {
             if (context.Rig is not { } rig)
                 return;
-            foreach (var device in dashboard.Devices)
-            {
-                if (rig.Find(device.Alias) is not { } instance)
-                    problems.Add(new(null, null, $"The device '{device.Alias}' is not in the rig."));
-                else if (!new SchemaName(instance.MapRoot).Equals(new SchemaName(device.MapRoot)))
-                    problems.Add(new(null, null, $"The device '{device.Alias}' of the rig is a '{instance.MapRoot}', the dashboard needs a '{device.MapRoot}'."));
-            }
+            foreach (var problem in dashboard.DeviceProblems(rig))
+                problems.Add(new(null, null, problem));
         }
 
         // the library the bindings are checked against: compiled, with the roots of the devices

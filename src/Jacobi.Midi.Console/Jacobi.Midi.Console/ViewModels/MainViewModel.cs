@@ -316,8 +316,13 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     {
         if (!await ConfirmDiscard(RigOrigin, "Open another rig", $"The rig '{RigOrigin.Name}' has unsaved changes. Opening another rig discards them.", "Open"))
             return;
-        if (await PickFile("Open rig", "Rig", "*.xml", "*.json") is not { } file)
-            return;
+        if (await PickFile("Open rig", "Rig", "*.xml", "*.json") is { } file)
+            LoadRig(file);
+    }
+
+    // opens the rig of the file in place of the open one, the open dashboards on it; false when it cannot be read (reported)
+    private bool LoadRig(PickedFile file)
+    {
         try
         {
             _rig = RigFile.Read(file.Text, FileFormats.FromPath(file.Name));
@@ -326,10 +331,12 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             History.Clear();
             _reports.Clear();
             OpenSessions();
+            return true;
         }
         catch (Exception exception) when (exception is FileFormatException or ArgumentException)
         {
             Report($"'{file.Name}' cannot be opened", exception.Message);
+            return false;
         }
     }
 
@@ -351,6 +358,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         }
 
         CheckLook(dashboard, file.Origin);
+        await OpenRigOf(dashboard, file.Origin);
         var entry = new DashboardEntry(Complete(dashboard, file.Origin), file.Origin);
         Dashboards.Add(entry);
         if (Rig is not null && dashboard.Sources.IsEmpty)
@@ -367,6 +375,54 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
                 Status = $"'{dashboard.Name}' opened; its schemas were added, so the values of the devices were reset.";
         }
         RefreshNotifications();
+    }
+
+    /// <summary>
+    /// Makes sure the rig a dashboard is opened on has its devices: when the open rig does not (or no rig is open), the
+    /// rig the dashboard was made with (<see cref="Dashboard.RigPath"/>) is opened, after the user confirmed replacing
+    /// the open one. A rig that is not found is located by the user; the dashboard then refers to it there (a change of
+    /// the dashboard). Without its rig the dashboard is opened as it is and its problems are reported.
+    /// </summary>
+    private async Task OpenRigOf(Dashboard dashboard, FileOrigin origin)
+    {
+        var referred = dashboard.RigPath is { } path ? FilePaths.Resolve(path, origin.Directory) : null;
+        if (_rig is not null && dashboard.DeviceProblems(_rig).Count == 0)
+        {
+            if (referred is not null && Path.IsPathRooted(referred) && LocalPath(RigOrigin) is { } open && !FilePaths.AreSame(referred, open))
+                Inform($"'{dashboard.Name}'", $"it was made with the rig '{dashboard.RigPath}'; it is opened on '{RigOrigin.Name}', which has its devices.");
+            return;
+        }
+        if (dashboard.RigPath is not { } rigPath)
+            return;
+
+        var rigName = Path.GetFileName(rigPath);
+        if (_rig is not null
+            && (!await Confirm("ANOTHER RIG", $"Open the rig '{rigName}'", $"'{dashboard.Name}' was made with the rig '{rigPath}'; the open rig '{RigOrigin.Name}' does not have its devices. Opening its rig replaces the open one.", "Replace")
+                || !await ConfirmDiscard(RigOrigin, "Replace the rig", $"The rig '{RigOrigin.Name}' has unsaved changes. Opening another rig discards them.", "Replace")))
+            return;
+
+        var file = await ReadFile(referred!);
+        var located = false;
+        if (file is null)
+        {
+            if (!await Confirm("RIG NOT FOUND", $"Locate the rig '{rigName}'", $"'{dashboard.Name}' was made with the rig '{rigPath}', which cannot be found. Locate it, or open the dashboard without it.", "Locate")
+                || await PickFile($"Locate the rig '{rigName}'", "Rig", "*.xml", "*.json") is not { } picked)
+            {
+                Report($"'{dashboard.Name}'", $"its rig '{rigPath}' was not found; the dashboard is opened without it.");
+                return;
+            }
+            file = picked;
+            located = true;
+        }
+        if (!LoadRig(file) || !located)
+            return;
+        // the dashboard refers to the rig where the user found it
+        if (LocalPath(file.Origin) is { } found)
+        {
+            dashboard.RigPath = origin.Directory is { } directory ? FilePaths.RelativeTo(found, directory) : found;
+            origin.Changes++;
+            Inform($"'{dashboard.Name}'", $"it now refers to the rig '{dashboard.RigPath}'. Save the dashboard to keep it.");
+        }
     }
 
     /// <summary>Opens a new, empty dashboard on the rig, in Edit mode: a grid to drop controls on.</summary>
@@ -1503,14 +1559,34 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             Title = title,
             FileTypeFilter = [new FilePickerFileType(kind) { Patterns = patterns }],
         });
-        if (files.Count == 0)
-            return null;
+        return files.Count == 0 ? null : await ReadFile(files[0]);
+    }
 
-        var file = files[0];
+    // a file by its path; null when it is not found or the host has no file paths (the browser)
+    private async Task<PickedFile?> ReadFile(string path)
+    {
+        if (StorageProvider is null || !Path.IsPathRooted(path))
+            return null;
+        try
+        {
+            return await StorageProvider.TryGetFileFromPathAsync(path) is { } file ? await ReadFile(file) : null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            Report($"'{path}' cannot be read", exception.Message);
+            return null;
+        }
+    }
+
+    private static async Task<PickedFile> ReadFile(IStorageFile file)
+    {
         await using var stream = await file.OpenReadAsync();
         using var reader = new StreamReader(stream);
         return new PickedFile(file.Name, await reader.ReadToEndAsync(), FileOrigin.Of(file));
     }
+
+    // the full path of a file; null when it has none (not saved, or the browser)
+    private static string? LocalPath(FileOrigin origin) => origin.File?.TryGetLocalPath();
 
     // asks the user to confirm discarding the unsaved changes of a file; true when it has none
     private async Task<bool> ConfirmDiscard(FileOrigin origin, string title, string message, string confirmText)
@@ -1532,7 +1608,13 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     {
         if (SelectedDashboard is not { Dashboard: var dashboard, Origin: var origin })
             return false;
-        return await SaveFile("Dashboard", origin, saveAs, [dashboard.Sources], format => DashboardFile.Write(dashboard, format));
+        return await SaveFile("Dashboard", origin, saveAs, [dashboard.Sources], (format, directory) =>
+        {
+            // the dashboard is made with the open rig: it refers to it, when both have a place
+            if (LocalPath(RigOrigin) is { } rig && directory is not null)
+                dashboard.RigPath = FilePaths.RelativeTo(rig, directory);
+            return DashboardFile.Write(dashboard, format);
+        });
     }
 
     private async Task<bool> WriteRig(bool saveAs)
@@ -1540,19 +1622,19 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         if (_rig is not { } rig)
             return false;
         var sources = rig.Devices.Select(device => device.Sources).Prepend(rig.Sources);
-        return await SaveFile("Rig", RigOrigin, saveAs, [.. sources], format => RigFile.Write(rig, format));
+        return await SaveFile("Rig", RigOrigin, saveAs, [.. sources], (format, _) => RigFile.Write(rig, format));
     }
 
     // writes a file to where it was read from, or where the user picks (Save as, or a file not saved before);
     // the format follows the extension
-    private async Task<bool> SaveFile(string kind, FileOrigin origin, bool saveAs, IReadOnlyList<SchemaSources> sources, Func<FileFormat, string> write)
+    private async Task<bool> SaveFile(string kind, FileOrigin origin, bool saveAs, IReadOnlyList<SchemaSources> sources, Func<FileFormat, string?, string> write)
     {
         var file = saveAs || origin.File is null ? await PickSaveFile(kind, origin.Name) : origin.File;
         if (file is null)
             return false;
         try
         {
-            var text = write(FileFormats.FromPath(file.Name));
+            var text = write(FileFormats.FromPath(file.Name), FileOrigin.Of(file).Directory);
             await using (var stream = await file.OpenWriteAsync())
             {
                 if (stream.CanSeek)
