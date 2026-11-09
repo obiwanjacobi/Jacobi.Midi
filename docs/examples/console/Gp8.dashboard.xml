@@ -1,5 +1,5 @@
 <dashboard format="jacobi.midi.dashboard/1" name="GP-8 patch" cellSize="24">
-  <device alias="gp8" mapRoot="Gp8.AddressMap" />
+  <device alias="gp8" mapRoot="Gp8.AddressMap" receive="requestData" />
   <grid device="gp8" base="AddressMap.Memory[$patch].Patch" size="43,34">
     <variable name="patch" value="0" />
     <section label="Patch" at="0,0" size="17,7">

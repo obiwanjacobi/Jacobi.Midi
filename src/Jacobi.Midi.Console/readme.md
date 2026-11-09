@@ -375,8 +375,17 @@ amber: some, red: none) with a summary; a click opens the list of the devices wi
 - **Play mode** has an explicit choice of where the values come from: **Offline** (dump files: *Open › Dump…*) or **MIDI** (the devices). With MIDI, the controls of a device that is not online are disabled; *Open › Dump…* is only available offline.
 - Without a MIDI backend (the browser host) the console stays offline; the bar says so.
 
-The values are not exchanged with the devices yet: a connected device can be tested, but its values still come from
-dumps (the synchronisation is on the [todo list](todo.md)).
+**Receiving the values.** In Play mode with MIDI, the values of the parameters the dashboard shown is bound to are
+received from each of its devices: when the dashboard is shown and when a device comes (back) online. The dashboard
+names, per device, the exchange to receive with (`receive` on its `device`, e.g. `requestData`): an exchange of the
+exchange file of the device's map root (see the [message exchange](../Jacobi.Midi.Device/Exchange/readme.md)). A
+device without one is not received from, which the notifications say. `RigConnections.Receive` requests the
+parameters one after the other into the device state (origin `Device`); a parameter that came with an earlier one
+(the same address, an atomic group) is not requested again. The first parameter that does not complete ends the
+receive; it is reported with its reason and the number of parameters not requested after it. **⟳ Request data** in
+the toolbar (Play mode with MIDI) requests them again, fresh from the devices (`SessionData.Device`; a device that is not online is reported), e.g. after
+a change on the device that it did not send. Sending changes,
+following the device and the other steps of the synchronisation are on the [todo list](todo.md).
 
 **Connections** (`RigConnections` in Console.Core). One MIDI session and the endpoints it reaches (watched, so the list
 follows the endpoints that come and go), and a `DeviceSession` of the [message exchange](../Jacobi.Midi.Device/Exchange/readme.md)
@@ -494,7 +503,7 @@ The same rig in XML:
   "name": "Lead sound",
   "cellSize": 24,
   "look": "Foundry",
-  "devices": [ { "alias": "synth", "mapRoot": "Acme.AddressMap" } ],
+  "devices": [ { "alias": "synth", "mapRoot": "Acme.AddressMap", "receive": "requestData" } ],
   "layout": {
     "type": "grid", "size": [37, 10],
     "children": [
@@ -527,7 +536,7 @@ The same dashboard in XML:
 
 ```xml
 <dashboard format="jacobi.midi.dashboard/1" name="Lead sound" cellSize="24" look="Foundry">
-  <device alias="synth" mapRoot="Acme.AddressMap" />
+  <device alias="synth" mapRoot="Acme.AddressMap" receive="requestData" />
   <grid size="37,10">
     <section label="Filter" at="0,0" size="12,10" device="synth" base="AddressMap.Edit.Filter">
       <knob label="Cutoff" at="0,0" size="5,7">

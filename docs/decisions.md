@@ -3,6 +3,48 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## Message exchange in the console (2026-11-09)
+
+Issue: the console has a value model per device (`DeviceState`) and MIDI connections with a `DeviceSession` per
+device (`RigConnections`), but no data is exchanged with the devices yet; only dumps are loaded and saved, and only for
+address maps. See the [proposal](../src/Jacobi.Midi.Console/sync-proposal.md).
+
+1. **Two value models:** the console's `DeviceState` (what the user sees and sets) and the session's state of the
+   device (Midi.Device, internal). The console does not own or hand in the session's state. *Why:* keeps the
+   separation between a client app and the device API.
+2. **The operations with a device are configured in the dashboard and bound to message exchange patterns**, not
+   hard-wired in the console. *Why:* devices differ in their patterns; the console stays data-driven.
+3. **`DeviceState` supports every kind of root the Device API supports** (address maps and plain dump schemas), for
+   dump files and for the exchange alike; no address-only code in the console. *Why:* the Device API already handles
+   both; one way of working for all devices.
+4. **Exchange with the devices in Play mode only, to start with.** *Why:* smallest step; Edit mode can follow.
+5. **Midi.Device gets a public API to read the data of a root from SysEx bytes and to write it as SysEx bytes**,
+   without a connection or exchange file, for every kind of message map (address-map data messages and dump
+   messages). The console's dump files use it instead of `AddressMapAdapter`. *Why:* the messages in a dump file are
+   the same as on the wire; one place recognises and writes them (see *Device messages without an address map*,
+   decision 15).
+6. **"Dump file" in the console, "dump message" in Midi.Device.** The console names its side explicitly as a dump
+   file (e.g. *Open › Dump file…*, the `DeviceState` members and `ValueOrigin`); "dump" alone means the message.
+   *Why:* the two were easily mixed up.
+7. **No new layer: `IMessageMap` gets `Load` (and later `Save`)**, implemented once in the interface from the members
+   every map has (`DataMessages`, `TryRead`, `Split`, `Write`). `IMessageMap` and `MessageMaps` become public; the
+   members the exchange uses stay internal. `Save` is on the Device todo. *Why:* no extra type next to the maps; every
+   map gets it without code of its own; the Device API is a generic API, not only for the console and Schema Editor.
+8. **A dump file holds real SysEx messages**, as the device sends and accepts them: a file and a MIDI connection
+   differ only in the target, both need the same message maps. Decisions 5 and 7 are **parked**: the console keeps
+   `AddressMapAdapter.ReadData`/`EncodeData` for its dump files for now (address maps only); dump files with dump
+   messages come with `Load`/`Save` (Device todo). *Why:* the message exchange is the goal now; dump files are a
+   separate feature.
+9. **The dashboard names the exchange it requests the data with** (where its exchange file comes from: decision 11).
+   *Why:* decision 2; the console does not assume `requestData` or which exchange file a device has.
+10. **One dashboard at a time for the exchange, to start with**; several open dashboards are on the Console todo.
+    *Why:* smallest step.
+11. **Exchange files are sources like schema files:** embedded in an assembly (loaded with the assembly, e.g. the
+    Roland devices) or an `.exchange.xml`/`.exchange.json` file the user authors, listed in the sources; a later
+    file for the same root replaces an earlier one. The dashboard names, per device, the exchange to receive with
+    (to send with, later); it does not name the file. *Why:* the same way of working as for schemas; the user can
+    write an exchange file for a device without an assembly.
+
 ## Device messages without an address map (2026-11-06)
 
 Issue: the message exchange (`MessageExchange`, `DeviceSession`) finds, builds and recognises every message through

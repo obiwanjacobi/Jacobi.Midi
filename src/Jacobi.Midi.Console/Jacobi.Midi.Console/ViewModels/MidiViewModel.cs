@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Jacobi.Midi.Console.Core.Connections;
+using Jacobi.Midi.Console.Core.Dashboards;
 using Jacobi.Midi.Console.Core.Parameters;
 using Jacobi.Midi.Core;
 using Jacobi.Midi.Device.Exchange;
@@ -192,8 +193,7 @@ internal sealed class MidiViewModel : ViewModelBase, IAsyncDisposable
             var blocks = probe.Result.Blocks;
             var outcome = probe.Result.IsComplete
                 ? $"the device answered ({blocks.Count} block{(blocks.Count == 1 ? "" : "s")})"
-                : String.Join("; ", blocks.Where(block => block.Status != BlockStatus.Completed)
-                    .Select(block => (block.Reason ?? block.Error?.Message) is { } reason ? $"{block.Status}: {reason}" : block.Status.ToString()));
+                : Describe(probe.Result);
             return $"{probe.Path}{probe.Instance}: {outcome}";
         }
         catch (Exception exception)
@@ -201,6 +201,30 @@ internal sealed class MidiViewModel : ViewModelBase, IAsyncDisposable
             _notify($"Data request to '{alias}'", exception.Message, true);
             return $"Failed: {exception.Message}";
         }
+    }
+
+    /// <summary>
+    /// Receives the values of the parameters from the device with the exchange (see <see cref="RigConnections.Receive"/>);
+    /// null when it could not run, which is reported in the notifications.
+    /// </summary>
+    public async Task<ReceiveResult?> Receive(string alias, string exchange, IReadOnlyList<ParameterReference> parameters, SessionData? data)
+    {
+        if (_connections is null)
+            return null;
+        try
+        {
+            return await _connections.Receive(alias, exchange, parameters, data, CancellationToken.None);
+        }
+        catch (ExchangeException exception)
+        {
+            _notify($"Receiving '{alias}' with '{exchange}'", String.Join(" ", exception.Problems), true);
+        }
+        catch (Exception exception)
+        {
+            // the MIDI backend fails with its own exception types
+            _notify($"Receiving '{alias}' with '{exchange}'", exception.Message, true);
+        }
+        return null;
     }
 
     public async ValueTask DisposeAsync()
@@ -258,6 +282,11 @@ internal sealed class MidiViewModel : ViewModelBase, IAsyncDisposable
         OnPropertyChanged(nameof(SummaryBrush));
         Changed?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>The blocks of a transfer that did not complete, with their status and reason, in words.</summary>
+    public static string Describe(TransferResult result)
+        => String.Join("; ", result.Blocks.Where(block => block.Status != BlockStatus.Completed)
+            .Select(block => (block.Reason ?? block.Error?.Message) is { } reason ? $"{block.Status}: {reason}" : block.Status.ToString()));
 
     private static string Describe(IdentityReplyMessage reply)
         => String.Create(CultureInfo.InvariantCulture,

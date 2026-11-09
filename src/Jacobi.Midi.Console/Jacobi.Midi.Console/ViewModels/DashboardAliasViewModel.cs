@@ -23,6 +23,26 @@ internal sealed class DashboardAliasViewModel(MainViewModel owner, Dashboard das
         }
     }
 
+    /// <summary>
+    /// The exchange the dashboard receives the device's values with in Play mode with MIDI (e.g. <c>requestData</c>, see
+    /// <see cref="DashboardDevice.Receive"/>); empty: none, the values are not received.
+    /// </summary>
+    public string? Receive
+    {
+        get => dashboard.FindDevice(alias)?.Receive;
+        set
+        {
+            try
+            {
+                owner.SetDashboardReceive(dashboard, alias, value);
+            }
+            catch (ArgumentException exception)
+            {
+                throw new DataValidationException(exception.Message);
+            }
+        }
+    }
+
     /// <summary>True when the rig has a device with the alias; otherwise the controls that use it do not work.</summary>
     public bool IsInRig => owner.IsDeviceOfRig(alias);
 }

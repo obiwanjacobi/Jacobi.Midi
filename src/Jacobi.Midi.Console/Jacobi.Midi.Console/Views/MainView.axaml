@@ -162,6 +162,9 @@
                                 </Flyout>
                             </Button.Flyout>
                         </Button>
+                        <!-- Play mode with MIDI: the values of the dashboard requested again from its online devices -->
+                        <Button Content="⟳ Request data" Command="{Binding RequestDataCommand}" IsVisible="{Binding IsPlaying}"
+                                ToolTip.Tip="Request the values of the dashboard's parameters from its online devices again" />
                     </StackPanel>
                 </StackPanel>
                 <!-- Play mode: the look of the dashboard (in Edit mode it is in the dashboard's properties) -->
@@ -289,6 +292,9 @@
                                         <TextBox Text="{Binding Alias, UpdateSourceTrigger=LostFocus}" />
                                         <TextBlock Text="The rig has no device with this alias: its controls do not work." FontSize="12" TextWrapping="Wrap"
                                                    Foreground="#FFB4A0" IsVisible="{Binding !IsInRig}" />
+                                        <!-- the exchange of the device's exchange file the values are received with (Play mode with MIDI) -->
+                                        <TextBox Text="{Binding Receive, UpdateSourceTrigger=LostFocus}" PlaceholderText="Receive with, e.g. requestData"
+                                                 ToolTip.Tip="The exchange the values are received with from the device (Play mode with MIDI); empty: not received" />
                                     </StackPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>

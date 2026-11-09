@@ -1,0 +1,501 @@
+<dashboard format="jacobi.midi.dashboard/1" name="GX-700" cellSize="20" look="Foundry">
+  <device alias="gx700" mapRoot="Gx700.AddressMap" />
+  <grid label="GX-700" size="83,197" color="#6E8FB3" plateColor="#C9A55A" device="gx700" base="AddressMap.Temporary">
+    <section label="Common" size="48,21" at="0,0" base="AddressMap.Temporary.Common">
+      <knob size="5,7" at="0,0">
+        <bind slot="value" parameter="OutputLevel" />
+      </knob>
+      <section label="Chain" size="14,7" at="5,0" base="AddressMap.Temporary.Common.Chain[$chain]">
+        <variable name="chain" value="0" />
+        <numberBox label="Chain" size="6,4" at="0,0">
+          <bind slot="value" parameter="$chain" />
+        </numberBox>
+        <selector size="6,4" at="6,0">
+          <bind slot="value" parameter="EffectType" />
+        </selector>
+      </section>
+      <text size="9,4" at="19,0">
+        <bind slot="value" parameter="Name" />
+      </text>
+      <section label="Assign" size="46,10" at="0,8" base="AddressMap.Temporary.Common.Assign[$assign]">
+        <variable name="assign" value="0" />
+        <numberBox label="Assign" size="6,4" at="0,0">
+          <bind slot="value" parameter="$assign" />
+        </numberBox>
+        <selector size="6,4" at="6,0">
+          <bind slot="value" parameter="Target" />
+        </selector>
+        <knob size="5,7" at="12,0">
+          <bind slot="value" parameter="Min" />
+        </knob>
+        <knob size="5,7" at="17,0">
+          <bind slot="value" parameter="Max" />
+        </knob>
+        <selector size="6,4" at="22,0">
+          <bind slot="value" parameter="Source" />
+        </selector>
+        <selector size="6,4" at="28,0">
+          <bind slot="value" parameter="Mode" />
+        </selector>
+        <knob size="5,7" at="34,0">
+          <bind slot="value" parameter="ActLo" />
+        </knob>
+        <knob size="5,7" at="39,0">
+          <bind slot="value" parameter="ActHi" />
+        </knob>
+      </section>
+    </section>
+    <section label="Compressor" size="42,10" at="0,21" base="AddressMap.Temporary.Compressor">
+      <switch size="4,7" at="0,0">
+        <bind slot="value" parameter="On" />
+      </switch>
+      <selector size="6,4" at="4,0">
+        <bind slot="value" parameter="Type" />
+      </selector>
+      <knob size="5,7" at="10,0">
+        <bind slot="value" parameter="Sustain" />
+      </knob>
+      <knob size="5,7" at="15,0">
+        <bind slot="value" parameter="Attack" />
+      </knob>
+      <knob size="5,7" at="20,0">
+        <bind slot="value" parameter="Threshold" />
+      </knob>
+      <knob size="5,7" at="25,0">
+        <bind slot="value" parameter="Release" />
+      </knob>
+      <knob size="5,7" at="30,0">
+        <bind slot="value" parameter="Tone" />
+      </knob>
+      <knob size="5,7" at="35,0">
+        <bind slot="value" parameter="EffectLevel" />
+      </knob>
+    </section>
+    <section label="Wah" size="49,17" at="0,31" base="AddressMap.Temporary.Wah">
+      <switch size="4,7" at="0,0">
+        <bind slot="value" parameter="On" />
+      </switch>
+      <selector size="6,4" at="4,0">
+        <bind slot="value" parameter="Mode" />
+      </selector>
+      <knob size="5,7" at="10,0">
+        <bind slot="value" parameter="Frequency" />
+      </knob>
+      <selector size="6,4" at="15,0">
+        <bind slot="value" parameter="Polarity" />
+      </selector>
+      <knob size="5,7" at="21,0">
+        <bind slot="value" parameter="Sensitivity" />
+      </knob>
+      <knob size="5,7" at="26,0">
+        <bind slot="value" parameter="Manual" />
+      </knob>
+      <knob size="5,7" at="31,0">
+        <bind slot="value" parameter="Peak" />
+      </knob>
+      <selector size="6,4" at="36,0">
+        <bind slot="value" parameter="Pedal" />
+      </selector>
+      <knob size="5,7" at="42,0">
+        <bind slot="value" parameter="PedalMin" />
+      </knob>
+      <knob size="5,7" at="0,7">
+        <bind slot="value" parameter="PedalMax" />
+      </knob>
+      <knob size="5,7" at="5,7">
+        <bind slot="value" parameter="Rate" />
+      </knob>
+      <knob size="5,7" at="10,7">
+        <bind slot="value" parameter="Depth" />
+      </knob>
+      <knob size="5,7" at="15,7">
+        <bind slot="value" parameter="EffectLevel" />
+      </knob>
+    </section>
+    <section label="OverdriveDistortion" size="32,10" at="0,48" base="AddressMap.Temporary.OverdriveDistortion">
+      <switch size="4,7" at="0,0">
+        <bind slot="value" parameter="On" />
+      </switch>
+      <selector size="6,4" at="4,0">
+        <bind slot="value" parameter="Type" />
+      </selector>
+      <knob size="5,7" at="10,0">
+        <bind slot="value" parameter="Drive" />
+      </knob>
+      <knob size="5,7" at="15,0">
+        <bind slot="value" parameter="Bass" />
+      </knob>
+      <knob size="5,7" at="20,0">
+        <bind slot="value" parameter="Treble" />
+      </knob>
+      <knob size="5,7" at="25,0">
+        <bind slot="value" parameter="EffectLevel" />
+      </knob>
+    </section>
+    <section label="Preamp" size="46,11" at="0,58" base="AddressMap.Temporary.Preamp">
+      <switch size="4,7" at="0,0">
+        <bind slot="value" parameter="On" />
+      </switch>
+      <selector size="6,4" at="4,0">
+        <bind slot="value" parameter="Type" />
+      </selector>
+      <knob size="5,7" at="10,0">
+        <bind slot="value" parameter="Volume" />
+      </knob>
+      <knob size="5,7" at="15,0">
+        <bind slot="value" parameter="Bass" />
+      </knob>
+      <knob size="5,7" at="20,0">
+        <bind slot="value" parameter="Middle" />
+      </knob>
+      <knob size="5,7" at="25,0">
+        <bind slot="value" parameter="Treble" />
+      </knob>
+      <knob size="5,7" at="30,0">
+        <bind slot="value" parameter="Presence" />
+      </knob>
+      <knob size="5,7" at="35,0">
+        <bind slot="value" parameter="Master" />
+      </knob>
+      <switch size="4,7" at="40,0">
+        <bind slot="value" parameter="Bright" />
+      </switch>
+      <selector size="6,4" at="4,4">
+        <bind slot="value" parameter="Gain" />
+      </selector>
+    </section>
+    <section label="Loop" size="22,10" at="0,69" base="AddressMap.Temporary.Loop">
+      <switch size="4,7" at="0,0">
+        <bind slot="value" parameter="On" />
+      </switch>
+      <knob size="5,7" at="4,0">
+        <bind slot="value" parameter="ReturnLevel" />
+      </knob>
+      <knob size="5,7" at="9,0">
+        <bind slot="value" parameter="SendLevel" />
+      </knob>
+      <selector size="6,4" at="14,0">
+        <bind slot="value" parameter="Mode" />
+      </selector>
+    </section>
+    <section label="Equalizer" size="38,10" at="0,79" base="AddressMap.Temporary.Equalizer">
+      <switch size="4,7" at="0,0">
+        <bind slot="value" parameter="On" />
+      </switch>
+      <knob size="5,7" at="4,0">
+        <bind slot="value" parameter="LowGain" />
+      </knob>
+      <selector size="6,4" at="9,0">
+        <bind slot="value" parameter="MiddleFrequency" />
+      </selector>
+      <knob size="5,7" at="15,0">
+        <bind slot="value" parameter="MiddleGain" />
+      </knob>
+      <selector size="6,4" at="20,0">
+        <bind slot="value" parameter="MiddleQ" />
+      </selector>
+      <knob size="5,7" at="26,0">
+        <bind slot="value" parameter="HighGain" />
+      </knob>
+      <knob size="5,7" at="31,0">
+        <bind slot="value" parameter="Level" />
+      </knob>
+    </section>
+    <section label="SpeakerSimulator" size="27,10" at="0,89" base="AddressMap.Temporary.SpeakerSimulator">
+      <switch size="4,7" at="0,0">
+        <bind slot="value" parameter="On" />
+      </switch>
+      <selector size="6,4" at="4,0">
+        <bind slot="value" parameter="Type" />
+      </selector>
+      <knob size="5,7" at="10,0">
+        <bind slot="value" parameter="MicSetting" />
+      </knob>
+      <knob size="5,7" at="15,0">
+        <bind slot="value" parameter="MicLevel" />
+      </knob>
+      <knob size="5,7" at="20,0">
+        <bind slot="value" parameter="DirectLevel" />
+      </knob>
+    </section>
+    <section label="NoiseSuppressor" size="27,10" at="0,99" base="AddressMap.Temporary.NoiseSuppressor">
+      <switch size="4,7" at="0,0">
+        <bind slot="value" parameter="On" />
+      </switch>
+      <knob size="5,7" at="4,0">
+        <bind slot="value" parameter="Threshold" />
+      </knob>
+      <knob size="5,7" at="9,0">
+        <bind slot="value" parameter="Release" />
+      </knob>
+      <selector size="6,4" at="14,0">
+        <bind slot="value" parameter="Detect" />
+      </selector>
+      <knob size="5,7" at="20,0">
+        <bind slot="value" parameter="EffectLevel" />
+      </knob>
+    </section>
+    <section label="Modulation" size="50,41" at="0,109" base="AddressMap.Temporary.Modulation">
+      <switch size="4,7" at="0,0">
+        <bind slot="value" parameter="On" />
+      </switch>
+      <selector size="6,4" at="4,0">
+        <bind slot="value" parameter="Mode" />
+      </selector>
+      <selector size="6,4" at="10,0">
+        <bind slot="value" parameter="PhaserType" />
+      </selector>
+      <selector size="6,4" at="16,0">
+        <bind slot="value" parameter="VibratoTrigger" />
+      </selector>
+      <knob size="5,7" at="22,0">
+        <bind slot="value" parameter="VibratoRiseTime" />
+      </knob>
+      <selector size="6,4" at="27,0">
+        <bind slot="value" parameter="HumanizerMode" />
+      </selector>
+      <selector size="6,4" at="33,0">
+        <bind slot="value" parameter="HumanizerVowel1" />
+      </selector>
+      <selector size="6,4" at="39,0">
+        <bind slot="value" parameter="HumanizerVowel2" />
+      </selector>
+      <knob size="5,7" at="0,7">
+        <bind slot="value" parameter="Rate" />
+      </knob>
+      <knob size="5,7" at="5,7">
+        <bind slot="value" parameter="Depth" />
+      </knob>
+      <knob size="5,7" at="10,7">
+        <bind slot="value" parameter="Manual" />
+      </knob>
+      <knob size="5,7" at="15,7">
+        <bind slot="value" parameter="Resonance" />
+      </knob>
+      <knob size="5,7" at="20,7">
+        <bind slot="value" parameter="PhaserStep" />
+      </knob>
+      <knob size="5,7" at="25,7">
+        <bind slot="value" parameter="FlangerSeparation" />
+      </knob>
+      <knob size="5,7" at="30,7">
+        <bind slot="value" parameter="FlangerGate" />
+      </knob>
+      <selector size="6,4" at="35,7">
+        <bind slot="value" parameter="HumanizerTrigger" />
+      </selector>
+      <selector size="6,4" at="41,7">
+        <bind slot="value" parameter="HumanizerPedal" />
+      </selector>
+      <knob size="5,7" at="0,14">
+        <bind slot="value" parameter="RingModFrequency" />
+      </knob>
+      <knob size="5,7" at="5,14">
+        <bind slot="value" parameter="RingModEffectLevel" />
+      </knob>
+      <knob size="5,7" at="10,14">
+        <bind slot="value" parameter="RingModDirectLevel" />
+      </knob>
+      <selector size="6,4" at="15,14">
+        <bind slot="value" parameter="PitchShifterMode" />
+      </selector>
+      <knob size="5,7" at="21,14">
+        <bind slot="value" parameter="Pitch1" />
+      </knob>
+      <knob size="5,7" at="26,14">
+        <bind slot="value" parameter="Pitch2" />
+      </knob>
+      <knob size="5,7" at="31,14">
+        <bind slot="value" parameter="Pitch3" />
+      </knob>
+      <knob size="5,7" at="36,14">
+        <bind slot="value" parameter="Fine1" />
+      </knob>
+      <knob size="5,7" at="41,14">
+        <bind slot="value" parameter="Fine2" />
+      </knob>
+      <knob size="5,7" at="0,21">
+        <bind slot="value" parameter="Fine3" />
+      </knob>
+      <selector size="6,4" at="5,21">
+        <bind slot="value" parameter="HarmonistKey" />
+      </selector>
+      <selector size="6,4" at="11,21">
+        <bind slot="value" parameter="HarmonistInterval1" />
+      </selector>
+      <selector size="6,4" at="17,21">
+        <bind slot="value" parameter="HarmonistInterval2" />
+      </selector>
+      <selector size="6,4" at="23,21">
+        <bind slot="value" parameter="HarmonistInterval3" />
+      </selector>
+      <knob size="5,7" at="29,21">
+        <bind slot="value" parameter="Pan1" />
+      </knob>
+      <knob size="5,7" at="34,21">
+        <bind slot="value" parameter="Pan2" />
+      </knob>
+      <knob size="5,7" at="39,21">
+        <bind slot="value" parameter="Pan3" />
+      </knob>
+      <knob size="5,7" at="0,28">
+        <bind slot="value" parameter="Level1" />
+      </knob>
+      <knob size="5,7" at="5,28">
+        <bind slot="value" parameter="Level2" />
+      </knob>
+      <knob size="5,7" at="10,28">
+        <bind slot="value" parameter="Level3" />
+      </knob>
+      <knob size="5,7" at="15,28">
+        <bind slot="value" parameter="Balance" />
+      </knob>
+      <knob size="5,7" at="20,28">
+        <bind slot="value" parameter="TotalLevel" />
+      </knob>
+      <section label="HarmonistScale" size="23,10" at="25,28" base="AddressMap.Temporary.Modulation.HarmonistScale[$harmonistScale]">
+        <variable name="harmonistScale" value="0" />
+        <numberBox label="HarmonistScale" size="6,4" at="0,0">
+          <bind slot="value" parameter="$harmonistScale" />
+        </numberBox>
+        <knob size="5,7" at="6,0">
+          <bind slot="value" parameter="Interval1" />
+        </knob>
+        <knob size="5,7" at="11,0">
+          <bind slot="value" parameter="Interval2" />
+        </knob>
+        <knob size="5,7" at="16,0">
+          <bind slot="value" parameter="Interval3" />
+        </knob>
+      </section>
+    </section>
+    <section label="Delay" size="49,17" at="0,150" base="AddressMap.Temporary.Delay">
+      <switch size="4,7" at="0,0">
+        <bind slot="value" parameter="On" />
+      </switch>
+      <selector size="6,4" at="4,0">
+        <bind slot="value" parameter="Mode" />
+      </selector>
+      <selector size="6,4" at="10,0">
+        <bind slot="value" parameter="TempoIn" />
+      </selector>
+      <knob size="5,7" at="16,0">
+        <bind slot="value" parameter="Tempo" />
+      </knob>
+      <knob size="5,7" at="21,0">
+        <bind slot="value" parameter="TimeCenter" />
+      </knob>
+      <knob size="5,7" at="26,0">
+        <bind slot="value" parameter="TimeLeft" />
+      </knob>
+      <knob size="5,7" at="31,0">
+        <bind slot="value" parameter="TimeRight" />
+      </knob>
+      <selector size="6,4" at="36,0">
+        <bind slot="value" parameter="IntervalCenter" />
+      </selector>
+      <knob size="5,7" at="42,0">
+        <bind slot="value" parameter="Feedback" />
+      </knob>
+      <knob size="5,7" at="0,7">
+        <bind slot="value" parameter="LevelCenter" />
+      </knob>
+      <knob size="5,7" at="5,7">
+        <bind slot="value" parameter="LevelLeft" />
+      </knob>
+      <knob size="5,7" at="10,7">
+        <bind slot="value" parameter="LevelRight" />
+      </knob>
+      <knob size="5,7" at="15,7">
+        <bind slot="value" parameter="HighDamp" />
+      </knob>
+      <selector size="6,4" at="20,7">
+        <bind slot="value" parameter="HighCut" />
+      </selector>
+      <switch size="4,7" at="26,7">
+        <bind slot="value" parameter="Smooth" />
+      </switch>
+      <knob size="5,7" at="30,7">
+        <bind slot="value" parameter="EffectLevel" />
+      </knob>
+      <knob size="5,7" at="35,7">
+        <bind slot="value" parameter="DirectLevel" />
+      </knob>
+    </section>
+    <section label="Chorus" size="49,10" at="0,167" base="AddressMap.Temporary.Chorus">
+      <switch size="4,7" at="0,0">
+        <bind slot="value" parameter="On" />
+      </switch>
+      <selector size="6,4" at="4,0">
+        <bind slot="value" parameter="Mode" />
+      </selector>
+      <knob size="5,7" at="10,0">
+        <bind slot="value" parameter="Rate" />
+      </knob>
+      <knob size="5,7" at="15,0">
+        <bind slot="value" parameter="Depth" />
+      </knob>
+      <knob size="5,7" at="20,0">
+        <bind slot="value" parameter="PreDelay" />
+      </knob>
+      <selector size="6,4" at="25,0">
+        <bind slot="value" parameter="LowCut" />
+      </selector>
+      <selector size="6,4" at="31,0">
+        <bind slot="value" parameter="HighCut" />
+      </selector>
+      <knob size="5,7" at="37,0">
+        <bind slot="value" parameter="ModWave" />
+      </knob>
+      <knob size="5,7" at="42,0">
+        <bind slot="value" parameter="EffectLevel" />
+      </knob>
+    </section>
+    <section label="TremoloPan" size="27,10" at="0,177" base="AddressMap.Temporary.TremoloPan">
+      <switch size="4,7" at="0,0">
+        <bind slot="value" parameter="On" />
+      </switch>
+      <selector size="6,4" at="4,0">
+        <bind slot="value" parameter="Mode" />
+      </selector>
+      <knob size="5,7" at="10,0">
+        <bind slot="value" parameter="Rate" />
+      </knob>
+      <knob size="5,7" at="15,0">
+        <bind slot="value" parameter="Depth" />
+      </knob>
+      <knob size="5,7" at="20,0">
+        <bind slot="value" parameter="Balance" />
+      </knob>
+    </section>
+    <section label="Reverb" size="49,10" at="0,187" base="AddressMap.Temporary.Reverb">
+      <switch size="4,7" at="0,0">
+        <bind slot="value" parameter="On" />
+      </switch>
+      <selector size="6,4" at="4,0">
+        <bind slot="value" parameter="Type" />
+      </selector>
+      <knob size="5,7" at="10,0">
+        <bind slot="value" parameter="Time" />
+      </knob>
+      <knob size="5,7" at="15,0">
+        <bind slot="value" parameter="PreDelay" />
+      </knob>
+      <selector size="6,4" at="20,0">
+        <bind slot="value" parameter="LowCut" />
+      </selector>
+      <selector size="6,4" at="26,0">
+        <bind slot="value" parameter="HighCut" />
+      </selector>
+      <knob size="5,7" at="32,0">
+        <bind slot="value" parameter="Diffusion" />
+      </knob>
+      <knob size="5,7" at="37,0">
+        <bind slot="value" parameter="EffectLevel" />
+      </knob>
+      <knob size="5,7" at="42,0">
+        <bind slot="value" parameter="DirectLevel" />
+      </knob>
+    </section>
+  </grid>
+</dashboard>

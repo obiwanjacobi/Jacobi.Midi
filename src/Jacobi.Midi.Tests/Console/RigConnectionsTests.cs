@@ -1,4 +1,7 @@
+using Jacobi.BinarySerializer.Execution;
 using Jacobi.Midi.Console.Core.Connections;
+using Jacobi.Midi.Console.Core.Dashboards;
+using Jacobi.Midi.Console.Core.Devices;
 using Jacobi.Midi.Console.Core.Parameters;
 using Jacobi.Midi.Console.Core.Rigs;
 using Jacobi.Midi.Core;
@@ -206,6 +209,111 @@ public class RigConnectionsTests
         await using var connections = await Start(new FakeMidiApi(), Open(Gp8(endpoint: new EndpointReference(Port))));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => connections.ProbeData("gp8", TestContext.Current.CancellationToken));
+    }
+
+    private static ParameterReference PatchParameter(string field, int patch)
+        => new("gp8", $"AddressMap.Memory.Patch.{field}", new InstancePath([patch]));
+
+    // the requests (RQ1) sent to the GP-8
+    private static int Requests(FakeMidiApi api)
+        => api.Connections.SelectMany(connection => connection.Sent).Count(sent => sent.SysEx is [0xF0, 0x41, 0x00, 0x13, 0x11, ..]);
+
+    [Fact]
+    public async Task Receive_TheParameters_AreRequestedOnceAndSetWithTheirOrigin()
+    {
+        var api = new FakeMidiApi();
+        api.Endpoints.Add(FakeMidiApi.Endpoint(Port));
+        api.Responder = (_, _, sysEx) => sysEx is [0xF0, 0x41, 0x00, 0x13, 0x11, ..] ? DataAt(sysEx[5], sysEx[6], sysEx[8]) : null;
+        var rig = Open(Gp8(endpoint: new EndpointReference(Port)));
+        await using var connections = await Start(api, rig);
+        var state = rig.Devices["gp8"];
+        var origins = new List<ValueOrigin>();
+        state.ValueChanged += (_, change) => origins.Add(change.Origin);
+
+        var result = await connections.Receive("gp8", ExchangeNames.RequestData,
+            [PatchParameter("EffectSwiches1.PhaserOn", 2), PatchParameter("EffectSwiches1.DelayOn", 2), PatchParameter("MasterVolume", 2),
+                PatchParameter("EffectSwiches1.PhaserOn", 2)],
+            data: null, TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsComplete);
+        Assert.Equal(3, result.Parameters.Count);
+        // the two switches are bits of one address: the second came with the first
+        Assert.Equal(2, result.Transfers.Count);
+        Assert.Equal(2, Requests(api));
+        Assert.True(state.TryGetValue(PatchParameter("EffectSwiches1.DelayOn", 2), out _));
+        Assert.True(state.TryGetValue(PatchParameter("MasterVolume", 2), out _));
+        Assert.NotEmpty(origins);
+        Assert.All(origins, origin => Assert.Equal(ValueOrigin.Device, origin));
+    }
+
+    [Fact]
+    public async Task Receive_Again_IsAnsweredByTheSession_UnlessFreshFromTheDevice()
+    {
+        var api = new FakeMidiApi();
+        api.Endpoints.Add(FakeMidiApi.Endpoint(Port));
+        api.Responder = (_, _, sysEx) => sysEx is [0xF0, 0x41, 0x00, 0x13, 0x11, ..] ? DataAt(sysEx[5], sysEx[6], sysEx[8]) : null;
+        await using var connections = await Start(api, Open(Gp8(endpoint: new EndpointReference(Port))));
+        ParameterReference[] parameters = [PatchParameter("MasterVolume", 1)];
+        await connections.Receive("gp8", ExchangeNames.RequestData, parameters, data: null, TestContext.Current.CancellationToken);
+
+        var again = await connections.Receive("gp8", ExchangeNames.RequestData, parameters, data: null, TestContext.Current.CancellationToken);
+        Assert.True(again.IsComplete);
+        Assert.Equal(1, Requests(api));
+
+        var fresh = await connections.Receive("gp8", ExchangeNames.RequestData, parameters, SessionData.Device, TestContext.Current.CancellationToken);
+        Assert.True(fresh.IsComplete);
+        Assert.Equal(2, Requests(api));
+    }
+
+    [Fact]
+    public async Task Receive_TheDeviceDoesNotAnswer_EndsAtTheFirstParameter()
+    {
+        var api = new FakeMidiApi();
+        api.Endpoints.Add(FakeMidiApi.Endpoint(Port));
+        var rig = Open(Gp8(endpoint: new EndpointReference(Port)));
+        await using var connections = await Start(api, rig);
+
+        var result = await connections.Receive("gp8", ExchangeNames.RequestData,
+            [PatchParameter("MasterVolume", 0), PatchParameter("MasterVolume", 1), PatchParameter("MasterVolume", 2)],
+            data: null, TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsComplete);
+        Assert.Equal(PatchParameter("MasterVolume", 0), result.Failed!.Value.Parameter);
+        Assert.Equal(BlockStatus.TimedOut, result.Failed!.Value.Result.Blocks[0].Status);
+        Assert.Equal(2, result.NotRequested);
+        Assert.Equal(0, rig.Devices["gp8"].Count);
+    }
+
+    [Fact]
+    public async Task Receive_WithAnExchangeTheFileDoesNotHave_Throws()
+    {
+        var api = new FakeMidiApi();
+        api.Endpoints.Add(FakeMidiApi.Endpoint(Port));
+        await using var connections = await Start(api, Open(Gp8(endpoint: new EndpointReference(Port))));
+
+        await Assert.ThrowsAsync<ExchangeException>(() => connections.Receive("gp8", "noSuchExchange",
+            [PatchParameter("MasterVolume", 0)], data: null, TestContext.Current.CancellationToken));
+        Assert.Equal(0, Requests(api));
+    }
+
+    [Fact]
+    public async Task Receive_NotOnline_Throws()
+    {
+        await using var connections = await Start(new FakeMidiApi(), Open(Gp8(endpoint: new EndpointReference(Port))));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => connections.Receive("gp8", ExchangeNames.RequestData,
+            [PatchParameter("MasterVolume", 0)], data: null, TestContext.Current.CancellationToken));
+    }
+
+    // a DT1 with the requested addresses of a patch (the first patch of the dump, as every patch), with its checksum
+    private static byte[] DataAt(byte msb, byte lsb, byte size)
+    {
+        // the dump's DT1: F0 41 00 13 12, the address (2), the 0x32 parameters of the patch, the checksum, F7
+        var offset = lsb & 0x3F;
+        byte[] message = [0xF0, 0x41, 0x00, 0x13, 0x12, msb, lsb, .. Dump.AsSpan(7 + offset, size), 0x00, 0xF7];
+        var sum = message[5..^2].Sum(value => value);
+        message[^2] = (byte)((128 - sum % 128) % 128);
+        return message;
     }
 
     // the first patch of the dump as a DT1 at the requested address, with its checksum

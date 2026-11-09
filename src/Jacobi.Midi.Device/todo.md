@@ -6,6 +6,19 @@ Known gaps and loose ends of the address map and the message exchange (see [Addr
 
 - [ ] Add universal sysex definitions to midi.schema.xml
 
+## Device messages
+
+- [ ] **`IMessageMap.Load` and `Save`**: read the data of a root from SysEx messages and write a range of it as SysEx
+  messages, without a connection or exchange file, e.g. for dump files (see [docs/decisions.md](../../docs/decisions.md),
+  *Message exchange in the console*, decisions 5, 7 and 8). Built once in the interface from `DataMessages`, `TryRead`,
+  `Split` and `Write`, so every map has them; `IMessageMap` and `MessageMaps` public with only the facts and
+  `Load`/`Save` as public members. Replaces `AddressMapAdapter.ReadData`/`EncodeData` (used by the console's
+  `DeviceState.LoadDump`/`SaveDump`), so the console's dump files work for dump messages too. Open: which data
+  message `Save` writes when the root has more than one (offline there is no exchange file to name it): one message
+  per call, an optional data message with the first one the map can split the range for as the default; or the map's
+  own choice per block, as `AddressMap.SelectBlocks` does now. The Schema Editor's use of `AddressMapAdapter`
+  (`PlanData`, `WriteData`) needs the same refactoring for dump messages.
+
 ## Message exchange
 
 - [ ] **Message exchange for schemas without an address map** (a small redesign of the API). The exchange (`MessageExchange`, `DeviceSession`) is built on the address map: it finds, builds and recognises every message through it (`MessageExchange.MapOf`, `AddressMap.Split`, `AddressMap.Message`, `AddressProtocol.CreateMessage`, `AddressMap.TryReadData`). The exchange files are already generic: they name messages and events, no addresses. A device whose dumps are ordinary schemas (e.g. Korg dumps selected by a function code, see `docs/analysis`) cannot be exchanged. The design is decided (see [docs/decisions.md](../../docs/decisions.md), *Device messages without an address map*): a base layer of device messages (`Jacobi.Midi.Device.Messages`) with message maps per root (`IMessageMap`), created by an ordered chain of providers (`IMessageMapProvider`: address first, the default dump provider last); the exchange and the session work on the interfaces only. Each stage below builds and passes the tests on its own:

@@ -1,5 +1,5 @@
 <dashboard format="jacobi.midi.dashboard/1" name="GP-8 compare" cellSize="24">
-  <device alias="gp8" mapRoot="Gp8.AddressMap" />
+  <device alias="gp8" mapRoot="Gp8.AddressMap" receive="requestData" />
   <!-- two patches side by side: each section has its own 'patch' -->
   <grid device="gp8" size="45,14">
     <section label="Patch A" at="0,0" size="22,14" base="AddressMap.Memory[$patch].Patch">

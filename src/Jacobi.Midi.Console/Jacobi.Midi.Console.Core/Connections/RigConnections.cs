@@ -1,5 +1,7 @@
 using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
+using Jacobi.BinarySerializer.Processor;
+using Jacobi.Midi.Console.Core.Dashboards;
 using Jacobi.Midi.Console.Core.Devices;
 using Jacobi.Midi.Console.Core.Parameters;
 using Jacobi.Midi.Console.Core.Rigs;
@@ -190,6 +192,51 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
             ?? throw new InvalidOperationException($"The map of '{alias}' has no parameters.");
         var range = state.Plan.CreateRange(path, instance, path, instance);
         return new DataProbeResult(path, instance, await session.Probe(range, ct));
+    }
+
+    /// <summary>
+    /// Receives the values of parameters from the device into its device state (origin <see cref="ValueOrigin.Device"/>)
+    /// with the exchange <paramref name="exchange"/> of the exchange file of its map root, one parameter after the
+    /// other. The exchange receives the atomic group of a parameter (and what else its map widens the range to); a
+    /// parameter that was received with an earlier one is not requested again. With
+    /// <see cref="ExchangeNames.RequestData"/> the session answers what it already holds, unless <paramref name="data"/>
+    /// is <see cref="SessionData.Device"/>; any other exchange always requests. The first parameter that does not complete
+    /// ends the receive: the parameters after it are not requested.
+    /// </summary>
+    /// <param name="exchange">The name of the exchange, as the dashboard names it (<see cref="Dashboards.DashboardDevice.Receive"/>).</param>
+    /// <param name="data">Where the values come from; null: the session's default (from what it holds, else the device).</param>
+    /// <exception cref="InvalidOperationException">The device is not online or has no state.</exception>
+    /// <exception cref="ExchangeException">The exchange cannot run for a parameter (e.g. the exchange file has no such exchange).</exception>
+    /// <exception cref="NotSupportedException">The exchange sends data too.</exception>
+    public async Task<ReceiveResult> Receive(string alias, string exchange, IEnumerable<ParameterReference> parameters,
+        SessionData? data, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(exchange);
+        ArgumentNullException.ThrowIfNull(parameters);
+        DeviceSession session;
+        DeviceState state;
+        lock (_lock)
+        {
+            session = _links.GetValueOrDefault(alias)?.Session ?? throw new InvalidOperationException($"'{alias}' is not online.");
+            state = _rig?.Devices.GetValueOrDefault(alias) ?? throw new InvalidOperationException($"'{alias}' has no parameters: see the problems of the rig.");
+        }
+
+        var requested = parameters.Distinct().ToList();
+        var sink = new ReceivedSink(state.CreateSink(ValueOrigin.Device));
+        var results = new List<(ParameterReference Parameter, TransferResult Result)>();
+        foreach (var parameter in requested)
+        {
+            if (sink.Received.Contains((parameter.Path, parameter.Instance)))
+                continue;
+            var range = state.Plan.CreateRange(parameter.Path, parameter.Instance, parameter.Path, parameter.Instance);
+            var result = exchange == ExchangeNames.RequestData
+                ? await session.RequestData(range, sink, data, progress: null, ct)
+                : await session.Execute(exchange, range, new ExchangeData { Sink = sink }, progress: null, ct);
+            results.Add((parameter, result));
+            if (!result.IsComplete)
+                break;
+        }
+        return new ReceiveResult(alias, exchange, requested, results);
     }
 
     public async ValueTask DisposeAsync()
@@ -408,6 +455,30 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
     }
 
     private void Raise() => Changed?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
+    /// Passes the values of a receive on to the device state and remembers which fields were received, so a parameter
+    /// that came with an earlier one is not requested again.
+    /// </summary>
+    private sealed class ReceivedSink(IValueSink inner) : IValueSink
+    {
+        public HashSet<(string Path, InstancePath Instance)> Received { get; } = [];
+
+        public void SetField(FieldContext context, LogicalField value)
+        {
+            Received.Add((context.Path, context.Instance));
+            inner.SetField(context, value);
+        }
+
+        // the device state is flat: every scope is the sink itself
+        public IValueSink EnterGroup(GroupContext context) => this;
+        public IValueSink EnterItem(RepeatContext context, int index, int count) => this;
+        public IValueSink EnterChoice(ChoiceContext context, int selectedIndex) => this;
+        public void ExitGroup(GroupContext context) { }
+        public void ExitItem(RepeatContext context, int index, int count) { }
+        public void ExitChoice(ChoiceContext context, int selectedIndex) { }
+    }
+
     /// <summary>
     /// The connection of one device: what it was made for (endpoint, device values, schemas), its session and status.
     /// </summary>
@@ -453,3 +524,49 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
 /// atomic group) and the result per block.
 /// </summary>
 public sealed record DataProbeResult(string Path, InstancePath Instance, TransferResult Result);
+
+/// <summary>
+/// The outcome of <see cref="RigConnections.Receive"/>: the parameters that were asked for, and the transfer of each
+/// parameter that was requested (one that came with an earlier one has none). The receive ends at the first transfer
+/// that did not complete; the parameters after it were not requested.
+/// </summary>
+/// <param name="Alias">The device.</param>
+/// <param name="Exchange">The exchange the values were received with.</param>
+/// <param name="Parameters">The parameters asked for, without duplicates.</param>
+/// <param name="Transfers">The transfers in the order they ran.</param>
+public sealed record ReceiveResult(string Alias, string Exchange, IReadOnlyList<ParameterReference> Parameters,
+    IReadOnlyList<(ParameterReference Parameter, TransferResult Result)> Transfers)
+{
+    /// <summary>True when every transfer completed (and so every parameter was received).</summary>
+    public bool IsComplete => Transfers.All(transfer => transfer.Result.IsComplete);
+
+    /// <summary>The transfer that ended the receive; null when it is complete.</summary>
+    public (ParameterReference Parameter, TransferResult Result)? Failed
+    {
+        get
+        {
+            foreach (var transfer in Transfers)
+            {
+                if (!transfer.Result.IsComplete)
+                    return transfer;
+            }
+            return null;
+        }
+    }
+
+    /// <summary>The number of parameters after the one that ended the receive: they were not requested. 0 when complete.</summary>
+    public int NotRequested
+    {
+        get
+        {
+            if (Failed is not { } failed)
+                return 0;
+            for (var index = 0; index < Parameters.Count; index++)
+            {
+                if (Parameters[index] == failed.Parameter)
+                    return Parameters.Count - index - 1;
+            }
+            return 0;
+        }
+    }
+}

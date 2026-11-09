@@ -80,6 +80,17 @@ public sealed class DashboardSession : IDisposable
             .Select(parameter => parameter!.Path)
             .ToHashSet(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The parameters of a device the controls are bound to now: with the repeat items the index variables select, in
+    /// the order of the controls, without duplicates. These are the parameters to receive from the device.
+    /// </summary>
+    public IReadOnlyList<ParameterReference> ParametersOf(string alias)
+        => [.. Resolution.Bindings
+            .Select(binding => binding.Parameter)
+            .OfType<ParameterReference>()
+            .Where(parameter => String.Equals(parameter.Device, alias, StringComparison.OrdinalIgnoreCase))
+            .Distinct()];
+
     /// <summary>The current (zero based) index of a variable.</summary>
     public int IndexOf(VariableReference variable)
         => _indices.TryGetValue(variable, out var index) ? index : _startIndices.GetValueOrDefault(variable);

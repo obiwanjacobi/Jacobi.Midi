@@ -94,7 +94,13 @@ internal sealed class WindowsMidiEndpointObserver : IMidiEndpointObserver
             lock (_gate)
                 ThrowIfUnavailable();
             var initialEnumerationCompleted = Volatile.Read(ref _initialEnumerationCompleted);
-            var next = _watcher.EnumeratedEndpointDevices.Values
+            if (TryReadEnumerated() is not { } devices)
+            {
+                // the watcher changed its endpoints while they were read: read them again in another round
+                _changes.Writer.TryWrite(true);
+                return;
+            }
+            var next = devices
                 .Select(WindowsMidiEndpointMapper.Map)
                 .OrderBy(endpoint => endpoint.Name, StringComparer.Ordinal)
                 .ThenBy(endpoint => endpoint.Id, StringComparer.OrdinalIgnoreCase)
@@ -149,6 +155,20 @@ internal sealed class WindowsMidiEndpointObserver : IMidiEndpointObserver
         finally
         {
             _reconciling.Release();
+        }
+    }
+
+    // The watcher's collection is changed on the watcher's own thread (e.g. during the first enumeration) and cannot be
+    // locked: a change while it is read makes the read fail. Null then; the change also queued a round of its own.
+    private Native.MidiEndpointDeviceInformation[]? TryReadEnumerated()
+    {
+        try
+        {
+            return [.. _watcher.EnumeratedEndpointDevices.Values];
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
         }
     }
 

@@ -53,4 +53,10 @@ public sealed record DashboardDevice(string Alias, string MapRoot)
 {
     /// <summary>Overrides the rig's colors of the device on this dashboard.</summary>
     public AreaColors Colors { get; init; } = AreaColors.None;
+
+    /// <summary>
+    /// The name of the exchange the dashboard receives the device's values with (e.g. <c>requestData</c>): an exchange of
+    /// the exchange file of the device's map root. Null when the dashboard does not receive values from the device.
+    /// </summary>
+    public string? Receive { get; init; }
 }

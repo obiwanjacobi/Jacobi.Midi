@@ -12,13 +12,15 @@ using Jacobi.Midi.Console.Core.Schemas;
 using Jacobi.Midi.Console.Dashboards;
 using Jacobi.Midi.Console.Looks;
 using Jacobi.Midi.Core;
+using Jacobi.Midi.Device.Exchange;
 
 namespace Jacobi.Midi.Console.ViewModels;
 
 /// <summary>
 /// The view model of the main view: the open rig (a <see cref="RigSession"/> with the device states), the dashboards
 /// open on it (one <see cref="DashboardSession"/> each, all sharing the device states), the selected dashboard, the
-/// Edit/Play mode and the look. Until the device synchronisation exists, the values come from dumps.
+/// Edit/Play mode and the look. The values come from dump files (Offline) or, in Play mode with MIDI, are received from
+/// the devices with the exchange the dashboard names for each (<see cref="DashboardDevice.Receive"/>).
 /// <para>
 /// In Edit mode the left panel shows the rig (<see cref="RigTree"/>: the devices and their parameters) and the palettes
 /// of controls; what is dragged from it is dropped on the dashboard (<see cref="Drop"/>, <see cref="Bind"/>). The user
@@ -37,6 +39,9 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
 
     // what the console said about files, dumps and edits, besides the problems of the rig and the dashboard
     private readonly List<Notification> _reports = [];
+    // the devices of the dashboard shown whose values were received while online (Play mode with MIDI), for that session
+    private readonly HashSet<string> _received = new(StringComparer.OrdinalIgnoreCase);
+    private DashboardSession? _receivedFor;
     private Rig? _rig;
     /// <summary>Where the rig was read from, and whether it changed since.</summary>
     [ObservableProperty]
@@ -805,6 +810,31 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     }
 
     /// <summary>
+    /// Sets the exchange the dashboard receives the values of a device with (<see cref="DashboardDevice.Receive"/>), as an
+    /// edit of the dashboard; null or empty: none. A device the dashboard does not list yet is added, with the map root of
+    /// the rig's device.
+    /// </summary>
+    /// <exception cref="ArgumentException">The dashboard does not list the device and the rig has no device with the alias.</exception>
+    public void SetDashboardReceive(Dashboard dashboard, string alias, string? exchange)
+    {
+        if (Dashboards.FirstOrDefault(entry => entry.Dashboard == dashboard) is not { } entry)
+            return;
+        exchange = String.IsNullOrWhiteSpace(exchange) ? null : exchange.Trim();
+        var device = dashboard.FindDevice(alias)
+            ?? (_rig?.Find(alias) is { } instance ? new DashboardDevice(instance.Alias, instance.MapRoot) : null)
+            ?? throw new ArgumentException($"The dashboard does not list '{alias}' and the rig has no device with this alias.", nameof(alias));
+        if (device.Receive == exchange && dashboard.Devices.Contains(device))
+            return;
+        var changed = device with { Receive = exchange };
+        IReadOnlyList<DashboardDevice> devices = dashboard.Devices.Contains(device)
+            ? [.. dashboard.Devices.Select(other => other == device ? changed : other)]
+            : [.. dashboard.Devices, changed];
+        DoDashboardEdit(entry, new ValueEdit<IReadOnlyList<DashboardDevice>>($"receive of '{alias}'", () => dashboard.Devices, value => dashboard.Devices = value, devices));
+        Status = (exchange is null ? $"'{alias}' is not received from on '{dashboard.Name}'" : $"'{alias}' is received with '{exchange}' on '{dashboard.Name}'")
+            + ". Save to keep it.";
+    }
+
+    /// <summary>
     /// Adds a device for an address map of the schema library to the rig, named after the map (<c>Gp8.AddressMap</c>:
     /// <c>gp8</c>); it is selected.
     /// </summary>
@@ -1052,6 +1082,8 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             item.Connection = Midi.ConnectionOf(item.Instance!.Alias);
         DeviceProperties?.RefreshConnection();
         LoadDumpCommand.NotifyCanExecuteChanged();
+        RequestDataCommand.NotifyCanExecuteChanged();
+        ReceiveFromDevices();
     }
 
     partial void OnSelectedDashboardChanged(DashboardEntry? value)
@@ -1061,6 +1093,8 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         RefreshDashboardAliases();
         RefreshUsage();
         ShowDashboardLook();
+        RequestDataCommand.NotifyCanExecuteChanged();
+        ReceiveFromDevices();
     }
 
     // the selected dashboard has a new session: shown as a newly selected dashboard
@@ -1068,6 +1102,78 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     {
         SelectedControl = null;
         OnPropertyChanged(nameof(SelectedSession));
+        RequestDataCommand.NotifyCanExecuteChanged();
+        ReceiveFromDevices();
+    }
+
+    // Play mode with MIDI: the values of a device of the dashboard shown are received when it comes online, and those of
+    // all its online devices when another dashboard (or session) is shown; one dashboard at a time
+    private void ReceiveFromDevices()
+    {
+        if (IsEditing || !Midi.IsMidi || SelectedSession is not { } session)
+        {
+            _received.Clear();
+            _receivedFor = null;
+            return;
+        }
+        if (!ReferenceEquals(session, _receivedFor))
+        {
+            _received.Clear();
+            _receivedFor = session;
+        }
+        foreach (var device in session.Dashboard.Devices)
+        {
+            if (Midi.ConnectionOf(device.Alias)?.IsOnline != true)
+            {
+                // received again when it comes back online
+                _received.Remove(device.Alias);
+                continue;
+            }
+            if (_received.Add(device.Alias))
+                _ = Receive(session, device, data: null);
+        }
+    }
+
+    private bool CanRequestData() => !IsEditing && Midi.IsMidi && SelectedSession is not null;
+
+    // the toolbar: the values of the dashboard shown requested again from its devices, fresh from the device; a device
+    // that is not online is reported in the notifications
+    [RelayCommand(CanExecute = nameof(CanRequestData))]
+    private async Task RequestData()
+    {
+        if (SelectedSession is not { } session)
+            return;
+        foreach (var device in session.Dashboard.Devices)
+            await Receive(session, device, SessionData.Device);
+    }
+
+    // receives the values of the parameters of the dashboard bound to the device, with the exchange the dashboard names
+    private async Task Receive(DashboardSession session, DashboardDevice device, SessionData? data)
+    {
+        var (alias, exchange) = (device.Alias, device.Receive);
+        if (exchange is null)
+        {
+            Inform($"Device '{alias}'", "the dashboard names no exchange to receive its values with: they are not received.");
+            return;
+        }
+        var parameters = session.ParametersOf(alias);
+        if (parameters.Count == 0)
+            return;
+        Status = $"Receiving '{alias}'…";
+        // a failure that keeps the exchange from running is reported by the MIDI view model
+        if (await Midi.Receive(alias, exchange, parameters, data) is not { } result)
+            return;
+        if (result.Failed is { } failed)
+        {
+            var notRequested = result.NotRequested;
+            Report($"Receiving '{alias}' with '{exchange}'",
+                $"{failed.Parameter.Path}{failed.Parameter.Instance}: {MidiViewModel.Describe(failed.Result)}"
+                + (notRequested > 0 ? $"; {notRequested} parameter{(notRequested == 1 ? " was" : "s were")} not requested after it." : "."));
+        }
+        else
+        {
+            Status = $"Received {parameters.Count} parameter{(parameters.Count == 1 ? "" : "s")} from '{alias}'.";
+        }
     }
 
     // a panel shows another control or device with fresh fields (null first: the template is not reused), so that no

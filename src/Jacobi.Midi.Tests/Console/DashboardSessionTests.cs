@@ -88,6 +88,21 @@ public class DashboardSessionTests
     }
 
     [Fact]
+    public void ParametersOf_AreTheBoundParameters_OfTheItemTheVariableSelects()
+    {
+        using var session = Open();
+        session.SetIndex(new VariableReference(session.Dashboard.Layout, "patch"), 3);
+
+        var parameters = session.ParametersOf("GP8");
+
+        // five parameters; the number box is bound to the variable
+        Assert.Equal(5, parameters.Count);
+        Assert.Equal(new ParameterReference("gp8", "AddressMap.Memory.Patch.DynamicFilter.Sens", new InstancePath([3])), parameters[0]);
+        Assert.All(parameters, parameter => Assert.Equal(new InstancePath([3]), parameter.Instance));
+        Assert.Empty(session.ParametersOf("other"));
+    }
+
+    [Fact]
     public void Open_GivesAValuePerBoundSlot()
     {
         using var session = Open();
