@@ -5,6 +5,8 @@ Known gaps and loose ends, collected while building the editor.
 ## Node editor
 
 - [x] Editing `description` or `sample` on the Properties tab does not refresh the staged values on the General tab; pressing *Apply* there writes the old values back. Fixed: the description and sample value fields are removed from the General tab; both are edited as properties only.
+- [x] Top bar / Midi bar: size to window width. Currently stuff drops off when window width is too small.
+- [ ] Node (def) references: allow easy navigation through schema tree by making node refs clickable.
 - [ ] The node def, count, selected index, member node def, byte size/length/offset and value fields are plain text boxes; offer the document's node defs (and the reachable `ref:` paths) as suggestions.
 - [x] `SchemaWorkspaceDocument.ApplyNodeEdits` takes the type-specific properties as an optional trailing `NodeFacets` parameter; fold name, data type, description and sample into the staged model so there is one apply path. Fixed: there is no apply step any more; `NodeFacets` edits the name, data type and type-specific values of the node live.
 - [ ] Remove contiguous match selection. send separate messages for gaps.
@@ -19,6 +21,7 @@ Known gaps and loose ends, collected while building the editor.
 - [ ] A node that is moved to another parent or whose type is changed is written as a new element in an XML source (`XmlSchemaSource` matches nodes by identity within their parent): the comments inside and before it are lost. Reordering within the same parent keeps them.
 - [ ] Change type only covers group, repeat and choice; a field cannot be changed into a group-like node (or back).
 - [ ] A node cannot be moved between the document members and the node defs (e.g. turn a member into a node def), nor to another document.
+- [ ] Add an option to select the schema files and assemblies to load on startup. Saved in (user) settings file.
 
 ## Effective processors and properties
 
@@ -43,6 +46,8 @@ Known gaps and loose ends, collected while building the editor.
 
 - [x] Phase 1 (Compare): `Schema | Workbench` mode switch, session (title, save/open), captures from .syx / pasted hex / Receive, baseline and variants with change notes, message slots, byte view (`HexView`) with difference, changed-bits, derived and annotation marks, interpret strip, annotations.
 - [ ] A message slot of a variant with a different length is compared byte by byte up to the shorter length; the proposal's alignment on the longest common subsequence is not done.
+- [ ] Allow changing the byte-span of a (multi-byte) field easily (drag?).
+- [ ] Slots are called blocks elsewhere. Messages?
 - [ ] The layers of the byte view cannot be toggled; there is only a legend.
 - [ ] The interpret strip does not check the rows against the change notes (they are free text, not parsed) and there are no sweeps yet. Needs a way to enter the noted value.
 - [ ] Keyboard: `Ctrl+Tab` (next unknown span), `Ctrl+1…9` (focus a variant), `Enter`/`F2` (define/rename a field) are not implemented; arrows, Shift+arrows, Home/End and Tab/Shift+Tab are.
@@ -51,6 +56,7 @@ Known gaps and loose ends, collected while building the editor.
 - [x] Phase 2 (Build), first part: one root per message slot (`Message<n>`, `midi.sysex` framing) with `Wip_<offset>` placeholders, Define / Apply / Remove field, a live preview of the field's value in every capture (on a copy of the schema), field coverage under the bytes, double-click selects a field or unknown span, interpret strip rows set the data type.
 - [x] Decimal display (Hex/Decimal switch: the bytes and offsets of the byte view; the tooltip shows both), find a value (decimal, hex or hex bytes; as one byte, 7-bit packed or nibbles; in the focused variant or the baseline, changed bytes first) and notes on slots (in the session, the slots list and the slot headers).
 - [x] Moving the slots splitter moved the slots list down (the splitter resized the header row); fixed values for fields (checked by the reader in every capture); define the selected field at the same position in the other slots (where the bytes are the same, or where they are unknown).
+- [ ] Select current field from workspace in schema-tree when switching.
 - [ ] Find only looks in the focused variant (or the baseline); finding in all captures, and finding a value in the slots that changed only, may help.
 - [ ] Frame proposal: header constants, checksum detection (`roland.checksum`, `yamaha.checksum`, `sys.crc`) and address fields are not proposed yet.
 - [ ] A slot is matched to its root by name (`Message<n>`); a renamed root is not found. Matching by reading (the root that reads the baseline message) would be more robust.

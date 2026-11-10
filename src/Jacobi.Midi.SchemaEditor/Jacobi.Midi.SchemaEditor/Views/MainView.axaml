@@ -23,7 +23,7 @@
                     <TextBlock Text="MIDI SCHEMA STUDIO" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource AppTextHeadingBrush}" />
                     <TextBlock Text="Author, inspect and reverse-engineer SysEx schemas" FontSize="12" Foreground="{DynamicResource AppTextLabelBrush}" />
                 </StackPanel>
-                <midi:MidiBarControl Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" DataContext="{Binding MidiBar}" />
+                <midi:MidiBarControl Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Center" DataContext="{Binding MidiBar}" />
             </Grid>
         </Border>
 
