@@ -39,10 +39,22 @@ internal interface IMessageMap
     byte[] Write(DeviceMessage message, PlanRange block, IValueSource? source, DeviceValues device);
 
     /// <summary>
-    /// Recognises a message of the device as <paramref name="message"/> for the device values: for a data message,
-    /// <paramref name="data"/> is the data it carries; for any other message it is null.
+    /// Matches a message of the device with <paramref name="message"/> for the device values: recognised (for a data
+    /// message with the data it carries), not this message, or a near miss with the problem (see <see cref="MessageMatch"/>).
     /// </summary>
-    bool TryRead(DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device, out ReceivedData? data);
+    MessageMatch Match(DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device);
+
+    /// <summary>
+    /// Recognises a message of the device as <paramref name="message"/> for the device values: for a data message,
+    /// <paramref name="data"/> is the data it carries; for any other message it is null. A near miss is not recognised
+    /// (see <see cref="Match"/> for its problem).
+    /// </summary>
+    bool TryRead(DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device, out ReceivedData? data)
+    {
+        var match = Match(message, sysEx, device);
+        data = match.Data;
+        return match.IsRecognised;
+    }
 
     /// <summary>True when the received data covers the block.</summary>
     bool IsComplete(PlanRange block, IReadOnlyList<ReceivedData> received);

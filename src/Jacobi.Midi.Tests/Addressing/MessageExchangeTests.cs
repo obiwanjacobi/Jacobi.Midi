@@ -98,6 +98,60 @@ public class MessageExchangeTests
     }
 
     [Fact]
+    public async Task Receive_AReplyThatCannotBeRead_IsNamedInTheTimeout()
+    {
+        var serializer = CreateSerializer();
+        var device = new FakeDevice
+        {
+            Answer = answer =>
+            {
+                answer[^2] ^= 0x01;
+                return answer;
+            },
+        };
+        await using var exchange = CreateExchange(serializer, device, timeoutMs: 50);
+
+        var result = await RequestData(exchange, Range(serializer, "AddressMap.Edit"), new FieldValueStore());
+
+        var block = Assert.Single(result.Blocks);
+        Assert.Equal(BlockStatus.TimedOut, block.Status);
+        Assert.Contains("CRC mismatch", Assert.Single(block.Unaccepted));
+        Assert.StartsWith("timeout in turn 'request' of 'requestData'. 1 message was received but not accepted: ", block.Reason);
+        Assert.Contains("CRC mismatch", block.Reason);
+    }
+
+    [Fact]
+    public async Task Receive_DataOutsideTheBlock_IsNamed()
+    {
+        var serializer = CreateSerializer();
+        // the device answers with memory patch 5, whatever is asked
+        var device = new FakeDevice { Answer = _ => FakeDevice.MemoryPatch(5) };
+        await using var exchange = CreateExchange(serializer, device, timeoutMs: 50);
+
+        var result = await RequestData(exchange, Range(serializer, "AddressMap.Edit"), new FieldValueStore());
+
+        var block = Assert.Single(result.Blocks);
+        Assert.Equal(BlockStatus.TimedOut, block.Status);
+        Assert.Contains("with data outside the block", Assert.Single(block.Unaccepted));
+    }
+
+    [Fact]
+    public async Task Receive_OtherTraffic_IsNotNamed()
+    {
+        var serializer = CreateSerializer();
+        // the answer of another device (device id 5)
+        var device = new FakeDevice { Answer = _ => DataMessage(0, Patch(FakeDevice.EditName), deviceId: 5) };
+        await using var exchange = CreateExchange(serializer, device, timeoutMs: 50);
+
+        var result = await RequestData(exchange, Range(serializer, "AddressMap.Edit"), new FieldValueStore());
+
+        var block = Assert.Single(result.Blocks);
+        Assert.Equal(BlockStatus.TimedOut, block.Status);
+        Assert.Empty(block.Unaccepted);
+        Assert.Equal("timeout in turn 'request' of 'requestData'.", block.Reason);
+    }
+
+    [Fact]
     public async Task Receive_AFailedBlock_EndsTheTransfer()
     {
         var serializer = CreateSerializer();

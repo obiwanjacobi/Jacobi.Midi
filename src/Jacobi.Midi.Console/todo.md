@@ -12,6 +12,7 @@ What is planned for the console, and what was done. What the console does now is
 - [ ] A rig (or dashboard) whose schema files or assemblies are not found: prompt the user to locate them, and refer to them there.
 - [x] Rig device values not as a string, but a list with possibile keys from droplist.
 - [ ] make droplists for send and receive exchange names.
+- [ ] prompt user for unsaved changes when closing the app.
 - [ ] Phase out `AddressMapAdapter` in `SchemaLibrary` (`Maps`: `IsMap`, `ItemCount`, the order of `Roots`) in favour of the generic `MessageMaps`/`MessageMapInfo`; first decide what these mean for every kind of map (every root has a map now, a dump by default).
 - [ ] Add a clear button to the problems window and a X-button to each item.
 - [ ] Control label should not determine scale of control. Cutoff text... Controls with long (default) names now show very small knobs.

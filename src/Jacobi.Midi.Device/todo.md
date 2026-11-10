@@ -6,6 +6,7 @@ Known gaps and loose ends of the address map and the message exchange (see [Addr
 
 - [ ] Add universal sysex definitions to midi.schema.xml
 - [ ] Add documentation to schema fields (and groups?) `midi.doc`. Copy text from the manual to show in editor and/or console.
+- [x] consolidate midi.atomic and midi.unit? Add an opposite of atomic: individual (per field)? Allow midi.unit on groups? *Done:* `midi.transfer="atomic|individual"` replaces `midi.atomic` (see [docs/decisions.md](../../docs/decisions.md), *How a group is cut into blocks*); `midi.unit` stays a message setting.
 
 ## Device messages
 

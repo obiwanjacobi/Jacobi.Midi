@@ -61,8 +61,18 @@ public enum BlockStatus
 /// </summary>
 public sealed record BlockResult(PlanRange Block, BlockStatus Status, Exception? Error = null)
 {
-    /// <summary>Why the transfer did not complete, as written by the exchange; null when it completed.</summary>
+    /// <summary>
+    /// Why the transfer did not complete, as written by the exchange (with the first of <see cref="Unaccepted"/>, when
+    /// there are any); null when it completed.
+    /// </summary>
     public string? Reason { get; init; }
+
+    /// <summary>
+    /// The messages of the device that arrived during the block but were not accepted, each with why: a near miss (its
+    /// envelope and device match, but it cannot be read) or data of the device outside the block. Other traffic is not
+    /// listed.
+    /// </summary>
+    public IReadOnlyList<string> Unaccepted { get; init; } = [];
 
     /// <summary>A block that was not transferred because the transfer ended at <paramref name="ended"/>; it gets the same status.</summary>
     internal static BlockResult NotTransferred(PlanRange block, BlockResult ended)

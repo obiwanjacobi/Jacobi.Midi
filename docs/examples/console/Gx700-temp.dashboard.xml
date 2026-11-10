@@ -359,13 +359,13 @@
           <bind slot="value" parameter="$harmonistScale" />
         </numberBox>
         <knob size="5,7" at="6,0">
-          <bind slot="value" parameter="Interval1" />
+          <bind slot="value" parameter="Scale.Interval1" />
         </knob>
         <knob size="5,7" at="11,0">
-          <bind slot="value" parameter="Interval2" />
+          <bind slot="value" parameter="Scale.Interval2" />
         </knob>
         <knob size="5,7" at="16,0">
-          <bind slot="value" parameter="Interval3" />
+          <bind slot="value" parameter="Scale.Interval3" />
         </knob>
       </section>
     </section>

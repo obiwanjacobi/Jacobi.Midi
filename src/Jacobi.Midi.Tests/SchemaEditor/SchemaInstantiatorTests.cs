@@ -1,4 +1,5 @@
 using System.Reflection;
+using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.SchemaEditor.Instantiate;
@@ -1115,7 +1116,7 @@ public class SchemaInstantiatorTests
         var root = Assert.IsType<InstanceGroup>(instantiator.Create(msg));
 
         // the End field expects F7
-        Assert.Throws<InvalidOperationException>(
+        Assert.Throws<SerializationException>(
             () => instantiator.Deserialize(instantiator.FindRootName(msg)!.Value, root, [0xF0, 0x01, 0x02, 0x03, 0x00], []));
 
         Assert.Equal("1", Field(root, "Head", "A").Value);

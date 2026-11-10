@@ -223,8 +223,8 @@ internal sealed class AddressMap : IMessageMap
 
     /// <summary>
     /// Splits a node range into the blocks to transfer with the given message: per field, per atomic group, or in
-    /// contiguous parts split at unmapped gaps and at the message's maximum data size, never inside a field or an
-    /// atomic group. Nodes the access excludes are left out: read-only fields for a message that carries data (they
+    /// contiguous parts split at unmapped gaps, at the members of individual groups and repeats (<c>midi.transfer</c>) and
+    /// at the message's maximum data size, never inside a field or an atomic group or repeat. Nodes the access excludes are left out: read-only fields for a message that carries data (they
     /// are not sent), write-only fields for any other message (the device does not transmit them).
     /// With an atomic message, only the atomic groups are returned.
     /// </summary>
@@ -267,6 +267,7 @@ internal sealed class AddressMap : IMessageMap
             default:
                 var atomics = _layout.AtomicGroups(span).Select(a => a.Range).ToList();
                 bool CanSplitAt(long address) => !atomics.Any(a => a.Start < address && address < a.End);
+                var cuts = _layout.Cuts(span).ToHashSet();
 
                 var current = new List<AddressOccurrence>();
                 foreach (var field in fields)
@@ -277,7 +278,8 @@ internal sealed class AddressMap : IMessageMap
                         var end = current[^1].Range.End;
                         var gap = field.Range.Start > end;
                         var tooBig = settings.MaxDataSize > 0 && field.Range.End - start > settings.MaxDataSize && CanSplitAt(field.Range.Start);
-                        if ((gap || tooBig) && field.Range.Start >= end)
+                        var cut = cuts.Contains(field.Range.Start);
+                        if ((gap || tooBig || cut) && field.Range.Start >= end)
                         {
                             blocks.Add(CreateBlock(current));
                             current = [];
@@ -510,60 +512,87 @@ internal sealed class AddressMap : IMessageMap
         return _serializer.Deserialize(data.Message.Range, new ReadOnlySequence<byte>(data.SysEx), envelope);
     }
 
+    private ReceivedData? TryRead(DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device)
+        => Read(message, sysEx, device).Data;
+
     // The length of the data is only known from the message as a whole: try the blocks that start at the address
     // (see Candidates). A block that is too large runs out of data, one that is too small does not end at the end
     // of the message (checksum, end of exclusive). The trial reads discard the values.
-    private ReceivedData? TryRead(DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device)
+    // Once the address and the device values match, the message is this map's: when no block fits it is a near miss,
+    // with the failure of a block that has the size of the data (not one that ran out of data) as the reason.
+    private MessageMatch Read(DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device)
     {
         IEnumerator<AddressBlock>? candidates = null;
+        long address = 0;
+        string? problem = null;
         try
         {
             while (true)
             {
-                var rejected = false;
+                var notThis = false;
+                var exhausted = false;
                 AddressBlock? tried = null;
 
                 EnvelopeBody<IValueSink> Select(EnvelopeSink envelope)
                 {
-                    if (AddressProtocol.AddressOf(envelope) is not { } address)
+                    if (AddressProtocol.AddressOf(envelope) is not { } at)
                     {
-                        rejected = true;
+                        notThis = true;
                         throw new InvalidOperationException($"'{message.Name}': the data comes before the address.");
                     }
                     if (!Matches(envelope.Device, device))
                     {
-                        rejected = true;
+                        notThis = true;
                         throw new InvalidOperationException("The message is for another device.");
                     }
 
-                    candidates ??= Candidates(message, address, sysEx.Length).GetEnumerator();
+                    address = at;
+                    candidates ??= Candidates(message, at, sysEx.Length).GetEnumerator();
                     if (!candidates.MoveNext())
                     {
-                        rejected = true;
+                        exhausted = true;
                         throw new InvalidOperationException("No block of the map fits the data.");
                     }
                     tried = candidates.Current;
                     return new EnvelopeBody<IValueSink>(Root, tried.Nodes, WrapBody(NullSink.Instance, tried.Nodes));
                 }
 
+                var sink = new EnvelopeSink(Select);
                 try
                 {
-                    var sink = new EnvelopeSink(Select);
                     var read = _serializer.Deserialize(message.Range, new ReadOnlySequence<byte>(sysEx), sink);
                     if (read == sysEx.Length && tried is not null)
                     {
                         _overheads[message] = sysEx.Length - tried.Addresses.Size;
-                        return new ReceivedData(message, sysEx, sink.Device, tried.Nodes, Decode);
+                        return MessageMatch.Recognised(new ReceivedData(message, sysEx, sink.Device, tried.Nodes, Decode));
                     }
                 }
                 catch (Exception exception) when (exception is not OperationCanceledException)
                 {
-                    // not this message, not this device, or the tried block does not fit
+                    if (notThis)
+                    {
+                        return MessageMatch.NotThis;
+                    }
+                    if (exhausted)
+                    {
+                        return MessageMatch.Rejected(
+                            $"'{message.FullName}' at {Protocol.AddressSpace.Format(address)} ({sysEx.Length} bytes): {problem ?? "no block of the map starts at the address with the size of the data."}");
+                    }
+                    if (candidates is null)
+                    {
+                        // before the body: the envelope or the device does not match
+                        return MessageMatch.Failed(exception, sink.Device, device, committed: false);
+                    }
+                    // a tried block that has the size of the data, but whose data cannot be read
+                    if (problem is null && exception is not SerializationException { Category: SerializationCategories.EndOfData })
+                    {
+                        problem = exception.Message;
+                    }
                 }
 
-                if (rejected || candidates is null)
+                if (candidates is null)
                 {
-                    return null;
+                    return MessageMatch.NotThis;
                 }
             }
         }
@@ -707,16 +736,13 @@ internal sealed class AddressMap : IMessageMap
             ? CreateData(message, block, source ?? throw new ArgumentNullException(nameof(source), $"'{message.FullName}': there are no values to send."), device)
             : Protocol.CreateMessage(message, GetAddressRange(block), device);
 
-    bool IMessageMap.TryRead(DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device, out ReceivedData? data)
+    MessageMatch IMessageMap.Match(DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device)
     {
-        if (message.IsData)
-        {
-            var read = TryReadData(message, sysEx, device, out var received);
-            data = read ? received : null;
-            return read;
-        }
-        data = null;
-        return Protocol.TryRead(message, sysEx, device);
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(device);
+        return message.IsData
+            ? Read(message, sysEx, device)
+            : DeviceMessages.Recognise(_serializer, message, sysEx, device, out _);
     }
 
     bool IMessageMap.IsComplete(PlanRange block, IReadOnlyList<ReceivedData> received)

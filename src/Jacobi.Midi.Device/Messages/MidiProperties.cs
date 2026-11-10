@@ -10,21 +10,65 @@ namespace Jacobi.Midi.Device.Messages;
 /// </summary>
 internal static class MidiProperties
 {
+    /// <summary>
+    /// The absolute start address of an addressed node (address map), in address notation.
+    /// </summary>
     public const string Address = "midi.address";
+    /// <summary>
+    /// The number of addresses an addressed node occupies (address map); on a repeat the size of one item.
+    /// </summary>
     public const string Stride = "midi.stride";
+    /// <summary>
+    /// The number of items a repeat has in the address space (address map). Only on repeats.
+    /// </summary>
     public const string Repeat = "midi.repeat";
-    public const string Atomic = "midi.atomic";
+    /// <summary>
+    /// How a group or repeat is cut into blocks: <c>atomic</c> (always whole) or <c>individual</c> (each member, or
+    /// repeat item, on its own) (address map).
+    /// </summary>
+    public const string Transfer = "midi.transfer";
+    /// <summary>
+    /// The access of an addressed node: <c>readwrite</c> (default), <c>read</c> or <c>write</c> (address map, inherited).
+    /// </summary>
     public const string Access = "midi.access";
+    /// <summary>
+    /// The prefix of <c>midi.device.&lt;name&gt;</c>: a device value fixed for the device type, on the map root.
+    /// </summary>
     public const string DevicePrefix = "midi.device.";
+    /// <summary>
+    /// What one message covers: <c>range</c> (default), <c>field</c> or <c>atomic</c> (envelope, overridable on the map root).
+    /// </summary>
     public const string Unit = "midi.unit";
+    /// <summary>
+    /// The largest number of data bytes in one message (envelope, overridable on the map root).
+    /// </summary>
     public const string MaxDataSize = "midi.maxDataSize";
+    /// <summary>
+    /// Which value an envelope field or open choice holds: <c>address</c>, <c>size</c>, <c>device.&lt;name&gt;</c> or <c>data</c>.
+    /// </summary>
     public const string Role = "midi.role";
+    /// <summary>
+    /// The bits per address byte of the <c>address</c> field (envelope); default 7.
+    /// </summary>
     public const string AddressBits = "midi.addressBits";
 
     // values of midi.role
+
+    /// <summary>
+    /// The role of the field that holds the transferred block's absolute start address.
+    /// </summary>
     public const string RoleAddress = "address";
+    /// <summary>
+    /// The role of the field that holds the transferred block's size (request only).
+    /// </summary>
     public const string RoleSize = "size";
+    /// <summary>
+    /// The role of the open choice that holds the values of the block.
+    /// </summary>
     public const string RoleData = "data";
+    /// <summary>
+    /// The prefix of the <c>device.&lt;name&gt;</c> role: a field that holds a device value (<see cref="DevicePrefix"/>).
+    /// </summary>
     public const string RoleDevicePrefix = "device.";
 
     public static SchemaNode SchemaNodeOf(NodeInfo node) => node switch

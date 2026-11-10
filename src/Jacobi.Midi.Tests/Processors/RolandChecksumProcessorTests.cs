@@ -51,7 +51,7 @@ public class RolandChecksumProcessorTests
         var data = new byte[] { 0x01, 0x02, 0x03, 0x04, 0x10 };
         var valueSink = new ValueSink();
 
-        Assert.Throws<InvalidOperationException>(() =>
+        Assert.Throws<SerializationException>(() =>
         {
             serializer.Deserialize(ChecksumRoot, new ReadOnlySequence<byte>(data), valueSink);
         });

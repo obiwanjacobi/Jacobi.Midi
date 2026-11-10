@@ -33,7 +33,7 @@ untouched. A `device.<name>` role gets its value from `midi.device.<name>` in th
 | `midi.address` | the map root and any node below it that is not inside a repeat | The **absolute** start address of the node. Optional: the map root starts at address 0 without it; a node below the root without it follows its previous sibling (previous start + previous size); the first member starts where its parent starts. Not allowed inside a repeat item (all items would get the same address). |
 | `midi.stride` | any addressed node | The number of addresses the node occupies: the distance from its start to the start of the next node. On a **repeat** it is the size of one item, the distance between items. Optional: the default is the computed size (the encoded byte count, one address per data byte). It must be ≥ the computed size; the addresses after the content are reserved. This is how gaps inside repeated or reused blocks are expressed. |
 | `midi.repeat` | repeat | The number of items the repeat has in the address space. The repeat's `count` states how many items a dump holds and is checked by the serializer; a device map does not know that, so its repeats leave `count` out (read until the end of the data) and give `midi.repeat`. Optional: without it a constant `count` is used (a fixed list inside a patch). Not allowed on other nodes. |
-| `midi.atomic` | group, repeat item, map root | `true`: the group is **indivisible**; it is always received and sent as a whole (a GP-8 patch, Yamaha dump blocks; a device that only does complete dumps has an atomic root). |
+| `midi.transfer` | group, repeat, map root | How the node is cut into blocks, at its own level (its members; of a repeat: its items). `atomic`: the node is **indivisible**, it is always received and sent as a whole (a GP-8 patch, Yamaha dump blocks, the GX-700 effect chain; a device that only does complete dumps has an atomic root). `individual`: each member (item) is transferred on its own, never joined with its neighbours (the GX-700 display lines). Without it the message's unit and maximum data size decide. Not on a field. Nesting: a contradiction is an error (`individual` inside `atomic`), a redundancy is not (`atomic` inside `atomic` has no effect, e.g. a reused nodeDef). |
 | `midi.access` | any addressed node, inherited | `readwrite` (default), `read` (e.g. Yamaha System Information) or `write` (trigger addresses such as XG System On, Store To Flash). Receive never requests `write` nodes; send never writes `read` nodes. |
 | `midi.device.<name>` | map root | A device value that is fixed for the device type, e.g. `midi.device.modelId="0x13"`. The client can add or override values (`DeviceValues`). |
 | `midi.unit`, `midi.maxDataSize` | map root | Override the envelope's message settings for this device (see below). A `midi.unit` override applies to the data messages only. |
@@ -92,7 +92,7 @@ The schemas in the repository:
 - [TestDevice.cs](../../Jacobi.Midi.Tests/Addressing/TestDevice.cs): a complete envelope and device map without vendor schemas (the test schemas): 2 address bytes, a `sys.crc` (CRC-7) checksum, an atomic patch nodeDef, a non-atomic group and a repeat with reserved addresses.
 - [Roland.schema.xml](../../Jacobi.Midi.Roland/Roland.schema.xml): the Roland Type IV envelope (RQ1, DT1). `Message16`, `Message24` and `Message32` are the same messages with 2, 3 and 4 address bytes, each with its own open choice contract (`messageBody16`, `messageBody24`, `messageBody32`); a device map conforms to one address size only.
 - [Gp8.schema.xml](../../Jacobi.Midi.Roland/Gp8/Gp8.schema.xml): a device map with 2 address bytes; a temporary patch and a repeat of 128 memory patches with a stride larger than the patch.
-- [Gx700.schema.xml](../../Jacobi.Midi.Roland/Boss/Gx700/Gx700.schema.xml): a device map with 4 address bytes; atomic sections inside a patch, the same sections without `midi.atomic` in the individual (per parameter) temporary area, a write-only trigger address (Sound Change Request) and a read-only area (display).
+- [Gx700.schema.xml](../../Jacobi.Midi.Roland/Boss/Gx700/Gx700.schema.xml): a device map with 4 address bytes; atomic sections inside a patch, the same sections without `midi.transfer` in the individual (per parameter) temporary area, an atomic repeat (the effect chain), a write-only trigger address (Sound Change Request) and a read-only area (display) whose lines are requested individually.
 
 A minimal stand-alone example (a made-up device, not in the repository). The envelope has a request and a data
 message with a 2 byte address; the checksum and framing processors are left out. How the two are exchanged (and the
@@ -136,7 +136,7 @@ The device map conforms to the envelope's `body` and fixes the device value `mod
 ```xml
 <!-- device schema, includes 'acme' -->
 <nodeDefs>
-  <group name="program" midi.atomic="true">
+  <group name="program" midi.transfer="atomic">
     <members>
       <field name="Level" datatype="sys.uint8"/>
       <field name="Name" datatype="sys.string" byteLength="8">
@@ -194,12 +194,12 @@ constant in a bit-packed group:
        midi.device.groupId="0x7F1C" midi.device.modelId="0x08" midi.address="0x00-00-00">
   <members>
     <group name="StoreToFlash" midi.address="0x0D-00-00" midi.access="write"> ... </group>
-    <group name="SystemCommon" midi.atomic="true" midi.address="0x20-00-00"> ... </group>
-    <group name="MasterEq" midi.atomic="true" midi.address="0x20-40-00"> ... </group>
-    <group name="Common" midi.atomic="true" midi.address="0x46-00-00"> ... </group>
+    <group name="SystemCommon" midi.transfer="atomic" midi.address="0x20-00-00"> ... </group>
+    <group name="MasterEq" midi.transfer="atomic" midi.address="0x20-40-00"> ... </group>
+    <group name="Common" midi.transfer="atomic" midi.address="0x46-00-00"> ... </group>
     <repeat name="Zone" midi.address="0x4A-00-00" midi.stride="0x00-01-00" midi.repeat="4">
       <members>
-        <group name="Zone" nodeDef="zone" midi.atomic="true" />
+        <group name="Zone" nodeDef="zone" midi.transfer="atomic" />
       </members>
     </repeat>
   </members>
@@ -210,9 +210,10 @@ constant in a bit-packed group:
 
 **Node ranges and addresses.** Addresses only increase in plan order, so a `PlanRange` covers one ascending address
 span. A range is **widened** to whole addresses (asking for one bit field of a bit-packed group also delivers the
-other fields of that byte) and, for a transfer, to the **atomic groups** it overlaps. It is then split into the blocks
-to transfer with a message: per field (`field`), per atomic group (`atomic`), or in contiguous parts split at
-unmapped gaps and at the message's maximum data size, never inside a field or an atomic group (`range`). Nodes the
+other fields of that byte) and, for a transfer, to the **atomic groups** (and repeats) it overlaps. It is then split
+into the blocks to transfer with a message: per field (`field`), per atomic group (`atomic`), or in contiguous parts
+split at unmapped gaps, at the members of individual groups and repeats and at the message's maximum data size, never
+inside a field or an atomic group (`range`). Nodes the
 access excludes are left out: read-only fields for a message that carries data, write-only fields for any other
 message (the device does not transmit them).
 

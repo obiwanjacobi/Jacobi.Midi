@@ -213,6 +213,93 @@ public class AddressMapTests
         Assert.Equal([new AddressRange(GlobalStart, 9), new AddressRange(GlobalStart + 9, 1)], blocks.Select(b => b.Addresses));
     }
 
+    // 0x00 Before, 0x01-0x04 Display (individual: Line1, Pair of 2, Line3), 0x05 After,
+    // 0x06-0x0B Items (individual: 3 items of A, B), 0x0C-0x0E Chain (atomic: 3 items), 0x0F Last
+    private const string TransferXml = """
+        <schema name="Transfer">
+          <includes>
+            <include schema="TestEnvelope" />
+          </includes>
+          <members>
+            <group name="Map" nodeDef="TestEnvelope.body" midi.device.modelId="0x43">
+              <members>
+                <field name="Before" datatype="sys.uint8" />
+                <group name="Display" midi.transfer="individual">
+                  <members>
+                    <field name="Line1" datatype="sys.uint8" />
+                    <group name="Pair">
+                      <members>
+                        <field name="A" datatype="sys.uint8" />
+                        <field name="B" datatype="sys.uint8" />
+                      </members>
+                    </group>
+                    <field name="Line3" datatype="sys.uint8" />
+                  </members>
+                </group>
+                <field name="After" datatype="sys.uint8" />
+                <repeat name="Items" count="3" midi.transfer="individual">
+                  <members>
+                    <field name="A" datatype="sys.uint8" />
+                    <field name="B" datatype="sys.uint8" />
+                  </members>
+                </repeat>
+                <repeat name="Chain" count="3" midi.transfer="atomic">
+                  <members>
+                    <field name="Effect" datatype="sys.uint8" />
+                  </members>
+                </repeat>
+                <field name="Last" datatype="sys.uint8" />
+              </members>
+            </group>
+          </members>
+        </schema>
+        """;
+
+    private static AddressMap CreateTransferMap()
+        => AddressMap.Create(CreateSerializer(Parse(TransferXml)), new SchemaName("Transfer.Map"));
+
+    [Fact]
+    public void Split_Individual_CutsAtEachMemberAndAtItsOwnBoundaries()
+    {
+        var map = CreateTransferMap();
+        var request = map.Message(new SchemaName("TestEnvelope.Message.Request"));
+
+        var blocks = map.Split(map.CreateRange("Map"), request);
+
+        // a member group (Pair) stays one block; the atomic Chain joins Last (no transfer: the message decides)
+        Assert.Equal(
+            [
+                new AddressRange(0x00, 1), new AddressRange(0x01, 1), new AddressRange(0x02, 2), new AddressRange(0x04, 1),
+                new AddressRange(0x05, 1), new AddressRange(0x06, 2), new AddressRange(0x08, 2), new AddressRange(0x0A, 2),
+                new AddressRange(0x0C, 4),
+            ],
+            blocks.Select(b => b.Addresses));
+    }
+
+    [Fact]
+    public void Split_AtomicRepeat_StaysWhole()
+    {
+        var map = CreateTransferMap();
+        var data = map.Protocol.DataMessages[0];
+        var small = map.Protocol.SettingsOf(data) with { MaxDataSize = 2 };
+
+        var range = map.CreateRange("Map.Chain", default, "Map.Last", default);
+        var blocks = map.Split(range, data, small);
+
+        Assert.Equal([new AddressRange(0x0C, 3), new AddressRange(0x0F, 1)], blocks.Select(b => b.Addresses));
+    }
+
+    [Fact]
+    public void WidenToAtomic_ItemOfAnAtomicRepeat_BecomesTheRepeat()
+    {
+        var map = CreateTransferMap();
+
+        var effect = map.CreateRange("Map.Chain.Effect", new InstancePath([1]));
+        var widened = map.WidenToAtomic(effect);
+
+        Assert.Equal(new AddressRange(0x0C, 3), map.GetAddressRange(widened));
+    }
+
     [Fact]
     public void SelectBody_ByModelId()
     {
@@ -318,6 +405,60 @@ public class AddressMapTests
         message[^2] ^= 0x01;
 
         Assert.False(map.TryReadData(message, Device0, out _));
+    }
+
+    private static MessageMatch Match(AddressMap map, string message, byte[] sysEx, DeviceValues device)
+        => ((IMessageMap)map).Match(map.Message(new SchemaName(message)), sysEx, device);
+
+    [Fact]
+    public void Match_OtherTraffic_IsNotThisMessage()
+    {
+        var map = CreateMap();
+        var data = DataMessage(PatchAddress(0), Patch("Patch  0"));
+
+        // another device id, another model id (no map), and a request read as data (its command differs)
+        Assert.Equal(MessageMatch.NotThis, Match(map, "TestEnvelope.Message.Data", data, new DeviceValues { ["deviceId"] = 5 }));
+        Assert.Equal(MessageMatch.NotThis, Match(map, "TestEnvelope.Message.Data", DataMessage(PatchAddress(0), Patch("Patch  0"), modelId: 0x44), Device0));
+        Assert.Equal(MessageMatch.NotThis, Match(map, "TestEnvelope.Message.Data", Request(PatchAddress(0), PatchSize), Device0));
+        Assert.Equal(MessageMatch.NotThis, Match(map, "TestEnvelope.Message.Request", data, Device0));
+    }
+
+    [Fact]
+    public void Match_CorruptCrc_IsANearMissWithTheReason()
+    {
+        var map = CreateMap();
+        var message = DataMessage(PatchAddress(0), Patch("Patch  0"));
+        message[^2] ^= 0x01;
+
+        var match = Match(map, "TestEnvelope.Message.Data", message, Device0);
+
+        Assert.True(match.IsRejected);
+        Assert.Contains("CRC mismatch", match.Problem);
+        Assert.Contains("0x01-00", match.Problem);
+    }
+
+    [Fact]
+    public void Match_AddressOutsideTheMap_IsANearMiss()
+    {
+        var map = CreateMap();
+        // the reserved addresses after the edit patch
+        var message = DataMessage(PatchSize, [1, 2]);
+
+        var match = Match(map, "TestEnvelope.Message.Data", message, Device0);
+
+        Assert.True(match.IsRejected);
+        Assert.Contains("no block of the map starts at the address", match.Problem);
+    }
+
+    [Fact]
+    public void Match_Recognised_HoldsTheData()
+    {
+        var map = CreateMap();
+
+        var match = Match(map, "TestEnvelope.Message.Data", DataMessage(PatchAddress(1), Patch("Patch  1")), Device0);
+
+        Assert.True(match.IsRecognised);
+        Assert.Equal(new AddressRange(PatchAddress(1), PatchSize), map.GetAddressRange(match.Data!.Block));
     }
 
     [Fact]

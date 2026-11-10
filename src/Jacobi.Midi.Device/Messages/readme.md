@@ -22,7 +22,7 @@ provider that claims the root wins.
 
 | Order | Provider | Claims a root | Map |
 | ----- | -------- | ------------- | --- |
-| 1 | `AddressMapProvider` | with an address-map tag (`midi.address`, `midi.stride`, `midi.repeat`, `midi.atomic`, `midi.access`) on one of its nodes, or carried by a data message with the role `address` | `AddressMap` (see [Addressing](../Addressing/readme.md)) |
+| 1 | `AddressMapProvider` | with an address-map tag (`midi.address`, `midi.stride`, `midi.repeat`, `midi.transfer`, `midi.access`) on one of its nodes, or carried by a data message with the role `address` | `AddressMap` (see [Addressing](../Addressing/readme.md)) |
 | 2 | `DumpMapProvider` | every other root | `DumpMap` (below) |
 
 A provider claims a root by the tags it owns and then reports the problems of those tags itself: a broken address
@@ -50,6 +50,14 @@ values read from a message select the body (`ConformingBodies`). The roles that 
 A recognised data message is a `ReceivedData`: the message, its device values and the block it carries;
 `Decode(sink)` reads its values into a value model, in the way of the map that recognised it. Recognising and decoding
 are separate: data is recognised on the receive thread, and only the data of a completed block reaches the client.
+
+Matching a message of the device (`IMessageMap.Match`) has three outcomes (`MessageMatch`): **recognised**, **not
+this message** (other traffic: silent), or a **near miss**: the envelope and the device match, but the message cannot
+be read; its `Problem` says why (the reason and location of the serializer's `SerializationException`). The line
+between the last two is drawn in one place, `MessageMatch.Failed`: once a data message's body is selected (its
+envelope and device values match) every failure is a near miss; before that, a constant that differs (the engine's
+`expectedValue`), a device value that differs or a rejection by the value model is not this message, any other
+failure of the serializer is a near miss. `TryRead` is `Match` without the problem.
 
 ## Dump map
 

@@ -143,6 +143,54 @@ public class AddressMapValidatorTests
         Assert.Equal("Map.Value", problem.Path.Value);
     }
 
+    [Fact]
+    public void Validate_Transfer_AContradictionIsAnError_ARedundancyIsNot()
+    {
+        var problems = Validate("""
+            <schema name="Other">
+              <includes>
+                <include schema="TestEnvelope" />
+              </includes>
+              <members>
+                <group name="Map" nodeDef="TestEnvelope.body">
+                  <members>
+                    <group name="Outer" midi.transfer="atomic">
+                      <members>
+                        <group name="Inner" midi.transfer="atomic">
+                          <members>
+                            <field name="A" datatype="sys.uint8" />
+                          </members>
+                        </group>
+                        <repeat name="Items" count="2" midi.transfer="individual">
+                          <members>
+                            <field name="B" datatype="sys.uint8" />
+                          </members>
+                        </repeat>
+                      </members>
+                    </group>
+                    <repeat name="Chain" count="2" midi.transfer="atomic">
+                      <members>
+                        <field name="C" datatype="sys.uint8" />
+                      </members>
+                    </repeat>
+                    <field name="D" datatype="sys.uint8" midi.transfer="atomic" />
+                    <group name="E" midi.transfer="whole">
+                      <members>
+                        <field name="F" datatype="sys.uint8" />
+                      </members>
+                    </group>
+                  </members>
+                </group>
+              </members>
+            </schema>
+            """);
+
+        // individual inside atomic, transfer on a field, an unknown value; atomic in atomic and on a repeat are fine
+        Assert.Equal(
+            ["Map.D", "Map.E", "Map.Outer.Items"],
+            Of(problems, MessageMapProblemSeverity.Error).Select(problem => problem.Path.Value).Order());
+    }
+
     [Theory]
     [InlineData("midi.role", "address", true)]
     [InlineData("midi.role", "device.modelId", true)]
@@ -153,8 +201,10 @@ public class AddressMapValidatorTests
     [InlineData("midi.messageInterval", "20", false)]
     [InlineData("midi.address", "0x40-00", true)]
     [InlineData("midi.address", "forty", false)]
-    [InlineData("midi.atomic", "true", true)]
-    [InlineData("midi.atomic", "yes", false)]
+    [InlineData("midi.transfer", "atomic", true)]
+    [InlineData("midi.transfer", "individual", true)]
+    [InlineData("midi.transfer", "true", false)]
+    [InlineData("midi.atomic", "true", false)]
     [InlineData("midi.access", "read", true)]
     [InlineData("midi.unit", "field", true)]
     [InlineData("midi.exchange", "acknowledged", false)]

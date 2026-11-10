@@ -379,7 +379,7 @@ public sealed class MessageExchange : IAsyncDisposable
                                 accepted.Decode(sink);
                             }
                         }
-                        return new BlockResult(block, done.Status) { Reason = done.Reason };
+                        return Result(block, done.Status, done.Reason, active.Unaccepted);
 
                     default:
                         throw new InvalidOperationException($"'{prepared.Definition.Name}', turn '{machine.Turn.Name}': unexpected action.");
@@ -388,7 +388,7 @@ public sealed class MessageExchange : IAsyncDisposable
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            return new BlockResult(block, BlockStatus.Failed, exception) { Reason = exception.Message };
+            return Result(block, BlockStatus.Failed, exception.Message, active.Unaccepted) with { Error = exception };
         }
         finally
         {
@@ -397,6 +397,18 @@ public sealed class MessageExchange : IAsyncDisposable
                 _active = null;
             }
         }
+    }
+
+    // a block that did not complete names the messages it did not accept in its reason: often the cause (e.g. a
+    // timeout because the reply could not be read)
+    private static BlockResult Result(PlanRange block, BlockStatus status, string? reason, IReadOnlyList<string> unaccepted)
+    {
+        if (status != BlockStatus.Completed && unaccepted.Count > 0)
+        {
+            var count = unaccepted.Count == 1 ? "1 message was" : $"{unaccepted.Count} messages were";
+            reason = $"{reason} {count} received but not accepted: {unaccepted[0]}{(unaccepted.Count > 1 ? " (and more)" : String.Empty)}";
+        }
+        return new BlockResult(block, status) { Reason = reason, Unaccepted = unaccepted };
     }
 
     // waits for a message for the machine until the deadline; ignored messages do not extend it
@@ -508,29 +520,66 @@ public sealed class MessageExchange : IAsyncDisposable
         IReadOnlyList<DeviceMessage> Receivable, IReadOnlyList<DeviceMessage> Others);
 
     /// <summary>
-    /// The transfer that is running: the exchange and block it is for, and the messages for its machine.
+    /// The transfer that is running: the exchange and block it is for, the messages for its machine, and the messages
+    /// of the device it did not accept (see <see cref="BlockResult.Unaccepted"/>).
     /// </summary>
     private sealed class ActiveTransfer(PreparedExchange exchange, PlanRange block)
     {
+        // the bytes of a message shown in a problem
+        private const int ShownBytes = 32;
+
+        private readonly Lock _lock = new();
+        private readonly List<string> _unaccepted = [];
+
         public PreparedExchange Exchange { get; } = exchange;
         public PlanRange Block { get; } = block;
         public Channel<ExchangeMessage> Inbox { get; } = Channel.CreateUnbounded<ExchangeMessage>(new UnboundedChannelOptions { SingleReader = true });
 
-        // a data message of the exchange inside the block, or another message the exchange waits for; null otherwise
+        public IReadOnlyList<string> Unaccepted
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return [.. _unaccepted];
+                }
+            }
+        }
+
+        // a data message of the exchange inside the block, or another message the exchange waits for; null otherwise.
+        // A near miss, or data outside the block, is kept as unaccepted (once per message: the first reason).
         public ExchangeMessage? TryRecognise(byte[] sysEx)
         {
+            string? unaccepted = null;
             foreach (var message in Exchange.Receivable)
             {
-                if (Exchange.Map.TryRead(message, sysEx, Exchange.Device, out var data) && data is not null && data.Block.Overlaps(Block))
+                var match = Exchange.Map.Match(message, sysEx, Exchange.Device);
+                if (match.Data is { } data)
                 {
-                    return new ExchangeMessage(message, data);
+                    if (data.Block.Overlaps(Block))
+                    {
+                        return new ExchangeMessage(message, data);
+                    }
+                    unaccepted ??= $"'{message.FullName}' with data outside the block ({BlockResult.Describe(data.Block)})";
                 }
+                unaccepted ??= match.Problem;
             }
             foreach (var message in Exchange.Others)
             {
-                if (Exchange.Map.TryRead(message, sysEx, Exchange.Device, out _))
+                var match = Exchange.Map.Match(message, sysEx, Exchange.Device);
+                if (match.IsRecognised)
                 {
                     return new ExchangeMessage(message);
+                }
+                unaccepted ??= match.Problem;
+            }
+
+            if (unaccepted is not null)
+            {
+                var shown = Convert.ToHexString(sysEx.AsSpan(0, Math.Min(sysEx.Length, ShownBytes)));
+                lock (_lock)
+                {
+                    _unaccepted.Add($"{unaccepted} [{shown}{(sysEx.Length > ShownBytes ? "…" : String.Empty)}]");
                 }
             }
             return null;

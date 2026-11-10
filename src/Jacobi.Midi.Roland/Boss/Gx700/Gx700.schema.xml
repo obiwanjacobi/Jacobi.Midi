@@ -66,7 +66,7 @@
           0x01-0x0D: the effect chain, 1st - 13th: 1-13 = effectType (Table-1.1).
           Every effect type must be in the chain exactly once.
         -->
-        <repeat name="Chain" count="13">
+        <repeat name="Chain" count="13" midi.transfer="atomic">
           <members>
             <field name="EffectType" datatype="effectType" />
           </members>
@@ -349,12 +349,16 @@
         -->
         <repeat name="HarmonistScale" count="12">
           <members>
-            <!-- 0x00: 0-48 (= -24 - +24 semitones, 24 = tonic, Table-10.2) -->
-            <field name="Interval1" datatype="int24" />
-            <!-- 0x01: 0-48 (= -24 - +24 semitones, 24 = tonic, Table-10.2) -->
-            <field name="Interval2" datatype="int24" />
-            <!-- 0x02: 0-48 (= -24 - +24 semitones, 24 = tonic, Table-10.2) -->
-            <field name="Interval3" datatype="int24" />
+            <group name="Scale" midi.transfer="atomic">
+              <members>
+                <!-- 0x00: 0-48 (= -24 - +24 semitones, 24 = tonic, Table-10.2) -->
+                <field name="Interval1" datatype="int24" />
+                <!-- 0x01: 0-48 (= -24 - +24 semitones, 24 = tonic, Table-10.2) -->
+                <field name="Interval2" datatype="int24" />
+                <!-- 0x02: 0-48 (= -24 - +24 semitones, 24 = tonic, Table-10.2) -->
+                <field name="Interval3" datatype="int24" />
+              </members>
+            </group>
           </members>
         </repeat>
       </members>
@@ -467,20 +471,20 @@
     <!-- One patch in a bulk area (user, preset, temporary): 14 sections, one DT1 each. -->
     <group name="patch">
       <members>
-        <group name="Common" nodeDef="common" midi.atomic="true" midi.stride="0x01-00" />
-        <group name="Compressor" nodeDef="compressor" midi.atomic="true" midi.stride="0x01-00" />
-        <group name="Wah" nodeDef="wah" midi.atomic="true" midi.stride="0x01-00" />
-        <group name="OverdriveDistortion" nodeDef="overdriveDistortion" midi.atomic="true" midi.stride="0x01-00" />
-        <group name="Preamp" nodeDef="preamp" midi.atomic="true" midi.stride="0x01-00" />
-        <group name="Loop" nodeDef="loop" midi.atomic="true" midi.stride="0x01-00" />
-        <group name="Equalizer" nodeDef="equalizer" midi.atomic="true" midi.stride="0x01-00" />
-        <group name="SpeakerSimulator" nodeDef="speakerSimulator" midi.atomic="true" midi.stride="0x01-00" />
-        <group name="NoiseSuppressor" nodeDef="noiseSuppressor" midi.atomic="true" midi.stride="0x01-00" />
-        <group name="Modulation" nodeDef="modulation" midi.atomic="true" midi.stride="0x01-00" />
-        <group name="Delay" nodeDef="delay" midi.atomic="true" midi.stride="0x01-00" />
-        <group name="Chorus" nodeDef="chorus" midi.atomic="true" midi.stride="0x01-00" />
-        <group name="TremoloPan" nodeDef="tremoloPan" midi.atomic="true" midi.stride="0x01-00" />
-        <group name="Reverb" nodeDef="reverb" midi.atomic="true" midi.stride="0x01-00" />
+        <group name="Common" nodeDef="common" midi.transfer="atomic" midi.stride="0x01-00" />
+        <group name="Compressor" nodeDef="compressor" midi.transfer="atomic" midi.stride="0x01-00" />
+        <group name="Wah" nodeDef="wah" midi.transfer="atomic" midi.stride="0x01-00" />
+        <group name="OverdriveDistortion" nodeDef="overdriveDistortion" midi.transfer="atomic" midi.stride="0x01-00" />
+        <group name="Preamp" nodeDef="preamp" midi.transfer="atomic" midi.stride="0x01-00" />
+        <group name="Loop" nodeDef="loop" midi.transfer="atomic" midi.stride="0x01-00" />
+        <group name="Equalizer" nodeDef="equalizer" midi.transfer="atomic" midi.stride="0x01-00" />
+        <group name="SpeakerSimulator" nodeDef="speakerSimulator" midi.transfer="atomic" midi.stride="0x01-00" />
+        <group name="NoiseSuppressor" nodeDef="noiseSuppressor" midi.transfer="atomic" midi.stride="0x01-00" />
+        <group name="Modulation" nodeDef="modulation" midi.transfer="atomic" midi.stride="0x01-00" />
+        <group name="Delay" nodeDef="delay" midi.transfer="atomic" midi.stride="0x01-00" />
+        <group name="Chorus" nodeDef="chorus" midi.transfer="atomic" midi.stride="0x01-00" />
+        <group name="TremoloPan" nodeDef="tremoloPan" midi.transfer="atomic" midi.stride="0x01-00" />
+        <group name="Reverb" nodeDef="reverb" midi.transfer="atomic" midi.stride="0x01-00" />
       </members>
     </group>
 
@@ -508,7 +512,7 @@
     <group name="system">
       <members>
         <!-- Section 00: 19 bytes. Table-17 System Parameters. -->
-        <group name="Common" midi.atomic="true" midi.stride="0x01-00">
+        <group name="Common" midi.transfer="atomic" midi.stride="0x01-00">
           <members>
             <!-- 0x00: 0-10 (= 435 - 445 Hz) -->
             <field name="TunerPitch" datatype="tunerPitch" />
@@ -549,7 +553,7 @@
           Sections 01 and 02: 128 bytes each. Table-18 MIDI Program Change Map: the patch (1-200) selected by
           program change 1-64 (section 01) and 65-128 (section 02).
         -->
-        <group name="ProgramChangeMap1" midi.atomic="true" midi.stride="0x01-00">
+        <group name="ProgramChangeMap1" midi.transfer="atomic" midi.stride="0x01-00">
           <members>
             <repeat name="Program" count="64">
               <members>
@@ -559,7 +563,7 @@
             </repeat>
           </members>
         </group>
-        <group name="ProgramChangeMap2" midi.atomic="true" midi.stride="0x01-00">
+        <group name="ProgramChangeMap2" midi.transfer="atomic" midi.stride="0x01-00">
           <members>
             <repeat name="Program" count="64">
               <members>
@@ -1546,8 +1550,12 @@
         <group name="Temporary" nodeDef="patch" midi.address="0x04-00-00-00" />
         <!-- The temporary buffer, written per parameter. -->
         <group name="IndividualTemporary" nodeDef="individualPatch" midi.address="0x08-00-00-00" />
-        <!-- Table-20: the 2 lines of the display. -->
-        <group name="Display" midi.address="0x10-00-00-00" midi.access="read">
+        <!--
+          Table-20: the 2 lines of the display, transferred individually (manual).
+          [TODO] the GX-700 does not answer an RQ1 for the display, not for one line either (MIDI monitor): find out
+          how the display data can be obtained.
+        -->
+        <group name="Display" midi.address="0x10-00-00-00" midi.access="read" midi.transfer="individual">
           <members>
             <!-- 0x00-0x0F: Table-1.4 -->
             <field name="Line1" datatype="text" byteLength="16" />

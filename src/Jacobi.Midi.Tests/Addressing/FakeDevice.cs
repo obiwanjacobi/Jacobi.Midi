@@ -25,6 +25,9 @@ internal sealed class FakeDevice : ISysExPort
     }
 
     public bool Silent { get; init; }
+
+    /// <summary>Changes each answer before it is sent (e.g. a corrupt checksum, another device); null: as it is.</summary>
+    public Func<byte[], byte[]>? Answer { get; init; }
     public List<byte[]> Requests { get; } = [];
     public List<byte[]> DataSets { get; } = [];
 
@@ -44,7 +47,8 @@ internal sealed class FakeDevice : ISysExPort
             case 0x01:
                 Requests.Add(bytes);
                 var request = new AddressRange((bytes[5] << 7) | bytes[6], (bytes[7] << 7) | bytes[8]);
-                var answers = _patches.Where(p => new AddressRange(p.Key, PatchSize).Overlaps(request)).Select(p => p.Value).ToList();
+                var answers = _patches.Where(p => new AddressRange(p.Key, PatchSize).Overlaps(request))
+                    .Select(p => Answer is null ? p.Value : Answer(p.Value.ToArray())).ToList();
                 if (!Silent)
                 {
                     _ = Task.Run(() => answers.ForEach(answer => Received?.Invoke(answer)), ct);

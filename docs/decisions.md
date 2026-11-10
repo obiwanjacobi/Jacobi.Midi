@@ -3,6 +3,63 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## Messages that are received but not accepted (2026-11-09)
+
+Issue: every SysEx from the port is tried against the messages a transfer can receive; a message that does not fit is
+dropped without a trace (`AddressMap.TryRead` catches the serializer's exceptions, `MessageExchange.OnReceived` drops
+what nobody recognises). A reply with e.g. a byte outside `validBytes` ends in a timeout that cannot be told apart
+from a device that does not answer. The serializer throws on a mismatch; the map treats every exception as "not this
+message".
+
+1. **Silent until the envelope and the device match; reported from there on.** Not our message (constants differ)
+   or another device (device values differ): silent, a port carries other traffic. The envelope and device match but
+   the message fails (checksum, address not in the map, invalid data, no block fits), or it is recognised but outside
+   the running block: reported, with the reason. *Why:* a near miss is a problem to show; other traffic is not.
+2. **Only the running transfer reports them** (in its result), no event on `MessageExchange` for messages outside a
+   transfer. *Why:* the transfer is where a missing reply is noticed.
+3. **Jacobi.BinarySerializer reports a complete failure: one exception type** (deriving from
+   `InvalidOperationException`) with the direction, a category, the node (path and instance), the byte position, the
+   source, and the expected and actual value where they apply. The engine fills in the location by wrapping at the
+   boundary of each node and processor call; a processor can report its own category. *Why:* a general purpose library;
+   a caller (here: the map telling "not this message" from a near miss) needs facts, not message text.
+4. **`Category` is a string, not an enum.** The engine uses its own fixed categories (e.g. a constant that does not
+   match, invalid data, end of data, schema); a processor can give its own specific value. *Why:* no telling what
+   future processors need.
+5. **`Origin` says who reported it: the engine (internal errors) or the processor key** (`sys.crc`, `midi.string`).
+   *Why:* together with `Category` it identifies the failure without a central list. Named `Origin`, not `Source`:
+   `Exception.Source` already exists (the assembly name).
+6. **The engine's categories are string constants in one place:** `expectedValue`, `invalidData` (read),
+   `invalidValue` (write), `endOfData`, `schema`; the engine's source is `engine` (a processor key always has a dot). A
+   processor that gives no category gets the general one of the direction (`invalidData`, `invalidValue`) with its key
+   as the source. *Why:* the existing processor throws need no change. The decisions about Jacobi.BinarySerializer are
+   kept in this file.
+7. **The block a message arrived during lists what it did not accept** (`BlockResult.Unaccepted`, each with why); a
+   block that did not complete names the first in its reason (e.g. after "timeout in turn 'request' …"). *Why:* the
+   console shows the reason without changes; the near miss is usually the cause of the timeout.
+
+## How a group is cut into blocks (2026-11-09)
+
+Issue: the GX-700 *Display* lines must be requested individually; a request for both lines times out. With the `range`
+unit (Roland RQ1/DT1) `AddressMap.Split` joins neighbouring fields into one block; group boundaries are no reason to
+split, and `midi.atomic` only forbids a split inside a group. The schema could not say "per member".
+
+1. **One property, `midi.transfer="atomic|individual"`, replaces `midi.atomic`** (no backward compatibility).
+   `atomic`: the group is always one block; `individual`: its members are transferred on their own. Without it the
+   message's unit and `midi.maxDataSize` decide. *Why:* both are settings of the same thing; one property rules out
+   having both on a group. `transfer` rather than `split`: `split="atomic"` reads as the opposite of what it means.
+2. **A value is about the group's own level:** `atomic` forbids a cut inside the group; `individual` requires a cut at
+   each boundary of its direct members, and at the group's own start and end (else the first or last member joins the
+   neighbours outside). Per field below is reached by nesting `individual`. *Why:* symmetrical; each group decides for
+   itself.
+3. **On groups and repeats, not on fields** (an error there), for every value. The members of a repeat are its items:
+   `atomic` transfers all items in one block, `individual` each item on its own. *Why:* the rules are those of the
+   property, not per value; a repeat such as the GX-700 effect chain must be sent whole without an extra group level
+   (which would change the paths).
+4. **Nesting: a contradiction is an error, a redundancy is not.** `individual` inside `atomic` is an error (a cut that
+   is forbidden); `atomic` inside `atomic` is allowed and has no effect (was an error); `atomic` inside `individual`
+   is a member that goes whole. A value without effect is not reported (a debug output may come later). *Why:* reuse of
+   nodeDefs with atomic sections inside an atomic group.
+
 ## A dashboard refers to its rig (2026-11-09)
 
 Issue: a dashboard file did not say what it depends on; the user had to open the right rig first. The idea was to

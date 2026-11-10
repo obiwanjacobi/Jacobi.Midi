@@ -94,7 +94,7 @@ internal static class TestDevice
             <include schema="TestEnvelope" />
           </includes>
           <nodeDefs>
-            <group name="patch" midi.atomic="true">
+            <group name="patch" midi.transfer="atomic">
               <members>
                 <group name="Switches" byteLength="1">
                   <processors>

@@ -22,7 +22,7 @@
     midi.address       absolute start address (wire form, as in the manual)
     midi.stride        number of addresses of a node; on a repeat the size of one item (the distance between items)
     midi.repeat        number of items of a repeat in the address space (a dump may hold fewer)
-    midi.atomic        the group is always transferred as a whole
+    midi.transfer      atomic: the group is always transferred as a whole
     midi.device.*      device values fixed for the GP-8 (used by the message envelope)
 -->
 <schema name="Gp8">

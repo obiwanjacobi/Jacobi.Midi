@@ -25,7 +25,7 @@ public static class AddressMapTags
         Describe(MidiProperties.Address, "Map: the absolute start address of the node, in wire form (e.g. 0x40-00)."),
         Describe(MidiProperties.Stride, "Map: the number of addresses the node (or one repeat item) occupies."),
         Describe(MidiProperties.Repeat, "Map: the number of items of a repeat in the address space."),
-        Describe(MidiProperties.Atomic, "Map: true when the group is always transferred as a whole."),
+        Describe(MidiProperties.Transfer, "Map: how a group or repeat is cut into blocks: atomic (always whole) or individual (each member or item on its own)."),
         Describe(MidiProperties.Access, "Map: readwrite (default), read or write; inherited."),
         Describe(MidiProperties.Unit, "Message or map root: what one message covers: range (default), field or atomic."),
         Describe(MidiProperties.MaxDataSize, "Message or map root: the largest number of data bytes in one message."),
@@ -67,9 +67,8 @@ public static class AddressMapTags
             MidiProperties.Address or MidiProperties.Stride or MidiProperties.MaxDataSize
                 or MidiProperties.AddressBits or MidiProperties.Repeat
                 => IsNumber(value) ? null : $"'{name}' must be a number, not '{value}'.",
-            MidiProperties.Atomic
-                => value is not null && (MidiProperties.IsTrue(value) || value == "0" || String.Equals(value, "false", StringComparison.OrdinalIgnoreCase))
-                    ? null : $"'{name}' must be true or false, not '{value}'.",
+            MidiProperties.Transfer
+                => Enum.TryParse<NodeTransfer>(value, ignoreCase: true, out _) ? null : $"'{name}' must be atomic or individual, not '{value}'.",
             MidiProperties.Access
                 => Enum.TryParse<NodeAccess>(value, ignoreCase: true, out _) ? null : $"'{name}' must be readwrite, read or write, not '{value}'.",
             MidiProperties.Unit

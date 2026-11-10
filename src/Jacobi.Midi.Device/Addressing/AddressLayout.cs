@@ -17,6 +17,18 @@ public enum NodeAccess
 }
 
 /// <summary>
+/// How a group or repeat is cut into blocks (<c>midi.transfer</c>), at its own level: its members (the items of a
+/// repeat). Without it, the unit and maximum data size of the message decide.
+/// </summary>
+internal enum NodeTransfer
+{
+    /// <summary>Never cut inside: the node is always transferred as a whole.</summary>
+    Atomic,
+    /// <summary>Always cut at the boundaries of its members (and its own start and end): each is transferred on its own.</summary>
+    Individual,
+}
+
+/// <summary>
 /// The static address layout of one plan node. <see cref="Offset"/> is relative to the frame the node is in:
 /// the item of the nearest enclosing repeat, or the absolute address space outside repeats.
 /// One instance per plan node, not per repeat item.
@@ -39,7 +51,9 @@ internal sealed class AddressLayoutNode
 
     public bool IsRepeat => Node is RepeatInfo;
     public bool IsField => Node is FieldInfo;
-    public bool IsAtomic { get; init; }
+    /// <summary>The node's own <c>midi.transfer</c>; null when it has none.</summary>
+    public NodeTransfer? Transfer { get; init; }
+    public bool IsAtomic => Transfer == NodeTransfer.Atomic;
     public NodeAccess Access { get; init; }
 
     public AddressRange RangeIn(long frameBase) => new(frameBase + Offset, Size);
@@ -55,8 +69,8 @@ internal readonly record struct AddressOccurrence(AddressLayoutNode Layout, Inst
 
 /// <summary>
 /// Builds the address layout of a map plan from the <c>midi.address</c>, <c>midi.stride</c>, <c>midi.repeat</c>,
-/// <c>midi.atomic</c> and <c>midi.access</c> properties, and finds the occurrences of fields and atomic groups in an
-/// address range. Addresses only increase in plan order, so a plan range covers one ascending address span.
+/// <c>midi.transfer</c> and <c>midi.access</c> properties, and finds the occurrences of fields and atomic groups and
+/// the required cuts in an address range. Addresses only increase in plan order, so a plan range covers one ascending address span.
 /// </summary>
 internal sealed class AddressLayout
 {
@@ -165,9 +179,73 @@ internal sealed class AddressLayout
     public IEnumerable<AddressOccurrence> Fields(AddressRange span)
         => Occurrences(Root, 0, InstancePath.Empty, span, atomic: false);
 
-    /// <summary>The atomic groups (in address order) whose addresses overlap the span.</summary>
+    /// <summary>
+    /// The atomic groups and repeats (in address order) whose addresses overlap the span; only the outermost (an
+    /// atomic node inside another one adds nothing).
+    /// </summary>
     public IEnumerable<AddressOccurrence> AtomicGroups(AddressRange span)
         => Occurrences(Root, 0, InstancePath.Empty, span, atomic: true);
+
+    /// <summary>
+    /// The addresses where a block must start, of the individual groups and repeats that overlap the span: the start of
+    /// each member (of a repeat: each item) and the end of the node. Not in address order; may lie outside the span.
+    /// </summary>
+    public IEnumerable<long> Cuts(AddressRange span)
+        => Cuts(Root, 0, span);
+
+    private static IEnumerable<long> Cuts(AddressLayoutNode node, long frameBase, AddressRange span)
+    {
+        var range = node.RangeIn(frameBase);
+        // nothing is cut inside an atomic node (an individual one inside it is an error of the layout)
+        if (!range.Overlaps(span) || node.IsField || node.IsAtomic)
+        {
+            yield break;
+        }
+
+        var individual = node.Transfer == NodeTransfer.Individual;
+        if (individual)
+        {
+            yield return range.End;
+        }
+
+        if (node.IsRepeat)
+        {
+            if (node.Stride <= 0)
+            {
+                yield break;
+            }
+            var first = (int)Math.Max(0, (span.Start - range.Start) / node.Stride);
+            var last = (int)Math.Min(node.Count - 1, (span.End - 1 - range.Start) / node.Stride);
+            for (var index = first; index <= last; index++)
+            {
+                var itemBase = range.Start + index * node.Stride;
+                if (individual)
+                {
+                    yield return itemBase;
+                }
+                foreach (var member in node.Members)
+                {
+                    foreach (var cut in Cuts(member, itemBase, span))
+                    {
+                        yield return cut;
+                    }
+                }
+            }
+            yield break;
+        }
+
+        foreach (var member in node.Members)
+        {
+            if (individual)
+            {
+                yield return member.RangeIn(frameBase).Start;
+            }
+            foreach (var cut in Cuts(member, frameBase, span))
+            {
+                yield return cut;
+            }
+        }
+    }
 
     private static IEnumerable<AddressOccurrence> Occurrences(AddressLayoutNode node, long frameBase, InstancePath instance, AddressRange span, bool atomic)
     {
@@ -177,7 +255,7 @@ internal sealed class AddressLayout
             yield break;
         }
 
-        if (atomic ? node.IsAtomic && !node.IsRepeat : node.IsField)
+        if (atomic ? node.IsAtomic : node.IsField)
         {
             yield return new AddressOccurrence(node, instance, range);
             yield break;
@@ -237,22 +315,15 @@ internal sealed class AddressLayout
                 }
             }
 
-            var atomic = MidiProperties.IsTrue(MidiProperties.Find(node, MidiProperties.Atomic));
-            if (atomic && inAtomic)
-            {
-                Error(node, "an atomic group cannot be inside another atomic group.");
-            }
-            if (atomic && node is FieldInfo)
-            {
-                Error(node, $"'{MidiProperties.Atomic}' only applies to groups.");
-            }
+            var transfer = Transfer(node, inAtomic);
+            var atomic = transfer == NodeTransfer.Atomic;
 
             var layout = new AddressLayoutNode
             {
                 Node = node,
                 Parent = parent,
                 Offset = start,
-                IsAtomic = atomic && node is GroupInfo,
+                Transfer = transfer,
                 Access = Access(node, inheritedAccess),
             };
             var explicitSize = Address(node, MidiProperties.Stride);
@@ -420,6 +491,32 @@ internal sealed class AddressLayout
                 return null;
             }
             return address;
+        }
+
+        // a contradiction is an error (a cut an enclosing atomic node forbids), a redundancy is not (atomic in atomic)
+        private NodeTransfer? Transfer(NodeInfo node, bool inAtomic)
+        {
+            var text = MidiProperties.Find(node, MidiProperties.Transfer);
+            if (text is null)
+            {
+                return null;
+            }
+            if (!Enum.TryParse<NodeTransfer>(text, ignoreCase: true, out var transfer))
+            {
+                Error(node, $"'{MidiProperties.Transfer}' must be atomic or individual, not '{text}'.");
+                return null;
+            }
+            if (node is FieldInfo)
+            {
+                Error(node, $"'{MidiProperties.Transfer}' only applies to groups and repeats.");
+                return null;
+            }
+            if (transfer == NodeTransfer.Individual && inAtomic)
+            {
+                Error(node, $"'{MidiProperties.Transfer}' individual is not possible inside an atomic group or repeat: it requires the cuts the atomic node forbids.");
+                return null;
+            }
+            return transfer;
         }
 
         private NodeAccess Access(NodeInfo node, NodeAccess inherited)

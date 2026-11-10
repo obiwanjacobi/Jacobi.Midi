@@ -1,3 +1,4 @@
+using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.Midi.Console.Core.Dashboards;
@@ -135,7 +136,7 @@ public class DeviceStateTests
     {
         var state = CreateState();
 
-        Assert.Throws<InvalidOperationException>(() => state.SaveDump(Patches(state, 0, 0)));
+        Assert.Throws<SerializationException>(() => state.SaveDump(Patches(state, 0, 0)));
     }
 
     [Fact]

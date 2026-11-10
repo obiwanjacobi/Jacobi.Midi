@@ -106,24 +106,18 @@ internal sealed class DumpMap : IMessageMap
         return writer.WrittenSpan.ToArray();
     }
 
-    public bool TryRead(DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device, out ReceivedData? data)
+    public MessageMatch Match(DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device)
     {
         ArgumentNullException.ThrowIfNull(message);
-        data = null;
         if (IsData(message) && IsCarriedRoot)
         {
-            return TryReadCarried(message, sysEx, device, out data);
+            return ReadCarried(message, sysEx, device);
         }
 
-        if (!DeviceMessages.TryRecognise(_serializer, message, sysEx, device, out var read))
-        {
-            return false;
-        }
-        if (IsData(message))
-        {
-            data = new ReceivedData(message, sysEx, read, Whole, Decode);
-        }
-        return true;
+        var match = DeviceMessages.Recognise(_serializer, message, sysEx, device, out var read);
+        return match.IsRecognised && IsData(message)
+            ? MessageMatch.Recognised(new ReceivedData(message, sysEx, read, Whole, Decode))
+            : match;
     }
 
     // every message of the dump holds the whole root
@@ -181,27 +175,37 @@ internal sealed class DumpMap : IMessageMap
     private static bool IsCarried(Serializer serializer, SchemaName root)
         => serializer.Schemas.FindOpenChoices(serializer.Schemas.FindRoot(root)).Any(choice => DeviceMessages.IsRole(choice, MidiProperties.RoleData));
 
-    // the device values read before the body must agree with the device and select this root as the body
-    private bool TryReadCarried(DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device, out ReceivedData? data)
+    // the device values read before the body must agree with the device and select this root as the body; once it
+    // is selected, a message that cannot be read is a near miss
+    private MessageMatch ReadCarried(DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device)
     {
-        data = null;
+        var selected = false;
+        var sink = new EnvelopeSink(envelope =>
+        {
+            if (!Selects(envelope.Device, device))
+            {
+                throw new InvalidOperationException("The message is for another device or body.");
+            }
+            selected = true;
+            return new EnvelopeBody<IValueSink>(Root, null, NullSink.Instance);
+        });
+        long length;
         try
         {
-            var sink = new EnvelopeSink(envelope => Selects(envelope.Device, device)
-                ? new EnvelopeBody<IValueSink>(Root, null, NullSink.Instance)
-                : throw new InvalidOperationException("The message is for another device or body."));
-            if (_serializer.Deserialize(message.Range, new ReadOnlySequence<byte>(sysEx), sink) != sysEx.Length)
-            {
-                return false;
-            }
-            data = new ReceivedData(message, sysEx, sink.Device, Whole, Decode);
-            return true;
+            length = _serializer.Deserialize(message.Range, new ReadOnlySequence<byte>(sysEx), sink);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // not this message, not this device, or not this body
-            return false;
+            return MessageMatch.Failed(exception, sink.Device, device, committed: selected);
         }
+
+        if (length != sysEx.Length)
+        {
+            return selected
+                ? MessageMatch.Rejected($"'{message.FullName}': the message has {sysEx.Length} bytes, {length} were expected for '{Root}'.")
+                : MessageMatch.NotThis;
+        }
+        return MessageMatch.Recognised(new ReceivedData(message, sysEx, sink.Device, Whole, Decode));
     }
 
     private bool Selects(DeviceValues read, DeviceValues device)

@@ -120,7 +120,7 @@ Full rules: `src/Jacobi.Midi.Device/Addressing/readme.md`. In short:
 - `midi.address` / `midi.stride` are in the **wire form** as written in the manual: hex, bytes separated by `-` (`0x40-00`, `0x00-01-00-00`). `40 00` on the wire is linear 0x2000. Do not write linear addresses.
 - `midi.address` is absolute. Leave it out where the node follows its previous sibling. Never put it inside a repeat item.
 - `midi.stride` is the number of addresses of a node; on a repeat the size of one item (the distance between items). It may be larger than the content (reserved addresses).
-- `midi.atomic="true"` on every group the device always transfers as a whole (one DT1 per patch or section). Do not nest atomic groups.
+- `midi.transfer="atomic"` on every group (or repeat) the device always transfers as a whole (one DT1 per patch or section); atomic inside atomic is allowed (reused nodeDefs). `midi.transfer="individual"` on a group (or repeat) whose members (items) the device only transfers one at a time (the manual says "individual"). Never `individual` inside `atomic`.
 - A repeat of the map's own items (`Memory`) has `midi.repeat` with the number of items in the address space and no `count`: a dump may hold fewer items. A fixed list inside a patch keeps its constant `count`. No choices and no virtual fields (`byteOffset`) inside the map.
 - `midi.access="read"` / `"write"` for read-only and trigger addresses.
 

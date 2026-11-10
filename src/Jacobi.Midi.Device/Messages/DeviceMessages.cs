@@ -121,25 +121,38 @@ internal static class DeviceMessages
     /// fields are discarded. Returns false for any other message.
     /// </summary>
     public static bool TryRecognise(Serializer serializer, DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device, out DeviceValues read)
+        => Recognise(serializer, message, sysEx, device, out read).IsRecognised;
+
+    /// <summary>
+    /// <see cref="TryRecognise"/> with the outcome: recognised (without data), not this message, or a near miss: the
+    /// constants and device values read agree, but the message cannot be read or is longer than the message
+    /// (see <see cref="MessageMatch.Failed"/>).
+    /// </summary>
+    public static MessageMatch Recognise(Serializer serializer, DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device, out DeviceValues read)
     {
         ArgumentNullException.ThrowIfNull(message);
         read = new DeviceValues();
+        var sink = new EnvelopeSink(_ => throw new InvalidOperationException($"'{message.Name}': the message has a data open choice."));
+        long length;
         try
         {
-            var sink = new EnvelopeSink(_ => throw new InvalidOperationException($"'{message.Name}': the message has a data open choice."));
-            var length = serializer.Deserialize(message.Range, new ReadOnlySequence<byte>(sysEx), sink);
-            if (length != sysEx.Length || !sink.Device.All(v => !device.TryGet(v.Key, out var expected) || expected == v.Value))
-            {
-                return false;
-            }
-            read = sink.Device;
-            return true;
+            length = serializer.Deserialize(message.Range, new ReadOnlySequence<byte>(sysEx), sink);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // not this message
-            return false;
+            return MessageMatch.Failed(exception, sink.Device, device, committed: false);
         }
+
+        if (!sink.Device.All(v => !device.TryGet(v.Key, out var expected) || expected == v.Value))
+        {
+            return MessageMatch.NotThis;
+        }
+        if (length != sysEx.Length)
+        {
+            return MessageMatch.Rejected($"'{message.FullName}': the message has {sysEx.Length} bytes, {length} were expected.");
+        }
+        read = sink.Device;
+        return MessageMatch.Recognised(null);
     }
 
     /// <summary>True when the node has the <c>midi.role</c> <paramref name="role"/>.</summary>

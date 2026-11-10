@@ -187,6 +187,33 @@ public class Gx700AddressMapTests
         Assert.Equal(new AddressRange(DisplayStart, 0x20), map.GetAddressRange(display));
     }
 
+    [Fact]
+    public void Display_EachLineIsRequestedOnItsOwn()
+    {
+        var map = CreateMap();
+        var request = map.Message(new SchemaName("Roland.Message32.RQ1"));
+
+        // the manual: the lines are transferred individually (midi.transfer="individual")
+        var blocks = map.Split(map.CreateRange("AddressMap.Display"), request);
+
+        Assert.Equal([new AddressRange(DisplayStart, 0x10), new AddressRange(DisplayStart + 0x10, 0x10)], blocks.Select(b => b.Addresses));
+    }
+
+    [Fact]
+    public void Display_ALineWithACharacterOutsideTheCharacterSet_IsANearMiss()
+    {
+        var map = CreateMap();
+        // a DT1 of line 1 (16 characters) that holds 0x00 (Table-1.4 starts at 0x16)
+        byte[] scope = [0x10, 0x00, 0x00, 0x00, .. "GX-700 \0        "u8.ToArray()];
+        byte[] message = [0xF0, 0x41, 0x00, 0x79, 0x12, .. scope, RolandChecksum(scope), 0xF7];
+
+        var match = ((IMessageMap)map).Match(map.Protocol.DataMessages[0], message, Device);
+
+        Assert.True(match.IsRejected);
+        Assert.Contains("0x10-00-00-00", match.Problem);
+        Assert.Contains("'AddressMap.Display.Line1': the byte 0x00 is not a valid byte", match.Problem);
+    }
+
     [Theory]
     [InlineData("gx700-sysex-patch1.syx", 14)]
     [InlineData("gx700-sysex-system.syx", 3)]
