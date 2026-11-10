@@ -63,6 +63,11 @@
         <Style Selector="Border.paletteItem:pointerover">
             <Setter Property="Background" Value="#50FFFFFF" />
         </Style>
+        <!-- a segment of a switch (e.g. Edit/Play): radio buttons (one of the panel is chosen; pressing the chosen one
+             keeps it) with the look of toggle buttons -->
+        <Style Selector="RadioButton.segment">
+            <Setter Property="Theme" Value="{StaticResource {x:Type ToggleButton}}" />
+        </Style>
     </UserControl.Styles>
 
     <Panel>
@@ -132,15 +137,15 @@
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal">
-                        <ToggleButton Content="Edit" IsChecked="{Binding IsEditing}" CornerRadius="4,0,0,4" />
-                        <ToggleButton Content="Play" IsChecked="{Binding IsPlaying}" CornerRadius="0,4,4,0" />
+                        <RadioButton Classes="segment" Content="Edit" IsChecked="{Binding IsEditing}" CornerRadius="4,0,0,4" />
+                        <RadioButton Classes="segment" Content="Play" IsChecked="{Binding IsPlaying}" CornerRadius="0,4,4,0" />
                     </StackPanel>
                     <!-- the MIDI bar: in Play mode where the values come from, Offline (dump files) or MIDI (the devices of
                          the rig); Edit mode is always connected. And the connection of each device. -->
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <StackPanel Orientation="Horizontal" IsEnabled="{Binding Midi.IsAvailable}" IsVisible="{Binding IsPlaying}">
-                            <ToggleButton Content="Offline" IsChecked="{Binding Midi.IsOffline}" CornerRadius="4,0,0,4" ToolTip.Tip="The values come from dump files (Open › Dump…)" />
-                            <ToggleButton Content="MIDI" IsChecked="{Binding Midi.IsMidi}" CornerRadius="0,4,4,0" ToolTip.Tip="Connect the devices of the rig to their MIDI endpoints" />
+                            <RadioButton Classes="segment" Content="Offline" IsChecked="{Binding Midi.IsOffline}" CornerRadius="4,0,0,4" ToolTip.Tip="The values come from dump files (Open › Dump…)" />
+                            <RadioButton Classes="segment" Content="MIDI" IsChecked="{Binding Midi.IsMidi}" CornerRadius="0,4,4,0" ToolTip.Tip="Connect the devices of the rig to their MIDI endpoints" />
                         </StackPanel>
                         <Button ToolTip.Tip="The connections of the devices">
                             <StackPanel Orientation="Horizontal" Spacing="6">
