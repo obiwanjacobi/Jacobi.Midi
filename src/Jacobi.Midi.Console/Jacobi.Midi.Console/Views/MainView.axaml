@@ -187,18 +187,35 @@
         <Border DockPanel.Dock="Bottom" Padding="20,6" Background="#40000000">
             <StackPanel Spacing="4">
                 <TextBlock Text="{Binding Status}" Foreground="{DynamicResource ConsoleTextBrush}" FontSize="12" TextWrapping="Wrap" />
-                <Expander Header="{Binding NotificationsHeader}" IsVisible="{Binding Notifications.Count}">
+                <Expander IsVisible="{Binding Notifications.Count}">
                     <!-- all notifications, scrolled when they do not fit; selectable, to copy them; a problem in its own color -->
-                    <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto">
-                        <ItemsControl ItemsSource="{Binding Notifications}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vm:Notification">
-                                    <SelectableTextBlock Text="{Binding Message}" TextWrapping="Wrap" FontSize="12" Margin="0,0,12,4"
-                                                         Classes="notification" Classes.problem="{Binding IsProblem}" />
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
+                    <!-- the reports (what happened) can be dismissed, one by one (✕) or all (Clear); the problems of the current state stay until their cause is gone -->
+                    <Expander.Header>
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBlock Text="{Binding NotificationsHeader}" VerticalAlignment="Center" />
+                            <Button Content="Clear" FontSize="12" Padding="8,0" VerticalAlignment="Center"
+                                    ToolTip.Tip="Remove the reports of what happened; the problems of the rig and the dashboard stay until they are solved"
+                                    Command="{Binding ClearReportsCommand}" />
+                        </StackPanel>
+                    </Expander.Header>
+                    <DockPanel>
+                        <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding Notifications}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:Notification">
+                                        <DockPanel Margin="0,0,12,4">
+                                            <Button DockPanel.Dock="Right" Content="✕" FontSize="10" Padding="4,0" Margin="8,0,0,0" VerticalAlignment="Top"
+                                                    IsVisible="{Binding IsReport}" ToolTip.Tip="Remove this report"
+                                                    Command="{Binding $parent[ItemsControl].((vm:MainViewModel)DataContext).DismissReportCommand}"
+                                                    CommandParameter="{Binding}" />
+                                            <SelectableTextBlock Text="{Binding Message}" TextWrapping="Wrap" FontSize="12"
+                                                                 Classes="notification" Classes.problem="{Binding IsProblem}" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
                 </Expander>
             </StackPanel>
         </Border>

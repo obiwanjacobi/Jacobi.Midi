@@ -3,6 +3,14 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## Dismissing notifications in the console (2026-11-10)
+
+Issue: the notifications could not be cleared; they hold both reports of what happened and the problems of the
+current state (rig, dashboard, schema library), which are derived again on every refresh.
+
+1. **Only reports can be dismissed**, one by one (✕) or all (*Clear*); the problems of the current state stay until
+   their cause is gone. *Why:* those describe what is wrong now; hiding them would hide a real problem.
+
 ## The console always has a rig (2026-11-10)
 
 Issue: the console started without a rig; devices could not be added until a rig file was opened.

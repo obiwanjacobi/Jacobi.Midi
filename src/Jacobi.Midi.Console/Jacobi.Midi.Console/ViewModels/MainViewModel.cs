@@ -363,6 +363,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         // the edits and reports may be of the rig that was open
         History.Clear();
         _reports.Clear();
+        ClearReportsCommand.NotifyCanExecuteChanged();
         OpenSessions();
     }
 
@@ -1708,10 +1709,32 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
 
     private void Notify(string what, string message, bool isProblem)
     {
-        _reports.Add(new Notification($"{what}: {message}", isProblem));
+        _reports.Add(new Notification($"{what}: {message}", isProblem, IsReport: true));
         RefreshNotifications();
+        ClearReportsCommand.NotifyCanExecuteChanged();
         Status = $"{what}.";
     }
+
+    /// <summary>Removes a report from the notifications; the problems of the current state cannot be dismissed.</summary>
+    [RelayCommand]
+    private void DismissReport(Notification report)
+    {
+        if (!_reports.Remove(report))
+            return;
+        RefreshNotifications();
+        ClearReportsCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>Removes all reports from the notifications; the problems of the current state stay.</summary>
+    [RelayCommand(CanExecute = nameof(HasReports))]
+    private void ClearReports()
+    {
+        _reports.Clear();
+        RefreshNotifications();
+        ClearReportsCommand.NotifyCanExecuteChanged();
+    }
+
+    private bool HasReports() => _reports.Count > 0;
 
     private async Task<PickedFile?> PickFile(string title, string kind, params string[] patterns)
     {
