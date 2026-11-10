@@ -138,4 +138,38 @@
         <Setter Property="GlowOpacity" Value="{DynamicResource ConsoleGlowOpacity}" />
     </ControlTheme>
 
+    <!--
+        The headers of tabs and selector tabs on a dashboard: in the look's label font and text color, as the labels of
+        the controls (upper case, spaced), the selected page in the accent; as high as the two cell rows of the headers
+        (GridLayout), so the pages are on the cells.
+    -->
+    <ControlTheme x:Key="ConsoleTabItem" TargetType="TabItem" BasedOn="{StaticResource {x:Type TabItem}}">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="MinHeight" Value="48" />
+        <Setter Property="Height" Value="48" />
+        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="HeaderTemplate">
+            <DataTemplate>
+                <TextBlock Text="{Binding Converter={x:Static chrome:UpperCaseConverter.Instance}}"
+                           FontFamily="{DynamicResource ConsoleLabelFont}" FontSize="12" FontWeight="SemiBold" LetterSpacing="1.5" />
+            </DataTemplate>
+        </Setter>
+        <Style Selector="^ /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Foreground" Value="{DynamicResource ConsoleTextBrush}" />
+            <Setter Property="Opacity" Value="0.7" />
+        </Style>
+        <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Foreground" Value="{DynamicResource ConsoleTextBrush}" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="^:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Foreground" Value="{DynamicResource ConsoleAccentBrush}" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="^:selected /template/ Border#PART_SelectedPipe">
+            <Setter Property="Background" Value="{DynamicResource ConsoleAccentBrush}" />
+        </Style>
+    </ControlTheme>
+
 </ResourceDictionary>

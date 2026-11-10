@@ -47,25 +47,20 @@ public static class ControlMoves
             if (current.Base is { } own && SchemaPaths.TryParse(own, _ => 0, out var parsedBase, out _))
                 CheckVariables(current, parsedBase.Variables.Select(use => use.Variable), before, after);
 
-            switch (current)
+            if (current is ParameterControl parameter)
             {
-                case ParameterControl parameter:
-                    var changed = false;
-                    var bindings = new Dictionary<string, Binding>(StringComparer.Ordinal);
-                    foreach (var (slot, binding) in parameter.Slots)
-                    {
-                        bindings[slot] = Rebind(parameter, binding, before, after);
-                        changed |= bindings[slot] != binding;
-                    }
-                    if (changed)
-                        slots.Add(new SlotsChange(parameter, bindings));
-                    break;
-
-                case LayoutControl layout:
-                    foreach (var child in layout.Children)
-                        Visit(child, before.Inside(child), after.Inside(child));
-                    break;
+                var changed = false;
+                var bindings = new Dictionary<string, Binding>(StringComparer.Ordinal);
+                foreach (var (slot, binding) in parameter.Slots)
+                {
+                    bindings[slot] = Rebind(parameter, binding, before, after);
+                    changed |= bindings[slot] != binding;
+                }
+                if (changed)
+                    slots.Add(new SlotsChange(parameter, bindings));
             }
+            foreach (var child in current.Children)
+                Visit(child, before.Inside(child), after.Inside(child));
         }
 
         Binding Rebind(ParameterControl parameter, Binding binding, BindingScope before, BindingScope after)
@@ -98,7 +93,7 @@ public static class ControlMoves
 
     /// <summary>True when the control is <paramref name="other"/> or contains it.</summary>
     public static bool Contains(DashboardControl control, DashboardControl other)
-        => control == other || (control is LayoutControl layout && layout.Children.Any(child => Contains(child, other)));
+        => control == other || control.Children.Any(child => Contains(child, other));
 }
 
 /// <summary>

@@ -93,10 +93,7 @@ public static class DeviceAliases
     private static IEnumerable<DashboardControl> Controls(DashboardControl control)
     {
         yield return control;
-        if (control is LayoutControl layout)
-        {
-            foreach (var inner in layout.Children.SelectMany(Controls))
-                yield return inner;
-        }
+        foreach (var inner in control.Children.SelectMany(Controls))
+            yield return inner;
     }
 }

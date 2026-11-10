@@ -78,8 +78,6 @@ public static class DashboardFile
                         .Set("name", variable.Name)
                         .Set("value", variable.Value));
                 }
-                foreach (var child in layout.Children)
-                    element.Add(ToElement(child, FileRoles.Children));
                 break;
 
             case ParameterControl parameter:
@@ -89,6 +87,8 @@ public static class DashboardFile
                 AddSlots(element, parameter);
                 break;
         }
+        foreach (var child in control.Children)
+            element.Add(ToElement(child, FileRoles.Children));
         return element;
     }
 
@@ -96,8 +96,8 @@ public static class DashboardFile
     {
         switch (control)
         {
-            case ValueControl value:
-                foreach (var (slot, binding) in value.Bindings)
+            case ValueControl or SelectorTabsControl:
+                foreach (var (slot, binding) in control.Slots)
                 {
                     element.Add(new FileElement(FileRoles.Bind.ElementName!, FileRoles.Bind)
                         .Set(FileRoles.Bind.KeyAttribute!, slot)
@@ -209,19 +209,27 @@ public static class DashboardFile
                 Unit = element.Get("unit"),
                 Decimals = ConsoleFile.GetInt(element, "decimals", minimum: 0),
             };
-            control = kind == ParameterControlKind.Envelope
-                ? new EnvelopeControl
+            control = kind switch
+            {
+                ParameterControlKind.Envelope => new EnvelopeControl
                 {
                     Label = label, Size = size, At = at, Grow = grow, Colors = colors, Device = device, Base = basePath,
                     Display = display,
                     Segments = [.. element.TakeChildren().Select(ReadSegment)],
-                }
-                : new ValueControl(kind)
+                },
+                ParameterControlKind.SelectorTabs => ReadSelectorTabs(element, new SelectorTabsControl
                 {
                     Label = label, Size = size, At = at, Grow = grow, Colors = colors, Device = device, Base = basePath,
                     Display = display,
-                    Bindings = ReadBindings(element, kind),
-                };
+                }),
+                _ => new ValueControl(kind)
+                {
+                    Label = label, Size = size, At = at, Grow = grow, Colors = colors, Device = device, Base = basePath,
+                    Display = display,
+                    Bindings = ReadBindings(element, kind, element.TakeChildren()),
+                },
+            };
+
         }
         else
         {
@@ -277,11 +285,30 @@ public static class DashboardFile
             : throw element.Error($"'base': {error}");
     }
 
-    private static Dictionary<string, Binding> ReadBindings(FileElement element, ParameterControlKind kind)
+    // the bindings and the pages (grids) of selector tabs
+    private static SelectorTabsControl ReadSelectorTabs(FileElement element, SelectorTabsControl control)
+    {
+        var children = element.TakeChildren();
+        control.Bindings = ReadBindings(element, control.Kind, children.Where(IsBind));
+        var pages = new List<DashboardControl>();
+        foreach (var child in children.Where(child => !IsBind(child)))
+        {
+            var page = ReadControl(child);
+            if (!SelectorTabsControl.IsPage(page))
+                throw child.Error($"a page of '{element.Name}' is a '{FileNames.Of(LayoutControlKind.Grid)}', not a '{child.Name}'.");
+            pages.Add(page);
+        }
+        control.Children = pages;
+        return control;
+    }
+
+    private static bool IsBind(FileElement element) => element.Name == FileRoles.Bind.ElementName;
+
+    private static Dictionary<string, Binding> ReadBindings(FileElement element, ParameterControlKind kind, IEnumerable<FileElement> children)
     {
         var allowed = SlotNames.Of(kind);
         var bindings = new Dictionary<string, Binding>(StringComparer.Ordinal);
-        foreach (var child in element.TakeChildren())
+        foreach (var child in children)
         {
             if (child.Name != FileRoles.Bind.ElementName)
                 throw child.Error($"'{element.Name}' cannot contain '{child.Name}'.");

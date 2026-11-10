@@ -38,6 +38,18 @@ public closed class DashboardControl
     /// are relative to; inherited by the controls inside it. Bases do not stack: the nearest one is used.
     /// </summary>
     public string? Base { get; set; }
+
+    /// <summary>
+    /// The controls this control holds, in order: the one member every walk over the controls of a dashboard uses. The
+    /// children of a <see cref="LayoutControl"/>, the pages of a <see cref="SelectorTabsControl"/>; none for a control
+    /// that holds no controls.
+    /// </summary>
+    /// <exception cref="NotSupportedException">Set on a control that holds no controls.</exception>
+    public virtual IReadOnlyList<DashboardControl> Children
+    {
+        get => [];
+        set => throw new NotSupportedException($"A {GetType().Name} holds no controls.");
+    }
 }
 
 /// <summary>
@@ -66,6 +78,8 @@ public sealed class ValueControl : ParameterControl
     {
         if (kind == ParameterControlKind.Envelope)
             throw new ArgumentException($"An envelope is an {nameof(EnvelopeControl)}.", nameof(kind));
+        if (kind == ParameterControlKind.SelectorTabs)
+            throw new ArgumentException($"Selector tabs are a {nameof(SelectorTabsControl)}.", nameof(kind));
         Kind = kind;
     }
 
@@ -126,6 +140,45 @@ public sealed class EnvelopeControl : ParameterControl
 }
 
 /// <summary>
+/// A selector that shows a page per option of its parameter instead of buttons: the page of the current value is
+/// shown, so a page holds the controls that are only valid for its option. Each page is a grid named
+/// (<see cref="DashboardControl.Label"/>) after the option it belongs to; not every option needs a page.
+/// </summary>
+public sealed class SelectorTabsControl : ParameterControl
+{
+    private IReadOnlyList<DashboardControl> _pages = [];
+
+    public override ParameterControlKind Kind => ParameterControlKind.SelectorTabs;
+
+    /// <summary>The bindings by slot name: the <c>value</c> slot (see <see cref="SlotNames"/>).</summary>
+    public IReadOnlyDictionary<string, Binding> Bindings { get; set; } = new Dictionary<string, Binding>();
+
+    public override IReadOnlyDictionary<string, Binding> Slots
+    {
+        get => Bindings;
+        set => Bindings = value;
+    }
+
+    /// <summary>The pages, in order: grids (see <see cref="IsPage"/>), each labelled with the name of its option.</summary>
+    /// <exception cref="ArgumentException">A control is not a page.</exception>
+    public override IReadOnlyList<DashboardControl> Children
+    {
+        get => _pages;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            if (value.FirstOrDefault(page => !IsPage(page)) is { } other)
+                throw new ArgumentException($"A page of selector tabs is a grid, not a {other.GetType().Name}.", nameof(value));
+            _pages = value;
+        }
+    }
+
+    /// <summary>True when the control can be a page of selector tabs: a grid.</summary>
+    public static bool IsPage(DashboardControl control)
+        => control is LayoutControl { Kind: LayoutControlKind.Grid };
+}
+
+/// <summary>
 /// One segment of an envelope: the parameter for its time, the parameter for the level it ends at, and whether
 /// it holds (sustains) until note off.
 /// </summary>
@@ -139,7 +192,7 @@ public sealed class LayoutControl : DashboardControl
 {
     public required LayoutControlKind Kind { get; init; }
 
-    public IReadOnlyList<DashboardControl> Children { get; set; } = [];
+    public override IReadOnlyList<DashboardControl> Children { get; set; } = [];
 
     /// <summary>
     /// The index variables of the controls inside this one (<c>Programs[$patch]</c>). A variable of a nearer layout
@@ -171,6 +224,7 @@ public enum ParameterControlKind
     Slider,
     Switch,
     Selector,
+    SelectorTabs,
     NumberBox,
     Text,
     XyPad,
@@ -216,7 +270,7 @@ public sealed record DisplaySettings
 /// </summary>
 public static class SlotNames
 {
-    /// <summary>The slot of a single-value control (knob, slider, switch, selector, number box, text).</summary>
+    /// <summary>The slot of a single-value control (knob, slider, switch, selector, selector tabs, number box, text).</summary>
     public const string Value = "value";
     /// <summary>The lower value of a slider with two values.</summary>
     public const string Min = "min";

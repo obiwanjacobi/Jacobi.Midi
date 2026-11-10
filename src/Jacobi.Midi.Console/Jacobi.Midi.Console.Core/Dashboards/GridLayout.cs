@@ -2,8 +2,8 @@ namespace Jacobi.Midi.Console.Core.Dashboards;
 
 /// <summary>
 /// The layout of a dashboard in cells. The dashboard's root and every grid and section are grids: each control in them
-/// has a position (column, row) and a size in cells. Rows, columns and tabs arrange their children themselves: those
-/// only have a size. <see cref="Complete"/> gives the controls of a file that lack them a size and position;
+/// has a position (column, row) and a size in cells. Rows, columns, tabs and selector tabs arrange their children
+/// themselves: those only have a size. <see cref="Complete"/> gives the controls of a file that lack them a size and position;
 /// <see cref="Place"/> moves or sizes a control and pushes the controls it would overlap down, growing the grids that
 /// no longer fit their children.
 /// </summary>
@@ -14,6 +14,9 @@ public static class GridLayout
 
     /// <summary>The width of a grid without a size, to place the controls without a position in.</summary>
     private const int DefaultColumns = 48;
+
+    /// <summary>The rows the headers of tabs and selector tabs take above their pages.</summary>
+    private const int TabHeaderRows = 2;
 
     /// <summary>True when the layout control places its children at a position (a grid or section).</summary>
     public static bool IsGrid(LayoutControl layout) => layout.Kind is LayoutControlKind.Grid or LayoutControlKind.Section;
@@ -30,6 +33,7 @@ public static class GridLayout
             ParameterControlKind.Slider => new(4, 9),
             ParameterControlKind.Switch => new(4, 7),
             ParameterControlKind.Selector => new(6, 4),
+            ParameterControlKind.SelectorTabs => DefaultSize(LayoutControlKind.Tabs),
             ParameterControlKind.NumberBox => new(6, 4),
             ParameterControlKind.Text => new(9, 4),
             ParameterControlKind.XyPad => new(7, 7),
@@ -51,20 +55,25 @@ public static class GridLayout
             _ => new(1, 1),
         };
 
+    /// <summary>The size of a page of tabs or selector tabs of a size: below the headers.</summary>
+    public static CellSize PageSize(CellSize size)
+        => new(size.Columns, Math.Max(1, size.Rows - TabHeaderRows));
+
     /// <summary>
     /// True when cells are wider than tall: a control with a direction (a slider, a separator) then runs horizontally,
     /// otherwise vertically.
     /// </summary>
     public static bool IsWide(CellSize size) => size.Columns > size.Rows;
 
-    /// <summary>The layout control the control is a child of; null for the root (or a control not in it).</summary>
-    public static LayoutControl? ParentOf(LayoutControl root, DashboardControl control)
+    /// <summary>The control that holds the control; null for the root (or a control not in it).</summary>
+    public static DashboardControl? ParentOf(DashboardControl root, DashboardControl control)
     {
+        ArgumentNullException.ThrowIfNull(root);
         foreach (var child in root.Children)
         {
             if (child == control)
                 return root;
-            if (child is LayoutControl layout && ParentOf(layout, control) is { } parent)
+            if (ParentOf(child, control) is { } parent)
                 return parent;
         }
         return null;
@@ -72,25 +81,47 @@ public static class GridLayout
 
     /// <summary>
     /// Gives every control without a size its default size (a layout control: the size of its children), and every
-    /// child of a grid without a position one below the children that have one. Returns the number of sizes and
-    /// positions given.
+    /// child of a grid without a position one below the children that have one. The pages of tabs and selector tabs get
+    /// the space below their headers (not less than their controls need; the tabs grow when they need more), as
+    /// <see cref="Place"/> keeps them. Returns the number of sizes and positions given.
     /// </summary>
-    public static int Complete(LayoutControl root)
+    public static int Complete(DashboardControl root)
     {
         ArgumentNullException.ThrowIfNull(root);
-        var given = 0;
-        foreach (var child in root.Children.OfType<LayoutControl>())
-            given += Complete(child);
-        foreach (var child in root.Children.Where(child => child is not LayoutControl && child.Size is null))
-        {
-            child.Size = child is ParameterControl parameter ? DefaultSize(parameter.Kind) : new CellSize(1, 1);
-            given++;
-        }
-        if (IsGrid(root))
-            given += PlaceUnplaced(root);
+        var given = root.Children.Sum(Complete);
+        if (root is LayoutControl layout && IsGrid(layout))
+            given += PlaceUnplaced(layout);
         if (root.Size is null)
         {
-            root.Size = ContentSize(root);
+            root.Size = root switch
+            {
+                LayoutControl content => ContentSize(content),
+                ParameterControl parameter => DefaultSize(parameter.Kind),
+            };
+            given++;
+        }
+        if (HasPages(root))
+            given += CompletePages(root);
+        return given;
+    }
+
+    // the tabs fit the largest content of their pages, the pages take the space below the headers
+    private static int CompletePages(DashboardControl holder)
+    {
+        var given = 0;
+        var size = holder.Size!.Value;
+        var minimum = MinimumSize(holder);
+        if (minimum.Columns > size.Columns || minimum.Rows > size.Rows)
+        {
+            size = new CellSize(Math.Max(size.Columns, minimum.Columns), Math.Max(size.Rows, minimum.Rows));
+            holder.Size = size;
+            given++;
+        }
+        var changes = new Dictionary<DashboardControl, Placement>();
+        SizePages(holder, size, changes);
+        foreach (var (page, placement) in changes)
+        {
+            page.Size = placement.Size;
             given++;
         }
         return given;
@@ -113,11 +144,50 @@ public static class GridLayout
     private static void Place(LayoutControl root, DashboardControl control, Placement placement, Dictionary<DashboardControl, Placement> changes)
     {
         changes[control] = placement;
+        if (HasPages(control) && SizePages(control, placement.Size, changes))
+            Fit(root, control, changes);
         if (ParentOf(root, control) is not { } parent)
             return;
-        if (IsGrid(parent))
-            PushAside(parent, control, changes);
+        if (parent is LayoutControl layout && IsGrid(layout))
+            PushAside(layout, control, changes);
         Fit(root, parent, changes);
+    }
+
+    /// <summary>
+    /// The smallest size a control can be given: what its controls need (a grid, section, row or column), the largest
+    /// content of its pages below the headers (tabs and selector tabs), one cell for any other control.
+    /// </summary>
+    public static CellSize MinimumSize(DashboardControl control)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        if (HasPages(control))
+        {
+            var contents = control.Children
+                .Select(page => new Placement(default, page is LayoutControl layout ? ContentSize(layout) : page.Size ?? new CellSize(1, 1)))
+                .ToList();
+            return contents.Count == 0 ? new CellSize(1, TabHeaderRows + 1) : PagesSize(contents);
+        }
+        return control is LayoutControl other ? ContentSize(other) : new CellSize(1, 1);
+    }
+
+    /// <summary>True when the control shows its children as pages, one at a time below headers: tabs and selector tabs.</summary>
+    public static bool HasPages(DashboardControl control)
+        => control is LayoutControl { Kind: LayoutControlKind.Tabs } or SelectorTabsControl;
+
+    // the pages take the space below the headers, but not less than their controls need; true when a page needs more
+    private static bool SizePages(DashboardControl holder, CellSize size, Dictionary<DashboardControl, Placement> changes)
+    {
+        var space = PageSize(size);
+        var needsMore = false;
+        foreach (var page in holder.Children)
+        {
+            var needed = page is LayoutControl layout ? ContentSize(layout, changes) : PlacementOf(page, changes).Size;
+            var pageSize = new CellSize(Math.Max(space.Columns, needed.Columns), Math.Max(space.Rows, needed.Rows));
+            needsMore |= pageSize != space;
+            if (pageSize != PlacementOf(page, changes).Size)
+                changes[page] = PlacementOf(page, changes) with { Size = pageSize };
+        }
+        return needsMore;
     }
 
     // the siblings the control overlaps move down below it, and so on for the siblings those then overlap
@@ -140,15 +210,15 @@ public static class GridLayout
         }
     }
 
-    // a layout control grows to the size of its children when they no longer fit
-    private static void Fit(LayoutControl root, LayoutControl layout, Dictionary<DashboardControl, Placement> changes)
+    // a control grows to the size of its children when they no longer fit
+    private static void Fit(LayoutControl root, DashboardControl holder, Dictionary<DashboardControl, Placement> changes)
     {
-        var current = PlacementOf(layout, changes);
-        var needed = ContentSize(layout, changes);
+        var current = PlacementOf(holder, changes);
+        var needed = ContentSize(holder, changes);
         if (needed.Columns <= current.Size.Columns && needed.Rows <= current.Size.Rows)
             return;
         var size = new CellSize(Math.Max(needed.Columns, current.Size.Columns), Math.Max(needed.Rows, current.Size.Rows));
-        Place(root, layout, current with { Size = size }, changes);
+        Place(root, holder, current with { Size = size }, changes);
     }
 
     // the children without a position, side by side below those with one, on lines as wide as the grid
@@ -181,10 +251,12 @@ public static class GridLayout
     private static CellSize ContentSize(LayoutControl layout)
         => ContentSize(layout, new Dictionary<DashboardControl, Placement>());
 
-    // the size a layout control needs for its children (with their placements as changed)
-    private static CellSize ContentSize(LayoutControl layout, Dictionary<DashboardControl, Placement> changes)
+    // the size a control needs for its children (with their placements as changed)
+    private static CellSize ContentSize(DashboardControl holder, Dictionary<DashboardControl, Placement> changes)
     {
-        var children = layout.Children.Select(child => PlacementOf(child, changes)).ToList();
+        var children = holder.Children.Select(child => PlacementOf(child, changes)).ToList();
+        if (holder is not LayoutControl layout)
+            return children.Count == 0 ? new CellSize(1, 1) : PagesSize(children);
         if (children.Count == 0)
             return new CellSize(Math.Max(1, InsetOf(layout).Left + InsetOf(layout).Right), Math.Max(1, InsetOf(layout).Top + InsetOf(layout).Bottom));
 
@@ -196,8 +268,7 @@ public static class GridLayout
             case LayoutControlKind.Column:
                 return new CellSize(children.Max(child => child.Size.Columns), children.Sum(child => child.Size.Rows) + gaps);
             case LayoutControlKind.Tabs:
-                // the tab headers take two rows
-                return new CellSize(children.Max(child => child.Size.Columns), children.Max(child => child.Size.Rows) + 2);
+                return PagesSize(children);
             default:
                 var inset = InsetOf(layout);
                 return new CellSize(
@@ -205,6 +276,10 @@ public static class GridLayout
                     children.Max(child => child.At.Row + child.Size.Rows) + inset.Top + inset.Bottom);
         }
     }
+
+    // pages shown one at a time below their headers
+    private static CellSize PagesSize(List<Placement> pages)
+        => new(pages.Max(page => page.Size.Columns), pages.Max(page => page.Size.Rows) + TabHeaderRows);
 
     private static Placement PlacementOf(DashboardControl control, Dictionary<DashboardControl, Placement> changes)
         => changes.TryGetValue(control, out var placement)

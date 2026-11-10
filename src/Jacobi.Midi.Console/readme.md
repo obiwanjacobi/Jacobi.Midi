@@ -20,7 +20,7 @@ the devices) is in the [todo list](todo.md).
 | **Index variable** | A repeat index the user changes in the UI, e.g. the patch number: declared on a layout control and used in binding paths as `Programs[$patch]`. Changed by a control bound to `$patch`. |
 | **Parameter** | One field of the root group of a device (usually its address map), identified by its schema path and `InstancePath` (e.g. the `Rate` of the phaser in the temporary patch). The display name, value range, steps and option names come from the schema's data type (`min`, `max`, `scale`, `shift`, `options`). |
 | **Dashboard** | A tree of controls: layout controls that contain parameter controls and other layout controls. It refers to devices by alias only, so it is portable between rigs. |
-| **Control** | An element of a dashboard. A **parameter control** (knob, envelope, ...) has named **slots**, each holding one parameter. A **layout control** (row, grid, section, ...) has no slots: it arranges and groups the controls inside it. |
+| **Control** | An element of a dashboard. A **parameter control** (knob, envelope, ...) has named **slots**, each holding one parameter. A **layout control** (row, grid, section, ...) has no slots: it arranges and groups the controls inside it. Both may hold controls (`DashboardControl.Children`): a layout control its children, selector tabs their pages. |
 | **Binding** | What fills a slot: device alias + schema path, with the repeat indices (constant or index variables) in the path. The slots of one control may be bound to parameters of different devices. |
 | **Device state** | The console's value model of one device instance: the last known value of each parameter. All controls bound to the same parameter, on any dashboard, show the same value. |
 | **Face** | The inner part of a parameter control: how its value is drawn (an arc, a ring of LEDs, a schematic symbol). Faces of one style for all control types form a **kit**. |
@@ -46,6 +46,7 @@ change the control type afterwards.
 | Slider (horizontal, vertical) | value | one number, or two numbers (min/max), both with a range; horizontal when its cells are wider than tall (`GridLayout.IsWide`), else vertical |
 | Switch | value | a `sys.bool` (e.g. `roland.switch`); only a bool: a switch bound to anything else is reported and not bound, a parameter that is not a bool cannot be dropped on it, and a control bound to one cannot become a switch (`ControlCatalog.Accepts`) |
 | Selector | value | a data type with `options`: a row of segments, or with more than six options (`SelectorFaceState.MaxSegments`) a display with ▲/▼ whose option opens the list on a click |
+| Selector tabs | value | not suggested: a selector becomes one in the control panel. A data type with `options` whose options each have parameters of their own (see below) |
 | Number box | value | any number, when typing or stepping the exact value matters; an index variable (`$patch`) |
 | Text | value | a string (a patch name) |
 | XY pad | x, y | two numbers: dragging the point sets both |
@@ -60,6 +61,27 @@ envelopes are presets of that one control. Dragging a breakpoint changes the tim
 together; a segment without a bound level uses a fixed level (the maximum, 0 for the last segment) and one without a
 bound time half its share of the width (`EnvelopeShape`: each segment has an equal share, the segment that holds one
 more for the hold).
+
+### Selector tabs show a page per option
+
+Some parameters are only valid for some options of another (the wave parameters per oscillator type). **Selector
+tabs** (`SelectorTabsControl`) are a selector whose options are tab headers, each with a **page**: a grid that holds
+the controls of that option. The selected option shows its page.
+
+- The pages come from the options in the schema. Bound to a parameter (the first time, or to another field) the
+  selector tabs get a page per option, in the schema's order (`SelectorPages`); a binding written again for the same
+  field (a move, a renamed alias, another repeat item) keeps them. In the control panel the options are checked that
+  have a page: unchecking one removes its page with its controls, checking one adds an empty page in the schema's
+  order. The only page stays: to remove it, delete the selector tabs.
+- A page belongs to the option its label names, matched without case; the header shows the option's name. A page whose
+  option is no longer in the schema, or an option with more than one page, is reported; such a page is never shown.
+- In *Play* mode the value decides: the page of the current option is shown, a header click sets that option; while
+  the value is not known, or its option has no page, no header is selected and no page shown. Not bound, they are
+  plain tabs.
+- In *Edit* mode they are plain tabs (see [Edit and Play](#edit-and-play)); nothing is sent.
+- They have no chrome: the headers are the selector, in the look's label font and colors (as the headers of tabs).
+- The pages have the size of the selector tabs (below the headers) and are not moved or sized themselves; see
+  [Layout controls](#layout-controls).
 
 ### Behaviour of all parameter controls
 
@@ -102,13 +124,18 @@ position), and the console says so.
 
 When a control is moved or sized onto other controls, these are **pushed down** below it (and the controls they then
 overlap, and so on); a grid or section that no longer fits its children **grows**, and pushes in its own grid in turn.
+No control is sized smaller than its controls need (`GridLayout.MinimumSize`).
+
+The **pages** of tabs and selector tabs take the space below the headers (`GridLayout.PageSize`): sizing the tabs sizes
+all their pages, never smaller than the controls on a page need (the tabs grow around the largest). A page is not sized
+itself. A file whose pages do not fit their tabs gets that when it is opened, and the console says so.
 
 | Control | Arranges its children | Used for |
 |---------|-----------------------|----------|
 | Grid | on cells, each child at its position (`at`) in its size | the root of a dashboard; exact placement, e.g. to copy a device's panel layout |
 | Section | as a grid, inside a frame with a title | a group of parameters: "Filter", "Amp", a device |
 | Row, Column | next to / below each other (flex): `gap`, `wrap`; a child's `grow` shares the remaining space; the children have no position | a strip of controls that adapts when controls are added or removed |
-| Tabs | one page at a time (the headers take two rows); each child is a page, named by its label: a grid or section; any other control put on tabs gets a grid page of its own (`ControlCatalog.PageFor`) | many parameters on a small screen; the sections of a patch |
+| Tabs | one page at a time (the headers take two rows, in the look's label font and colors); each child is a page, named by its label: a grid or section; any other control put on tabs gets a grid page of its own (`ControlCatalog.PageFor`) | many parameters on a small screen; the sections of a patch. For the parameters of the options of one parameter: [selector tabs](#selector-tabs-show-a-page-per-option) |
 | Spacer, Separator | — | room or a line between controls; a separator is a line along the long side of its cells (`GridLayout.IsWide`) |
 | Label | — | a text on the dashboard |
 
@@ -306,10 +333,10 @@ In *Edit* mode:
 - the values are locked: the controls do not change them (`DashboardEditing.IsEditing`, inherited by all controls of the dashboard), the cursor is the arrow;
 - a click selects the control under the pointer (outlined); a right-click also opens the color chooser for the part under the pointer (see [Color](#color)); in *Play* mode a right-click does nothing;
 - Esc, or a click beside the dashboard, selects nothing: the panel shows the dashboard (its name and zoom);
-- dragging a control in a grid or section moves it, dragging the handle at the bottom right of the selection sizes it, by whole cells; the control follows the pointer and is placed when it is let go (controls in the way are pushed down, grids grow); the cells of the grid the selected control is in are drawn over it, with the column and row numbers every five cells;
+- dragging a control in a grid or section moves it, dragging the handle at the bottom right of the selection sizes it, by whole cells, not smaller than its controls need (the handle takes the press before the controls inside the selection); the control follows the pointer and is placed when it is let go (controls in the way are pushed down, grids grow); the cells of the grid the selected control is in are drawn over it, with the column and row numbers every five cells;
 - dragging a control over another grid, section, row, column or tabs moves it into it; its bindings stay bound to the same parameters (`ControlMoves`: a moved layout control keeps the device and base it inherited, a binding that would point elsewhere is written again; a variable that is not around its new place is reported). A palette item dropped in a grid or section goes to the cell under the pointer, elsewhere after the other controls;
-- Delete (or *Delete* in the panel) deletes the selected control and the controls inside it; the root stays;
-- tabs: a click on a tab header shows its page and selects it (drop on the page to add to it, on the headers to add a page); the page shown stays shown when the dashboard is built again, and selecting a control shows the pages it is on;
+- Delete (or *Delete* in the panel) deletes the selected control and the controls inside it; the root stays, and so does the only page of selector tabs;
+- tabs and selector tabs: a click on a tab header shows its page and selects it, a click on the header of the selected page selects the tabs themselves (their headers may cover a small control); the page shown stays shown when the dashboard is built again, and selecting a control shows the pages it is on. Drop on the page to add to it; on the headers of tabs to add a page, on those of selector tabs a field binds them. A page has no handle: it has the size of its tabs; a page of selector tabs is not moved out of them either;
 - a label or separator has only an accent: it is drawn in the look's text or outline color until it is given a color (right-click, or the panel);
 - the left and right panels are sized with the splitters between them and the dashboard (at least 180 pixels; kept while Play mode closes them).
 
@@ -331,7 +358,8 @@ any of its repeat items is bound to, and fainter, a device, group or repeat with
 
 - its label, position in its grid (column, row), size (columns × rows) and display settings (unit, decimals);
 - its three colors (each opens the color chooser, ✕ makes it inherited);
-- its kind, with a button per kind (one single-value control into another, a grid into a section, a row into a column: `ControlCatalog.WithKind`);
+- its kind, with a button per kind (one single-value control into another, also into selector tabs and back, a grid into a section, a row into a column: `ControlCatalog.WithKind`); selector tabs get a page per option and at least their default size, and lose their pages when they become another kind; a page keeps its kind;
+- the pages of selector tabs: a list of the options to check (see [Selector tabs](#selector-tabs-show-a-page-per-option));
 - the bindings of the slots as text (`[device:]path` or `$name`), the device and base (with what is inherited as the placeholder), the index variables of a layout control, the gap and wrap of a row or column, and the segments of an envelope.
 
 With nothing selected it shows the dashboard's name and zoom (its `cellSize` as a percentage of the default 24 pixels,
@@ -360,14 +388,15 @@ renamed in the dashboard's properties).
 
 **Undo.** Every change is an edit (`IEdit`) in the edit history (`EditHistory`): undo (↶, Ctrl+Z) and redo (↷,
 Ctrl+Y); the history is cleared when a dashboard is closed or another rig is opened. A dashboard or rig counts the
-edits since it was read or saved, so undoing all of them makes it unchanged again. After an edit the dashboard is
+edits since it was read or saved, so undoing all of them makes it unchanged again. An edit (or undo, redo) is all or
+nothing: one that fails is not done (what it did is taken back), it is reported, and the console goes on. After an edit the dashboard is
 resolved again (`DashboardSession.Refresh`: the variables keep their current item); after an edit of the rig the rig is
 opened again on the same library, and the devices that stay the same (the same device, also by another alias; map root, device values) keep their state
 and values (`RigSession.Open` with the previous session).
 
 **Notifications** (below the status) list what the console tells: problems (files, schemas, devices, bindings, dumps,
-MIDI) in their own color, and information (a schema that replaces a built-in one, sizes given to a file); the header
-counts both.
+MIDI) in their own color, also an edit that failed, and information (a schema that replaces a built-in one, sizes given
+to a file); the header counts both.
 
 ## MIDI
 
@@ -582,6 +611,7 @@ The same dashboard in XML:
 - `devices` lists the aliases the dashboard needs with the map root they must have, and optionally colors (`color`, `plateColor`, `panelColor`) that override the rig's on this dashboard. An alias that is not in the rig, or has another map root there, is reported.
 - A binding is written as `[device:]path`. The path is a schema path in the notation of the serializer's node references: a repeat item is given by its index (`Programs[5].Program.Level`) or by an index variable (`Programs[$patch].Program.Level`), so the instance is part of the path. The device and the start of the path may come from the `device` and `base` of the control or of a layout control around it; a binding with its own device (`pedalboard:AddressMap.Temporary.Compressor.Attack`) has a full path.
 - `variables` of a layout control: the index variables with their starting value (zero based); see [Index variables](#index-variables).
+- Selector tabs (`selectorTabs`) have their `value` binding and their pages: grids, each labelled with the name of its option (in JSON in `children`).
 - `size` (columns,rows) and, inside a grid or section, `at` (column,row) are written for every control; a file without them gets them when it is opened (see [Layout controls](#layout-controls)). `grow` is only used inside a row or column.
 - Every file names its kind and version in `format`; a file of another kind or version is not read.
 

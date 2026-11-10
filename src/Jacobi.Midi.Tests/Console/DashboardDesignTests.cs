@@ -246,6 +246,41 @@ public class DashboardDesignTests
     }
 
     [Fact]
+    public void WithKind_ASelectorBecomesSelectorTabs_WithAPagePerOption_AndBack_WithoutPages()
+    {
+        var selector = new ValueControl(ParameterControlKind.Selector)
+        {
+            Label = "Direction", Size = new CellSize(12, 10),
+            Bindings = new Dictionary<string, Binding> { [SlotNames.Value] = new("UpDown") },
+        };
+        Assert.Contains(ParameterControlKind.SelectorTabs, ControlCatalog.KindsOf(selector));
+
+        var tabs = Assert.IsType<SelectorTabsControl>(ControlCatalog.WithKind(selector, ParameterControlKind.SelectorTabs, ["Down", "Up"]));
+
+        Assert.Equal(("Direction", new Binding("UpDown")), (tabs.Label, tabs.Bindings[SlotNames.Value]));
+        Assert.Equal(["Down", "Up"], tabs.Children.Select(page => page.Label));
+        Assert.All(tabs.Children, page => Assert.Equal(new CellSize(12, 8), page.Size));
+        Assert.DoesNotContain(ParameterControlKind.Envelope, ControlCatalog.KindsOf(tabs));
+
+        var back = Assert.IsType<ValueControl>(ControlCatalog.WithKind(tabs, ParameterControlKind.Selector));
+
+        Assert.Equal(new Binding("UpDown"), back.Bindings[SlotNames.Value]);
+        Assert.Empty(back.Children);
+    }
+
+    [Fact]
+    public void KindsOf_APageOfSelectorTabs_IsNone_APageIsAGrid()
+    {
+        var page = new LayoutControl { Kind = LayoutControlKind.Grid, Label = "Up" };
+        var tabs = new SelectorTabsControl { Children = [page] };
+
+        Assert.Empty(ControlCatalog.KindsOf(page, tabs));
+        Assert.Throws<ArgumentException>(() => ControlCatalog.WithKind(page, LayoutControlKind.Section, parent: tabs));
+        // elsewhere a grid can still be a section
+        Assert.Contains(LayoutControlKind.Section, ControlCatalog.KindsOf(page));
+    }
+
+    [Fact]
     public void PageFor_Tabs_IsTheGridOrSection_OrAGridPageAroundTheControl()
     {
         var tabs = new LayoutControl { Kind = LayoutControlKind.Tabs, Children = [new LayoutControl { Kind = LayoutControlKind.Grid }] };

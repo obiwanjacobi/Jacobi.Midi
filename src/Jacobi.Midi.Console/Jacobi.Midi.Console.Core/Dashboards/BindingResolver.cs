@@ -79,8 +79,6 @@ public static class BindingResolver
                 case LayoutControl layout:
                     foreach (var variable in layout.Variables)
                         declarations[new VariableReference(layout, variable.Name)] = variable;
-                    foreach (var child in layout.Children)
-                        Visit(child, scope);
                     break;
 
                 case ParameterControl parameter:
@@ -88,6 +86,8 @@ public static class BindingResolver
                         ResolveSlot(parameter, slot, binding, scope);
                     break;
             }
+            foreach (var child in control.Children)
+                Visit(child, scope);
         }
 
         void ResolveSlot(ParameterControl control, string slot, Binding binding, BindingScope scope)

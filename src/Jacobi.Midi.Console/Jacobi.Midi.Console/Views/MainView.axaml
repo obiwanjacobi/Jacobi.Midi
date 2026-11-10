@@ -32,6 +32,11 @@
             <Setter Property="BorderBrush" Value="#4FA3FF" />
             <Setter Property="BorderThickness" Value="1" />
         </Style>
+        <!-- a page of selector tabs whose option is not (any more) an option of the parameter -->
+        <Style Selector="CheckBox.noOption">
+            <Setter Property="FontStyle" Value="Italic" />
+            <Setter Property="Foreground" Value="#E05A4F" />
+        </Style>
         <Style Selector="SelectableTextBlock.notification">
             <Setter Property="Foreground" Value="{DynamicResource ConsoleTextBrush}" />
         </Style>
@@ -458,8 +463,8 @@
                                     </StackPanel>
                                     <TextBlock Text="Size in cells (columns × rows)" Classes="caption" />
                                     <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                        <NumericUpDown Value="{Binding Columns}" Minimum="1" Increment="1" FormatString="0" ToolTip.Tip="Columns (width)" />
-                                        <NumericUpDown Grid.Column="1" Value="{Binding Rows}" Minimum="1" Increment="1" FormatString="0" ToolTip.Tip="Rows (height)" />
+                                        <NumericUpDown Value="{Binding Columns}" Minimum="1" Increment="1" FormatString="0" ToolTip.Tip="Columns (width)" IsEnabled="{Binding CanResize}" />
+                                        <NumericUpDown Grid.Column="1" Value="{Binding Rows}" Minimum="1" Increment="1" FormatString="0" ToolTip.Tip="Rows (height)" IsEnabled="{Binding CanResize}" />
                                     </Grid>
 
                                     <StackPanel Spacing="10" IsVisible="{Binding IsParameter}">
@@ -545,6 +550,31 @@
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
+                                    </StackPanel>
+
+                                    <StackPanel Spacing="6" IsVisible="{Binding IsSelectorTabs}">
+                                        <TextBlock Text="Pages (an option each)" Classes="heading" />
+                                        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" IsEnabled="{Binding CanChoosePages}"
+                                                ToolTip.Tip="Choose the options that have a page">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Text="{Binding PagesText}" />
+                                                <TextBlock Grid.Column="1" Text="▾" Margin="8,0,0,0" />
+                                            </Grid>
+                                            <Button.Flyout>
+                                                <Flyout Placement="BottomEdgeAlignedLeft">
+                                                    <ScrollViewer MaxHeight="400">
+                                                        <ItemsControl ItemsSource="{Binding Pages}" MinWidth="200">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate x:DataType="vm:PageChoiceViewModel">
+                                                                    <CheckBox Content="{Binding Name}" IsChecked="{Binding HasPage}" IsEnabled="{Binding CanChange}" ToolTip.Tip="{Binding Tip}"
+                                                                              Classes.noOption="{Binding IsOfNoOption}" />
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </ScrollViewer>
+                                                </Flyout>
+                                            </Button.Flyout>
+                                        </Button>
                                     </StackPanel>
 
                                     <StackPanel Spacing="8" IsVisible="{Binding IsParameter}">

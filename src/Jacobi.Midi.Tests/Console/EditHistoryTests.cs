@@ -77,4 +77,69 @@ public class EditHistoryTests
         Assert.Equal(4, changes);
         Assert.False(history.CanUndo);
     }
+
+    // an edit that fails when it is applied or reverted (as told)
+    private sealed class FailingEdit : IEdit
+    {
+        public bool FailsApply { get; set; }
+
+        public bool FailsRevert { get; set; }
+
+        public string Description => "Failing";
+
+        public void Apply()
+        {
+            if (FailsApply)
+                throw new InvalidOperationException("apply failed");
+        }
+
+        public void Revert()
+        {
+            if (FailsRevert)
+                throw new InvalidOperationException("revert failed");
+        }
+    }
+
+    [Fact]
+    public void EditGroup_ThatFails_UndoesWhatItDid_AndIsNotRemembered()
+    {
+        var holder = new Holder { Label = "a" };
+        var history = new EditHistory();
+
+        Assert.Throws<InvalidOperationException>(() => history.Do(new EditGroup("both", [SetLabel(holder, "b"), new FailingEdit { FailsApply = true }])));
+
+        Assert.Equal("a", holder.Label);
+        Assert.False(history.CanUndo);
+    }
+
+    [Fact]
+    public void EditGroup_ThatFailsToRevert_DoesWhatItRevertedAgain()
+    {
+        var holder = new Holder { Label = "a" };
+        var group = new EditGroup("both", [new FailingEdit { FailsRevert = true }, SetLabel(holder, "b")]);
+        group.Apply();
+
+        Assert.Throws<InvalidOperationException>(group.Revert);
+
+        Assert.Equal("b", holder.Label);
+    }
+
+    [Fact]
+    public void Undo_ThatFails_StaysTheLastEdit_AndRedoThatFails_StaysUndone()
+    {
+        var failing = new FailingEdit();
+        var history = new EditHistory();
+        history.Do(failing);
+
+        failing.FailsRevert = true;
+        Assert.Throws<InvalidOperationException>(() => history.Undo());
+        Assert.Same(failing, history.NextUndo);
+
+        failing.FailsRevert = false;
+        history.Undo();
+        failing.FailsApply = true;
+        Assert.Throws<InvalidOperationException>(() => history.Redo());
+        Assert.Same(failing, history.NextRedo);
+        Assert.False(history.CanUndo);
+    }
 }

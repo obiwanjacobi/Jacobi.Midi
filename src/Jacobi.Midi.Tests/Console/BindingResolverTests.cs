@@ -298,6 +298,40 @@ public class BindingResolverTests
         Assert.Throws<ArgumentException>(() => new ValueControl(ParameterControlKind.Envelope));
     }
 
+    [Fact]
+    public void ValueControl_IsNotSelectorTabs()
+    {
+        Assert.Throws<ArgumentException>(() => new ValueControl(ParameterControlKind.SelectorTabs));
+    }
+
+    [Fact]
+    public void SelectorTabs_TheirSlotAndTheControlsOnTheirPages_AreResolvedInTheirScope()
+    {
+        var knob = Knob(new Binding("Saw.Detune"));
+        var tabs = new SelectorTabsControl
+        {
+            Base = "AddressMap.Edit.Osc",
+            Bindings = new Dictionary<string, Binding> { [SlotNames.Value] = new("Type") },
+            Children = [new LayoutControl { Kind = LayoutControlKind.Grid, Label = "Saw", Children = [knob] }],
+        };
+        var dashboard = Dashboard(Section("synth", null, tabs));
+
+        var resolution = BindingResolver.Resolve(dashboard);
+
+        Assert.Empty(resolution.Problems);
+        Assert.Equal(
+            [(tabs, "AddressMap.Edit.Osc.Type"), (knob, "AddressMap.Edit.Osc.Saw.Detune")],
+            resolution.Bindings.Select(binding => ((ParameterControl)binding.Control, binding.Parameter!.Path)));
+    }
+
+    [Fact]
+    public void SelectorTabs_TakeOnlyGridsAsPages()
+    {
+        var tabs = new SelectorTabsControl();
+
+        Assert.Throws<ArgumentException>(() => tabs.Children = [new LayoutControl { Kind = LayoutControlKind.Section }]);
+    }
+
     private static ValueControl Knob(Binding binding)
         => new(ParameterControlKind.Knob) { Bindings = new Dictionary<string, Binding> { [SlotNames.Value] = binding } };
 

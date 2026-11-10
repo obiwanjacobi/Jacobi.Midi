@@ -44,9 +44,7 @@ public sealed record BindingScope(string? Device, string? Base, IReadOnlyDiction
             var scope = outer.Inside(current);
             if (current == control)
                 return scope;
-            return current is LayoutControl layout
-                ? layout.Children.Select(child => Find(child, scope)).FirstOrDefault(found => found is not null)
-                : null;
+            return current.Children.Select(child => Find(child, scope)).FirstOrDefault(found => found is not null);
         }
     }
 

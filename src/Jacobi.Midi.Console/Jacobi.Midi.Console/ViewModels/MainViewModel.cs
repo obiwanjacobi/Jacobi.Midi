@@ -154,7 +154,8 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             var edit = new ValueEdit<string>("dashboard name", () => dashboard.Name, name => dashboard.Name = name, value.Trim());
             if (!edit.Changes)
                 return;
-            DoDashboardEdit(entry, edit);
+            if (!DoDashboardEdit(entry, edit))
+                return;
             Status = $"The dashboard is named '{dashboard.Name}'. Save to keep it.";
         }
     }
@@ -174,7 +175,8 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             var edit = new ValueEdit<int>("dashboard zoom", () => dashboard.CellSize, size => dashboard.CellSize = size, cellSize);
             if (!edit.Changes)
                 return;
-            DoDashboardEdit(entry, edit);
+            if (!DoDashboardEdit(entry, edit))
+                return;
             Status = $"The dashboard is shown at {DashboardZoom:0}% (cells of {cellSize} pixels). Save to keep it.";
         }
     }
@@ -198,7 +200,8 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             }, value.Name);
             if (!edit.Changes)
                 return;
-            DoDashboardEdit(entry, edit);
+            if (!DoDashboardEdit(entry, edit))
+                return;
             Status = $"The dashboard has the look '{value.Name}'. Save to keep it.";
         }
     }
@@ -546,7 +549,8 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     [RelayCommand(CanExecute = nameof(CanUndo))]
     private void Undo()
     {
-        if (History.Undo() is { } edit)
+        IEdit? edit = null;
+        if (History.NextUndo is { } next && Safely($"undo of {next.Description}", () => edit = History.Undo()) && edit is not null)
             Status = $"Undone: {edit.Description}.";
     }
 
@@ -555,7 +559,8 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     [RelayCommand(CanExecute = nameof(CanRedo))]
     private void Redo()
     {
-        if (History.Redo() is { } edit)
+        IEdit? edit = null;
+        if (History.NextRedo is { } next && Safely($"redo of {next.Description}", () => edit = History.Redo()) && edit is not null)
             Status = $"Redone: {edit.Description}.";
     }
 
@@ -577,7 +582,8 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             value => device.Colors = device.Colors.With(area, value), color?.ToString());
         if (!edit.Changes)
             return;
-        DoRigEdit(edit);
+        if (!DoRigEdit(edit))
+            return;
         Status = $"{edit.Description}: {color?.ToString() ?? "the look's"}. Save to keep it in the rig.";
         // the dashboard's color of the device wins: say so, the change does not show here
         if (SelectedDashboard?.Dashboard.FindDevice(alias)?.Colors[area] is { } own)
@@ -598,7 +604,8 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         var edit = new ValueEdit<T>($"{what} of '{ControlCatalog.NameOf(control)}'", get, set, value);
         if (!edit.Changes)
             return;
-        DoDashboardEdit(entry, edit);
+        if (!DoDashboardEdit(entry, edit))
+            return;
         Status = $"{edit.Description}: {shown ?? value?.ToString() ?? "default"}. Save to keep it.";
     }
 
@@ -617,9 +624,10 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         var edits = new List<IEdit>();
         if (binding?.Device is { } device && DeviceEdit(entry.Dashboard, device) is { } addDevice)
             edits.Add(addDevice);
-        edits.Add(SlotsEdit(control, slots));
-        DoDashboardEdit(entry, new EditGroup($"binding of '{ControlCatalog.NameOf(control)}'", edits));
-        Status = $"'{ControlCatalog.NameOf(control)}'.{slot}: {binding?.ToString() ?? "not bound"}. Save to keep it.";
+        var pages = BindingEdits(entry, control, slots, edits);
+        if (!DoDashboardEdit(entry, new EditGroup($"binding of '{ControlCatalog.NameOf(control)}'", edits)))
+            return;
+        Status = $"'{ControlCatalog.NameOf(control)}'.{slot}: {binding?.ToString() ?? "not bound"}{PagesOf(pages)}. Save to keep it.";
     }
 
     /// <summary>Sets the device of a control (null inherits it); a device the dashboard does not list yet is added.</summary>
@@ -633,7 +641,8 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         if (alias is not null && DeviceEdit(entry.Dashboard, alias) is { } addDevice)
             edits.Add(addDevice);
         edits.Add(new ValueEdit<string?>("device", () => control.Device, value => control.Device = value, alias));
-        DoDashboardEdit(entry, new EditGroup($"device of '{ControlCatalog.NameOf(control)}'", edits));
+        if (!DoDashboardEdit(entry, new EditGroup($"device of '{ControlCatalog.NameOf(control)}'", edits)))
+            return;
         Status = $"The device of '{ControlCatalog.NameOf(control)}': {alias ?? "inherited"}. Save to keep it.";
     }
 
@@ -644,7 +653,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         if (given > 0)
         {
             origin.Changes++;
-            Inform($"'{origin.Name}'", $"{given} sizes and positions were missing and are given; save it to keep them.");
+            Inform($"'{origin.Name}'", $"{given} sizes and positions were missing (or pages did not fit their tabs) and are given; save it to keep them.");
         }
         return dashboard;
     }
@@ -659,13 +668,22 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         var entry = EntryOf(control);
         if (entry is null)
             return;
+        if (size != control.Size && !CanResize(control))
+        {
+            Status = $"'{ControlCatalog.NameOf(control)}' is a page: it has the size of '{ControlCatalog.NameOf(ParentOf(control)!)}', which is sized itself.";
+            return;
+        }
+        // not smaller than its controls need
+        var minimum = GridLayout.MinimumSize(control);
+        size = new CellSize(Math.Max(size.Columns, minimum.Columns), Math.Max(size.Rows, minimum.Rows));
         var (edits, moved) = PlacementEdits(entry.Dashboard.Layout, control, at, size);
         if (edits.Count == 0)
             return;
 
         var what = size != control.Size ? "size" : "position";
         var edit = new EditGroup($"{what} of '{ControlCatalog.NameOf(control)}'", edits);
-        DoDashboardEdit(entry, edit);
+        if (!DoDashboardEdit(entry, edit))
+            return;
         Status = $"{edit.Description}: {at.Column},{at.Row} {size.Columns}×{size.Rows}{Others(moved)}. Save to keep it.";
     }
 
@@ -700,7 +718,8 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         edits.Add(ChildrenEdit(container, children));
         var (placements, moved) = WithChildren([(container, children)], () => PlacementEdits(entry.Dashboard.Layout, inserted, at, inserted.Size ?? size));
         edits.AddRange(placements);
-        DoDashboardEdit(entry, new EditGroup($"add '{ControlCatalog.NameOf(control)}'", edits));
+        if (!DoDashboardEdit(entry, new EditGroup($"add '{ControlCatalog.NameOf(control)}'", edits)))
+            return;
         SelectedControl = control;
         Status = $"'{ControlCatalog.NameOf(control)}' added to '{ControlCatalog.NameOf(container)}'{Declared(plan)}{Others(moved)}. Save to keep it.";
     }
@@ -720,10 +739,12 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         }
         var plan = ControlDrops.Bind(entry.Dashboard, session.Resolution, item.Source, control);
         var slots = new Dictionary<string, Binding>(control.Slots, StringComparer.Ordinal) { [plan.Slot!] = plan.Binding! };
-        var edits = new List<IEdit>(AdditionEdits(entry.Dashboard, plan)) { SlotsEdit(control, slots) };
-        DoDashboardEdit(entry, new EditGroup($"binding of '{ControlCatalog.NameOf(control)}'", edits));
+        var edits = new List<IEdit>(AdditionEdits(entry.Dashboard, plan));
+        var pages = BindingEdits(entry, control, slots, edits);
+        if (!DoDashboardEdit(entry, new EditGroup($"binding of '{ControlCatalog.NameOf(control)}'", edits)))
+            return;
         SelectedControl = control;
-        Status = $"'{ControlCatalog.NameOf(control)}'.{plan.Slot}: {plan.Binding}{Declared(plan)}. Save to keep it.";
+        Status = $"'{ControlCatalog.NameOf(control)}'.{plan.Slot}: {plan.Binding}{Declared(plan)}{PagesOf(pages)}. Save to keep it.";
     }
 
     /// <summary>
@@ -738,6 +759,11 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         var entry = EntryOf(control);
         if (entry is null || control.Size is not { } size || GridLayout.ParentOf(entry.Dashboard.Layout, control) is not { } parent)
             return;
+        if (parent is SelectorTabsControl)
+        {
+            Status = $"'{ControlCatalog.NameOf(control)}' is a page of '{ControlCatalog.NameOf(parent)}' and stays there: its pages are chosen in its properties.";
+            return;
+        }
         if (parent == container)
         {
             Place(control, at, size);
@@ -766,7 +792,8 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         if (plan.Base is { } basePath)
             edits.Add(new ValueEdit<string?>("base", () => control.Base, value => control.Base = value, basePath));
         edits.AddRange(plan.Slots.Select(change => SlotsEdit(change.Control, change.Slots)));
-        DoDashboardEdit(entry, new EditGroup($"move of '{ControlCatalog.NameOf(control)}'", edits));
+        if (!DoDashboardEdit(entry, new EditGroup($"move of '{ControlCatalog.NameOf(control)}'", edits)))
+            return;
         foreach (var problem in plan.Problems)
             Report($"Moving '{ControlCatalog.NameOf(control)}'", problem);
         if (plan.Problems.Count == 0)
@@ -804,7 +831,13 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             Status = "The root of a dashboard cannot be deleted.";
             return;
         }
-        DoDashboardEdit(entry, new EditGroup($"delete '{ControlCatalog.NameOf(control)}'", [ChildrenEdit(parent, [.. parent.Children.Where(child => child != control)])]));
+        if (parent is SelectorTabsControl tabs && !SelectorPages.CanRemove(tabs, control))
+        {
+            Status = $"'{ControlCatalog.NameOf(control)}' is the only page of '{ControlCatalog.NameOf(tabs)}' and stays: delete '{ControlCatalog.NameOf(tabs)}' itself to remove both.";
+            return;
+        }
+        if (!DoDashboardEdit(entry, new EditGroup($"delete '{ControlCatalog.NameOf(control)}'", [ChildrenEdit(parent, [.. parent.Children.Where(child => child != control)])])))
+            return;
         SelectedControl = null;
         Status = $"'{ControlCatalog.NameOf(control)}' deleted (Ctrl+Z brings it back). Save to keep it.";
     }
@@ -821,13 +854,45 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             Status = $"'{ControlCatalog.NameOf(control)}' cannot be a {kind}: it cannot show what it is bound to.";
             return;
         }
-        var changed = ControlCatalog.WithKind(control, kind);
+        // selector tabs get a page per option of the parameter the control is bound to
+        var options = control is ParameterControl bound ? entry.Session?.ValueOf(bound, SlotNames.Value)?.Info.Options : null;
+        if (!ControlCatalog.KindsOf(control, parent).Contains(kind))
+        {
+            Status = $"'{ControlCatalog.NameOf(control)}' cannot be a {kind}{(parent is SelectorTabsControl ? $": it is a page of '{ControlCatalog.NameOf(parent)}', and a page is a grid" : "")}.";
+            return;
+        }
+        var changed = ControlCatalog.WithKind(control, kind, options, parent);
         var lost = control is ParameterControl before && changed is ParameterControl after ? before.Slots.Count - after.Slots.Count : 0;
-        DoDashboardEdit(entry, new EditGroup($"kind of '{ControlCatalog.NameOf(control)}'",
-            [ChildrenEdit(parent, [.. parent.Children.Select(child => child == control ? changed : child)])]));
+        var lostPages = control is SelectorTabsControl ? control.Children.Count - changed.Children.Count : 0;
+        var children = parent.Children.Select(child => child == control ? changed : child).ToList();
+        List<IEdit> edits = [ChildrenEdit(parent, children)];
+        // selector tabs get at least their default size, for room on their pages (pushing others aside, the pages follow)
+        var others = 0;
+        if (changed is SelectorTabsControl && changed.Size is { } size)
+        {
+            var least = GridLayout.DefaultSize(ParameterControlKind.SelectorTabs);
+            var grown = new CellSize(Math.Max(size.Columns, least.Columns), Math.Max(size.Rows, least.Rows));
+            if (grown != size)
+            {
+                var (placements, moved) = WithChildren([(parent, children)], () => PlacementEdits(entry.Dashboard.Layout, changed, changed.At ?? default, grown));
+                edits.AddRange(placements);
+                // its pages grow along: they are no others
+                others = Math.Max(0, moved - changed.Children.Count);
+            }
+        }
+        if (!DoDashboardEdit(entry, new EditGroup($"kind of '{ControlCatalog.NameOf(control)}'", edits)))
+            return;
         SelectedControl = changed;
-        Status = $"'{ControlCatalog.NameOf(control)}' is a {kind}{(lost > 0 ? $"; {lost} binding(s) of slots a {kind} does not have are gone" : "")}. Save to keep it.";
+        Status = $"'{ControlCatalog.NameOf(control)}' is a {kind}{Others(others)}"
+            + (lost > 0 ? $"; {lost} binding(s) of slots a {kind} does not have are gone" : "")
+            + (lostPages > 0 ? $"; its {lostPages} page(s) and the controls on them are gone (Ctrl+Z brings them back)" : "")
+            + (changed is SelectorTabsControl { Children.Count: > 0 } ? PagesOf(changed.Children) : "")
+            + ". Save to keep it.";
     }
+
+    /// <summary>The control that holds the control; null for the root of its dashboard (or a control in none).</summary>
+    public DashboardControl? ParentOf(DashboardControl control)
+        => EntryOf(control)?.Dashboard is { } dashboard ? GridLayout.ParentOf(dashboard.Layout, control) : null;
 
     /// <summary>True when the control is in a grid or section: it has a position.</summary>
     public bool IsInGrid(DashboardControl control)
@@ -844,8 +909,46 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         return control.Slots.Keys.All(slot => session?.ValueOf(control, slot)?.Info is not { } info || ControlCatalog.Accepts(kind, info));
     }
 
+    /// <summary>The options of the parameter the control's <c>value</c> slot is bound to; null when it has none (yet).</summary>
+    public IReadOnlyList<string>? OptionsOf(ParameterControl control)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        return EntryOf(control)?.Session?.ValueOf(control, SlotNames.Value)?.Info.Options;
+    }
+
+    /// <summary>
+    /// Gives selector tabs a page for an option (in the order of the options) or takes the page of an option (or a page
+    /// of no option) away with the controls on it, as one edit.
+    /// </summary>
+    public void SetPage(SelectorTabsControl tabs, string name, bool hasPage)
+    {
+        ArgumentNullException.ThrowIfNull(tabs);
+        ArgumentNullException.ThrowIfNull(name);
+        var entry = EntryOf(tabs);
+        if (entry is null)
+            return;
+        var pages = hasPage
+            ? OptionsOf(tabs) is { } options ? SelectorPages.WithPage(tabs, options, name) : null
+            : SelectorPages.WithoutPage(tabs, name);
+        if (pages is null)
+            return;
+        if (!DoDashboardEdit(entry, new EditGroup($"pages of '{ControlCatalog.NameOf(tabs)}'", [ChildrenEdit(tabs, pages)])))
+            return;
+        Status = hasPage
+            ? $"'{ControlCatalog.NameOf(tabs)}' has a page for '{name}'. Save to keep it."
+            : $"The page '{name}' of '{ControlCatalog.NameOf(tabs)}' is gone with its controls (Ctrl+Z brings it back). Save to keep it.";
+    }
+
     /// <summary>True when the control is the root of its dashboard.</summary>
     public bool IsRoot(DashboardControl control) => Dashboards.Any(entry => entry.Dashboard.Layout == control);
+
+    /// <summary>True when the control can be sized: not a page of tabs or selector tabs (it has the size of its tabs).</summary>
+    public bool CanResize(DashboardControl control)
+        => ParentOf(control) is not { } parent || !GridLayout.HasPages(parent);
+
+    /// <summary>True when the control can be deleted: not the root of its dashboard, nor the only page of selector tabs.</summary>
+    public bool CanDelete(DashboardControl control)
+        => !IsRoot(control) && (ParentOf(control) is not SelectorTabsControl tabs || SelectorPages.CanRemove(tabs, control));
 
     /// <summary>The device, base and variables a control inherits from the layout controls around it.</summary>
     public BindingScope ScopeAround(DashboardControl control)
@@ -867,7 +970,8 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         var edit = new ValueEdit<T>($"{what} of device '{device.Alias}'", get, set, value);
         if (!edit.Changes)
             return;
-        DoRigEdit(edit);
+        if (!DoRigEdit(edit))
+            return;
         Status = $"{edit.Description}: {shown ?? value?.ToString() ?? "none"}. Save to keep it in the rig.";
     }
 
@@ -893,7 +997,8 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         var edits = DeviceAliases.Rename(dashboard, alias, newAlias);
         if (edits.Count == 0)
             return;
-        DoDashboardEdit(entry, new EditGroup($"device alias '{alias}'", edits));
+        if (!DoDashboardEdit(entry, new EditGroup($"device alias '{alias}'", edits)))
+            return;
         Status = $"Device '{alias}' is renamed to '{newAlias}' in '{dashboard.Name}'"
             + (IsDeviceOfRig(newAlias) ? "" : $"; the rig has no device '{newAlias}'") + ". Save to keep it.";
     }
@@ -931,7 +1036,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     }
 
     // changes a device of the dashboard as one edit; one the dashboard does not list yet is added with the rig's map root;
-    // false when nothing changed
+    // false when nothing changed (or the edit failed)
     private bool EditDashboardDevice(Dashboard dashboard, string alias, string what, Func<DashboardDevice, DashboardDevice> change)
     {
         if (Dashboards.FirstOrDefault(entry => entry.Dashboard == dashboard) is not { } entry)
@@ -946,8 +1051,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         IReadOnlyList<DashboardDevice> devices = listed is not null
             ? [.. dashboard.Devices.Select(other => other == listed ? changed : other)]
             : [.. dashboard.Devices, changed];
-        DoDashboardEdit(entry, new ValueEdit<IReadOnlyList<DashboardDevice>>(what, () => dashboard.Devices, value => dashboard.Devices = value, devices));
-        return true;
+        return DoDashboardEdit(entry, new ValueEdit<IReadOnlyList<DashboardDevice>>(what, () => dashboard.Devices, value => dashboard.Devices = value, devices));
     }
 
     /// <summary>
@@ -1040,14 +1144,16 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
 
     private void EditDeviceSources(DeviceInstance device, SchemaSources sources, string shown)
     {
-        DoRigEdit(new ValueEdit<SchemaSources>($"schemas of device '{device.Alias}'", () => device.Sources, value => device.Sources = value, sources), rebuildsLibrary: true);
+        if (!DoRigEdit(new ValueEdit<SchemaSources>($"schemas of device '{device.Alias}'", () => device.Sources, value => device.Sources = value, sources), rebuildsLibrary: true))
+            return;
         Status = $"Device '{device.Alias}': {shown}; the schemas were built again, so the values of the devices were reset. Save to keep it in the rig.";
     }
 
     private void AddDevice(DeviceInstance device, bool rebuildsLibrary)
     {
         var rig = _rig!;
-        DoRigEdit(new ValueEdit<IReadOnlyList<DeviceInstance>>($"add device '{device.Alias}'", () => rig.Devices, value => rig.Devices = value, [.. rig.Devices, device]), rebuildsLibrary);
+        if (!DoRigEdit(new ValueEdit<IReadOnlyList<DeviceInstance>>($"add device '{device.Alias}'", () => rig.Devices, value => rig.Devices = value, [.. rig.Devices, device]), rebuildsLibrary))
+            return;
         SelectedRigItem = RigTree.FirstOrDefault(item => item.Instance == device);
         Status = $"Device '{device.Alias}' ({device.MapRoot}) added{(rebuildsLibrary ? "; the schemas were built again, so the values of the devices were reset" : "")}. Save to keep it in the rig.";
     }
@@ -1095,7 +1201,8 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         ArgumentNullException.ThrowIfNull(device);
         if (_rig is not { } rig)
             return;
-        DoRigEdit(new ValueEdit<IReadOnlyList<DeviceInstance>>($"remove device '{device.Alias}'", () => rig.Devices, value => rig.Devices = value, [.. rig.Devices.Where(other => other != device)]));
+        if (!DoRigEdit(new ValueEdit<IReadOnlyList<DeviceInstance>>($"remove device '{device.Alias}'", () => rig.Devices, value => rig.Devices = value, [.. rig.Devices.Where(other => other != device)])))
+            return;
         DeviceProperties = null;
         Status = $"Device '{device.Alias}' removed (Ctrl+Z brings it back). Save to keep it in the rig.";
         foreach (var dashboard in Dashboards.Select(entry => entry.Dashboard).Where(dashboard => DeviceAliases.Of(dashboard).Contains(device.Alias, StringComparer.OrdinalIgnoreCase)))
@@ -1103,7 +1210,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     }
 
     private static bool IsInGrid(LayoutControl root, DashboardControl control)
-        => GridLayout.ParentOf(root, control) is { } parent && GridLayout.IsGrid(parent);
+        => GridLayout.ParentOf(root, control) is LayoutControl parent && GridLayout.IsGrid(parent);
 
     private DashboardEntry? EntryOf(DashboardControl control)
         => Dashboards.FirstOrDefault(entry => ControlMoves.Contains(entry.Dashboard.Layout, control));
@@ -1124,25 +1231,43 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         return (edits, changes.Count - 1);
     }
 
-    // runs a function on the dashboard as it will be with the children of some layout controls changed
-    private static T WithChildren<T>(IReadOnlyList<(LayoutControl Layout, IReadOnlyList<DashboardControl> Children)> changes, Func<T> function)
+    // runs a function on the dashboard as it will be with the children of some controls changed
+    private static T WithChildren<T>(IReadOnlyList<(DashboardControl Holder, IReadOnlyList<DashboardControl> Children)> changes, Func<T> function)
     {
-        var before = changes.Select(change => change.Layout.Children).ToList();
+        var before = changes.Select(change => change.Holder.Children).ToList();
         try
         {
-            foreach (var (layout, children) in changes)
-                layout.Children = children;
+            foreach (var (holder, children) in changes)
+                holder.Children = children;
             return function();
         }
         finally
         {
             for (var index = changes.Count - 1; index >= 0; index--)
-                changes[index].Layout.Children = before[index];
+                changes[index].Holder.Children = before[index];
         }
     }
 
-    private static ValueEdit<IReadOnlyList<DashboardControl>> ChildrenEdit(LayoutControl layout, IReadOnlyList<DashboardControl> children)
-        => new("children", () => layout.Children, value => layout.Children = value, children);
+    private static ValueEdit<IReadOnlyList<DashboardControl>> ChildrenEdit(DashboardControl holder, IReadOnlyList<DashboardControl> children)
+        => new("children", () => holder.Children, value => holder.Children = value, children);
+
+    // the edits of binding the slots of a control anew, added to the edits: selector tabs bound to another field get a
+    // page per option of it (SelectorPages.Rebound); returns those pages, null when the pages stay
+    private static IReadOnlyList<DashboardControl>? BindingEdits(DashboardEntry entry, ParameterControl control, IReadOnlyDictionary<string, Binding> slots, List<IEdit> edits)
+    {
+        edits.Add(SlotsEdit(control, slots));
+        if (control is not SelectorTabsControl tabs || entry.Session is not { } session)
+            return null;
+        var before = control.Slots.GetValueOrDefault(SlotNames.Value) is { } old ? session.FieldOf(control, old) : null;
+        var after = slots.GetValueOrDefault(SlotNames.Value) is { } binding ? session.FieldOf(control, binding) : null;
+        if (SelectorPages.Rebound(tabs, before, after) is not { } pages)
+            return null;
+        edits.Add(ChildrenEdit(tabs, pages));
+        return pages;
+    }
+
+    private static string PagesOf(IReadOnlyList<DashboardControl>? pages)
+        => pages is null ? "" : $"; the pages are those of its {pages.Count} options";
 
     private static ValueEdit<IReadOnlyDictionary<string, Binding>> SlotsEdit(ParameterControl control, IReadOnlyDictionary<string, Binding> slots)
         => new("bindings", () => control.Slots, value => control.Slots = value, slots);
@@ -1330,23 +1455,50 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             SelectedControl = null;
     }
 
-    private void DoDashboardEdit(DashboardEntry entry, IEdit edit)
-        => History.Do(new FileEdit(edit, entry.Origin, () =>
+    // false when the edit failed: it is reported and not done
+    private bool DoDashboardEdit(DashboardEntry entry, IEdit edit)
+        => Safely(edit.Description, () => History.Do(new FileEdit(edit, entry.Origin, () =>
         {
             entry.Session?.Refresh();
             OnEdited();
-        }));
+        })));
 
     // an edit of the rig: the rig is opened again; when it changes the schemas, with a library built again
-    private void DoRigEdit(IEdit edit, bool rebuildsLibrary = false)
-        => History.Do(new FileEdit(edit, RigOrigin, () =>
+    private bool DoRigEdit(IEdit edit, bool rebuildsLibrary = false)
+        => Safely(edit.Description, () => History.Do(new FileEdit(edit, RigOrigin, () =>
         {
             if (rebuildsLibrary)
                 RebuildRig();
             else
                 ReopenRig();
             OnEdited();
-        }));
+        })));
+
+    // an edit (or undo, redo) that fails is not done: it is reported, the app goes on; true when it was done
+    private bool Safely(string what, Action edit)
+    {
+        try
+        {
+            edit();
+            return true;
+        }
+        catch (Exception exception)
+        {
+            Report($"'{what}' failed and is not done", $"{exception.Message} ({exception.GetType().Name})");
+            // the sessions and views show the dashboards and rig as they are again (the failure may have been there)
+            try
+            {
+                foreach (var entry in Dashboards)
+                    entry.Session?.Refresh();
+                OnEdited();
+            }
+            catch (Exception again)
+            {
+                Report("The dashboard could not be shown again", $"{again.Message} ({again.GetType().Name})");
+            }
+            return false;
+        }
+    }
 
     // an edit was done or undone: the dashboard is built again, the panels show the new values; a control that is no
     // longer in its dashboard is not selected
@@ -1688,18 +1840,24 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     {
         public string Description => edit.Description;
 
-        public void Apply()
-        {
-            edit.Apply();
-            origin.Changes++;
-            changed();
-        }
+        public void Apply() => Change(edit.Apply, edit.Revert, +1);
 
-        public void Revert()
+        public void Revert() => Change(edit.Revert, edit.Apply, -1);
+
+        // the views follow the change; when that fails the change is taken back, so the file and the history agree
+        private void Change(Action change, Action back, int count)
         {
-            edit.Revert();
-            origin.Changes--;
-            changed();
+            change();
+            try
+            {
+                changed();
+            }
+            catch
+            {
+                back();
+                throw;
+            }
+            origin.Changes += count;
         }
     }
 

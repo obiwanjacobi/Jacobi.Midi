@@ -295,4 +295,41 @@ public class DashboardSessionTests
 
         Assert.Contains(session.Problems, problem => problem.StartsWith("Patch.value:") && problem.Contains("its number of items is not known"));
     }
+
+    // selector tabs on the UpDown choice (options Down and Up) before the patch number box, with the pages given
+    private static string WithSelectorTabs(string pages)
+        => Dashboard.Replace("""<numberBox label="Patch">""",
+            $"""<selectorTabs label="Direction"><bind slot="value" parameter="DynamicFilter.UpDown" />{pages}</selectorTabs><numberBox label="Patch">""");
+
+    [Fact]
+    public void SelectorTabs_WithPagesOfSomeOfTheirOptions_HaveNoProblems()
+    {
+        using var session = Open(WithSelectorTabs("""<grid label="up" />"""));
+
+        Assert.Empty(session.Problems);
+    }
+
+    [Fact]
+    public void SelectorTabs_APageOfNoOption_IsAProblem()
+    {
+        using var session = Open(WithSelectorTabs("""<grid label="Down" /><grid label="Sideways" />"""));
+
+        Assert.Equal(["Direction: the page 'Sideways' is of no option; it is never shown (options: Down, Up)."], session.Problems);
+    }
+
+    [Fact]
+    public void FieldOf_ABinding_IsTheFieldInTheScopeOfTheControl_WithItsOptions()
+    {
+        using var session = Open(WithSelectorTabs(""));
+        var tabs = Assert.IsType<SelectorTabsControl>(session.Dashboard.Layout.Children[Patch]);
+
+        var field = session.FieldOf(tabs, new Binding("DynamicFilter.UpDown"));
+        var otherPatch = session.FieldOf(tabs, new Binding("AddressMap.Memory[3].Patch.DynamicFilter.UpDown") { Device = "gp8" });
+
+        Assert.Equal(("gp8", "AddressMap.Memory.Patch.DynamicFilter.UpDown"), (field!.Device, field.Path));
+        Assert.Equal(["Down", "Up"], field.Info.Options);
+        Assert.True(field.IsSameField(otherPatch!));
+        Assert.Null(session.FieldOf(tabs, new Binding("DynamicFilter.Missing")));
+        Assert.Null(session.FieldOf(tabs, new Binding("$patch")));
+    }
 }

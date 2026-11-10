@@ -3,6 +3,81 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## A selector with pages in the console (2026-11-10)
+
+Issue: some parameters are only valid for some options of another parameter (e.g. the wave parameters per oscillator
+type); the dashboard should show only the parameters of the selected option.
+
+1. **A new selector control that shows a page per option instead of buttons**; the existing tabs layout control stays
+   as it is. *Why:* it is a selector at heart (bound to a parameter with `options`); tabs remain plain layout.
+2. **The pages are taken from the options in the schema (at design time, like everything else), each tab named by
+   the option's name. On creation every option gets a page, in the schema's order; after that the user removes and
+   adds pages for options of the schema. The dashboard file keeps the pages as designed, each with the option it
+   belongs to. At runtime (Play) only the selected page is determined: the page of the current value; no value (or an
+   option without a page) is no page selected.** *Why:* the dashboard is a design on top of the schema; not every
+   option needs a page.
+3. **One notion of "a control that holds controls" in the model**, so the walks over the control tree do not depend
+   on `LayoutControl`; the new control is a `ParameterControl` that also holds its pages. *Why:* one place of truth for
+   walking the tree, instead of teaching either the binding code (layout kind with a slot) or every `Children` walk
+   (parameter control with pages) about a special case.
+4. **The pages hold controls only; no index variables (for now).** *Why:* no known need.
+5. **Each page is a plain grid `LayoutControl`, as a page of tabs is; the editor does not offer variables on them.**
+   *Why:* drops, moves and placement on a page work unchanged (the page is the target); only the tree walks change.
+6. **The controls a control holds are a virtual `Children` on `DashboardControl`** (empty by default), overridden by
+   `LayoutControl` and the new control; every tree walk uses it without a type test. *Why:* simplest for the walks;
+   one member, no interface.
+7. **A page records its option by name, matched without case.** *Why:* readable in the file and the term the console
+   uses for a choice; a page survives a change of the stored values.
+8. **A page whose option is no longer in the schema is reported, kept (showing its stored name) and never selected**;
+   the user removes it or points it to another option. *Why:* the page may hold a design; nothing is lost silently.
+9. **A page keeps its option name in its own `Label`**, as a page of tabs is named. *Why:* uses what is there; no new
+   member or type.
+10. **The new control is called `SelectorTabs`** (the `ParameterControlKind`, the palette item and the file element).
+11. **The pages are chosen in a check-droplist on the `SelectorTabs` properties**: every option of the bound parameter
+    in the schema's order, checked when it has a page. Checking adds an empty grid page (named by the option, at its
+    schema position among the pages), unchecking removes it (an undoable edit). A page's `Label` is not edited
+    otherwise. A page whose option is gone is listed checked and marked missing. This replaces pointing a page to
+    another option (decision 8). *Why:* one editor covers adding, removing and the fixed names.
+12. **Unchecking a page that holds controls removes it without a prompt**; undo brings it back. *Why:* every
+    dashboard edit is undoable. **The only page stays** (its check and its Delete button are disabled, the Delete key
+    says why): selector tabs without pages show nothing; to remove them, delete the selector tabs. Plain tabs may be
+    empty: new tabs start so, and a dropped control becomes a page.
+13. **(Re)binding the `value` slot replaces the pages**: all pages are removed and a page is added for every option of
+    the new parameter. *Why:* the pages belong to the options of the bound parameter; simple and predictable. Only
+    when the resolved parameter changes: a binding that is written again for the same parameter (a move, a device
+    alias renamed, another `base`) keeps the pages. The same parameter is the same field of the same device, whatever
+    repeat item (`BoundField.IsSameField`): its options are the same. Unbinding keeps the pages.
+14. **In Edit mode the pages behave as those of tabs** (the page shown is UI state, a header click selects the page,
+    selecting a control shows its page; nothing is sent). **In Play mode the value decides**: a header click sends its
+    option, a received or loaded value shows its page, an unknown value or an option without a page shows none.
+    *Why:* every page can be designed whatever the device's value. A click on the header of the selected page selects
+    the (selector) tabs themselves (both kinds of tabs): their headers may cover all of a small control, which could
+    then not be selected, sized or edited any more.
+15. **`SelectorTabs` has no chrome**, as tabs: the headers are the selector, the pages hold their own controls.
+16. **A single-value control can change its kind to `SelectorTabs` and back** (Properties): it keeps its binding and
+    gets a page per option of the bound parameter, as on a first binding; selector tabs that become another kind lose
+    their pages (the status says so; undo brings them back). The size stays, except that selector tabs get at least
+    their default size (pushing others aside, as a resize; the pages follow). *Why:* a dropped options field becomes
+    a selector (the first choice); turning it into selector tabs is the quick way to pages, which need room.
+17. **Resizing tabs or selector tabs sizes their pages** to the space below the headers (`GridLayout.PageSize`), but a
+    page never gets smaller than its controls need; then the tabs grow around it. *Why:* a page is the drop area for
+    its controls; it should fill the control the user sized. Both kinds of tabs behave the same. **A page is not sized
+    itself** (no handle, its size fields disabled, `Place` refuses): it has the size of its tabs. **No control is sized
+    smaller than its controls need** (`GridLayout.MinimumSize`: for tabs the largest page content below the headers);
+    the handle stops there. *Why:* one size for all pages; a resize that would snap back is not offered. A dashboard
+    that is opened gets the same (`GridLayout.Complete`): pages that do not fill their tabs are sized (reported, save to
+    keep it). The page area of selector tabs is the drop target of the page shown; their headers are the selector tabs.
+
+## An edit that fails in the console (2026-11-10)
+
+Issue: an exception in an edit (e.g. a page of selector tabs changed to a section) crashed the app.
+
+1. **Edits are all or nothing**: an `EditGroup` that fails undoes what it did; `EditHistory` remembers an edit (and
+   moves it between undo and redo) only when it succeeded; a refresh of the views that fails takes the edit back.
+   *Why:* the dashboard, its file and the history always agree.
+2. **A failed edit, undo or redo is a problem in the notifications** ("'…' failed and is not done", with the
+   message); the app goes on, and the status says no success. *Why:* nothing goes wrong silently, nor fatally.
+
 ## Documentation in the schemas (2026-11-10)
 
 Issue: the schemas have no place for documentation (e.g. text from the manual) that the Schema Editor can author and

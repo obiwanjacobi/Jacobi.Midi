@@ -118,4 +118,86 @@ public class GridLayoutTests
         Assert.Same(root, GridLayout.ParentOf(root, section));
         Assert.Null(GridLayout.ParentOf(root, root));
     }
+
+    [Fact]
+    public void Place_OnAPageOfSelectorTabs_GrowsThePageAndTheTabs()
+    {
+        var knob = Knob("a", 0, 0);
+        var page = new LayoutControl { Kind = LayoutControlKind.Grid, Label = "Saw", Size = new(4, 4), Children = [knob] };
+        var tabs = new SelectorTabsControl { At = new(0, 0), Size = new(4, 6), Children = [page] };
+        var root = new LayoutControl { Kind = LayoutControlKind.Grid, Size = new(20, 20), Children = [tabs] };
+
+        var changes = GridLayout.Place(root, knob, new CellPosition(4, 0), new CellSize(2, 2));
+
+        Assert.Equal(new CellSize(6, 4), changes[page].Size);
+        // the page below the two rows of the headers
+        Assert.Equal(new CellSize(6, 6), changes[tabs].Size);
+    }
+
+    [Fact]
+    public void Place_ResizedSelectorTabs_SizeTheirPagesToTheSpaceBelowTheHeaders()
+    {
+        var saw = new LayoutControl { Kind = LayoutControlKind.Grid, Label = "Saw", Size = new(6, 2) };
+        var pulse = new LayoutControl { Kind = LayoutControlKind.Grid, Label = "Pulse", Size = new(6, 2) };
+        var tabs = new SelectorTabsControl { At = new(0, 0), Size = new(6, 4), Children = [saw, pulse] };
+        var root = new LayoutControl { Kind = LayoutControlKind.Grid, Size = new(30, 30), Children = [tabs] };
+
+        var changes = GridLayout.Place(root, tabs, new CellPosition(0, 0), new CellSize(14, 12));
+
+        Assert.Equal(new CellSize(14, 10), changes[saw].Size);
+        Assert.Equal(new CellSize(14, 10), changes[pulse].Size);
+    }
+
+    [Fact]
+    public void Place_ShrunkTabs_KeepTheirPagesAsLargeAsTheirControls_AndGrowAroundThem()
+    {
+        var page = new LayoutControl { Kind = LayoutControlKind.Grid, Label = "One", Size = new(10, 8), Children = [Knob("a", 6, 4)] };
+        var tabs = new LayoutControl { Kind = LayoutControlKind.Tabs, At = new(0, 0), Size = new(10, 10), Children = [page] };
+        var root = new LayoutControl { Kind = LayoutControlKind.Grid, Size = new(30, 30), Children = [tabs] };
+
+        var changes = GridLayout.Place(root, tabs, new CellPosition(0, 0), new CellSize(4, 4));
+
+        // the knob at 6,4 of 2,2 needs 8 columns and 6 rows
+        Assert.Equal(new CellSize(8, 6), changes[page].Size);
+        Assert.Equal(new CellSize(8, 8), changes[tabs].Size);
+    }
+
+    [Fact]
+    public void Complete_GivesThePagesOfTabsTheSpaceBelowTheHeaders_AndTheTabsRoomForTheirContent()
+    {
+        var small = new LayoutControl { Kind = LayoutControlKind.Grid, Label = "Saw", Size = new(6, 2) };
+        var full = new LayoutControl { Kind = LayoutControlKind.Grid, Label = "Pulse", Size = new(6, 2), Children = [Knob("a", 14, 0)] };
+        var tabs = new SelectorTabsControl { At = new(0, 0), Size = new(12, 10), Children = [small, full] };
+
+        var given = GridLayout.Complete(new LayoutControl { Kind = LayoutControlKind.Grid, Size = new(30, 30), Children = [tabs] });
+
+        // the knob at 14,0 of 2,2 needs 16 columns: the tabs grow, the pages fill them below the headers
+        Assert.Equal(new CellSize(16, 10), tabs.Size);
+        Assert.Equal(new CellSize(16, 8), small.Size);
+        Assert.Equal(new CellSize(16, 8), full.Size);
+        Assert.Equal(3, given);
+    }
+
+    [Fact]
+    public void MinimumSize_OfTabs_IsTheLargestPageContent_BelowTheHeaders()
+    {
+        var small = new LayoutControl { Kind = LayoutControlKind.Grid, Label = "Saw", Size = new(20, 20), Children = [Knob("a", 0, 0)] };
+        var large = new LayoutControl { Kind = LayoutControlKind.Grid, Label = "Pulse", Size = new(20, 20), Children = [Knob("b", 6, 1)] };
+        var tabs = new SelectorTabsControl { Size = new(20, 22), Children = [small, large] };
+
+        // the knob at 6,1 of 2,2 needs 8 columns and 3 rows; the headers take two rows
+        Assert.Equal(new CellSize(8, 5), GridLayout.MinimumSize(tabs));
+        Assert.Equal(new CellSize(8, 3), GridLayout.MinimumSize(large));
+        Assert.Equal(new CellSize(1, 1), GridLayout.MinimumSize(Knob("c", 0, 0)));
+    }
+
+    [Fact]
+    public void Children_OfAControlThatHoldsNone_AreEmptyAndCannotBeSet()
+    {
+        var knob = Knob("a", 0, 0);
+
+        Assert.Empty(knob.Children);
+        Assert.Throws<NotSupportedException>(() => knob.Children = [Knob("b", 0, 0)]);
+        Assert.Null(GridLayout.ParentOf(knob, knob));
+    }
 }

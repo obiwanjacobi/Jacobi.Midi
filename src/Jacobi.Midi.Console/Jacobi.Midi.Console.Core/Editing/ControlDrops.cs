@@ -46,7 +46,7 @@ public static class ControlDrops
         else
         {
             control = Section(source.Node, source.Device, scope, repeats);
-            GridLayout.Complete((LayoutControl)control);
+            GridLayout.Complete(control);
         }
         return new DropPlan
         {
@@ -133,11 +133,11 @@ public static class ControlDrops
     }
 
     // where a field's new variables are declared: the nearest grid or section at or around the container
-    private static LayoutControl HostAround(LayoutControl root, LayoutControl container)
+    private static LayoutControl HostAround(LayoutControl root, DashboardControl container)
     {
-        for (LayoutControl? layout = container; layout is not null; layout = GridLayout.ParentOf(root, layout))
+        for (DashboardControl? control = container; control is not null; control = GridLayout.ParentOf(root, control))
         {
-            if (GridLayout.IsGrid(layout))
+            if (control is LayoutControl layout && GridLayout.IsGrid(layout))
                 return layout;
         }
         return root;

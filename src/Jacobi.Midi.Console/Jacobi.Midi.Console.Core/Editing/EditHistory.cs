@@ -45,6 +45,8 @@ public sealed class ValueEdit<T> : IEdit
 
 /// <summary>
 /// Edits that belong together (a move and the controls it pushes aside): done in order, undone in reverse, as one.
+/// All or nothing: when one of them fails, those done already are undone (and those undone already done again), and
+/// the failure is passed on.
 /// </summary>
 public sealed class EditGroup(string description, IReadOnlyList<IEdit> edits) : IEdit
 {
@@ -54,14 +56,34 @@ public sealed class EditGroup(string description, IReadOnlyList<IEdit> edits) : 
 
     public void Apply()
     {
-        foreach (var edit in edits)
-            edit.Apply();
+        var index = 0;
+        try
+        {
+            for (; index < edits.Count; index++)
+                edits[index].Apply();
+        }
+        catch
+        {
+            while (--index >= 0)
+                edits[index].Revert();
+            throw;
+        }
     }
 
     public void Revert()
     {
-        for (var index = edits.Count - 1; index >= 0; index--)
-            edits[index].Revert();
+        var index = edits.Count - 1;
+        try
+        {
+            for (; index >= 0; index--)
+                edits[index].Revert();
+        }
+        catch
+        {
+            while (++index < edits.Count)
+                edits[index].Apply();
+            throw;
+        }
     }
 }
 
@@ -87,7 +109,7 @@ public sealed class EditHistory
     /// <summary>An edit was done, undone or redone, or the history was cleared.</summary>
     public event EventHandler? Changed;
 
-    /// <summary>Applies the edit and remembers it.</summary>
+    /// <summary>Applies the edit and remembers it; an edit that fails is not remembered (and the failure passed on).</summary>
     public void Do(IEdit edit)
     {
         ArgumentNullException.ThrowIfNull(edit);
@@ -97,23 +119,25 @@ public sealed class EditHistory
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>Reverts the last edit; null when there is none.</summary>
+    /// <summary>Reverts the last edit; null when there is none. When it fails it stays the last edit (and the failure is passed on).</summary>
     public IEdit? Undo()
     {
-        if (!_done.TryPop(out var edit))
+        if (!_done.TryPeek(out var edit))
             return null;
         edit.Revert();
+        _done.Pop();
         _undone.Push(edit);
         Changed?.Invoke(this, EventArgs.Empty);
         return edit;
     }
 
-    /// <summary>Applies the last undone edit again; null when there is none.</summary>
+    /// <summary>Applies the last undone edit again; null when there is none. When it fails it stays undone (and the failure is passed on).</summary>
     public IEdit? Redo()
     {
-        if (!_undone.TryPop(out var edit))
+        if (!_undone.TryPeek(out var edit))
             return null;
         edit.Apply();
+        _undone.Pop();
         _done.Push(edit);
         Changed?.Invoke(this, EventArgs.Empty);
         return edit;

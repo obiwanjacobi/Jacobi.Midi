@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.VisualTree;
 using Jacobi.Midi.Console.Chrome;
 using Jacobi.Midi.Console.Controls;
@@ -41,12 +42,15 @@ namespace Jacobi.Midi.Console.Dashboards;
 /// <see cref="ShowSelection"/> with the cells of its grid), a right-click also opens the <see cref="ColorChooser"/> for
 /// the area that was clicked: the face or an element of the class <c>accentArea</c> is the accent, the rest of a
 /// parameter control its plate, the rest of a layout control its panel. Dragging a control in a grid moves it,
-/// dragging the handle at its bottom right sizes it, by whole cells; the control follows the pointer and is placed
+/// dragging the handle at its bottom right sizes it (the handle of the selected control takes the press before the
+/// controls inside it; a page of tabs has none), by whole cells, not smaller than its controls need
+/// (<see cref="GridLayout.MinimumSize"/>); the control follows the pointer and is placed
 /// (<see cref="IDashboardEditor.Place"/>) when it is let go. A control let go over another grid, section, row, column
 /// or tabs moves into it (<see cref="IDashboardEditor.Move"/>); the cells of the grid it goes into are shown while it is
 /// dragged. A <see cref="DragItem"/> dropped on the dashboard goes into the layout control under the pointer, at the cell
 /// of the pointer (<see cref="IDashboardEditor.Drop"/>); a field dropped on a parameter control binds it
-/// (<see cref="IDashboardEditor.Bind"/>). A tab header shows its page in Edit mode too, and selects it; the page a
+/// (<see cref="IDashboardEditor.Bind"/>). A tab header shows its page in Edit mode too, and selects it (the header of
+/// the selected page selects the tabs themselves, which their headers may cover); the page a
 /// tabs shows is kept when the dashboard is built again, and selecting a control shows the pages it is on. A label or
 /// separator has only an accent: drawn in the look's text or outline color until it is given one. In Play mode a
 /// right-click does nothing.
@@ -62,6 +66,9 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     /// <summary>The class of the elements of a look's chrome that are drawn in the accent.</summary>
     private const string AccentAreaClass = "accentArea";
 
+    /// <summary>The theme of the headers of tabs and selector tabs: in the look's label font and colors.</summary>
+    private const string TabItemTheme = "ConsoleTabItem";
+
     private static readonly IBrush SelectionBrush = new SolidColorBrush(Color.FromRgb(0x4F, 0xA3, 0xFF));
 
     // the built controls with what they show and their colors, both ways
@@ -72,8 +79,8 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     // the cells of the grids and sections: where their children are placed
     private readonly Dictionary<LayoutControl, Canvas> _grids = [];
     // the tab controls of the tabs, and the page each shows (kept while the dashboard is built again)
-    private readonly Dictionary<LayoutControl, TabControl> _tabs = [];
-    private static readonly ConditionalWeakTable<LayoutControl, StrongBox<int>> ShownPages = [];
+    private readonly Dictionary<DashboardControl, TabControl> _tabs = [];
+    private static readonly ConditionalWeakTable<DashboardControl, StrongBox<int>> ShownPages = [];
     private Control? _root;
     private Control? _selected;
     private Canvas? _shownGrid;
@@ -121,20 +128,19 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
             return;
         ShowPagesOf(control);
 
-        AdornerLayer.SetAdorner(_selected, new Panel
+        var outline = new Panel { IsHitTestVisible = false };
+        outline.Children.Add(new Rectangle { Stroke = SelectionBrush, StrokeThickness = 2, StrokeDashArray = [3, 2] });
+        // a page has the size of its tabs: no handle
+        if (!IsPage(control))
         {
-            IsHitTestVisible = false,
-            Children =
+            outline.Children.Add(new Rectangle
             {
-                new Rectangle { Stroke = SelectionBrush, StrokeThickness = 2, StrokeDashArray = [3, 2] },
-                new Rectangle
-                {
-                    Width = HandleSize, Height = HandleSize, Fill = SelectionBrush,
-                    HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom,
-                },
-            },
-        });
-        var grid = GridLayout.ParentOf(session.Dashboard.Layout, control) ?? control as LayoutControl;
+                Width = HandleSize, Height = HandleSize, Fill = SelectionBrush,
+                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom,
+            });
+        }
+        AdornerLayer.SetAdorner(_selected, outline);
+        var grid = (GridLayout.ParentOf(session.Dashboard.Layout, control) ?? control) as LayoutControl;
         // a visual has one adorner: the root's own cells are not shown when it is selected itself
         if (grid is not null && _grids.GetValueOrDefault(grid) is { } canvas && canvas != _selected)
         {
@@ -142,6 +148,15 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
             AdornerLayer.SetAdorner(canvas, new CellGrid { CellSize = Cell, IsHitTestVisible = false });
         }
     }
+
+    // a position (in the built control) on its sizing handle, at its bottom right
+    private static bool IsOnHandle(Control built, Point position)
+        => position.X >= built.Bounds.Width - HandleSize * 1.5 && position.Y >= built.Bounds.Height - HandleSize * 1.5
+            && position.X <= built.Bounds.Width && position.Y <= built.Bounds.Height;
+
+    // a page of tabs or selector tabs: it has the size of its tabs
+    private bool IsPage(DashboardControl control)
+        => GridLayout.ParentOf(session.Dashboard.Layout, control) is { } parent && GridLayout.HasPages(parent);
 
     // a control on a page of tabs (of tabs on a page, ...): those pages are shown
     private void ShowPagesOf(DashboardControl control)
@@ -167,14 +182,21 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     // left press on the handle starts sizing it, elsewhere moving it (in a grid)
     private void OnEditPressed(object? sender, PointerPressedEventArgs e)
     {
-        // a tab header shows its page, as in Play mode (the tabs take the press), and selects the page
-        if ((e.Source as Visual)?.GetSelfAndVisualAncestors().OfType<TabItem>().FirstOrDefault() is { Tag: DashboardControl page })
+        // the handle of the selected control sizes it, whatever control is under the handle (a page, a child in a grid)
+        var handle = _selected is { } shown && _built.TryGetValue(shown, out var current) && !IsPage(current.Control)
+            && e.GetCurrentPoint(shown) is { Properties.IsLeftButtonPressed: true } press && IsOnHandle(shown, press.Position)
+                ? shown
+                : null;
+        // a tab header shows its page, as in Play mode (the tabs take the press), and selects the page; the header of the
+        // selected page selects the tabs themselves (their headers may take all their space)
+        if (handle is null && (e.Source as Visual)?.GetSelfAndVisualAncestors().OfType<TabItem>().FirstOrDefault() is { Tag: DashboardControl page })
         {
-            editor.Select(page);
+            var isSelected = _selected is not null && _built.TryGetValue(_selected, out var selected) && selected.Control == page;
+            editor.Select(isSelected ? GridLayout.ParentOf(session.Dashboard.Layout, page) ?? page : page);
             return;
         }
         e.Handled = true;
-        var built = (e.Source as Visual)?.GetSelfAndVisualAncestors().OfType<Control>().FirstOrDefault(_built.ContainsKey);
+        var built = handle ?? (e.Source as Visual)?.GetSelfAndVisualAncestors().OfType<Control>().FirstOrDefault(_built.ContainsKey);
         // the dashboard takes the focus, for the keys (Delete); a text being typed in a panel is taken first, for the
         // control it is of (which builds the dashboard again)
         if (_root is { } root && !root.IsFocused)
@@ -203,13 +225,16 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         if (!point.Properties.IsLeftButtonPressed || built.GetVisualParent() is not Visual reference || control.Size is not { } size)
             return;
 
-        var isSizing = point.Position.X >= built.Bounds.Width - HandleSize * 1.5 && point.Position.Y >= built.Bounds.Height - HandleSize * 1.5;
+        // a page has the size of its tabs: it is not sized
+        var isSizing = !IsPage(control) && IsOnHandle(built, point.Position);
         var parent = GridLayout.ParentOf(session.Dashboard.Layout, control);
-        // the root is not moved; a control outside a grid is only moved into another layout control
-        if (!isSizing && parent is null)
+        // the root is not moved, nor a page of selector tabs (it belongs to its option); a control outside a grid is
+        // only moved into another layout control
+        if (!isSizing && parent is null or SelectorTabsControl)
             return;
         var placement = new Placement(control.At ?? default, size);
-        _drag = new Drag(control, built, reference, e.GetPosition(reference), point.Position, isSizing, parent is not null && GridLayout.IsGrid(parent), placement)
+        _drag = new Drag(control, built, reference, e.GetPosition(reference), point.Position, isSizing, parent is LayoutControl layout && GridLayout.IsGrid(layout), placement,
+            GridLayout.MinimumSize(control))
         {
             Current = placement,
         };
@@ -228,7 +253,7 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         var rows = (int)Math.Round(delta.Y / Cell);
         var original = drag.Original;
         drag.Current = drag.IsSizing
-            ? original with { Size = new CellSize(Math.Max(1, original.Size.Columns + columns), Math.Max(1, original.Size.Rows + rows)) }
+            ? original with { Size = new CellSize(Math.Max(drag.Minimum.Columns, original.Size.Columns + columns), Math.Max(drag.Minimum.Rows, original.Size.Rows + rows)) }
             : original with { At = new CellPosition(Math.Max(0, original.At.Column + columns), Math.Max(0, original.At.Row + rows)) };
         drag.Built.Width = drag.Current.Size.Columns * Cell;
         drag.Built.Height = drag.Current.Size.Rows * Cell;
@@ -269,7 +294,7 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     // a moved control over another layout control than its own goes into it
     private DropTarget? MoveTargetAt(Drag drag, PointerEventArgs e)
     {
-        if (_root?.InputHitTest(e.GetPosition(_root)) is not Visual hit || TargetAt(hit, drag.Control) is not { } target)
+        if (_root?.InputHitTest(e.GetPosition(_root)) is not Visual hit || TargetUnder(hit, e.GetPosition(_root), drag.Control) is not { } target)
             return null;
         return target.Container == GridLayout.ParentOf(session.Dashboard.Layout, drag.Control) ? null : target;
     }
@@ -278,7 +303,7 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     private void OnDragOver(object? sender, DragEventArgs e)
     {
         e.Handled = true;
-        if (e.DataTransfer.TryGetValue(DragItem.Format) is not { } item || TargetAt(e.Source as Visual, null) is not { } target || IsRefused(item, target))
+        if (e.DataTransfer.TryGetValue(DragItem.Format) is not { } item || TargetUnder(e.Source as Visual, e.GetPosition(_root!), null) is not { } target || IsRefused(item, target))
         {
             e.DragEffects = DragDropEffects.None;
             ShowTarget(null);
@@ -292,7 +317,7 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     {
         e.Handled = true;
         ShowTarget(null);
-        if (e.DataTransfer.TryGetValue(DragItem.Format) is not { } item || TargetAt(e.Source as Visual, null) is not { } target || IsRefused(item, target))
+        if (e.DataTransfer.TryGetValue(DragItem.Format) is not { } item || TargetUnder(e.Source as Visual, e.GetPosition(_root!), null) is not { } target || IsRefused(item, target))
             return;
         if (IsBinding(item, target))
             editor.Bind((ParameterDragItem)item, target.Control!);
@@ -308,18 +333,44 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     private static bool IsRefused(DragItem item, DropTarget target)
         => IsBinding(item, target) && ((ParameterDragItem)item).Source.Node.Info is { } info && !ControlCatalog.Accepts(target.Control!.Kind, info);
 
+    // the target at the visual, where the page area of selector tabs in it is their page shown, whatever the hit (a
+    // position in the root)
+    private DropTarget? TargetUnder(Visual? visual, Point position, DashboardControl? moved)
+    {
+        if (TargetAt(visual, moved) is not { } target || _root is not { } root)
+            return null;
+        foreach (var tabs in target.Container.Children.OfType<SelectorTabsControl>())
+        {
+            if (tabs == moved || tabs.Size is not { } size || _controls.GetValueOrDefault(tabs) is not TabControl { SelectedIndex: >= 0 and var shown } built
+                || shown >= tabs.Children.Count || tabs.Children[shown] is not LayoutControl page || root.TranslatePoint(position, built) is not { } point)
+            {
+                continue;
+            }
+            var headers = (size.Rows - GridLayout.PageSize(size).Rows) * Cell;
+            if (point.X >= 0 && point.X < built.Bounds.Width && point.Y >= headers && point.Y < built.Bounds.Height)
+                return new DropTarget(page, null);
+        }
+        return target;
+    }
+
     // the innermost built control at the visual (not in the moved control): a layout control is the container, a
     // parameter control is in the container of its parent
     private DropTarget? TargetAt(Visual? visual, DashboardControl? moved)
     {
+        var onHeader = false;
         for (; visual is not null; visual = visual.GetVisualParent())
         {
+            onHeader |= visual is TabItem;
             if (visual is not Control built || !_built.TryGetValue(built, out var entry) || (moved is not null && ControlMoves.Contains(moved, entry.Control)))
                 continue;
             return entry.Control switch
             {
                 LayoutControl layout => new DropTarget(layout, null),
-                ParameterControl parameter when GridLayout.ParentOf(session.Dashboard.Layout, parameter) is { } parent => new DropTarget(parent, parameter),
+                // the page area of selector tabs is the page shown; their headers are the selector tabs themselves
+                SelectorTabsControl tabs when !onHeader && built is TabControl { SelectedIndex: >= 0 and var shown } && shown < tabs.Children.Count
+                    && tabs.Children[shown] is LayoutControl page && (moved is null || !ControlMoves.Contains(moved, page))
+                    => new DropTarget(page, null),
+                ParameterControl parameter when GridLayout.ParentOf(session.Dashboard.Layout, parameter) is LayoutControl parent => new DropTarget(parent, parameter),
                 _ => null,
             };
         }
@@ -351,11 +402,12 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         var built = control switch
         {
             LayoutControl layout => BuildLayout(layout, scope),
+            SelectorTabsControl tabs => BuildSelectorTabs(tabs, scope),
             ParameterControl parameter => BuildParameter(parameter),
             _ => Placeholder(control, "control", null),
         };
-        // a parameter control (chrome and face) is fitted to its cells
-        if (control is ParameterControl)
+        // a parameter control (chrome and face) is fitted to its cells; selector tabs have no chrome
+        if (control is ParameterControl and not SelectorTabsControl)
             built = new CellFit { Child = built };
 
         if (control.Size is { } size)
@@ -417,7 +469,7 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
             if (visual is Face || (visual is StyledElement element && element.Classes.Contains(AccentAreaClass)))
                 return ColorArea.Accent;
         }
-        return control is ParameterControl ? ColorArea.Plate : ColorArea.Panel;
+        return control is ParameterControl and not SelectorTabsControl ? ColorArea.Plate : ColorArea.Panel;
     }
 
     private static string Describe(DashboardControl control, Control built)
@@ -450,27 +502,7 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
                 return BuildGrid(layout, scope);
 
             case LayoutControlKind.Tabs:
-                // each child is a page; the page shown stays shown when the dashboard is built again
-                var pages = layout.Children.Select((child, index) => new TabItem
-                {
-                    Header = child.Label ?? $"Page {index + 1}",
-                    Tag = child,
-                    Content = Build(child, scope),
-                }).ToList();
-                var tabs = new TabControl
-                {
-                    ItemsSource = pages,
-                    SelectedIndex = Math.Min(ShownPages.TryGetValue(layout, out var shown) ? shown.Value : 0, pages.Count - 1),
-                    Background = isEditing ? Brushes.Transparent : null,
-                };
-                tabs.SelectionChanged += (_, e) =>
-                {
-                    // not the change of tabs on one of its pages
-                    if (e.Source == tabs && tabs.SelectedIndex >= 0)
-                        ShownPages.AddOrUpdate(layout, new StrongBox<int>(tabs.SelectedIndex));
-                };
-                _tabs[layout] = tabs;
-                return tabs;
+                return BuildPages(layout, new TabControl(), scope, (child, index) => child.Label ?? $"Page {index + 1}");
 
             case LayoutControlKind.Spacer:
                 return new Border { Width = Cell, Height = Cell };
@@ -501,6 +533,45 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     }
 
     // a row or column: a stack, a wrap panel, or a grid when children share the remaining space (grow)
+    // the pages of tabs or selector tabs, a tab item each; the page shown is UI state, kept when the dashboard is built
+    // again, unless the value of selector tabs decides it (Play mode)
+    private TabControl BuildPages(DashboardControl holder, TabControl tabs, ColorScope scope, Func<DashboardControl, int, string> headerOf)
+    {
+        var pages = holder.Children.Select((child, index) => new TabItem
+        {
+            // the headers in the look (Themes/Controls.axaml)
+            Theme = Application.Current?.FindResource(TabItemTheme) as ControlTheme,
+            Header = headerOf(child, index),
+            Tag = child,
+            Content = Build(child, scope),
+        }).ToList();
+        tabs.ItemsSource = pages;
+        tabs.SelectedIndex = Math.Min(ShownPages.TryGetValue(holder, out var shown) ? shown.Value : 0, pages.Count - 1);
+        tabs.Background = isEditing ? Brushes.Transparent : null;
+        tabs.SelectionChanged += (_, e) =>
+        {
+            // not the change of tabs on one of its pages
+            if (e.Source == tabs && tabs.SelectedIndex >= 0 && tabs is not SelectorTabsView { Parameter: not null })
+                ShownPages.AddOrUpdate(holder, new StrongBox<int>(tabs.SelectedIndex));
+        };
+        _tabs[holder] = tabs;
+        return tabs;
+    }
+
+    // selector tabs: a page per option, without chrome; in Play mode the page of the bound value is shown and a header
+    // click writes its option, in Edit mode (or not bound) they are plain tabs
+    private TabControl BuildSelectorTabs(SelectorTabsControl control, ColorScope scope)
+    {
+        var parameter = session.ValueOf(control, SlotNames.Value);
+        var options = parameter?.Info.Options ?? [];
+        // a header has the option's name as the schema writes it
+        var tabs = BuildPages(control, new SelectorTabsView(control), scope,
+            (page, index) => SelectorPages.OptionOf(page, options) is { } option ? options[option] : page.Label ?? $"Page {index + 1}");
+        if (!isEditing)
+            ((SelectorTabsView)tabs).Parameter = parameter;
+        return tabs;
+    }
+
     private Panel Arrange(LayoutControl layout, Orientation orientation, double gap, ColorScope scope)
     {
         var children = layout.Children.Select(child => Build(child, scope)).ToList();
@@ -579,8 +650,11 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         },
     };
 
-    /// <summary>True when a kind of parameter control has its face; the others are shown as a placeholder.</summary>
-    public static bool HasFace(ParameterControlKind kind) => Faced.ContainsKey(kind);
+    /// <summary>
+    /// True when a kind of parameter control is built: it has its face, or (selector tabs) needs none; the others are
+    /// shown as a placeholder.
+    /// </summary>
+    public static bool HasFace(ParameterControlKind kind) => Faced.ContainsKey(kind) || kind == ParameterControlKind.SelectorTabs;
 
     // the control of its kind with the values of its slots: a control with one slot follows its parameter, one with
     // more slots (an XY pad, an envelope) the value of each
@@ -640,9 +714,11 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
 
     /// <summary>
     /// A control being dragged: what is dragged, where the pointer started (in the panel the control is in and in the
-    /// control itself), whether it is sized or moved, whether it is in a grid, and its placement before and now.
+    /// control itself), whether it is sized or moved, whether it is in a grid, its placement before and now, and the
+    /// smallest size it can be given (<see cref="GridLayout.MinimumSize"/>).
     /// </summary>
-    private sealed record Drag(DashboardControl Control, Control Built, Visual Reference, Point Start, Point Grab, bool IsSizing, bool InGrid, Placement Original)
+    private sealed record Drag(DashboardControl Control, Control Built, Visual Reference, Point Start, Point Grab, bool IsSizing, bool InGrid, Placement Original,
+        CellSize Minimum)
     {
         public Placement Current { get; set; }
     }

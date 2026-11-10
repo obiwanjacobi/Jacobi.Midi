@@ -31,8 +31,8 @@ public static class ControlCatalog
     }
 
     /// <summary>
-    /// True when a control of the kind can show the parameter: a switch only an on/off (bool) parameter, a selector only
-    /// a choice, a text anything, a number box a number (with or without range); the knob, slider, XY pad and envelope a
+    /// True when a control of the kind can show the parameter: a switch only an on/off (bool) parameter, a selector and
+    /// selector tabs only a choice, a text anything, a number box a number (with or without range); the knob, slider, XY pad and envelope a
     /// value in a range (a number, an on/off or a choice, see <see cref="ParameterInfo.Range"/>).
     /// </summary>
     public static bool Accepts(ParameterControlKind kind, ParameterInfo info)
@@ -41,7 +41,7 @@ public static class ControlCatalog
         return kind switch
         {
             ParameterControlKind.Switch => info.Kind == ParameterKind.Switch,
-            ParameterControlKind.Selector => info.Kind == ParameterKind.Choice,
+            ParameterControlKind.Selector or ParameterControlKind.SelectorTabs => info.Kind == ParameterKind.Choice,
             ParameterControlKind.Text => true,
             ParameterControlKind.NumberBox => info.Range is not null || info.Kind == ParameterKind.Number,
             _ => info.Range is not null,
@@ -56,18 +56,24 @@ public static class ControlCatalog
         var shows = kind switch
         {
             ParameterControlKind.Switch => "an on/off parameter (a bool)",
-            ParameterControlKind.Selector => "a parameter with options",
+            ParameterControlKind.Selector or ParameterControlKind.SelectorTabs => "a parameter with options",
             ParameterControlKind.NumberBox => "a number",
             _ => "a value in a range (a number, an on/off or options)",
         };
         return $"a {kind} shows only {shows}; '{info.Name}' is a {info.Kind.ToString().ToLowerInvariant()}.";
     }
 
-    /// <summary>A new, unbound parameter control of a kind in its default size; an envelope is an ADSR (see <see cref="Adsr"/>).</summary>
+    /// <summary>
+    /// A new, unbound parameter control of a kind in its default size; an envelope is an ADSR (see <see cref="Adsr"/>),
+    /// selector tabs have no pages yet (they follow the options of the parameter it is bound to).
+    /// </summary>
     public static ParameterControl Create(ParameterControlKind kind)
-        => kind == ParameterControlKind.Envelope
-            ? new EnvelopeControl { Size = GridLayout.DefaultSize(kind), Segments = Adsr }
-            : new ValueControl(kind) { Size = GridLayout.DefaultSize(kind) };
+        => kind switch
+        {
+            ParameterControlKind.Envelope => new EnvelopeControl { Size = GridLayout.DefaultSize(kind), Segments = Adsr },
+            ParameterControlKind.SelectorTabs => new SelectorTabsControl { Size = GridLayout.DefaultSize(kind) },
+            _ => new ValueControl(kind) { Size = GridLayout.DefaultSize(kind) },
+        };
 
     /// <summary>The segments of an ADSR envelope, not bound: attack, decay (to the sustain level, held) and release.</summary>
     public static IReadOnlyList<EnvelopeSegment> Adsr { get; } = [new(null), new(null, null, Hold: true), new(null)];
@@ -77,13 +83,14 @@ public static class ControlCatalog
         => new() { Kind = kind, Size = GridLayout.DefaultSize(kind) };
 
     /// <summary>
-    /// The kinds a control can be changed to, its own included: a single-value control to another (an envelope keeps
-    /// its kind), a grid to a section and back, a row to a column and back; empty for the other layout controls.
+    /// The kinds a control can be changed to, its own included: a single-value control (selector tabs included) to
+    /// another (an envelope keeps its kind), a grid to a section and back, a row to a column and back; empty for the
+    /// other layout controls. A page of selector tabs (its <paramref name="parent"/>) keeps its kind: a page is a grid.
     /// </summary>
-    public static IReadOnlyList<Enum> KindsOf(DashboardControl control)
-        => control switch
+    public static IReadOnlyList<Enum> KindsOf(DashboardControl control, DashboardControl? parent = null)
+        => parent is SelectorTabsControl ? [] : control switch
         {
-            ValueControl => [.. ParameterKinds.Where(kind => kind != ParameterControlKind.Envelope).Cast<Enum>()],
+            ValueControl or SelectorTabsControl => [.. ParameterKinds.Where(kind => kind != ParameterControlKind.Envelope).Cast<Enum>()],
             LayoutControl { Kind: LayoutControlKind.Grid or LayoutControlKind.Section } => [LayoutControlKind.Grid, LayoutControlKind.Section],
             LayoutControl { Kind: LayoutControlKind.Row or LayoutControlKind.Column } => [LayoutControlKind.Row, LayoutControlKind.Column],
             _ => [],
@@ -92,24 +99,21 @@ public static class ControlCatalog
     /// <summary>
     /// A control of another kind (one of <see cref="KindsOf"/>) with everything the control has: its place, label,
     /// colors, device and base; a parameter control its display settings and the bindings of the slots the kind has
-    /// (the others are dropped), a layout control its children and variables.
+    /// (the others are dropped), a layout control its children and variables. Selector tabs get a page per option of
+    /// <paramref name="options"/> (those of the parameter it is bound to; none without), as when they are bound
+    /// (<see cref="SelectorPages.For"/>); selector tabs that become another kind lose their pages.
     /// </summary>
-    /// <exception cref="ArgumentException">The control cannot be changed to the kind.</exception>
-    public static DashboardControl WithKind(DashboardControl control, Enum kind)
+    /// <exception cref="ArgumentException">The control (in its <paramref name="parent"/>) cannot be changed to the kind.</exception>
+    public static DashboardControl WithKind(DashboardControl control, Enum kind, IReadOnlyList<string>? options = null, DashboardControl? parent = null)
     {
         ArgumentNullException.ThrowIfNull(control);
         ArgumentNullException.ThrowIfNull(kind);
-        if (!KindsOf(control).Contains(kind))
+        if (!KindsOf(control, parent).Contains(kind))
             throw new ArgumentException($"A {KindOf(control)} cannot become a {kind}.", nameof(kind));
 
         DashboardControl changed = control switch
         {
-            ValueControl value => new ValueControl((ParameterControlKind)kind)
-            {
-                Display = value.Display,
-                Bindings = value.Bindings.Where(slot => SlotNames.Of((ParameterControlKind)kind).Contains(slot.Key))
-                    .ToDictionary(slot => slot.Key, slot => slot.Value, StringComparer.Ordinal),
-            },
+            ParameterControl parameter => ParameterOfKind(parameter, (ParameterControlKind)kind, options),
             LayoutControl layout => new LayoutControl
             {
                 Kind = (LayoutControlKind)kind,
@@ -128,6 +132,18 @@ public static class ControlCatalog
         changed.Device = control.Device;
         changed.Base = control.Base;
         return changed;
+    }
+
+    // a single-value control of another kind with the display and the bindings of the slots the kind has
+    private static ParameterControl ParameterOfKind(ParameterControl control, ParameterControlKind kind, IReadOnlyList<string>? options)
+    {
+        var bindings = control.Slots.Where(slot => SlotNames.Of(kind).Contains(slot.Key))
+            .ToDictionary(slot => slot.Key, slot => slot.Value, StringComparer.Ordinal);
+        if (kind != ParameterControlKind.SelectorTabs)
+            return new ValueControl(kind) { Display = control.Display, Bindings = bindings };
+        var tabs = new SelectorTabsControl { Display = control.Display, Bindings = bindings, Size = control.Size };
+        tabs.Children = SelectorPages.For(tabs, options ?? []);
+        return tabs;
     }
 
     /// <summary>

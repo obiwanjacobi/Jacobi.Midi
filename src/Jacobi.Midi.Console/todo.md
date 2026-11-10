@@ -7,6 +7,7 @@ What is planned for the console, and what was done. What the console does now is
 - [ ] Selecting several controls.
 - [ ] Copy and paste.
 - [ ] Allow drag-drop of schema group onto dashboard parameter to fill paths (base path)
+- [x] Add option to have tabs be Selector control.
 - [ ] Edit/Play switch also switches when pressing on the selected option. When in Play, clicking on Play switches to Edit.
 - [x] A dashboard file should have references to its dependent files and assembly resources. Loading a dashboard file should make everything work and prompt the user if files cannot be found.
 - [ ] A rig (or dashboard) whose schema files or assemblies are not found: prompt the user to locate them, and refer to them there.

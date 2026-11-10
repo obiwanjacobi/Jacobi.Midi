@@ -38,7 +38,7 @@ internal sealed partial class ControlPropertiesViewModel(MainViewModel owner, Da
         {
             if (owner.IsRoot(control))
                 return [];
-            var kinds = ControlCatalog.KindsOf(control)
+            var kinds = ControlCatalog.KindsOf(control, owner.ParentOf(control))
                 .Where(kind => kind.ToString() == Kind || kind is not ParameterControlKind other || control is not ParameterControl parameter || owner.Accepts(parameter, other))
                 .ToList();
             return kinds.Count < 2 ? [] : [.. kinds.Select(kind => new KindOption(kind, kind.ToString() == Kind, () => owner.ChangeKind(control, kind)))];
@@ -55,6 +55,9 @@ internal sealed partial class ControlPropertiesViewModel(MainViewModel owner, Da
 
     /// <summary>True when the control is in a grid or section: it has a position (<see cref="Column"/>, <see cref="Row"/>).</summary>
     public bool IsInGrid => owner.IsInGrid(control);
+
+    /// <summary>False for a page of tabs: it has the size of its tabs.</summary>
+    public bool CanResize => owner.CanResize(control);
 
     /// <summary>The column of the control in its grid (zero based).</summary>
     public decimal? Column
@@ -176,16 +179,43 @@ internal sealed partial class ControlPropertiesViewModel(MainViewModel owner, Da
     public IReadOnlyList<SlotViewModel> Slots
         => control switch
         {
-            ValueControl value => [.. SlotOrder.Where(SlotNames.Of(value.Kind).Contains).Select(slot => new SlotViewModel(this, slot, value.Bindings.GetValueOrDefault(slot)))],
             EnvelopeControl envelope => [.. Enumerable.Range(0, envelope.Segments.Count).SelectMany(index => new[]
             {
                 new SlotViewModel(this, SlotNames.Time(index), envelope.Segments[index].Time),
                 new SlotViewModel(this, SlotNames.Level(index), envelope.Segments[index].Level),
             })],
+            ParameterControl parameter => [.. SlotOrder.Where(SlotNames.Of(parameter.Kind).Contains)
+                .Select(slot => new SlotViewModel(this, slot, parameter.Slots.GetValueOrDefault(slot)))],
             _ => [],
         };
 
     public bool IsEnvelope => control is EnvelopeControl;
+
+    public bool IsSelectorTabs => control is SelectorTabsControl;
+
+    /// <summary>
+    /// The pages of selector tabs to choose: every option of the bound parameter, checked when it has a page, and the
+    /// pages of no option (marked, they can only be removed). Empty when the control is not bound to options.
+    /// </summary>
+    public IReadOnlyList<PageChoiceViewModel> Pages
+        => control is SelectorTabsControl tabs && owner.OptionsOf(tabs) is { } options
+            ? [.. SelectorPages.Choices(tabs, options).Select(choice => new PageChoiceViewModel(this, choice))]
+            : [];
+
+    /// <summary>What the pages are, for the button that opens their choice.</summary>
+    public string PagesText
+        => control is not SelectorTabsControl tabs ? String.Empty
+            : owner.OptionsOf(tabs) is { } options ? $"{tabs.Children.Count(page => SelectorPages.OptionOf(page, options) is not null)} of {options.Count} options"
+            : "bind it to a parameter with options first";
+
+    public bool CanChoosePages => Pages.Count > 0;
+
+    /// <summary>Gives the selector tabs a page for an option, or takes it away.</summary>
+    internal void SetPage(string name, bool hasPage)
+    {
+        if (control is SelectorTabsControl tabs)
+            owner.SetPage(tabs, name, hasPage);
+    }
 
     /// <summary>The segments of an envelope, to set which one holds or to remove one.</summary>
     public IReadOnlyList<SegmentViewModel> Segments
@@ -241,8 +271,10 @@ internal sealed partial class ControlPropertiesViewModel(MainViewModel owner, Da
     [RelayCommand]
     private void ClearColor(ColorArea area) => owner.SetControlColor(control, area, null);
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanDelete))]
     private void Delete() => owner.DeleteControl(control);
+
+    private bool CanDelete() => owner.CanDelete(control);
 
     /// <summary>Declares a new index variable, starting at the first item.</summary>
     [RelayCommand]
@@ -257,7 +289,11 @@ internal sealed partial class ControlPropertiesViewModel(MainViewModel owner, Da
     }
 
     /// <summary>Shows the values as they are now: after an edit or undo.</summary>
-    public void Refresh() => OnPropertyChanged(String.Empty);
+    public void Refresh()
+    {
+        OnPropertyChanged(String.Empty);
+        DeleteCommand.NotifyCanExecuteChanged();
+    }
 
     /// <summary>Binds a slot to the binding text (<c>[device:]path</c> or <c>$name</c>); empty unbinds it.</summary>
     internal void SetSlot(string slot, string? text)
@@ -351,6 +387,31 @@ internal sealed partial class SegmentViewModel(ControlPropertiesViewModel owner,
 
     [RelayCommand]
     private void Remove() => owner.RemoveSegment(index);
+}
+
+/// <summary>
+/// A page choice of the selected selector tabs in the control panel: an option (or a page of no option), checked when
+/// it has a page; (un)checking it gives the option a page or takes it away.
+/// </summary>
+internal sealed class PageChoiceViewModel(ControlPropertiesViewModel owner, PageChoice choice)
+{
+    public string Name => choice.IsOfNoOption ? $"{choice.Name} (no option)" : choice.Name;
+
+    /// <summary>A page of no option can only be removed.</summary>
+    public bool IsOfNoOption => choice.IsOfNoOption;
+
+    /// <summary>False for the only page: selector tabs keep at least one.</summary>
+    public bool CanChange => choice.CanChange;
+
+    public string Tip => !choice.CanChange ? "The only page stays: delete the selector tabs themselves to remove both."
+        : choice.IsOfNoOption ? "This page is of no option of the parameter: it is never shown. Uncheck it to remove it with its controls."
+        : "Checked: the option has a page. Unchecking it removes the page with its controls (Ctrl+Z brings it back).";
+
+    public bool HasPage
+    {
+        get => choice.HasPage;
+        set => owner.SetPage(choice.Name, value);
+    }
 }
 
 /// <summary>

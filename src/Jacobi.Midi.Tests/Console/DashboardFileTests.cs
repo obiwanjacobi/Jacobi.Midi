@@ -245,6 +245,58 @@ public class DashboardFileTests
         Assert.Contains(message, exception.Message);
     }
 
+    private const string SelectorTabsXml = """
+        <dashboard format="jacobi.midi.dashboard/1" name="Osc">
+          <grid>
+            <selectorTabs label="Type" size="12,10" at="0,0">
+              <bind slot="value" parameter="synth:Osc.Type" />
+              <grid label="Saw">
+                <knob at="0,0"><bind slot="value" parameter="synth:Osc.Saw.Detune" /></knob>
+              </grid>
+              <grid label="Pulse" />
+            </selectorTabs>
+          </grid>
+        </dashboard>
+        """;
+
+    [Fact]
+    public void Read_SelectorTabs_GivesTheBindingAndThePages()
+    {
+        var dashboard = DashboardFile.Read(SelectorTabsXml, FileFormat.Xml);
+
+        var tabs = Assert.IsType<SelectorTabsControl>(dashboard.Layout.Children[0]);
+        Assert.Equal(("Type", new CellSize(12, 10)), (tabs.Label, tabs.Size));
+        Assert.Equal(new Binding("Osc.Type") { Device = "synth" }, tabs.Bindings[SlotNames.Value]);
+        Assert.Equal(["Saw", "Pulse"], tabs.Children.Select(page => page.Label));
+        var knob = Assert.IsType<ValueControl>(Assert.Single(tabs.Children[0].Children));
+        Assert.Equal(new Binding("Osc.Saw.Detune") { Device = "synth" }, knob.Bindings[SlotNames.Value]);
+    }
+
+    [Theory]
+    [InlineData(FileFormat.Xml)]
+    [InlineData(FileFormat.Json)]
+    public void Write_SelectorTabs_GivesTheSameFileAgain(FileFormat format)
+    {
+        var written = DashboardFile.Write(DashboardFile.Read(SelectorTabsXml, FileFormat.Xml), format);
+
+        var read = DashboardFile.Read(written, format);
+
+        Assert.Equal(written, DashboardFile.Write(read, format));
+        Assert.Equal(["Saw", "Pulse"], read.Layout.Children[0].Children.Select(page => page.Label));
+    }
+
+    [Theory]
+    [InlineData("""<selectorTabs><section label="Saw" /></selectorTabs>""", "a page of 'selectorTabs' is a 'grid', not a 'section'")]
+    [InlineData("""<selectorTabs><bind slot="x" parameter="Type" /></selectorTabs>""", "has no slot 'x'")]
+    public void Read_SelectorTabs_ReportsWhatDoesNotFit(string control, string message)
+    {
+        var xml = $"""<dashboard format="jacobi.midi.dashboard/1" name="Test"><row>{control}</row></dashboard>""";
+
+        var exception = Assert.Throws<FileFormatException>(() => DashboardFile.Read(xml, FileFormat.Xml));
+
+        Assert.Contains(message, exception.Message);
+    }
+
     [Theory]
     [InlineData("lead.dashboard.xml", FileFormat.Xml)]
     [InlineData("lead.dashboard.JSON", FileFormat.Json)]

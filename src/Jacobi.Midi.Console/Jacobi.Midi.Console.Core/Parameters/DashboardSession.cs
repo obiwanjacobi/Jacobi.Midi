@@ -55,6 +55,26 @@ public sealed class DashboardSession : IDisposable
     public IControlValue? ValueOf(ParameterControl control, string slot)
         => _values.GetValueOrDefault((control, slot));
 
+    /// <summary>
+    /// The field a binding refers to when it fills a slot of the control (in the control's scope), whether or not the
+    /// control has it now; null for a binding to an index variable, or one that refers to no field of a device of the
+    /// rig.
+    /// </summary>
+    public BoundField? FieldOf(ParameterControl control, Binding binding)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(binding);
+        // any index will do: the field is the path without repeat indices
+        if (BindingScope.Of(Dashboard.Layout, control)?.FullPathOf(binding) is not (string device, string text)
+            || !SchemaPaths.TryParse(text, _ => 0, out var parsed, out _)
+            || DeviceOf(device) is not { } state
+            || state.Plan.Find(parsed.Path) is not FieldInfo field)
+        {
+            return null;
+        }
+        return new BoundField(device, parsed.Path, ParameterInfo.From(field));
+    }
+
     /// <summary>The device state of a device of the dashboard; null when the rig does not have it.</summary>
     public DeviceState? DeviceOf(string alias) => Rig.Devices.GetValueOrDefault(alias);
 
@@ -137,11 +157,14 @@ public sealed class DashboardSession : IDisposable
         _values.Clear();
     }
 
-    private void CollectStartIndices(LayoutControl layout)
+    private void CollectStartIndices(DashboardControl control)
     {
-        foreach (var variable in layout.Variables)
-            _startIndices[new VariableReference(layout, variable.Name)] = variable.Value;
-        foreach (var child in layout.Children.OfType<LayoutControl>())
+        if (control is LayoutControl layout)
+        {
+            foreach (var variable in layout.Variables)
+                _startIndices[new VariableReference(layout, variable.Name)] = variable.Value;
+        }
+        foreach (var child in control.Children)
             CollectStartIndices(child);
     }
 
@@ -210,6 +233,8 @@ public sealed class DashboardSession : IDisposable
                 continue;
             }
             _values[key] = new ParameterValue(state, parameter, info);
+            if (binding.Control is SelectorTabsControl tabs && binding.Slot == SlotNames.Value && info.Options is { } options)
+                problems.AddRange(SelectorPages.Problems(tabs, options).Select(problem => $"{Describe(tabs)}: {problem}"));
         }
 
         Problems = problems;
