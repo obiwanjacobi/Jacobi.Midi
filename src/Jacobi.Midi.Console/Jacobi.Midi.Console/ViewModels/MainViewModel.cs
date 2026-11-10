@@ -975,6 +975,16 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     public DeviceInstance? FindDevice(string alias) => _rig.Find(alias);
 
     /// <summary>
+    /// The names of the exchanges in the exchange file of the map root of the rig's device with the alias, to receive
+    /// and send with (<see cref="DashboardDevice.Receive"/>, <see cref="DashboardDevice.Send"/>); empty when the rig has
+    /// no such device or there is no exchange file for its map root.
+    /// </summary>
+    public IReadOnlyList<string> ExchangeNamesOf(string alias)
+        => _rig.Find(alias) is { } device && Rig?.Library.Exchanges.Find(new BinarySerializer.Schema.SchemaName(device.MapRoot)) is { } set
+            ? [.. set.Exchanges.Select(exchange => exchange.Name)]
+            : [];
+
+    /// <summary>
     /// Changes a property of a device of the rig as an edit (nothing when the value is the same); the rig is opened again
     /// (see <see cref="RigSession.Open"/>).
     /// </summary>

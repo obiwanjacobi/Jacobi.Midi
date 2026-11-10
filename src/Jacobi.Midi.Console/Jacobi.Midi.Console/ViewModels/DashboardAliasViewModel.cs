@@ -63,6 +63,12 @@ internal sealed class DashboardAliasViewModel(MainViewModel owner, Dashboard das
         }
     }
 
+    /// <summary>
+    /// The exchanges to choose from for <see cref="Receive"/> and <see cref="Send"/>: those of the exchange file of the
+    /// rig device's map root. Another name can still be typed.
+    /// </summary>
+    public IReadOnlyList<string> ExchangeNames { get; } = owner.ExchangeNamesOf(alias);
+
     /// <summary>True when the rig has a device with the alias; otherwise the controls that use it do not work.</summary>
     public bool IsInRig => owner.IsDeviceOfRig(alias);
 }

@@ -300,11 +300,13 @@
                                         <!-- the exchanges of the device's exchange file the values are received and the changes sent with (Play mode with MIDI) -->
                                         <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="2" Margin="0,2,0,0">
                                             <TextBlock Text="Receive with" Classes="caption" VerticalAlignment="Center" />
-                                            <TextBox Grid.Column="1" Text="{Binding Receive, UpdateSourceTrigger=LostFocus}" PlaceholderText="e.g. requestData"
-                                                     ToolTip.Tip="The exchange the values are received with from the device (Play mode with MIDI); empty: not received" />
+                                            <ComboBox Grid.Column="1" IsEditable="True" ItemsSource="{Binding ExchangeNames}" Text="{Binding Receive, UpdateSourceTrigger=LostFocus}"
+                                                      HorizontalAlignment="Stretch" PlaceholderText="e.g. requestData"
+                                                      ToolTip.Tip="The exchange the values are received with from the device (Play mode with MIDI); empty: not received" />
                                             <TextBlock Grid.Row="1" Text="Send with" Classes="caption" VerticalAlignment="Center" />
-                                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Send, UpdateSourceTrigger=LostFocus}" PlaceholderText="e.g. sendData"
-                                                     ToolTip.Tip="The exchange the changes of the values are sent to the device with (Play mode with MIDI); empty: not sent" />
+                                            <ComboBox Grid.Row="1" Grid.Column="1" IsEditable="True" ItemsSource="{Binding ExchangeNames}" Text="{Binding Send, UpdateSourceTrigger=LostFocus}"
+                                                      HorizontalAlignment="Stretch" PlaceholderText="e.g. sendData"
+                                                      ToolTip.Tip="The exchange the changes of the values are sent to the device with (Play mode with MIDI); empty: not sent" />
                                         </Grid>
                                     </StackPanel>
                                 </DataTemplate>
