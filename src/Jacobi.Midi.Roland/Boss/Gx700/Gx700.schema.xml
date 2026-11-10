@@ -99,21 +99,21 @@
     <group name="compressor">
       <members>
         <!-- 0x00: 0 = off, 1 = on -->
-        <field name="On" datatype="roland.switch" />
+        <field name="On" datatype="roland.switch" midi.doc="Turns the compressor/limiter effect on/off." />
         <!-- 0x01: 0 = compressor, 1 = limiter -->
-        <field name="Type" datatype="compressorType" />
+        <field name="Type" datatype="compressorType" midi.doc="Select either Compressor or Limiter.&#10;COMPRESSOR: The effect will function as a compressor.&#10;LIMITER: The effect will function as a limiter." />
         <!-- 0x02: 0-100 (compressor) -->
-        <field name="Sustain" datatype="roland.level" />
+        <field name="Sustain" datatype="roland.level" midi.doc="Adjusts the range (time) over which low-level signals are boosted. Larger values will result in longer sustain.&#10;When 'COMPRESSOR' is selected." />
         <!-- 0x03: 0-100 (compressor) -->
-        <field name="Attack" datatype="roland.level" />
+        <field name="Attack" datatype="roland.level" midi.doc="Adjusts the strength of the picking attack. Larger values will result in a sharper attack, creating a more clearly defined sound.&#10;When 'COMPRESSOR' is selected." />
         <!-- 0x04: 0-100 (limiter) -->
-        <field name="Threshold" datatype="roland.level" />
+        <field name="Threshold" datatype="roland.level" midi.doc="Adjust this as appropriate for the input signal from your guitar. When the input signal level exceeds this threshold level, limiting will be applied.&#10;When 'LIMITER' is selected." />
         <!-- 0x05: 0-100 (limiter) -->
-        <field name="Release" datatype="roland.level" />
+        <field name="Release" datatype="roland.level" midi.doc="This adjusts the time from when the signal level drops below the threshold until when limiting is removed.&#10;When 'LIMITER' is selected." />
         <!-- 0x06: 0-100 (= -50 - +50) -->
-        <field name="Tone" datatype="int50" />
+        <field name="Tone" datatype="int50" midi.doc="Adjusts the tone." />
         <!-- 0x07: 0-100 -->
-        <field name="EffectLevel" datatype="roland.level" />
+        <field name="EffectLevel" datatype="roland.level" midi.doc="Adjusts the volume. At the same time, the output level of the compressor/limiter is indicated by a meter in the display." />
       </members>
     </group>
 
@@ -121,31 +121,31 @@
     <group name="wah">
       <members>
         <!-- 0x00: 0 = off, 1 = on -->
-        <field name="On" datatype="roland.switch" />
+        <field name="On" datatype="roland.switch" midi.doc="Turns the pedal wah/auto wah effect on/off." />
         <!-- 0x01: 0 = pedal wah, 1 = sw-pedal wah, 2 = auto wah -->
-        <field name="Mode" datatype="wahMode" />
+        <field name="Mode" datatype="wahMode" midi.doc="Selects either pedal wah or auto wah.&#10;PEDAL WAH: The effect will function as a pedal wah.&#10;SW-PEDAL WAH: This is a pedal wah that can be switched on/off by pressing the pedal.&#10;AUTO WAH: The effect will function as an auto wah." />
         <!-- 0x02: 0-100 (pedal) -->
-        <field name="Frequency" datatype="roland.level" />
+        <field name="Frequency" datatype="roland.level" midi.doc="Adjusts the center frequency at which the wah effect will be applied.&#10;When 'PEDAL WAH' or 'SW-PEDAL WAH' is selected." />
         <!-- 0x03: 0 = down, 1 = up (auto) -->
-        <field name="Polarity" datatype="polarity" />
+        <field name="Polarity" datatype="polarity" midi.doc="Selection for the direction in which the filter will change in response to the input.&#10;UP: The frequency of the filter will rise.&#10;DOWN: The frequency of the filter will fall.&#10;When 'AUTO WAH' is selected." />
         <!-- 0x04: 0-100 (auto) -->
-        <field name="Sensitivity" datatype="roland.level" />
+        <field name="Sensitivity" datatype="roland.level" midi.doc="This adjusts the sensitivity at which the filter will change in the direction determined by the Polarity setting. Higher values will result in a stronger response. With a setting of '0', the strength of picking will have no effect.&#10;When 'AUTO WAH' is selected." />
         <!-- 0x05: 0-100 (auto) -->
-        <field name="Manual" datatype="roland.level" />
+        <field name="Manual" datatype="roland.level" midi.doc="Adjusts the center frequency at which the wah effect will be applied.&#10;When 'AUTO WAH' is selected." />
         <!-- 0x06: 0-100 -->
-        <field name="Peak" datatype="roland.level" />
+        <field name="Peak" datatype="roland.level" midi.doc="Adjusts the way in which the wah effect applies to the area around the center frequency. Lower values will produce a wah effect over a wide area around the center frequency. Higher values will produce a wah effect in a narrow area around the center frequency.&#10;With a value of '50' a standard wah sound will be produced." />
         <!-- 0x07: 0 = fixed, 1 = EXP pedal, 2 = FC-200EXP, 3-65 = MIDI CC (pedal source) -->
-        <field name="Pedal" datatype="wahPedal" />
+        <field name="Pedal" datatype="wahPedal" midi.doc="Specify the expression pedal (MIDI message) that will operate the wah pedal.&#10;FIXED: Use this setting when you want a fixed wah effect. The wah effect will be provided at the fixed frequency specified by the 'FREQUENCY' setting.&#10;EXP PEDAL: Use an expression pedal (optional: FV-300L + PCS-33 (Roland), EV-5 (Roland)) connected to the EXP PEDAL jack.&#10;FC-200EXP: The expression pedal of the FC-200 will be used.&#10;MIDI C#1-31, 64-95: MIDI control change messages will be used. Specify the controller number.&#10;When 'PEDAL WAH' or 'SW-PEDAL WAH' is selected." />
         <!-- 0x08: 0-100 (pedal) -->
-        <field name="PedalMin" datatype="roland.level" />
+        <field name="PedalMin" datatype="roland.level" midi.doc="Specify the lower limit of the 'FREQUENCY' sweep controlled by the pedal. The 'FREQUENCY' will be swept through the range between the 'PEDAL MINIMUM' and the 'PEDAL MAXIMUM' to create the wah pedal effect.&#10;When 'PEDAL WAH' or 'SW-PEDAL WAH' is selected." />
         <!-- 0x09: 0-100 (pedal) -->
-        <field name="PedalMax" datatype="roland.level" />
+        <field name="PedalMax" datatype="roland.level" midi.doc="Determines the upper limit of the 'FREQUENCY' sweep controlled by the pedal.&#10;When 'PEDAL WAH' or 'SW-PEDAL WAH' is selected." />
         <!-- 0x0A: 0-100 (auto) -->
-        <field name="Rate" datatype="roland.level" />
+        <field name="Rate" datatype="roland.level" midi.doc="Adjusts the frequency of the auto wah.&#10;When 'AUTO WAH' is selected." />
         <!-- 0x0B: 0-100 (auto) -->
-        <field name="Depth" datatype="roland.level" />
+        <field name="Depth" datatype="roland.level" midi.doc="Adjusts the depth of the auto wah effect.&#10;When 'AUTO WAH' is selected." />
         <!-- 0x0C: 0-100 -->
-        <field name="EffectLevel" datatype="roland.level" />
+        <field name="EffectLevel" datatype="roland.level" midi.doc="Adjusts the volume. At the same time, the output level of the wah will be indicated by a meter in the display." />
       </members>
     </group>
 
@@ -153,17 +153,17 @@
     <group name="overdriveDistortion">
       <members>
         <!-- 0x00: 0 = off, 1 = on -->
-        <field name="On" datatype="roland.switch" />
+        <field name="On" datatype="roland.switch" midi.doc="Turns the overdrive/distortion effect on/off." />
         <!-- 0x01: 0 = Vintage OD, 1 = Turbo OD, 2 = Blues, 3 = Distortion, 4 = Turbo DS, 5 = Metal, 6 = Fuzz -->
-        <field name="Type" datatype="distortionType" />
+        <field name="Type" datatype="distortionType" midi.doc="Selects the type of distortion.&#10;VINTAGE OD: Allows you to obtain a soft overdrive that sounds just like what is produced by vacuum tube distortion.&#10;TURBO OD: Allows you to obtain a rich effect just like distortion, without losing the subtle nuance of the overdrive.&#10;BLUES: This creates an overdrive with crunchy distortion. The processed distortion can faithfully reproduce the tone changes created by picking nuances, or controlling the knobs on the guitar.&#10;DISTORTION: This produces a standard distortion.&#10;TURBO DISTORTION: A distortion sound with special emphasis in the mid- and low-range, as when a large amp is played at high volume.&#10;METAL: This produces a rich and powerful heavy metal sound.&#10;FUZZ: This produces a basic fuzz sound." />
         <!-- 0x02: 0-100 -->
-        <field name="Drive" datatype="roland.level" />
+        <field name="Drive" datatype="roland.level" midi.doc="Adjusts the depth of distortion." />
         <!-- 0x03: 0-100 (= -50 - +50) -->
-        <field name="Bass" datatype="int50" />
+        <field name="Bass" datatype="int50" midi.doc="Adjusts the tone for the low frequency range." />
         <!-- 0x04: 0-100 (= -50 - +50) -->
-        <field name="Treble" datatype="int50" />
+        <field name="Treble" datatype="int50" midi.doc="Adjusts the tone for the high frequency range." />
         <!-- 0x05: 0-100 -->
-        <field name="EffectLevel" datatype="roland.level" />
+        <field name="EffectLevel" datatype="roland.level" midi.doc="Adjusts the volume. At the same time, the output level of the overdrive/distortion will be indicated by a meter in the display." />
       </members>
     </group>
 
@@ -171,26 +171,26 @@
     <group name="preamp">
       <members>
         <!-- 0x00: 0 = off, 1 = on -->
-        <field name="On" datatype="roland.switch" />
+        <field name="On" datatype="roland.switch" midi.doc="Turns the preamp effect on/off." />
         <!-- 0x01: 0 = JC-120, 1 = Clean Twin, 2 = Match Drive, 3 = BG Lead, 4 = MS1959 (I), 5 = MS1959 (II),
              6 = MS1959 (I+II), 7 = SLDN Lead, 8 = Metal 5150 -->
-        <field name="Type" datatype="preampType" />
+        <field name="Type" datatype="preampType" midi.doc="Selects the type of guitar preamp. The characteristics of various guitar amps have been analyzed, and their distortion and tone color have been simulated by these settings.&#10;JC-120: The sound of the Roland 'JC-120' (Jazz Chorus 120), a favorite of pro musicians around the world.&#10;CLEAN TWIN: The sound of a conventional built-in tube amp.&#10;MATCH DRIVE: A simulation of the latest tube amp widely used in styles from blues and rock.&#10;BG LEAD: The sound of a tube amp typical of the late '70s to '80s, characterized by a distinctive mid-range.&#10;MS1959 (I, II, I+II): The sound of a large tube amp stack that was indispensable to the British hard rock of the '70s, and is used to this day by many hard rock guitarists. I: A trebly sound created by using input I of the guitar amp. II: A mild sound created by using input II of the guitar amp. I+II: The sound of connecting inputs I and II of the guitar amp in parallel, creating a sound with a stronger low end than I.&#10;SLDN LEAD: A tube amp sound with versatile distortion, usable in a wide range of styles.&#10;METAL 5150: The sound of a large tube amp, suitable for heavy metal." />
         <!-- 0x02: 0-100 -->
-        <field name="Volume" datatype="roland.level" />
+        <field name="Volume" datatype="roland.level" midi.doc="Adjusts the volume and distortion of the amp." />
         <!-- 0x03: 0-100 -->
-        <field name="Bass" datatype="roland.level" />
+        <field name="Bass" datatype="roland.level" midi.doc="Adjusts the tone for the low frequency range." />
         <!-- 0x04: 0-100 -->
-        <field name="Middle" datatype="roland.level" />
+        <field name="Middle" datatype="roland.level" midi.doc="Adjusts the tone for the middle frequency range.&#10;If you have selected 'MATCH DRIVE' as the type, the middle control will have no effect." />
         <!-- 0x05: 0-100 -->
-        <field name="Treble" datatype="roland.level" />
+        <field name="Treble" datatype="roland.level" midi.doc="Adjusts the tone for the high frequency range." />
         <!-- 0x06: 0-100 -->
-        <field name="Presence" datatype="roland.level" />
+        <field name="Presence" datatype="roland.level" midi.doc="Adjusts the tone for the ultra high frequency range.&#10;If you have selected 'MATCH DRIVE' as the type, raising presence will cut the high range (the value will change from '0' to '-100')." />
         <!-- 0x07: 0-100 -->
-        <field name="Master" datatype="roland.level" />
+        <field name="Master" datatype="roland.level" midi.doc="Adjusts the volume of the entire preamp. At the same time, the output level of the preamp will be indicated by a meter in the display." />
         <!-- 0x08: 0 = off, 1 = on -->
-        <field name="Bright" datatype="roland.switch" />
+        <field name="Bright" datatype="roland.switch" midi.doc="Turns the bright setting on/off.&#10;ON: Bright is switched on to create a lighter and crisper tone.&#10;OFF: Bright is not used.&#10;Depending on the 'TYPE' setting, this may not be displayed." />
         <!-- 0x09: 0 = low, 1 = middle, 2 = high -->
-        <field name="Gain" datatype="preampGain" />
+        <field name="Gain" datatype="preampGain" midi.doc="Adjusts the distortion of the amp. Distortion will successively increase for settings of 'LOW', 'MIDDLE' and 'HIGH'." />
       </members>
     </group>
 
@@ -198,13 +198,13 @@
     <group name="loop">
       <members>
         <!-- 0x00: 0 = off, 1 = on -->
-        <field name="On" datatype="roland.switch" />
+        <field name="On" datatype="roland.switch" midi.doc="Turns the loop on/off." />
         <!-- 0x01: 0-100 -->
-        <field name="ReturnLevel" datatype="roland.level" />
+        <field name="ReturnLevel" datatype="roland.level" midi.doc="Adjusts the input level of the RETURN jack. At the same time, the return level will be indicated by a meter in the display." />
         <!-- 0x02: 0-100 -->
-        <field name="SendLevel" datatype="roland.level" />
+        <field name="SendLevel" datatype="roland.level" midi.doc="Adjusts the output level of the SEND jack." />
         <!-- 0x03: 0 = series, 1 = parallel -->
-        <field name="Mode" datatype="loopMode" />
+        <field name="Mode" datatype="loopMode" midi.doc="Set the function of the SEND/RETURN jacks.&#10;SERIES: The loop will be connected in series with the internal effects.&#10;PARALLEL: The loop will be connected in parallel with the internal effects." />
       </members>
     </group>
 
@@ -212,19 +212,19 @@
     <group name="equalizer">
       <members>
         <!-- 0x00: 0 = off, 1 = on -->
-        <field name="On" datatype="roland.switch" />
+        <field name="On" datatype="roland.switch" midi.doc="Switches the three-band equalizer effect on/off." />
         <!-- 0x01: 0-40 (= -20 - +20 dB) -->
-        <field name="LowGain" datatype="int20" />
+        <field name="LowGain" datatype="int20" midi.doc="Adjusts the gain (amount of boost/cut) for the low range." />
         <!-- 0x02: 0-20 (= 100 Hz - 10.0 kHz, Table-7.1) -->
-        <field name="MiddleFrequency" datatype="eqMiddleFrequency" />
+        <field name="MiddleFrequency" datatype="eqMiddleFrequency" midi.doc="Adjusts the center frequency that the middle range adjustment will affect." />
         <!-- 0x03: 0-40 (= -20 - +20 dB) -->
-        <field name="MiddleGain" datatype="int20" />
+        <field name="MiddleGain" datatype="int20" midi.doc="Adjusts the gain (amount of boost/cut) for the middle range." />
         <!-- 0x04: 0-5 (= 0.5, 1, 2, 4, 8, 16, Table-7.2) -->
-        <field name="MiddleQ" datatype="eqMiddleQ" />
+        <field name="MiddleQ" datatype="eqMiddleQ" midi.doc="Adjusts the width of the area centered at the 'MIDDLE FREQUENCY' that the equalizer will affect." />
         <!-- 0x05: 0-40 (= -20 - +20 dB) -->
-        <field name="HighGain" datatype="int20" />
+        <field name="HighGain" datatype="int20" midi.doc="Adjusts the gain (amount of boost/cut) for the high range." />
         <!-- 0x06: 0-40 (= -20 - +20 dB) -->
-        <field name="Level" datatype="int20" />
+        <field name="Level" datatype="int20" midi.doc="Adjusts the volume after the equalizer. At the same time, the output level of the equalizer will be indicated by a meter in the display." />
       </members>
     </group>
 
@@ -232,16 +232,16 @@
     <group name="speakerSimulator">
       <members>
         <!-- 0x00: 0 = off, 1 = on -->
-        <field name="On" datatype="roland.switch" />
+        <field name="On" datatype="roland.switch" midi.doc="Turns the speaker simulator on/off.&#10;If the Utility setting 'SPEAKER SIMULATOR' is set to 'ALWAYS ON' or 'ALWAYS OFF', the effect sound will not change even if this parameter is switched on or off." />
         <!-- 0x01: 0 = Small, 1 = Middle, 2 = JC-120, 3-6 = Built-In 1-4, 7-8 = BG Stack 1-2, 9-10 = MS Stack 1-2,
              11 = Metal Stack (Table-8.1) -->
-        <field name="Type" datatype="speakerType" />
+        <field name="Type" datatype="speakerType" midi.doc="Selects the type of speaker that will be simulated.&#10;SMALL: small open-back enclosure, 10 inch.&#10;MIDDLE: open-back enclosure, 12 inch.&#10;JC-120: open-back enclosure, 12 inch (two units).&#10;BUILT IN 1-4: open-back enclosure, 12 inch (two units).&#10;BG STACK 1-2: large sealed enclosure, 12 inch (two units).&#10;MS STACK 1-2: large sealed enclosure, 12 inch (four units).&#10;METAL STACK: large dual stack, 12 inch (four units)." />
         <!-- 0x02: 1-10 -->
-        <field name="MicSetting" datatype="uint1_10" />
+        <field name="MicSetting" datatype="uint1_10" midi.doc="Simulates the location of the microphone placement. A setting of '1' places the microphone in the center of the speaker cone, and '2' and '3' place the microphone progressively further away." />
         <!-- 0x03: 0-100 -->
-        <field name="MicLevel" datatype="roland.level" />
+        <field name="MicLevel" datatype="roland.level" midi.doc="Adjusts the volume of the microphone." />
         <!-- 0x04: 0-100 -->
-        <field name="DirectLevel" datatype="roland.level" />
+        <field name="DirectLevel" datatype="roland.level" midi.doc="Adjusts the volume of the direct sound." />
       </members>
     </group>
 
@@ -249,15 +249,15 @@
     <group name="noiseSuppressor">
       <members>
         <!-- 0x00: 0 = off, 1 = on -->
-        <field name="On" datatype="roland.switch" />
+        <field name="On" datatype="roland.switch" midi.doc="Turns the noise suppressor effect on/off." />
         <!-- 0x01: 0-100 -->
-        <field name="Threshold" datatype="roland.level" />
+        <field name="Threshold" datatype="roland.level" midi.doc="Adjust this parameter as appropriate for the volume of the noise. If the noise level is high, a higher setting is appropriate. If the noise level is low, a lower setting is appropriate. Adjust this value until the decay of the guitar sound is as natural as possible.&#10;High settings for the Threshold parameter may result in there being no sound when you play with your guitar volume turned down." />
         <!-- 0x02: 0-100 -->
-        <field name="Release" datatype="roland.level" />
+        <field name="Release" datatype="roland.level" midi.doc="Adjusts the time from when the noise suppressor begins to function until the volume reaches '0'." />
         <!-- 0x03: 0 = guitar in, 1 = NS in -->
-        <field name="Detect" datatype="nsDetect" />
+        <field name="Detect" datatype="nsDetect" midi.doc="Specify the point where the noise suppressor detects the envelope.&#10;GUITAR IN: The envelope of the input level at the INPUT jack will be used.&#10;NS IN: The envelope of the input level to the noise suppressor will be used.&#10;Normally you will set this at 'GUITAR IN'. If reverberation-type effects such as delay or reverb are connected before the noise suppressor, set this to 'NS IN' to prevent the reverberation from being cut off unnaturally." />
         <!-- 0x04: 0-100 -->
-        <field name="EffectLevel" datatype="roland.level" />
+        <field name="EffectLevel" datatype="roland.level" midi.doc="Adjusts the volume. At the same time, the output level of the noise suppressor will be indicated by a meter in the display." />
       </members>
     </group>
 
@@ -265,84 +265,84 @@
     <group name="modulation">
       <members>
         <!-- 0x00: 0 = off, 1 = on -->
-        <field name="On" datatype="roland.switch" />
+        <field name="On" datatype="roland.switch" midi.doc="Turns the modulation effect on/off." />
         <!-- 0x01: 0 = Flanger, 1 = Phaser, 2 = Pitch Shifter, 3 = Harmonist, 4 = Vibrato, 5 = Ring Modulator,
              6 = Humanizer (Table-10.1) -->
-        <field name="Mode" datatype="modulationMode" />
+        <field name="Mode" datatype="modulationMode" midi.doc="Selects either flanger, phaser, pitch shifter, harmonist, vibrato, ring modulator, or humanizer.&#10;FLANGER: The flanging effect gives a twisting, jet-airplane-like character to the sound.&#10;PHASER: By adding varied-phase portions to the direct sound, the phaser effect gives a whooshing, swirling character to the sound.&#10;PITCH SHIFTER: This creates an effect sound at a different pitch. The pitch can be shifted by up to 2 octaves, and you may play chords on your guitar.&#10;HARMONIST: This creates harmony in the key (scale) that you are using. When using the harmonist effect, play only single notes on your guitar.&#10;VIBRATO: This effect creates vibrato by slightly modulating the pitch.&#10;RING MODULATOR: This creates a bell-like sound by ring-modulating the guitar sound with the signal from the internal oscillator. The sound will be unmusical and lack distinctive pitches.&#10;HUMANIZER: This creates a human-like voice sound from the guitar sound." />
         <!-- 0x02: 0-4 (= 4, 6, 8, 10, 12 stage) (phaser) -->
-        <field name="PhaserType" datatype="phaserType" />
+        <field name="PhaserType" datatype="phaserType" midi.doc="Selects the number of stages that the phaser effect will use.&#10;4 STAGE: This is a four-phase effect. A light phaser effect is obtained.&#10;6 STAGE: This is a six-phase effect.&#10;8 STAGE: This is an eight-phase effect. It is the most popular phaser effect.&#10;10 STAGE: This is a ten-phase effect.&#10;12 STAGE: This is a twelve-phase effect. A deep phase effect is obtained.&#10;When 'PHASER' is selected." />
         <!-- 0x03: 0 = off, 1 = on, 2 = auto (vibrato) -->
-        <field name="VibratoTrigger" datatype="vibratoTrigger" />
+        <field name="VibratoTrigger" datatype="vibratoTrigger" midi.doc="Use a foot switch to turn the vibrato on/off. When 'AUTO' is selected, vibrato will automatically be applied each time picking occurs.&#10;This effect is designed to produce vibrato only while you depress a foot switch to produce a trigger signal.&#10;When 'VIBRATO' is selected." />
         <!-- 0x04: 0-100 (vibrato) -->
-        <field name="VibratoRiseTime" datatype="roland.level" />
+        <field name="VibratoRiseTime" datatype="roland.level" midi.doc="Adjusts the time from when the trigger is turned On until the specified vibrato depth is reached.&#10;When 'VIBRATO' is selected." />
         <!-- 0x05: 0 = auto, 1 = pedal (humanizer) -->
-        <field name="HumanizerMode" datatype="humanizerMode" />
+        <field name="HumanizerMode" datatype="humanizerMode" midi.doc="Select the way in which the two vowels will be switched.&#10;AUTO: Adjust 'RATE' and 'DEPTH' to switch between the two vowels.&#10;PEDAL: Use a pedal to switch between the two vowels.&#10;When 'HUMANIZER' is selected." />
         <!-- 0x06: 0-4 (= a, e, i, o, u) (humanizer) -->
-        <field name="HumanizerVowel1" datatype="vowel" />
+        <field name="HumanizerVowel1" datatype="vowel" midi.doc="This selects the first vowel.&#10;When 'HUMANIZER' is selected." />
         <!-- 0x07: 0-4 (= a, e, i, o, u) (humanizer) -->
-        <field name="HumanizerVowel2" datatype="vowel" />
+        <field name="HumanizerVowel2" datatype="vowel" midi.doc="This selects the second vowel.&#10;When 'HUMANIZER' is selected." />
         <!-- 0x08: 0-100 (flanger, phaser, vibrato, humanizer) -->
-        <field name="Rate" datatype="roland.level" />
+        <field name="Rate" datatype="roland.level" midi.doc="FLANGER: This sets the rate of the flanging effect.&#10;PHASER: This sets the rate of the Phaser effect.&#10;VIBRATO: Adjusts the frequency of the vibrato.&#10;HUMANIZER: Adjusts the cycle for switching between the two vowels (type AUTO)." />
         <!-- 0x09: 0-100 (flanger, phaser, vibrato, humanizer) -->
-        <field name="Depth" datatype="roland.level" />
+        <field name="Depth" datatype="roland.level" midi.doc="FLANGER: Determines the depth of the flanging effect.&#10;PHASER: Determines the depth of the Phaser effect.&#10;VIBRATO: Adjusts the depth of the vibrato.&#10;HUMANIZER: Adjusts the depth of the effect (type AUTO)." />
         <!-- 0x0A: 0-100 (flanger, phaser) -->
-        <field name="Manual" datatype="roland.level" />
+        <field name="Manual" datatype="roland.level" midi.doc="FLANGER: Adjusts the center frequency at which to apply the effect.&#10;PHASER: Adjusts the center frequency of the phaser effect." />
         <!-- 0x0B (MSB), 0x0C (LSB): 0-200 (= -100 - +100) (flanger, phaser) -->
-        <field name="Resonance" nodeDef="nibble8" datatype="int100" />
+        <field name="Resonance" nodeDef="nibble8" datatype="int100" midi.doc="Determines the amount of resonance (feedback). Increasing the value will emphasize the effect, creating a more unusual sound. Setting it to a minus value will create resonance having a reversed phase.&#10;When 'FLANGER' or 'PHASER' is selected." />
         <!-- 0x0D: 0 = off, 1-100 (phaser step rate) -->
-        <field name="PhaserStep" datatype="roland.level" />
+        <field name="PhaserStep" datatype="roland.level" midi.doc="This can be used to cause the sound to change in a stepped manner. Increasing the value will make the change finer.&#10;When 'PHASER' is selected." />
         <!-- 0x0E (MSB), 0x0F (LSB): 0-200 (= -100 - +100) (flanger) -->
-        <field name="FlangerSeparation" nodeDef="nibble8" datatype="int100" />
+        <field name="FlangerSeparation" nodeDef="nibble8" datatype="int100" midi.doc="Adjusts the diffusion. The diffusion increases as the value increases.&#10;When 'FLANGER' is selected." />
         <!-- 0x10: 0 = off, 1-100 (flanger) -->
-        <field name="FlangerGate" datatype="roland.level" />
+        <field name="FlangerGate" datatype="roland.level" midi.doc="This can be effectively used to cyclically cut the output from the flanger. Increasing the value will shorten the interval.&#10;When 'FLANGER' is selected." />
         <!-- 0x11: 0 = off, 1 = auto (humanizer) -->
-        <field name="HumanizerTrigger" datatype="humanizerTrigger" />
+        <field name="HumanizerTrigger" datatype="humanizerTrigger" midi.doc="This selects whether or not to have the timing adjusted so the unit will always begin with 'VOWEL1' when you play a string.&#10;AUTO: Yes, adjust the timing.&#10;OFF: No, do not adjust the timing.&#10;When 'HUMANIZER' is selected (type AUTO)." />
         <!-- 0x12: 0 = EXP pedal, 1 = FC-200EXP, 2-64 = MIDI CC (humanizer pedal source) -->
-        <field name="HumanizerPedal" datatype="pedal" />
+        <field name="HumanizerPedal" datatype="pedal" midi.doc="Specify the expression pedal (MIDI message) that will operate the humanizer.&#10;EXP PEDAL: Use an expression pedal (optional: FV-300L + PCS-33 (Roland), EV-5 (Roland)) connected to the EXP PEDAL jack.&#10;FC-200EXP: The expression pedal of the FC-200 will be used.&#10;MIDI C#1-31, 64-95: MIDI control change messages will be used. Specify the controller number.&#10;When 'HUMANIZER' is selected (type PEDAL)." />
         <!-- 0x13: 0 = intelligent, 1-100 (ring modulator) -->
-        <field name="RingModFrequency" datatype="roland.level" />
+        <field name="RingModFrequency" datatype="roland.level" midi.doc="Adjust the frequency of the internal oscillator. If 'INTELLIGENT' is selected, the oscillator frequency will change according to the pitch of the input sound, producing a sound that retains a sense of pitch.&#10;If 'INTELLIGENT' is used, the desired effect will not be obtained unless the pitch of the guitar is detected correctly. We recommend that you use this for playing single notes.&#10;When 'RING MODULATOR' is selected." />
         <!-- 0x14: 0-100 (ring modulator) -->
-        <field name="RingModEffectLevel" datatype="roland.level" />
+        <field name="RingModEffectLevel" datatype="roland.level" midi.doc="Adjusts the volume of the effect sound.&#10;When 'RING MODULATOR' is selected." />
         <!-- 0x15: 0-100 (ring modulator) -->
-        <field name="RingModDirectLevel" datatype="roland.level" />
+        <field name="RingModDirectLevel" datatype="roland.level" midi.doc="Adjusts the volume of the direct sound.&#10;When 'RING MODULATOR' is selected." />
         <!-- 0x16: 0 = slow, 1 = fast, 2 = mono (pitch shifter) -->
-        <field name="PitchShifterMode" datatype="pitchShifterMode" />
+        <field name="PitchShifterMode" datatype="pitchShifterMode" midi.doc="Selection for the type of pitch shifter.&#10;SLOW: Chords may be played. The response is slower, but the sound will waver less than 'FAST'.&#10;FAST: Chords may be played. The response is quicker than 'SLOW'.&#10;MONO: This is for mono input. Compared to conventional pitch shifters, the sound does not waver.&#10;When 'PITCH SHIFTER' is selected." />
         <!-- 0x17: 0-48 (= -24 - +24 semitones) (pitch shifter) -->
-        <field name="Pitch1" datatype="int24" />
+        <field name="Pitch1" datatype="int24" midi.doc="For the pitch shifted note of voice 1, specifies the pitch difference in semitone steps.&#10;When 'PITCH SHIFTER' is selected." />
         <!-- 0x18: 0-48 (= -24 - +24 semitones) (pitch shifter) -->
-        <field name="Pitch2" datatype="int24" />
+        <field name="Pitch2" datatype="int24" midi.doc="For the pitch shifted note of voice 2, specifies the pitch difference in semitone steps.&#10;When 'PITCH SHIFTER' is selected." />
         <!-- 0x19: 0-48 (= -24 - +24 semitones) (pitch shifter) -->
-        <field name="Pitch3" datatype="int24" />
+        <field name="Pitch3" datatype="int24" midi.doc="For the pitch shifted note of voice 3, specifies the pitch difference in semitone steps.&#10;When 'PITCH SHIFTER' is selected." />
         <!-- 0x1A: 0-100 (= -50 - +50) (pitch shifter) -->
-        <field name="Fine1" datatype="int50" />
+        <field name="Fine1" datatype="int50" midi.doc="For the pitch shifted note of voice 1, allows a fine adjustment of the pitch.&#10;If you were to shift the value of this parameter through its entire range (starting at -50 and finishing at +50) you would realize a total change of one semitone in the pitch.&#10;When 'PITCH SHIFTER' is selected." />
         <!-- 0x1B: 0-100 (= -50 - +50) (pitch shifter) -->
-        <field name="Fine2" datatype="int50" />
+        <field name="Fine2" datatype="int50" midi.doc="For the pitch shifted note of voice 2, allows a fine adjustment of the pitch.&#10;If you were to shift the value of this parameter through its entire range (starting at -50 and finishing at +50) you would realize a total change of one semitone in the pitch.&#10;When 'PITCH SHIFTER' is selected." />
         <!-- 0x1C: 0-100 (= -50 - +50) (pitch shifter) -->
-        <field name="Fine3" datatype="int50" />
+        <field name="Fine3" datatype="int50" midi.doc="For the pitch shifted note of voice 3, allows a fine adjustment of the pitch.&#10;If you were to shift the value of this parameter through its entire range (starting at -50 and finishing at +50) you would realize a total change of one semitone in the pitch.&#10;When 'PITCH SHIFTER' is selected." />
         <!-- 0x1D: 0-11 = C, Db - B major, 12-23 = C, Db - B minor (harmonist) -->
-        <field name="HarmonistKey" datatype="harmonistKey" />
+        <field name="HarmonistKey" datatype="harmonistKey" midi.doc="This sets the key for the song. If you make the appropriate key setting, the harmony that is generated will be appropriate for the song.&#10;When 'HARMONIST' is selected." />
         <!-- 0x1E: 0-28 (= -2 octaves - +2 octaves in diatonic steps, 14 = unison) (harmonist) -->
-        <field name="HarmonistInterval1" datatype="harmonistInterval" />
+        <field name="HarmonistInterval1" datatype="harmonistInterval" midi.doc="Determines the pitch interval (relative to the input note) at which the harmony of voice 1 will be generated. You can specify an interval of up to +/-2 octaves relative to the input note.&#10;If the resulting harmony is not what you want, you can make settings for 'IN' (input note) and 'OUT' (output note) and switch to the user scale. If you select the user scale, this parameter will be displayed as 'USER'.&#10;When 'HARMONIST' is selected." />
         <!-- 0x1F: 0-28 (= -2 octaves - +2 octaves in diatonic steps, 14 = unison) (harmonist) -->
-        <field name="HarmonistInterval2" datatype="harmonistInterval" />
+        <field name="HarmonistInterval2" datatype="harmonistInterval" midi.doc="Determines the pitch interval (relative to the input note) at which the harmony of voice 2 will be generated. You can specify an interval of up to +/-2 octaves relative to the input note.&#10;If the resulting harmony is not what you want, you can make settings for 'IN' (input note) and 'OUT' (output note) and switch to the user scale. If you select the user scale, this parameter will be displayed as 'USER'.&#10;When 'HARMONIST' is selected." />
         <!-- 0x20: 0-28 (= -2 octaves - +2 octaves in diatonic steps, 14 = unison) (harmonist) -->
-        <field name="HarmonistInterval3" datatype="harmonistInterval" />
+        <field name="HarmonistInterval3" datatype="harmonistInterval" midi.doc="Determines the pitch interval (relative to the input note) at which the harmony of voice 3 will be generated. You can specify an interval of up to +/-2 octaves relative to the input note.&#10;If the resulting harmony is not what you want, you can make settings for 'IN' (input note) and 'OUT' (output note) and switch to the user scale. If you select the user scale, this parameter will be displayed as 'USER'.&#10;When 'HARMONIST' is selected." />
         <!-- 0x21: 0-100 (= L100:R0 - L0:R100) (pitch shifter, harmonist) -->
-        <field name="Pan1" datatype="roland.level" />
+        <field name="Pan1" datatype="roland.level" midi.doc="Adjusts the stereo position (pan) of the shifted sound of voice 1.&#10;When 'PITCH SHIFTER' or 'HARMONIST' is selected." />
         <!-- 0x22: 0-100 (= L100:R0 - L0:R100) (pitch shifter, harmonist) -->
-        <field name="Pan2" datatype="roland.level" />
+        <field name="Pan2" datatype="roland.level" midi.doc="Adjusts the stereo position (pan) of the shifted sound of voice 2.&#10;When 'PITCH SHIFTER' or 'HARMONIST' is selected." />
         <!-- 0x23: 0-100 (= L100:R0 - L0:R100) (pitch shifter, harmonist) -->
-        <field name="Pan3" datatype="roland.level" />
+        <field name="Pan3" datatype="roland.level" midi.doc="Adjusts the stereo position (pan) of the shifted sound of voice 3.&#10;When 'PITCH SHIFTER' or 'HARMONIST' is selected." />
         <!-- 0x24: 0-100 (pitch shifter, harmonist) -->
-        <field name="Level1" datatype="roland.level" />
+        <field name="Level1" datatype="roland.level" midi.doc="Adjusts the output level of the shifted (harmony) note of voice 1.&#10;When 'PITCH SHIFTER' or 'HARMONIST' is selected." />
         <!-- 0x25: 0-100 (pitch shifter, harmonist) -->
-        <field name="Level2" datatype="roland.level" />
+        <field name="Level2" datatype="roland.level" midi.doc="Adjusts the output level of the shifted (harmony) note of voice 2.&#10;When 'PITCH SHIFTER' or 'HARMONIST' is selected." />
         <!-- 0x26: 0-100 (pitch shifter, harmonist) -->
-        <field name="Level3" datatype="roland.level" />
+        <field name="Level3" datatype="roland.level" midi.doc="Adjusts the output level of the shifted (harmony) note of voice 3.&#10;When 'PITCH SHIFTER' or 'HARMONIST' is selected." />
         <!-- 0x27: 0-100 (= D100:E0 - D0:E100) (pitch shifter, harmonist) -->
-        <field name="Balance" datatype="roland.level" />
+        <field name="Balance" datatype="roland.level" midi.doc="Adjusts the output balance between the direct sound (D) and the overall effect sound (E).&#10;When 'PITCH SHIFTER' or 'HARMONIST' is selected." />
         <!-- 0x28: 0-100 (pitch shifter, harmonist) -->
-        <field name="TotalLevel" datatype="roland.level" />
+        <field name="TotalLevel" datatype="roland.level" midi.doc="Adjusts the volume of the entire pitch shifter/harmonist.&#10;When 'PITCH SHIFTER' or 'HARMONIST' is selected." />
         <!--
           0x29-0x4C: the harmonist scale, one item per note of the key: C, Db, D, Eb, E, F, F#, G, Ab, A, Bb, B.
           Each item holds the interval of voice #1, #2 and #3 (harmonist).
@@ -352,11 +352,11 @@
             <group name="Scale" midi.transfer="atomic">
               <members>
                 <!-- 0x00: 0-48 (= -24 - +24 semitones, 24 = tonic, Table-10.2) -->
-                <field name="Interval1" datatype="int24" />
+                <field name="Interval1" datatype="int24" midi.doc="The user scale of voice 1: the 'OUT' note (output note) for this 'IN' note (input note). User scale settings are made by specifying the 'OUT' notes that will be output for each 'IN' note.&#10;When 'HARMONIST' is selected and the interval of voice 1 is 'USER'." />
                 <!-- 0x01: 0-48 (= -24 - +24 semitones, 24 = tonic, Table-10.2) -->
-                <field name="Interval2" datatype="int24" />
+                <field name="Interval2" datatype="int24" midi.doc="The user scale of voice 2: the 'OUT' note (output note) for this 'IN' note (input note). User scale settings are made by specifying the 'OUT' notes that will be output for each 'IN' note.&#10;When 'HARMONIST' is selected and the interval of voice 2 is 'USER'." />
                 <!-- 0x02: 0-48 (= -24 - +24 semitones, 24 = tonic, Table-10.2) -->
-                <field name="Interval3" datatype="int24" />
+                <field name="Interval3" datatype="int24" midi.doc="The user scale of voice 3: the 'OUT' note (output note) for this 'IN' note (input note). User scale settings are made by specifying the 'OUT' notes that will be output for each 'IN' note.&#10;When 'HARMONIST' is selected and the interval of voice 3 is 'USER'." />
               </members>
             </group>
           </members>
@@ -368,39 +368,39 @@
     <group name="delay">
       <members>
         <!-- 0x00: 0 = off, 1 = on -->
-        <field name="On" datatype="roland.switch" />
+        <field name="On" datatype="roland.switch" midi.doc="Turns the delay effect on/off." />
         <!-- 0x01: 0 = normal, 1 = tempo -->
-        <field name="Mode" datatype="delayMode" />
+        <field name="Mode" datatype="delayMode" midi.doc="Specify the delay mode.&#10;NORMAL: A conventional delay.&#10;TEMPO: A delay that lets you set the delay time using a foot switch." />
         <!-- 0x02: 0 = fixed, 1 = control 1, 2 = control 2, 3 = FC-200CTL, 4-67 = MIDI CC (tempo in control) -->
-        <field name="TempoIn" datatype="tempoIn" />
+        <field name="TempoIn" datatype="tempoIn" midi.doc="Determines the foot switch that will set the basic tempo.&#10;FIXED: The basic tempo will not be used. Instead, the delay times will be determined by the settings of 'TEMPO' (song tempo) and 'INTERVAL'.&#10;CONTROL 1, 2: A foot switch (optional: FS-5U, etc.) connected to the Control 1/2 jack will be used. Set the function of the Control 1/2 jack to 'ASSIGNABLE'.&#10;FC-200CTL: The control pedal of the FC-200 will be used.&#10;MIDI C#1-31, 64-95: MIDI control change messages will be used. Specify the controller number here.&#10;When 'TEMPO' is selected." />
         <!-- 0x03 (MSB), 0x04 (LSB): 0-250 (= 50-300 BPM) (tempo) -->
-        <field name="Tempo" nodeDef="nibble8" datatype="uint50_300" />
+        <field name="Tempo" nodeDef="nibble8" datatype="uint50_300" midi.doc="When 'TEMPO IN' is set to 'FIXED', this sets the tempo.&#10;This parameter is displayed only if 'TEMPO IN' is set to 'FIXED'.&#10;When 'TEMPO' is selected." />
         <!-- 0x05 (MSB), 0x06 (LSB): 0-2000 ms (normal) -->
-        <field name="TimeCenter" nodeDef="sysex14" datatype="uint2000" />
+        <field name="TimeCenter" nodeDef="sysex14" datatype="uint2000" midi.doc="Adjusts the delay time of the center channel.&#10;When 'NORMAL' is selected." />
         <!-- 0x07 (MSB), 0x08 (LSB): 0-400 % of the center (normal) -->
-        <field name="TimeLeft" nodeDef="sysex14" datatype="uint400" />
+        <field name="TimeLeft" nodeDef="sysex14" datatype="uint400" midi.doc="Adjusts the delay time of the left channel delay. This setting adjusts the left channel delay time relative to the center channel delay time (considered as 100%)." />
         <!-- 0x09 (MSB), 0x0A (LSB): 0-400 % of the center (normal) -->
-        <field name="TimeRight" nodeDef="sysex14" datatype="uint400" />
+        <field name="TimeRight" nodeDef="sysex14" datatype="uint400" midi.doc="Adjusts the delay time of the right channel delay. This setting adjusts the right channel delay time relative to the center channel delay time (considered as 100%)." />
         <!-- 0x0B: 0-10 (= sixteenth note - whole note, Table-11.1) (tempo) -->
-        <field name="IntervalCenter" datatype="delayInterval" />
+        <field name="IntervalCenter" datatype="delayInterval" midi.doc="Adjusts the delay time of the center channel. The delay time is calculated relative to the basic tempo (the intervals at which you press the foot switch), which is considered as '1'.&#10;When 'TEMPO' is selected." />
         <!-- 0x0C: 0-100 -->
-        <field name="Feedback" datatype="roland.level" />
+        <field name="Feedback" datatype="roland.level" midi.doc="Feedback refers to returning the delayed signal back into the input of the delay. This parameter adjusts the volume that is returned to the input. Higher settings will result in more delay repeats." />
         <!-- 0x0D: 0-100 -->
-        <field name="LevelCenter" datatype="roland.level" />
+        <field name="LevelCenter" datatype="roland.level" midi.doc="Adjusts the volume of the center channel delay." />
         <!-- 0x0E: 0-100 -->
-        <field name="LevelLeft" datatype="roland.level" />
+        <field name="LevelLeft" datatype="roland.level" midi.doc="Adjusts the volume of the left channel delay." />
         <!-- 0x0F: 0-100 -->
-        <field name="LevelRight" datatype="roland.level" />
+        <field name="LevelRight" datatype="roland.level" midi.doc="Adjusts the volume of the right channel delay." />
         <!-- 0x10: 0-50 (= -50 - 0) -->
-        <field name="HighDamp" datatype="shiftDown50" />
+        <field name="HighDamp" datatype="shiftDown50" midi.doc="Adjusts the amount of high damping (the way in which the higher frequency range of the delay sound will diminish). With a setting of '0' there will be no high damping effect." />
         <!-- 0x11: 0-15 = hiCut -->
-        <field name="HighCut" datatype="hiCut" />
+        <field name="HighCut" datatype="hiCut" midi.doc="The high cut filter cuts the frequencies above the specified frequency. This setting adjusts the frequency at which the high cut filter will begin to take effect. When 'FLAT' is selected, the high cut filter will have no effect." />
         <!-- 0x12: 0 = off, 1 = on -->
-        <field name="Smooth" datatype="roland.switch" />
+        <field name="Smooth" datatype="roland.switch" midi.doc="If smooth is turned on, the delay time will change smoothly when the delay time is modified." />
         <!-- 0x13: 0-100 -->
-        <field name="EffectLevel" datatype="roland.level" />
+        <field name="EffectLevel" datatype="roland.level" midi.doc="Adjusts the overall volume of the entire delay sound." />
         <!-- 0x14: 0-100 -->
-        <field name="DirectLevel" datatype="roland.level" />
+        <field name="DirectLevel" datatype="roland.level" midi.doc="Adjusts the volume of the direct sound." />
       </members>
     </group>
 
@@ -408,23 +408,23 @@
     <group name="chorus">
       <members>
         <!-- 0x00: 0 = off, 1 = on -->
-        <field name="On" datatype="roland.switch" />
+        <field name="On" datatype="roland.switch" midi.doc="Turns the chorus effect on/off." />
         <!-- 0x01: 0 = mono, 1 = stereo -->
-        <field name="Mode" datatype="chorusMode" />
+        <field name="Mode" datatype="chorusMode" midi.doc="Selection for the chorus mode.&#10;MONO: This chorus effect outputs the same sound from both L and R.&#10;STEREO: This is a stereo chorus effect that adds different chorus sounds to L and R." />
         <!-- 0x02: 0-100 -->
-        <field name="Rate" datatype="roland.level" />
+        <field name="Rate" datatype="roland.level" midi.doc="Adjusts the rate of the Chorus effect." />
         <!-- 0x03: 0-100 -->
-        <field name="Depth" datatype="roland.level" />
+        <field name="Depth" datatype="roland.level" midi.doc="Adjusts the depth of the Chorus effect. To use it for doubling, set the value to '0'." />
         <!-- 0x04: 0-100 (= 0.0 - 50.0 ms) -->
-        <field name="PreDelay" datatype="halves0_50" />
+        <field name="PreDelay" datatype="halves0_50" midi.doc="Adjusts the time needed for the effect sound to be output after the direct sound has been output. By setting a longer Pre Delay time, you can obtain an effect that sounds like more than one sound is being played at the same time (doubling effect)." />
         <!-- 0x05: 0-10 = lowCut -->
-        <field name="LowCut" datatype="lowCut" />
+        <field name="LowCut" datatype="lowCut" midi.doc="The low cut filter cuts the frequencies below the specified frequency. This setting adjusts the frequency at which the low cut filter will begin to take effect. When 'FLAT' is selected, the low cut filter will have no effect." />
         <!-- 0x06: 0-15 = hiCut -->
-        <field name="HighCut" datatype="hiCut" />
+        <field name="HighCut" datatype="hiCut" midi.doc="The high cut filter cuts the frequencies above the specified frequency. This setting adjusts the frequency at which the high cut filter will begin to take effect. When 'FLAT' is selected, the high cut filter will have no effect." />
         <!-- 0x07: 0-10 (= T10:S0 - T0:S10, the mix of triangle and sine) -->
-        <field name="ModWave" datatype="uint10" />
+        <field name="ModWave" datatype="uint10" midi.doc="Determines the waveform of the LFO (Low Frequency Oscillator) that will modulate the chorus effect. You can specify the proportions of 'TRI' (triangle wave) and 'SIN' (sine wave) to use in order to apply chorus using a mixed waveform.&#10;Ordinarily, chorus is applied using 'TRI'." />
         <!-- 0x08: 0-100 -->
-        <field name="EffectLevel" datatype="roland.level" />
+        <field name="EffectLevel" datatype="roland.level" midi.doc="Adjusts the volume of the effect sound." />
       </members>
     </group>
 
@@ -432,15 +432,15 @@
     <group name="tremoloPan">
       <members>
         <!-- 0x00: 0 = off, 1 = on -->
-        <field name="On" datatype="roland.switch" />
+        <field name="On" datatype="roland.switch" midi.doc="Turns the tremolo/pan effect on/off." />
         <!-- 0x01: 0 = tremolo triangle, 1 = tremolo square, 2 = pan triangle, 3 = pan square -->
-        <field name="Mode" datatype="tremoloPanMode" />
+        <field name="Mode" datatype="tremoloPanMode" midi.doc="Selection for tremolo or pan. And selection for the waveform that the effect will use.&#10;TREMOLO (triangle): The volume will change cyclically. And smooth change will be produced.&#10;TREMOLO (square): The volume will change cyclically. And abrupt change will be produced.&#10;PAN (triangle): The sound will be moved cyclically between left and right. And smooth change will be produced.&#10;PAN (square): The sound will be moved cyclically between left and right. And abrupt change will be produced." />
         <!-- 0x02: 0-100 -->
-        <field name="Rate" datatype="roland.level" />
+        <field name="Rate" datatype="roland.level" midi.doc="Adjusts the frequency (speed) of the change." />
         <!-- 0x03: 0-100 -->
-        <field name="Depth" datatype="roland.level" />
+        <field name="Depth" datatype="roland.level" midi.doc="Adjusts the depth of the effect." />
         <!-- 0x04: 0-100 (= L100:R0 - L0:R100) -->
-        <field name="Balance" datatype="roland.level" />
+        <field name="Balance" datatype="roland.level" midi.doc="Adjusts the stereo position of the sound." />
       </members>
     </group>
 
@@ -448,23 +448,23 @@
     <group name="reverb">
       <members>
         <!-- 0x00: 0 = off, 1 = on -->
-        <field name="On" datatype="roland.switch" />
+        <field name="On" datatype="roland.switch" midi.doc="Turns the reverb effect on/off." />
         <!-- 0x01: 0-4 (= Room1, Room2, Hall1, Hall2, Plate) -->
-        <field name="Type" datatype="reverbType" />
+        <field name="Type" datatype="reverbType" midi.doc="This selects the Reverb Type. Various different simulations of space are offered.&#10;ROOM 1: Simulates the reverberation in a small room. Provides the bright reverberation of a live room.&#10;ROOM 2: Simulates the reverberation in a small room. Provides warm reverberations.&#10;HALL 1: Simulates the reverberation in a concert hall. Provides clear and spacious reverberations.&#10;HALL 2: Simulates the reverberation in a concert hall. Provides warm reverberations.&#10;PLATE: Simulates plate reverberation (a reverb unit that uses the vibration of a metallic plate). Provides a metallic sound with a distinct upper range." />
         <!-- 0x02: 1-100 (= 0.1 - 10.0 s) -->
-        <field name="Time" datatype="tenths01_100" />
+        <field name="Time" datatype="tenths01_100" midi.doc="Adjusts the length (time) of reverberation." />
         <!-- 0x03: 0-100 ms -->
-        <field name="PreDelay" datatype="roland.level" />
+        <field name="PreDelay" datatype="roland.level" midi.doc="Adjusts the time until the reverb sound appears." />
         <!-- 0x04: 0-10 = lowCut (the manual refers to Table-15 and Table-16 the other way around) -->
-        <field name="LowCut" datatype="lowCut" />
+        <field name="LowCut" datatype="lowCut" midi.doc="The low cut filter cuts the frequencies below the specified frequency. This setting adjusts the frequency at which the low cut filter will begin to take effect. When 'FLAT' is selected, the low cut filter will have no effect." />
         <!-- 0x05: 0-15 = hiCut -->
-        <field name="HighCut" datatype="hiCut" />
+        <field name="HighCut" datatype="hiCut" midi.doc="The high cut filter cuts the frequencies above the specified frequency. This setting adjusts the frequency at which the high cut filter will begin to take effect. When 'FLAT' is selected, the high cut filter will have no effect." />
         <!-- 0x06: 0-10 -->
-        <field name="Diffusion" datatype="uint10" />
+        <field name="Diffusion" datatype="uint10" midi.doc="Adjusts the spatial spread of the reverb sound." />
         <!-- 0x07: 0-100 -->
-        <field name="EffectLevel" datatype="roland.level" />
+        <field name="EffectLevel" datatype="roland.level" midi.doc="Adjusts the volume of the reverb sound." />
         <!-- 0x08: 0-100 -->
-        <field name="DirectLevel" datatype="roland.level" />
+        <field name="DirectLevel" datatype="roland.level" midi.doc="Adjusts the volume of the direct sound." />
       </members>
     </group>
 
@@ -515,38 +515,38 @@
         <group name="Common" midi.transfer="atomic" midi.stride="0x01-00">
           <members>
             <!-- 0x00: 0-10 (= 435 - 445 Hz) -->
-            <field name="TunerPitch" datatype="tunerPitch" />
+            <field name="TunerPitch" datatype="tunerPitch" midi.doc="'Standard pitch' is the frequency of the A4 note (middle A on a piano) that is used as a standard to which all other notes are tuned. The GX-700 allows you to set the standard pitch over the range of 435 - 445 Hz.&#10;At the factory settings, this is set to 440 Hz." />
             <!-- 0x01: 0 = off, 1 = on, 2 = flat, 3 = double flat -->
             <field name="TunerString" datatype="tunerString" />
             <!-- 0x02: 0-100 -->
             <field name="TunerLevel" datatype="roland.level" />
             <!-- 0x03: 0 = guitar amp (combo), 1 = guitar amp (stack), 2 = power amp (combo), 3 = power amp (stack),
                  4 = line -->
-            <field name="OutputType" datatype="outputType" />
+            <field name="OutputType" datatype="outputType" midi.doc="Specify the type of the equipment that is connected to the output jack.&#10;GUITAR AMP (COMBO): Use this setting when connecting to the guitar input of a combo-type guitar amp (i.e., amp and speaker contained in a single unit).&#10;GUITAR AMP (STACK): Use this setting when connecting to the guitar input of a stack-type guitar amp (i.e., amp and speaker in separate units).&#10;POWER AMP (COMBO): Use this setting when connecting to the RETURN or MAIN IN of a combo-type guitar amp.&#10;POWER AMP (STACK): Use this setting when connecting to a power amp and speaker box, or to the RETURN or MAIN IN of a stack-type guitar amp.&#10;LINE: Use this setting when connecting to a mixer or MTR. This setting is also used when using headphones." />
             <!-- 0x04: 0 = patch, 1 = always off, 2 = always on -->
-            <field name="SpeakerSimulator" datatype="speakerSimulatorMode" />
+            <field name="SpeakerSimulator" datatype="speakerSimulatorMode" midi.doc="This turns the Speaker Simulator On/Off. Normally, this setting is turned on/off in accord with the Patch settings, but you may wish to turn it on for all Patches when listening through headphones, or when carrying out line recording. Alternatively, when playing all Patches through an amp you may wish to turn it off.&#10;PATCH: The Speaker Simulator will be on or off as specified by each Patch.&#10;ALWAYS ON: The Speaker Simulator will be on regardless of the Patch setting. The parameter settings for the Speaker Simulator will be as specified in the Patch settings.&#10;ALWAYS OFF: The Speaker Simulator will be off regardless of the Patch setting." />
             <!-- 0x05: 0-40 (= -20 - +20 dB) -->
-            <field name="NsThresholdLevel" datatype="int20" />
+            <field name="NsThresholdLevel" datatype="int20" midi.doc="Specify a compensatory adjustment of -20 dB - +20 dB to the threshold level of the noise suppressor that is included in each patch. This allows you to make temporary compensation for the output level of the guitar you are using, without changing the settings of each patch.&#10;If you wish to use the settings of each patch without change, set this to '0 dB'.&#10;This will have no effect on patches in which the noise suppressor is turned off." />
             <!-- 0x06 (MSB), 0x07 (LSB): 0-200 -->
-            <field name="ReverbLevel" nodeDef="nibble8" datatype="uint200" />
+            <field name="ReverbLevel" nodeDef="nibble8" datatype="uint200" midi.doc="Specify a compensatory adjustment of 0% - 200% to the reverb level of each patch. This allows you to make temporary compensation for the acoustics of the place where you are performing, without changing the settings of each patch.&#10;If you wish to use the settings of each patch without change, set this to '100%'.&#10;This will have no effect on patches in which reverb is turned off." />
             <!-- 0x08: 0 = number up, 1 = number down, 2 = bypass, 3 = tuner, 4 = assignable -->
-            <field name="Control1Jack" datatype="controlJack" />
+            <field name="Control1Jack" datatype="controlJack" midi.doc="Set the function of the CONTROL 1 Jack.&#10;NUMBER UP: The jack will function as a remote jack for incrementing the Patch number. Connect a momentary-type foot switch (optional: FS-5U etc.)&#10;NUMBER DOWN: The jack will function as a remote jack for decrementing the Patch number. Connect a momentary-type foot switch (optional: FS-5U etc.)&#10;BYPASS: The jack will function as a remote jack for turning bypass on/off. Connect a momentary-type foot switch (optional: FS-5U etc.)&#10;TUNER: The jack will function as a remote jack for turning the tuner on/off. Connect a momentary-type foot switch (optional: FS-5U etc.)&#10;ASSIGNABLE: The jack will function as a controller jack for the Control Assign function. Connect the type of foot switch that is appropriate for the control target you select." />
             <!-- 0x09: 0 = number up, 1 = number down, 2 = bypass, 3 = tuner, 4 = assignable -->
-            <field name="Control2Jack" datatype="controlJack" />
+            <field name="Control2Jack" datatype="controlJack" midi.doc="Set the function of the CONTROL 2 Jack.&#10;NUMBER UP: The jack will function as a remote jack for incrementing the Patch number. Connect a momentary-type foot switch (optional: FS-5U etc.)&#10;NUMBER DOWN: The jack will function as a remote jack for decrementing the Patch number. Connect a momentary-type foot switch (optional: FS-5U etc.)&#10;BYPASS: The jack will function as a remote jack for turning bypass on/off. Connect a momentary-type foot switch (optional: FS-5U etc.)&#10;TUNER: The jack will function as a remote jack for turning the tuner on/off. Connect a momentary-type foot switch (optional: FS-5U etc.)&#10;ASSIGNABLE: The jack will function as a controller jack for the Control Assign function. Connect the type of foot switch that is appropriate for the control target you select." />
             <!-- 0x0A (MSB), 0x0B (LSB): 1-200 (patch number) -->
-            <field name="NumberUpDownMin" nodeDef="nibble8" datatype="patchNumber" />
+            <field name="NumberUpDownMin" nodeDef="nibble8" datatype="patchNumber" midi.doc="Specify the range of Patch numbers that can be selected by a foot switch connected to the CONTROL 1/2 Jack: the lower limit 'MIN'." />
             <!-- 0x0C (MSB), 0x0D (LSB): 1-200 (patch number) -->
-            <field name="NumberUpDownMax" nodeDef="nibble8" datatype="patchNumber" />
+            <field name="NumberUpDownMax" nodeDef="nibble8" datatype="patchNumber" midi.doc="Specify the range of Patch numbers that can be selected by a foot switch connected to the CONTROL 1/2 Jack: the upper limit 'MAX'." />
             <!-- 0x0E: 0 = off, 1 = on -->
-            <field name="AssignHold" datatype="roland.switch" />
+            <field name="AssignHold" datatype="roland.switch" midi.doc="Specifies whether or not the previous values of controller sources will be maintained when the Patch changes.&#10;ON: Controller source values will be maintained when the Patch changes. When you select a new Patch number, target parameters which are using the same sources will maintain the previous values of the controller sources.&#10;OFF: Controller source values will not be maintained when the Patch changes. When you select a new Patch number, the effect sound will initially be unaffected by the current position of the controllers. As soon as you move a controller and its data is transmitted to the GX-700, the target parameter for that controller will be affected." />
             <!-- 0x0F: 0 = bypass, 1 = mute -->
-            <field name="BypassMode" datatype="bypassMode" />
+            <field name="BypassMode" datatype="bypassMode" midi.doc="Specify the result of turning BYPASS On.&#10;BYPASS: The guitar sound being input will be output without change.&#10;MUTE: Nothing will be output from any OUTPUT Jack; i.e., the GX-700 will be muted (silent)." />
             <!-- 0x10: 0-15 -->
-            <field name="LcdContrast" datatype="uint15" />
+            <field name="LcdContrast" datatype="uint15" midi.doc="Depending on the location where you place the GX-700, the display may be difficult to read. In this case, adjust the display contrast." />
             <!-- 0x11: 0-15 (= 1-16) -->
-            <field name="MidiChannel" datatype="midiChannel" />
+            <field name="MidiChannel" datatype="midiChannel" midi.doc="Set the MIDI channel used for transmitting and receiving MIDI messages.&#10;With the factory settings, the MIDI channel will be channel 1." />
             <!-- 0x12: 0 = omni off, 1 = omni on -->
-            <field name="OmniMode" datatype="roland.switch" />
+            <field name="OmniMode" datatype="roland.switch" midi.doc="If Omni Mode is turned on, MIDI data will be received on all channels, regardless of the MIDI Channel setting.&#10;Even if Omni mode is turned on, system exclusive data is received only if its device ID matches the 'Device ID' setting.&#10;With the factory settings, the setting is Omni On." />
           </members>
         </group>
         <!--
@@ -1540,7 +1540,7 @@
           </members>
         </repeat>
         <!-- Patch 101-200. -->
-        <repeat name="Preset" midi.address="0x01-00-00-00" midi.stride="0x00-01-00-00" midi.repeat="100">
+        <repeat name="Preset" midi.address="0x01-00-00-00" midi.stride="0x00-01-00-00" midi.repeat="100" midi.access="read">
           <members>
             <group name="Patch" nodeDef="patch" />
           </members>
