@@ -378,10 +378,11 @@ the map root does not need is marked, and so are the required ones still without
 not known), the MIDI endpoint and UMP groups with the
 device's connection and its tests (see [MIDI](#midi)), colors and its own schemas (schema files and assemblies, added
 and removed there); *Remove* takes it out. The *+* of the rig adds a device for an address map of the library (the
-other root groups in a submenu; named after it: `Gp8.AddressMap` is `gp8`), or from a schema file or an assembly the
-user picks: it becomes a schema source of the new device, which gets a root group of the documents the file brings
-(`SchemaLibrary.RootsFromFile`, an address map first), also when such a document replaces a built-in one of the same
-name; that replacement holds for all devices of the rig, and is shown as information. A change of the schemas builds
+other root groups in a submenu; named after it: `Gp8.AddressMap` is `gp8`). It also brings in the schemas (and
+exchange files) of a schema file or an assembly the user picks: the file becomes a schema source of the rig
+(`Rig.Sources`), and the root groups of the documents it brings (`SchemaLibrary.RootsFromFile`) are offered by the *+*
+from then on; no device is added. A file that brings no root group is not added (reported). A document of the file that
+replaces a built-in one of the same name does so for all devices of the rig, and is shown as information. A change of the schemas builds
 the library again, which resets the values of the devices (reported); schema files and assemblies are loaded by their
 path, so not in the browser. Open dashboards that use a renamed or removed alias are reported (a renamed one is
 renamed in the dashboard's properties).

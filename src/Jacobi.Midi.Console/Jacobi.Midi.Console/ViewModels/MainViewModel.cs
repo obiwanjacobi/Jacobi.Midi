@@ -44,8 +44,9 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     // the devices of the dashboard shown whose values were received while online (Play mode with MIDI), for that session
     private readonly HashSet<string> _received = new(StringComparer.OrdinalIgnoreCase);
     private DashboardSession? _receivedFor;
-    private Rig? _rig;
-    /// <summary>Where the rig was read from, and whether it changed since.</summary>
+    // a rig is always open: the console starts with a new, empty one (see UseRig)
+    private Rig _rig = new();
+    /// <summary>Where the rig was read from (no file for a new rig), and whether it changed since.</summary>
     [ObservableProperty]
     public partial FileOrigin RigOrigin { get; private set; } = new();
 
@@ -61,8 +62,9 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             OnPropertyChanged(nameof(UndoTip));
             OnPropertyChanged(nameof(RedoTip));
         };
-        // the console starts empty
-        Status = "Open a rig (☰ › Open › Rig…), then open its dashboards or make a new one (+ in Edit mode).";
+        // the console starts with a new rig, without dashboards
+        UseRig(new Rig(), NewRigOrigin());
+        Status = "Add devices to the new rig (+ of the rig in Edit mode) or open a rig (☰ › Open › Rig…); then open its dashboards or make a new one (+ in Edit mode).";
     }
 
     /// <summary>The edits of the open dashboards and rig.</summary>
@@ -326,17 +328,24 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             LoadRig(file);
     }
 
+    /// <summary>Starts a new, empty rig (not saved yet) in place of the open one; when that changed since it was saved, after the user confirmed discarding the changes.</summary>
+    [RelayCommand]
+    private async Task NewRig()
+    {
+        if (!await ConfirmDiscard(RigOrigin, "New rig", $"The rig '{RigOrigin.Name}' has unsaved changes. A new rig discards them.", "New rig"))
+            return;
+        UseRig(new Rig(), NewRigOrigin());
+    }
+
+    // a new rig has no file yet: Save asks where
+    private static FileOrigin NewRigOrigin() => new() { Name = "New rig.rig.xml" };
+
     // opens the rig of the file in place of the open one, the open dashboards on it; false when it cannot be read (reported)
     private bool LoadRig(PickedFile file)
     {
         try
         {
-            _rig = RigFile.Read(file.Text, FileFormats.FromPath(file.Name));
-            RigOrigin = file.Origin;
-            // the edits and reports may be of the rig that was open
-            History.Clear();
-            _reports.Clear();
-            OpenSessions();
+            UseRig(RigFile.Read(file.Text, FileFormats.FromPath(file.Name)), file.Origin);
             return true;
         }
         catch (Exception exception) when (exception is FileFormatException or ArgumentException)
@@ -344,6 +353,17 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             Report($"'{file.Name}' cannot be opened", exception.Message);
             return false;
         }
+    }
+
+    // the rig in place of the open one, the open dashboards on it
+    private void UseRig(Rig rig, FileOrigin origin)
+    {
+        _rig = rig;
+        RigOrigin = origin;
+        // the edits and reports may be of the rig that was open
+        History.Clear();
+        _reports.Clear();
+        OpenSessions();
     }
 
     /// <summary>Opens another dashboard on the rig, next to the open ones.</summary>
@@ -392,7 +412,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     private async Task OpenRigOf(Dashboard dashboard, FileOrigin origin)
     {
         var referred = dashboard.RigPath is { } path ? FilePaths.Resolve(path, origin.Directory) : null;
-        if (_rig is not null && dashboard.DeviceProblems(_rig).Count == 0)
+        if (dashboard.DeviceProblems(_rig).Count == 0)
         {
             if (referred is not null && Path.IsPathRooted(referred) && LocalPath(RigOrigin) is { } open && !FilePaths.AreSame(referred, open))
                 Inform($"'{dashboard.Name}'", $"it was made with the rig '{dashboard.RigPath}'; it is opened on '{RigOrigin.Name}', which has its devices.");
@@ -402,9 +422,8 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             return;
 
         var rigName = Path.GetFileName(rigPath);
-        if (_rig is not null
-            && (!await Confirm("ANOTHER RIG", $"Open the rig '{rigName}'", $"'{dashboard.Name}' was made with the rig '{rigPath}'; the open rig '{RigOrigin.Name}' does not have its devices. Opening its rig replaces the open one.", "Replace")
-                || !await ConfirmDiscard(RigOrigin, "Replace the rig", $"The rig '{RigOrigin.Name}' has unsaved changes. Opening another rig discards them.", "Replace")))
+        if (!await Confirm("ANOTHER RIG", $"Open the rig '{rigName}'", $"'{dashboard.Name}' was made with the rig '{rigPath}'; the open rig '{RigOrigin.Name}' does not have its devices. Opening its rig replaces the open one.", "Replace")
+            || !await ConfirmDiscard(RigOrigin, "Replace the rig", $"The rig '{RigOrigin.Name}' has unsaved changes. Opening another rig discards them.", "Replace"))
             return;
 
         var file = await ReadFile(referred!);
@@ -435,11 +454,6 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     [RelayCommand]
     private void NewDashboard()
     {
-        if (_rig is null)
-        {
-            Status = "Open a rig first: a dashboard is built from the parameters of its devices.";
-            return;
-        }
         var name = "New dashboard";
         for (var number = 2; Dashboards.Any(entry => entry.Dashboard.Name == name); number++)
             name = $"New dashboard {number}";
@@ -510,7 +524,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     private async Task Save()
     {
         var saved = new List<string>();
-        if (_rig is not null && RigOrigin.IsChanged && await WriteRig(saveAs: false))
+        if (RigOrigin.IsChanged && await WriteRig(saveAs: false))
             saved.Add(RigOrigin.Name);
         if (SelectedDashboard is { Origin.IsChanged: true } entry && await WriteDashboard(saveAs: false))
             saved.Add(entry.Origin.Name);
@@ -575,7 +589,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
 
     public void SetDeviceColor(string alias, ColorArea area, RgbColor? color)
     {
-        if (_rig?.Find(alias) is not { } device)
+        if (_rig.Find(alias) is not { } device)
             return;
         var name = AreaColors.NameOf(area).ToLowerInvariant();
         var edit = new ValueEdit<string?>($"{name} color of device '{alias}'", () => device.Colors[area],
@@ -956,9 +970,9 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             ? BindingScope.Of(dashboard.Layout, parent) ?? BindingScope.None
             : BindingScope.None;
 
-    public bool IsDeviceOfRig(string alias) => _rig?.Find(alias) is not null;
+    public bool IsDeviceOfRig(string alias) => _rig.Find(alias) is not null;
 
-    public DeviceInstance? FindDevice(string alias) => _rig?.Find(alias);
+    public DeviceInstance? FindDevice(string alias) => _rig.Find(alias);
 
     /// <summary>
     /// Changes a property of a device of the rig as an edit (nothing when the value is the same); the rig is opened again
@@ -1043,7 +1057,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             return false;
         var listed = dashboard.FindDevice(alias);
         var device = listed
-            ?? (_rig?.Find(alias) is { } instance ? new DashboardDevice(instance.Alias, instance.MapRoot) : null)
+            ?? (_rig.Find(alias) is { } instance ? new DashboardDevice(instance.Alias, instance.MapRoot) : null)
             ?? throw new ArgumentException($"The dashboard does not list '{alias}' and the rig has no device with this alias.", nameof(alias));
         var changed = change(device);
         if (listed is not null && changed == listed)
@@ -1061,46 +1075,46 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     [RelayCommand]
     private void AddDevice(string mapRoot)
     {
-        if (_rig is null)
-        {
-            Status = "Open a rig first.";
+        var rig = _rig;
+        var device = new DeviceInstance { Alias = AliasFor(mapRoot), MapRoot = mapRoot };
+        if (!DoRigEdit(new ValueEdit<IReadOnlyList<DeviceInstance>>($"add device '{device.Alias}'", () => rig.Devices, value => rig.Devices = value, [.. rig.Devices, device])))
             return;
-        }
-        AddDevice(new DeviceInstance { Alias = AliasFor(mapRoot), MapRoot = mapRoot }, rebuildsLibrary: false);
+        SelectedRigItem = RigTree.FirstOrDefault(item => item.Instance == device);
+        Status = $"Device '{device.Alias}' ({device.MapRoot}) added. Save to keep it in the rig.";
     }
 
     /// <summary>
-    /// Adds a device to the rig for the address map of a schema file or an assembly the user picks: the file becomes a
-    /// schema source of the device, and the library is built again with it (the values of the devices are reset).
+    /// Adds a schema file or an assembly the user picks to the schemas of the rig (<see cref="Rig.Sources"/>): the
+    /// library is built again with it (the values of the devices are reset) and the root groups it brings are offered
+    /// by the + of the rig; no device is added.
     /// </summary>
-    public async Task AddDeviceFrom(SchemaSourceKind kind)
+    public async Task AddRigSource(SchemaSourceKind kind)
     {
-        if (_rig is null)
-        {
-            Status = "Open a rig first.";
-            return;
-        }
         if (await PickSource(kind) is not { } path)
             return;
-        var device = new DeviceInstance { Alias = "device", MapRoot = String.Empty, Sources = SourcesWith(SchemaSources.None, kind, path) };
-        // the root groups of the documents the file brings (address maps first; also those that replace a built-in
-        // schema of the same name, which is told in the notifications)
-        var library = BuildLibrary(device);
-        var brought = (kind == SchemaSourceKind.Assembly ? library.RootsFromAssembly(AssemblyNameOf(path)) : library.RootsFromFile(path))
-            .Select(name => name.ToString()).ToList();
+        var rig = _rig;
+        var name = Path.GetFileName(path);
+        if (rig.Sources.Schemas.Concat(rig.Sources.Assemblies).Contains(path, StringComparer.OrdinalIgnoreCase))
+        {
+            Status = $"The rig has '{name}' already.";
+            return;
+        }
+        var sources = SourcesWith(rig.Sources, kind, path);
+        // the root groups of the documents the file brings (also those that replace a built-in schema of the same
+        // name, which is told in the notifications); a file that brings none is not added
+        var library = BuildLibrary(sources);
+        var brought = kind == SchemaSourceKind.Assembly ? library.RootsFromAssembly(AssemblyNameOf(path)) : library.RootsFromFile(path);
         if (brought.Count == 0)
         {
             var problems = library.Problems.Where(problem => problem.IsError).Select(problem => $"{problem.Source}: {problem.Message}").ToList();
-            Report($"'{Path.GetFileName(path)}'", problems.Count > 0
-                ? $"no device is added: {String.Join(" ", problems)}"
-                : "it has no root group: no device is added. Add it to a device in its panel when that device's schema needs it.");
+            Report($"'{name}'", problems.Count > 0
+                ? $"it is not added to the rig: {String.Join(" ", problems)}"
+                : "it has no root group: it is not added to the rig. Add it to a device in its panel when that device's schema needs it.");
             return;
         }
-        device.MapRoot = brought[0];
-        device.Alias = AliasFor(device.MapRoot);
-        AddDevice(device, rebuildsLibrary: true);
-        if (brought.Count > 1)
-            Status += $" It brings {brought.Count} root groups; choose another as its root in its panel.";
+        if (!DoRigEdit(new ValueEdit<SchemaSources>("schemas of the rig", () => rig.Sources, value => rig.Sources = value, sources), rebuildsLibrary: true))
+            return;
+        Status = $"'{name}' added to the rig: its {brought.Count} root group(s) can be added as a device with the + of the rig; the schemas were built again, so the values of the devices were reset. Save to keep it in the rig.";
     }
 
     // the name an assembly file has (its embedded schemas are known by it); the file name when it cannot be read
@@ -1149,15 +1163,6 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         Status = $"Device '{device.Alias}': {shown}; the schemas were built again, so the values of the devices were reset. Save to keep it in the rig.";
     }
 
-    private void AddDevice(DeviceInstance device, bool rebuildsLibrary)
-    {
-        var rig = _rig!;
-        if (!DoRigEdit(new ValueEdit<IReadOnlyList<DeviceInstance>>($"add device '{device.Alias}'", () => rig.Devices, value => rig.Devices = value, [.. rig.Devices, device]), rebuildsLibrary))
-            return;
-        SelectedRigItem = RigTree.FirstOrDefault(item => item.Instance == device);
-        Status = $"Device '{device.Alias}' ({device.MapRoot}) added{(rebuildsLibrary ? "; the schemas were built again, so the values of the devices were reset" : "")}. Save to keep it in the rig.";
-    }
-
     // the alias of a new device: the first part of its map root in lower case (Gp8.AddressMap: gp8), unique in the rig
     private string AliasFor(string mapRoot)
     {
@@ -1165,7 +1170,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         if (!DeviceAliases.IsValid(name))
             name = "device";
         var alias = name;
-        for (var number = 2; _rig?.Find(alias) is not null; number++)
+        for (var number = 2; _rig.Find(alias) is not null; number++)
             alias = $"{name}{number}";
         return alias;
     }
@@ -1199,8 +1204,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     public void RemoveDevice(DeviceInstance device)
     {
         ArgumentNullException.ThrowIfNull(device);
-        if (_rig is not { } rig)
-            return;
+        var rig = _rig;
         if (!DoRigEdit(new ValueEdit<IReadOnlyList<DeviceInstance>>($"remove device '{device.Alias}'", () => rig.Devices, value => rig.Devices = value, [.. rig.Devices.Where(other => other != device)])))
             return;
         DeviceProperties = null;
@@ -1287,7 +1291,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
 
     // the dashboard lists a device of the rig it is bound to; null when it does, or the rig does not have it
     private IEdit? DeviceEdit(Dashboard dashboard, string alias)
-        => dashboard.FindDevice(alias) is null && _rig?.Find(alias) is { } device
+        => dashboard.FindDevice(alias) is null && _rig.Find(alias) is { } device
             ? new ValueEdit<IReadOnlyList<DashboardDevice>>("devices", () => dashboard.Devices, value => dashboard.Devices = value,
                 [.. dashboard.Devices, new DashboardDevice(device.Alias, device.MapRoot)])
             : null;
@@ -1551,16 +1555,10 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             Status = $"'{name}': {String.Join("; ", loaded)}.";
     }
 
-    // the rig session needs a rig (dashboards are optional); the library is built from the built-in assemblies and the
-    // sources of the rig, its devices and all open dashboards; the dashboard sessions are opened on it again
+    // the rig session (dashboards are optional); the library is built from the built-in assemblies and the sources of
+    // the rig, its devices and all open dashboards; the dashboard sessions are opened on it again
     private void OpenSessions(DashboardEntry? select = null)
     {
-        if (_rig is null)
-        {
-            Status = "Open a rig.";
-            return;
-        }
-
         OpenDashboards(RigSession.Open(_rig, BuildLibrary()), select);
         var problems = Notifications.Count(notification => notification.IsProblem);
         var with = problems > 0 ? $" with {problems} problem(s)" : "";
@@ -1569,17 +1567,17 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             : $"{Dashboards.Count} dashboard(s) opened{with}.";
     }
 
-    // the schema library: the built-in assemblies and the sources of the rig, its devices (and one more device, to see
-    // what its sources bring) and all open dashboards
-    private SchemaLibrary BuildLibrary(DeviceInstance? extra = null)
+    // the schema library: the built-in assemblies and the sources of the rig (or other sources of the rig, to see what
+    // they bring), its devices and all open dashboards
+    private SchemaLibrary BuildLibrary(SchemaSources? rigSources = null)
     {
         var builder = new SchemaLibraryBuilder();
         foreach (var assembly in SchemaLibraryBuilder.CoreAssemblies)
             builder.AddAssembly(assembly);
         builder.AddAssembly(typeof(Jacobi.Midi.Roland.Processors.ProcessorFactory).Assembly);
         builder.AddAssembly(typeof(Jacobi.Midi.Yamaha.Processors.ProcessorFactory).Assembly);
-        builder.Add(_rig!.Sources, RigOrigin.Directory);
-        foreach (var device in extra is null ? _rig.Devices : _rig.Devices.Append(extra))
+        builder.Add(rigSources ?? _rig.Sources, RigOrigin.Directory);
+        foreach (var device in _rig.Devices)
             builder.Add(device.Sources, RigOrigin.Directory);
         foreach (var (dashboard, origin) in Dashboards.Select(entry => (entry.Dashboard, entry.Origin)))
             builder.Add(dashboard.Sources, origin.Directory);
@@ -1590,7 +1588,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     // the devices are reset); the selected dashboard and control stay selected
     private void RebuildRig()
     {
-        if (_rig is null || Rig is null)
+        if (Rig is null)
             return;
         var control = SelectedControl;
         OpenDashboards(RigSession.Open(_rig, BuildLibrary()), select: null);
@@ -1602,7 +1600,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     // their states and values), the dashboards on it; the selected dashboard and control stay selected
     private void ReopenRig()
     {
-        if (_rig is null || Rig is null)
+        if (Rig is null)
             return;
         var control = SelectedControl;
         OpenDashboards(RigSession.Open(_rig, Rig.Library, Rig), select: null);
@@ -1652,7 +1650,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     {
         var shown = DeviceProperties?.Device;
         RigTree.Clear();
-        foreach (var device in _rig?.Devices ?? [])
+        foreach (var device in _rig.Devices)
             RigTree.Add(RigTreeItem.Of(device, Rig?.Devices.GetValueOrDefault(device.Alias), Midi.ConnectionOf(device.Alias)));
         OnPropertyChanged(nameof(MapRoots));
         if (shown is not null)
@@ -1774,8 +1772,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
 
     private async Task<bool> WriteRig(bool saveAs)
     {
-        if (_rig is not { } rig)
-            return false;
+        var rig = _rig;
         var sources = rig.Devices.Select(device => device.Sources).Prepend(rig.Sources);
         return await SaveFile("Rig", RigOrigin, saveAs, [.. sources], (format, _) => RigFile.Write(rig, format));
     }

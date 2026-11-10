@@ -12,7 +12,7 @@ namespace Jacobi.Midi.Console.Core.Rigs;
 public sealed class Rig
 {
     /// <summary>Assemblies and schema files beyond the built-in ones, for all devices of the rig.</summary>
-    public SchemaSources Sources { get; init; } = SchemaSources.None;
+    public SchemaSources Sources { get; set; } = SchemaSources.None;
 
     public IReadOnlyList<DeviceInstance> Devices { get; set; } = [];
 

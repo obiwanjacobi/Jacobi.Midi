@@ -3,6 +3,19 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## The console always has a rig (2026-11-10)
+
+Issue: the console started without a rig; devices could not be added until a rig file was opened.
+
+1. **The console starts with a new, empty rig** that has no file yet (*Save rig* asks where). A rig is always open.
+   *Why:* devices can be added right away, and no part of the console has to handle "no rig".
+2. **A new rig is started from the + menu of the rig (*New rig*),** after confirming to discard unsaved changes.
+   *Why:* next to adding devices, where a rig is put together.
+3. **A schema file or assembly from the + menu of the rig only brings in its schemas** (and exchange files): it
+   becomes a source of the rig (`Rig.Sources`, saved with it) and its root groups are offered by the + menu; no device
+   is added. *Why:* an assembly holds many devices; the rig has only those the user adds. Listing and removing the
+   rig's sources, and keeping a long + menu manageable, wait for later.
+
 ## A selector with pages in the console (2026-11-10)
 
 Issue: some parameters are only valid for some options of another parameter (e.g. the wave parameters per oscillator

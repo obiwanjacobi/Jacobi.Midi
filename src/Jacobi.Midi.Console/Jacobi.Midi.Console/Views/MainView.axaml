@@ -214,7 +214,7 @@
                         <TextBlock Text="RIG" Classes="heading" VerticalAlignment="Center" Margin="0" />
                         <TextBlock Classes="changed" IsVisible="{Binding RigOrigin.IsChanged}" />
                     </StackPanel>
-                    <Button Grid.Column="1" Content="+" ToolTip.Tip="Add a device to the rig: for an address map of the schemas, or from a schema file or assembly" Click="OnAddDeviceClicked" />
+                    <Button Grid.Column="1" Content="+" ToolTip.Tip="Add a device to the rig for an address map of the schemas; bring in the schemas of a schema file or assembly; or start a new rig" Click="OnAddDeviceClicked" />
                 </Grid>
                 <TreeView Grid.Row="1" ItemsSource="{Binding RigTree}" SelectedItem="{Binding SelectedRigItem}">
                     <TreeView.ItemTemplate>

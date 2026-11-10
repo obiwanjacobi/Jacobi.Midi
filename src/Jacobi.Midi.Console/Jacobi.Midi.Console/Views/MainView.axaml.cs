@@ -120,8 +120,9 @@ internal partial class MainView : UserControl
         ColorChooser.Create(_viewModel, null, device.Alias, area, current, device.Alias).ShowAt(button);
     }
 
-    // the + of the rig: a device for an address map of the schemas (the other root groups in a submenu), or from a
-    // schema file or an assembly
+    // the + of the rig: a device for an address map of the schemas (the other root groups in a submenu); the schemas of
+    // a schema file or an assembly for the rig (their root groups are offered here then); or a new rig in place of the
+    // open one
     private void OnAddDeviceClicked(object? sender, RoutedEventArgs e)
     {
         if (sender is not Button button || _viewModel is not { } viewModel)
@@ -140,12 +141,14 @@ internal partial class MainView : UserControl
             menu.Items.Add(others);
         if (viewModel.MapRoots.Count > 0)
             menu.Items.Add(new Separator());
-        var fromSchema = new MenuItem { Header = "From a schema file…" };
-        fromSchema.Click += async (_, _) => await viewModel.AddDeviceFrom(SchemaSourceKind.Schema);
-        var fromAssembly = new MenuItem { Header = "From an assembly…" };
-        fromAssembly.Click += async (_, _) => await viewModel.AddDeviceFrom(SchemaSourceKind.Assembly);
+        var fromSchema = new MenuItem { Header = "Schemas from a schema file…" };
+        fromSchema.Click += async (_, _) => await viewModel.AddRigSource(SchemaSourceKind.Schema);
+        var fromAssembly = new MenuItem { Header = "Schemas from an assembly…" };
+        fromAssembly.Click += async (_, _) => await viewModel.AddRigSource(SchemaSourceKind.Assembly);
         menu.Items.Add(fromSchema);
         menu.Items.Add(fromAssembly);
+        menu.Items.Add(new Separator());
+        menu.Items.Add(new MenuItem { Header = "New rig", Command = viewModel.NewRigCommand });
         menu.ShowAt(button);
     }
 
