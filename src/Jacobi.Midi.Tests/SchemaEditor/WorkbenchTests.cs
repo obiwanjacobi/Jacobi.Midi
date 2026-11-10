@@ -291,30 +291,70 @@ public class WorkbenchTests
     }
 
     [Fact]
-    public void SlotNote_IsKeptPerSlotAndSaved()
+    public void SlotNote_IsTheDocOfTheSlotRoot_TheFirstNoteCreatesTheRoot()
     {
-        var storage = new FakeStorage();
-        var workbench = CreateWorkbench(storage);
+        var schemas = new FakeSchemaHost();
+        var workbench = CreateWorkbench(schemas: schemas);
         workbench.AddCapture(Dump("patch1", Message(0, 1, 2, 3, 4), Message(1, 1, 2, 3, 4)));
         Assert.False(workbench.HasNoteSlot);
-
         workbench.SelectedSlot = workbench.Slots[1];
         Assert.Equal("SLOT 2 NOTE", workbench.SlotNoteCaption);
-        workbench.SlotNoteText = "probably the compressor";
 
-        Assert.Equal("probably the compressor", workbench.Slots[1].Note);
-        Assert.True(workbench.Slots[1].HasNote);
-        Assert.Equal("probably the compressor", workbench.SlotNotes[1]);
+        // an empty note on a slot without a root adds nothing
+        workbench.SlotNoteText = " ";
+        Assert.Empty(schemas.Documents);
+
+        workbench.SlotNoteText = "probably the compressor\r\nsecond line";
+
+        var document = Assert.Single(schemas.Documents);
+        var root = WorkbenchSchema.FindRoot(document.Schema, 1)!;
+        Assert.Equal("probably the compressor\nsecond line", root.Doc);
+        Assert.True(document.IsDirty);
+        Assert.Null(WorkbenchSchema.FindRoot(document.Schema, 0));
+        Assert.Equal("probably the compressor\nsecond line", workbench.Slots[1].Note);
+        Assert.Equal("probably the compressor\nsecond line", workbench.SlotNotes[1]);
         workbench.SelectedSlot = workbench.Slots[0];
         Assert.Equal(String.Empty, workbench.SlotNoteText);
 
-        var read = WorkbenchSessionFile.Deserialize(WorkbenchSessionFile.Serialize(workbench.ToSession()));
-        Assert.Equal("probably the compressor", read.SlotNotes[1]);
+        // edited in the schema: the workbench shows it after a refresh
+        root.Doc = "the compressor";
+        workbench.RefreshSchema();
+        Assert.Equal("the compressor", workbench.Slots[1].Note);
 
         workbench.SelectedSlot = workbench.Slots[1];
         workbench.SlotNoteText = " ";
+        Assert.Null(root.Doc);
+        Assert.NotNull(WorkbenchSchema.FindRoot(document.Schema, 1));
         Assert.False(workbench.Slots[1].HasNote);
         Assert.Empty(workbench.SlotNotes);
+    }
+
+    [Fact]
+    public void Field_Doc_IsWrittenWithDefineAndApply()
+    {
+        var schemas = new FakeSchemaHost();
+        var workbench = CreateWorkbench(schemas: schemas);
+        workbench.AddCapture(Dump("patch1", Message(0, 0x00, 0x10, 0x20, 0x30)));
+        workbench.Selection = new ByteRange(0, 11, 1);
+        var field = workbench.Field;
+        field.Name = "Reverb";
+        field.Doc = "The reverb level.\n0-127";
+
+        field.DefineCommand.Execute(null);
+
+        var defined = Assert.IsType<MessageLayout>(workbench.Layouts[0]).Spans.Single(span => span.Field.Name == "Reverb").Field;
+        Assert.Equal("The reverb level.\n0-127", defined.Doc);
+
+        field.Doc = String.Empty;
+        field.ApplyCommand.Execute(null);
+        Assert.Null(defined.Doc);
+
+        // another selection clears the box; selecting the field fills it from the schema
+        defined.Doc = "Reverb";
+        workbench.Selection = new ByteRange(0, 9, 1);
+        Assert.Equal(String.Empty, field.Doc);
+        workbench.Selection = new ByteRange(0, 11, 1);
+        Assert.Equal("Reverb", field.Doc);
     }
 
     // ---- session file ----

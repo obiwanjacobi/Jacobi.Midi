@@ -86,7 +86,10 @@ in the slot's text (`length 77 → 79`, `missing in 1`).
 Selecting a slot scrolls the byte view to it and selects its first data byte.
 
 A **slot note** describes what a message is, e.g. `probably the compressor`. Type it in the right panel (**Slot n note**)
-for the slot of the selection. It is shown under the slot in the list and in the slot header of the byte view.
+for the slot of the selection; it can have several lines. It is the documentation of the slot's root in the target schema
+(the `midi.doc` property of `Message<n>`), not part of the session: the first note of a slot without a root adds the root
+(and the schema, when it does not exist yet), as the first field does. A note changed in Schema mode shows here too.
+It is shown under the slot in the list and (its first line) in the slot header of the byte view.
 
 ## Byte view
 
@@ -192,7 +195,7 @@ The field panel (right) shows what can be done with the selection:
 - **Define a field** — the selection is inside one unknown span (or in a slot that has no root yet). Enter the name; a
   data type is suggested (`sys.uint8` for 1 byte, `sys.uint16` with `ref:Midi.sysexbyte` for 2, `sys.string` with
   `ref:Midi.string` for printable text, `sys.bytes` otherwise). **Define field** adds it.
-- **Field &lt;name&gt;** — the selection starts in a field. **Apply** changes its name, data type, processor and fixed value;
+- **Field &lt;name&gt;** — the selection starts in a field. **Apply** changes its name, data type, processor, fixed value and documentation;
   **Remove field** turns its bytes back into an unknown span.
 - Nothing can be done for F0/F7, for a selection over several spans, or for bytes after a field of unknown size; the panel says so.
 
@@ -203,6 +206,8 @@ The fields:
   A `ref:Midi.*` processor adds the include of the `Midi` schema to the document.
 - **Fixed value** — the field always holds this value, e.g. the manufacturer id. Checking it fills in the value of the
   baseline (e.g. `65` for 41H). A capture with another value there gets a read problem.
+- **Documentation** (optional) — what the field is, e.g. text from the manual; it can have several lines. It is stored as
+  the `midi.doc` property of the field.
 
 **Values** shows the field's value in the baseline and every visible variant, while you edit: the field is tried on a copy
 of the schema, and every capture is read with it, the same way *Match* does. A capture that cannot be read (completely)
@@ -223,7 +228,8 @@ for `RolandId`. Turn it off for a field whose value differs per message, such as
 
 **New…**, **Open…**, **Save** and **Save as…** are in the session header. A session file (`<title>.workbench.json`) is
 self-contained: the captures are stored in it as hex, with their labels, change notes and hidden flags, the baseline,
-the notes on bytes and the slot notes. The schema is saved separately, as a normal schema document.
+and the notes on bytes. The schema is saved separately, as a normal schema document; it holds the slot notes (the
+documentation of the roots).
 
 Starting a new session or opening another one asks before unsaved changes are discarded. A `•` after the title marks
 unsaved changes.

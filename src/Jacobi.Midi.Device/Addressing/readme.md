@@ -252,7 +252,7 @@ every kind of [message map](../Messages/readme.md):
 Tools that show problems while a schema is written (the Schema Editor) use `MessageMapValidator.Validate` (in `Messages`: it validates every kind of map, see its readme): it checks
 all tags of all schemas of a serializer, also those that no map uses, and reports errors, warnings and information:
 
-- **Tags on their own** (`AddressMapTags.Validate`, also used per property): a known `midi.*` name and a valid value.
+- **Tags on their own** (`MidiProperties.Validate`, in `Messages`, also used per property): a known `midi.*` name and a valid value.
 - **Roles in context**: `data` only on an open choice, the other roles only on fields.
 - **Fulfilment**: a data message without a map root that conforms to its contract (information); a `device.<name>` role the map root does not fix, so the client supplies it (information); a `midi.device.<name>` on a map root that no message uses (warning).
 - **Every map root** with its envelopes, as above, created by the provider chain of the [message maps](../Messages/readme.md): a root without address tags is checked as a dump, so a data message without an `address` role is no error. The envelopes of a contract without a root are only checked as address envelopes when one of its data messages has an `address` role.
@@ -269,7 +269,6 @@ Namespace `Jacobi.Midi.Device.Addressing`.
 | `AddressMatch` | The result of resolving an address range: the block of whole fields it covers, whether it is aligned to field boundaries, and the unmapped addresses. |
 | `AddressSettings`, `AddressUnit` | The address settings of a message: its unit (`midi.unit`) and maximum data size (`midi.maxDataSize`). |
 | `NodeAccess` | The access of an addressed node (`midi.access`). |
-| `AddressMapTags` | Validate the tags on their own (names, descriptions, values, the role of a node), for tools such as the Schema Editor; their use in all schemas is validated by `MessageMapValidator` (`Messages`). |
 
 The generic types (`DeviceMessage`, `DeviceValues`, `ReceivedData`, `FieldValueStore` and the problems) are in
 `Jacobi.Midi.Device.Messages` (see [Messages](../Messages/readme.md)). Internal: `AddressMap` (an `IMessageMap`),

@@ -7,7 +7,7 @@ namespace Jacobi.Midi.Device.Messages;
 
 /// <summary>
 /// Validates the use of the <c>midi.*</c> tags in all schemas of a serializer, for tools that show the problems while a
-/// schema is written (e.g. the Schema Editor): the tags on their own (<see cref="AddressMapTags.Validate"/>), the roles
+/// schema is written (e.g. the Schema Editor): the tags on their own (<see cref="MidiProperties.Validate"/>), the roles
 /// in their context, the message map of every root, whatever its kind (the provider chain decides: an address map with
 /// its envelopes, a dump carried by a data message, a dump that is a message itself), as when the map is first used,
 /// and whether each role is fulfilled: a data message needs a root that conforms to its contract, and a
@@ -85,15 +85,15 @@ public static class MessageMapValidator
     private static void ValidateTags(string document, SchemaNode node, SchemaPath path,
         List<(string, SchemaPath, SchemaName)> dataChoices, MessageMapProblems problems)
     {
-        foreach (var property in node.Properties.Where(p => AddressMapTags.IsTag(p.Name)))
+        foreach (var property in node.Properties.Where(p => MidiProperties.IsTag(p.Name)))
         {
-            if (AddressMapTags.Validate(property.Name, property.Value) is { } problem)
+            if (MidiProperties.Validate(property.Name, property.Value) is { } problem)
             {
                 problems.Error(document, path, problem);
             }
         }
 
-        if (AddressMapTags.RoleOf(node) is { } role && AddressMapTags.IsRole(role))
+        if (MidiProperties.RoleOf(node) is { } role && MidiProperties.IsRole(role))
         {
             var isData = String.Equals(role, MidiProperties.RoleData, StringComparison.OrdinalIgnoreCase);
             if (isData && node is SchemaChoice { MemberNodeDef: { } contract })

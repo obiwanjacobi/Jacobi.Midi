@@ -8,6 +8,7 @@ using Jacobi.Midi.Core;
 using Jacobi.Midi.Messages;
 using Jacobi.Midi.Messages.V2;
 using Jacobi.Midi.SchemaEditor.Midi;
+using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.SchemaEditor.ViewModels;
 
 namespace Jacobi.Midi.SchemaEditor.Workbench;
@@ -76,11 +77,12 @@ internal sealed partial class WorkbenchViewModel : ViewModelBase
     [ObservableProperty]
     public partial bool ShowDecimal { get; set; }
 
-    // ---- slot notes ----
+    // ---- slot notes: the documentation (midi.doc) of the slot's root in the target schema ----
 
-    private Dictionary<int, string> _slotNotes = [];
-
-    /// <summary>The notes of the user on the message slots, by slot index (replaced on every change).</summary>
+    /// <summary>
+    /// The notes on the message slots, by slot index: the documentation of each slot's root in the target schema
+    /// (replaced on every change).
+    /// </summary>
     [ObservableProperty]
     public partial IReadOnlyDictionary<int, string> SlotNotes { get; private set; } = new Dictionary<int, string>();
 
@@ -92,37 +94,57 @@ internal sealed partial class WorkbenchViewModel : ViewModelBase
     /// <summary>The caption of the slot note, e.g. 'SLOT 3 NOTE'.</summary>
     public string SlotNoteCaption => NoteSlot is { } slot ? $"SLOT {slot + 1} NOTE" : "SLOT NOTE";
 
-    /// <summary>The note on the <see cref="NoteSlot"/>; setting it adds, changes or (when empty) removes it.</summary>
+    /// <summary>
+    /// The note on the <see cref="NoteSlot"/>: the documentation of its root in the target schema. Setting it adds, changes
+    /// or (when empty) removes it; the first note of a slot without a root adds the root (and the schema when it does not
+    /// exist yet), as the first field does.
+    /// </summary>
     public string SlotNoteText
     {
-        get => NoteSlot is { } slot ? _slotNotes.GetValueOrDefault(slot) ?? String.Empty : String.Empty;
+        get => NoteSlot is { } slot && FindSlotRoot(slot) is { } root ? root.Doc ?? String.Empty : String.Empty;
         set
         {
-            if (NoteSlot is not { } slot || String.Equals(value, SlotNoteText, StringComparison.Ordinal))
+            var text = value?.ReplaceLineEndings("\n").Trim() ?? String.Empty;
+            if (!HasSession || NoteSlot is not { } slot || Slots.ElementAtOrDefault(slot) is not { } noteSlot
+                || String.Equals(text, SlotNoteText, StringComparison.Ordinal))
             {
                 return;
             }
-            if (String.IsNullOrWhiteSpace(value))
+            var document = _schemaHost.FindDocument(Title);
+            var root = document is null ? null : WorkbenchSchema.FindRoot(document.Schema, slot);
+            if (root is null && text.Length == 0)
             {
-                _slotNotes.Remove(slot);
+                return;
             }
-            else
-            {
-                _slotNotes[slot] = value.Trim();
-            }
-            ApplySlotNotes();
-            IsDirty = true;
-            OnPropertyChanged();
+            var created = root is null;
+            document ??= _schemaHost.CreateDocument(Title);
+            root ??= WorkbenchSchema.CreateRoot(document, slot, noteSlot.Bytes);
+            root.Doc = text;
+            document.MarkChanged();
+            Status = created
+                ? $"Added {root.Name} to {document.Schema.Name} for the note of slot {slot + 1}."
+                : $"Changed the documentation of {root.Name} in {document.Schema.Name}.";
+            RefreshSchema();
         }
     }
 
+    // the root of a slot in the target schema; null when the schema is not open or the slot has no root
+    private EditGroup? FindSlotRoot(int slot)
+        => HasSession && _schemaHost.FindDocument(Title) is { } document ? WorkbenchSchema.FindRoot(document.Schema, slot) : null;
+
     private void ApplySlotNotes()
     {
-        SlotNotes = new Dictionary<int, string>(_slotNotes);
+        var notes = new Dictionary<int, string>();
         foreach (var slot in Slots)
         {
-            slot.Note = _slotNotes.GetValueOrDefault(slot.Index) ?? String.Empty;
+            slot.Note = FindSlotRoot(slot.Index)?.Doc ?? String.Empty;
+            if (slot.Note.Length > 0)
+            {
+                notes[slot.Index] = slot.Note;
+            }
         }
+        SlotNotes = notes;
+        OnPropertyChanged(nameof(SlotNoteText));
     }
 
     private void OnNoteSlotChanged()
@@ -247,6 +269,8 @@ internal sealed partial class WorkbenchViewModel : ViewModelBase
         SchemaText = !HasSession ? String.Empty
             : document is null ? $"Schema {Title} is not open: the first field creates it. To continue an existing schema, open it in Schema mode."
             : $"Schema {document.DisplayName}: {Layouts.Count(layout => layout is not null)} of {Slots.Count} slot(s) described.";
+        // the slot notes are the documentation of the roots: they may have been edited in the schema
+        ApplySlotNotes();
         UpdateField();
     }
 
@@ -453,10 +477,7 @@ internal sealed partial class WorkbenchViewModel : ViewModelBase
 
     /// <summary>The current state as a session (for saving).</summary>
     internal WorkbenchSession ToSession()
-        => new(Title, Captures.ToList(), Baseline is null ? -1 : Captures.IndexOf(Baseline), Annotations)
-        {
-            SlotNotes = new Dictionary<int, string>(_slotNotes)
-        };
+        => new(Title, Captures.ToList(), Baseline is null ? -1 : Captures.IndexOf(Baseline), Annotations);
 
     /// <summary>Replaces the session; the state is not dirty afterwards.</summary>
     internal void Load(WorkbenchSession session, SessionFile? file)
@@ -471,7 +492,6 @@ internal sealed partial class WorkbenchViewModel : ViewModelBase
         SelectedCapture = null;
         ClearFind();
         Annotations = session.Annotations;
-        _slotNotes = new Dictionary<int, string>(session.SlotNotes);
         foreach (var capture in session.Captures)
         {
             capture.PropertyChanged += OnCapturePropertyChanged;

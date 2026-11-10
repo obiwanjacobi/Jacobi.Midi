@@ -159,6 +159,21 @@ public class ItemDetailsTests
     }
 
     [Fact]
+    public void Details_TheDocOfANodeIsNotAPropertyRow()
+    {
+        var schema = CreateDocument();
+        var field = Field(Root(schema), "field", dataType: "sys.uint8");
+        field.Properties.Add(Property("other", "x"));
+        var document = new SchemaWorkspaceDocument(schema, SchemaFormat.Json);
+        using var details = ItemDetailsViewModel.Create(document, field)!;
+
+        field.Doc = "The field.";
+
+        Assert.Equal(["other"], details.Properties.Select(row => row.Name));
+        Assert.Contains(field.Properties, property => property.Name == "midi.doc");
+    }
+
+    [Fact]
     public void Details_EditOwnEntriesAndMarkDocumentChanged()
     {
         var schema = CreateDocument();

@@ -3,6 +3,31 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## Documentation in the schemas (2026-11-10)
+
+Issue: the schemas have no place for documentation (e.g. text from the manual) that the Schema Editor can author and
+the console can show on its controls (as a tooltip).
+
+1. **One tag, `midi.doc`: plain text, possibly multi-line, no markup (for now).** Allowed on any node, any value is
+   valid; it describes the node it is on and is not inherited. *Why:* a group's text is about the group, not its
+   members.
+2. **A newline in XML is written as a character reference in the attribute** (`midi.doc="Line one.&#10;Line two."`),
+   not as a `<property>` element and not as a `\n` escape of our own. *Why:* not verbose; standard XML, so no decoding
+   code; the serializer writes it back the same way (round trip tested); JSON (`\n`) and YAML hold the same text.
+3. **The `midi.*` tags are not address-map specific: `AddressMapTags` is folded into a public `MidiProperties`**
+   (`Messages`): the names, `Descriptors`, `IsTag`, `Validate`, `RoleOf`, `IsData` and `DocOf`; the helpers that read
+   tags from nodes stay internal. An unknown tag is *"not a midi property"*. *Why:* one place for all tags; `midi.doc`,
+   `midi.role` and `midi.device.*` have nothing to do with address maps.
+4. **The Schema Editor edits `midi.doc` in a box of its own, not in the property list.** Every node's details (repeat,
+   choice, group, field, also node defs) have a multi-line *Documentation* box with the note that it is stored as the
+   `midi.doc` property; the Properties tab hides it. One place reads and writes it (`EditNode.Doc`). *Why:* a long
+   multi-line text does not fit a property row; one place to edit it.
+5. **In the workbench, the slot note is the `midi.doc` of the slot's root** (`Message<n>`) and the field panel has a
+   documentation box for the field (written with *Define field*/*Apply*, copied to other slots). The first note of a slot
+   without a root creates the root (and the schema). The slot notes are no longer kept in the session file; old notes
+   are dropped (no backward compatibility). The note on bytes stays a session note: it also covers bytes that are no
+   field. *Why:* what the user learns about a message belongs in the schema; the console can show it.
+
 ## The data of a root for a client (2026-11-10)
 
 Issue: the console (dump files, `IsMap`, `ItemCount`) and the Schema Editor (instantiate, match, the role fields) both

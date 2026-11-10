@@ -163,9 +163,10 @@ internal static class WorkbenchSchema
     /// </summary>
     /// <param name="processor">An optional processor of the field, e.g. 'Midi.sysexbyte'.</param>
     /// <param name="value">The fixed value of the field (e.g. a manufacturer id); null or empty for a field that holds a parameter.</param>
+    /// <param name="doc">The documentation of the field (<c>midi.doc</c>); null or empty for none.</param>
     /// <exception cref="InvalidOperationException">The range is not inside one placeholder, or the name is not valid.</exception>
     public static EditField DefineField(SchemaWorkspaceDocument document, MessageLayout layout, ByteRange range,
-        string name, string dataType, string? processor, string? value = null)
+        string name, string dataType, string? processor, string? value = null, string? doc = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(layout);
@@ -195,6 +196,7 @@ internal static class WorkbenchSchema
             field.Processors.Add(new EditProcessorRef { Processor = new SchemaName(processor.Trim()) });
         }
         SetValue(field, value);
+        field.Doc = doc;
 
         var replacement = new List<EditNode>();
         if (range.Start > span.Start)
@@ -211,10 +213,12 @@ internal static class WorkbenchSchema
         return field;
     }
 
-    /// <summary>Changes the name, data type, processor and fixed value of a field that was defined before.</summary>
+    /// <summary>Changes the name, data type, processor, fixed value and documentation of a field that was defined before.</summary>
     /// <param name="value">The fixed value; null or empty for none.</param>
+    /// <param name="doc">The documentation (<c>midi.doc</c>); null or empty for none.</param>
     /// <exception cref="InvalidOperationException">The name is not valid or the data type is empty.</exception>
-    public static void UpdateField(SchemaWorkspaceDocument document, EditField field, string name, string dataType, string? processor, string? value = null)
+    public static void UpdateField(SchemaWorkspaceDocument document, EditField field, string name, string dataType, string? processor,
+        string? value = null, string? doc = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(field);
@@ -233,6 +237,7 @@ internal static class WorkbenchSchema
             field.Processors.Add(new EditProcessorRef { Processor = new SchemaName(processor.Trim()) });
         }
         SetValue(field, value);
+        field.Doc = doc;
         document.MarkChanged();
     }
 

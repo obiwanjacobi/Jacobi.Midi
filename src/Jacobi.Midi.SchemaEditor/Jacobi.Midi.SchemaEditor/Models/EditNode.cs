@@ -4,6 +4,7 @@ using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Device.Addressing;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.SchemaEditor.Models;
 
@@ -24,13 +25,51 @@ internal abstract partial class EditNode : ObservableObject
     /// The address map tag that marks the node in the schema tree: its role (<c>midi.role</c>, e.g. 'address'); null when
     /// it has none.
     /// </summary>
-    public string? AddressTag => FindProperty(AddressMapTags.Role);
+    public string? AddressTag => FindProperty(MidiProperties.Role);
+
+    /// <summary>
+    /// The documentation of the node (<c>midi.doc</c>): plain, possibly multi-line text; null when it has none.
+    /// Setting it adds, changes or (when empty) removes the property; line breaks are stored as '\n'.
+    /// The caller marks the document changed.
+    /// </summary>
+    public string? Doc
+    {
+        get => FindProperty(MidiProperties.Doc);
+        set
+        {
+            var text = value?.ReplaceLineEndings("\n").Trim();
+            var property = FindOwnProperty(MidiProperties.Doc);
+            if (String.IsNullOrEmpty(text))
+            {
+                if (property is not null)
+                {
+                    Properties.Remove(property);
+                }
+            }
+            else if (property is null)
+            {
+                Properties.Add(new EditProperty { Name = MidiProperties.Doc, Value = text });
+            }
+            else
+            {
+                property.Value = text;
+            }
+        }
+    }
+
+    private EditProperty? FindOwnProperty(string name)
+        => Properties?.FirstOrDefault(property => String.Equals(property.Name?.Trim(), name, StringComparison.OrdinalIgnoreCase));
 
     private string? FindProperty(string name)
-        => Properties?.FirstOrDefault(property => String.Equals(property.Name?.Trim(), name, StringComparison.OrdinalIgnoreCase))?.Value?.Trim() is { Length: > 0 } value
-            ? value : null;
+        => FindOwnProperty(name)?.Value?.Trim() is { Length: > 0 } value ? value : null;
 
-    // the tag follows the properties: added, removed, renamed or changed
+    private void OnDerivedPropertiesChanged()
+    {
+        OnPropertyChanged(nameof(AddressTag));
+        OnPropertyChanged(nameof(Doc));
+    }
+
+    // the tag and the doc follow the properties: added, removed, renamed or changed
     partial void OnPropertiesChanged(ObservableCollection<EditProperty>? oldValue, ObservableCollection<EditProperty> newValue)
     {
         if (oldValue is not null)
@@ -49,7 +88,7 @@ internal abstract partial class EditNode : ObservableObject
                 property.PropertyChanged += OnPropertyEdited;
             }
         }
-        OnPropertyChanged(nameof(AddressTag));
+        OnDerivedPropertiesChanged();
     }
 
     private void OnPropertiesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -65,10 +104,10 @@ internal abstract partial class EditNode : ObservableObject
             property.PropertyChanged -= OnPropertyEdited;
             property.PropertyChanged += OnPropertyEdited;
         }
-        OnPropertyChanged(nameof(AddressTag));
+        OnDerivedPropertiesChanged();
     }
 
-    private void OnPropertyEdited(object? sender, PropertyChangedEventArgs e) => OnPropertyChanged(nameof(AddressTag));
+    private void OnPropertyEdited(object? sender, PropertyChangedEventArgs e) => OnDerivedPropertiesChanged();
 }
 
 internal partial class EditField : EditNode

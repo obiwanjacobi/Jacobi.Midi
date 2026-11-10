@@ -8,7 +8,7 @@ using Jacobi.Midi.Device.Messages;
 namespace Jacobi.Midi.Tests.Messages;
 
 /// <summary>
-/// Tests <see cref="MessageMapValidator"/> and <see cref="AddressMapTags"/>: the use of the midi.* tags in the schemas and
+/// Tests <see cref="MessageMapValidator"/> and <see cref="MidiProperties"/>: the use of the midi.* tags in the schemas and
 /// how the roles of the envelope messages are fulfilled.
 /// </summary>
 public class MessageMapValidatorTests
@@ -247,10 +247,12 @@ public class MessageMapValidatorTests
     [InlineData("midi.device.modelId", "0x13", true)]
     [InlineData("midi.device.modelId", "x", false)]
     [InlineData("midi.adress", "0x40-00", false)]
+    [InlineData("midi.doc", "The output level.\n0 is silent.", true)]
+    [InlineData("midi.doc", "", true)]
     public void Tags_Validate(string name, string value, bool isValid)
     {
-        Assert.True(AddressMapTags.IsTag(name));
-        Assert.Equal(isValid, AddressMapTags.Validate(name, value) is null);
+        Assert.True(MidiProperties.IsTag(name));
+        Assert.Equal(isValid, MidiProperties.Validate(name, value) is null);
     }
 
     [Theory]
@@ -258,7 +260,34 @@ public class MessageMapValidatorTests
     [InlineData("sys.align.bytes")]
     [InlineData("role")]
     public void Tags_ProcessorPropertiesAreNotTags(string name)
-        => Assert.False(AddressMapTags.IsTag(name));
+        => Assert.False(MidiProperties.IsTag(name));
+
+    [Fact]
+    public void Doc_MultiLineInAnXmlAttribute_SurvivesARoundTrip()
+    {
+        var document = TestDevice.Parse("""
+            <schema name="Documented">
+              <members>
+                <group name="Voice" midi.doc="A voice.">
+                  <members>
+                    <field name="Level" datatype="sys.uint8" midi.doc="The output level.&#10;0 is silent." />
+                  </members>
+                </group>
+              </members>
+            </schema>
+            """);
+
+        var reread = BinarySerializer.Schema.Xml.XmlSerializer.Deserialize(BinarySerializer.Schema.Xml.XmlSerializer.Serialize(document));
+
+        foreach (var doc in new[] { document, reread })
+        {
+            var voice = doc.Members.Single();
+            Assert.Equal("A voice.", MidiProperties.DocOf(voice));
+            var level = Assert.IsAssignableFrom<BinarySerializer.Schema.SchemaGroup>(voice).Members.Single();
+            Assert.Equal("The output level.\n0 is silent.", MidiProperties.DocOf(level));
+        }
+        Assert.Empty(Of(Validate(BinarySerializer.Schema.Xml.XmlSerializer.Serialize(document)), MessageMapProblemSeverity.Error));
+    }
 
     [Fact]
     public void Info_DescribeRole_OfAnAddressMap()

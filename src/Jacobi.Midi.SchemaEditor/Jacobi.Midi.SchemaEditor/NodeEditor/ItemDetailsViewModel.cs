@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Device.Addressing;
+using Jacobi.Midi.Device.Messages;
 using Jacobi.Midi.SchemaEditor.Assemblies;
 using Jacobi.Midi.SchemaEditor.Models;
 
@@ -245,7 +246,10 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
     {
         var effective = _resolve();
         var itemCheck = CreateItemCheck(effective);
-        Properties = effective.Properties.Select(property => new PropertyRow(property, _properties, OnRowEdited, this, itemCheck)).ToList();
+        // the documentation of a node has a box of its own in the General tab (NodeFacets.Doc)
+        Properties = effective.Properties
+            .Where(property => _item is not EditNode || !String.Equals(property.Name, MidiProperties.Doc, StringComparison.OrdinalIgnoreCase))
+            .Select(property => new PropertyRow(property, _properties, OnRowEdited, this, itemCheck)).ToList();
         Processors = effective.Processors.Select(CreateProcessorRow).ToList();
         Definition = _definition is null ? null : new ProcessorDefRow(_definition, Properties, _properties, OnRowEdited, this);
         Unresolved = effective.Unresolved;
@@ -295,16 +299,16 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
         // the address map tags (midi.*) of a node: checked on their own, their use is checked with the whole schema set
         if (_item is EditNode)
         {
-            options.AddRange(AddressMapTags.Descriptors.Select(descriptor => new PropertyOption(descriptor.Name, descriptor)));
+            options.AddRange(MidiProperties.Descriptors.Select(descriptor => new PropertyOption(descriptor.Name, descriptor)));
         }
         return new PropertyCheck(options,
-            name => _item is EditNode && AddressMapTags.IsTag(name)
-                ? AddressMapTags.Descriptors.FirstOrDefault(descriptor => String.Equals(descriptor.Name, name.Trim(), StringComparison.OrdinalIgnoreCase))
+            name => _item is EditNode && MidiProperties.IsTag(name)
+                ? MidiProperties.Descriptors.FirstOrDefault(descriptor => String.Equals(descriptor.Name, name.Trim(), StringComparison.OrdinalIgnoreCase))
                 : ProcessorPropertyValidator.TrySplitPrefixed(name, out var key, out _) && GetDescribedProperties(key) is { } descriptors
                     ? ProcessorPropertyValidator.Find(key, descriptors, name)
                     : null,
-            (name, value) => _item is EditNode && AddressMapTags.IsTag(name)
-                ? AddressMapTags.Validate(name, value)
+            (name, value) => _item is EditNode && MidiProperties.IsTag(name)
+                ? MidiProperties.Validate(name, value)
                 : ProcessorPropertyValidator.TrySplitPrefixed(name, out var key, out _) && GetDescribedProperties(key) is { } descriptors
                     ? ProcessorPropertyValidator.Validate(key, descriptors, name, value, schema, catalog.DataTypes)
                     : null);
@@ -395,8 +399,9 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
     private void OnModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         // a value edit does not change which entries are effective; the row already shows it.
-        // The address tag is derived from the properties: it changes no entries either
-        if ((sender is EditProperty && e.PropertyName == nameof(EditProperty.Value)) || e.PropertyName == nameof(EditNode.AddressTag))
+        // The address tag and the doc are derived from the properties: they change no entries either
+        if ((sender is EditProperty && e.PropertyName == nameof(EditProperty.Value))
+            || e.PropertyName is nameof(EditNode.AddressTag) or nameof(EditNode.Doc))
         {
             return;
         }

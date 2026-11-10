@@ -150,7 +150,7 @@
                                     <TextBlock Grid.Column="1" Text="Δ" IsVisible="{Binding HasDifference}" FontWeight="Bold"
                                                Foreground="{DynamicResource AppTextAccentBrush}" />
                                     <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Note}" IsVisible="{Binding HasNote}" FontSize="11"
-                                               FontStyle="Italic" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Note}"
+                                               FontStyle="Italic" TextTrimming="CharacterEllipsis" MaxLines="1" ToolTip.Tip="{Binding Note}"
                                                Foreground="{DynamicResource AppTextAccentBrush}" />
                                 </Grid>
                             </DataTemplate>
@@ -291,6 +291,10 @@
                                                   ToolTip.Tip="The field always holds this value (e.g. the manufacturer id); a capture with other bytes here is flagged." />
                                         <TextBox Grid.Column="1" Text="{Binding FixedValue}" IsEnabled="{Binding IsFixed}" PlaceholderText="e.g. 65 or 0x41" />
                                     </Grid>
+                                    <TextBlock Text="Documentation (optional)" Classes="note" />
+                                    <TextBox Text="{Binding Doc}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="50"
+                                             PlaceholderText="What the field is, e.g. text from the manual" />
+                                    <TextBlock Text="Stored as the midi.doc property of the field." Classes="note" />
 
                                     <TextBlock Text="VALUES" Classes="section" Margin="0,6,0,0" />
                                     <ItemsControl ItemsSource="{Binding Values}">
@@ -324,7 +328,7 @@
                                         <CheckBox Content="Only where the bytes are the same" IsChecked="{Binding CopyRequiresSameBytes}" FontSize="12"
                                                   ToolTip.Tip="Off: also where the bytes differ, e.g. an address or a parameter at the same position." />
                                         <Button Content="{Binding CopyText}" Command="{Binding CopyToOtherSlotsCommand}" HorizontalAlignment="Stretch"
-                                                ToolTip.Tip="Defines this field (name, data type, processor, fixed value) at the same position in the other slots, where the bytes are unknown." />
+                                                ToolTip.Tip="Defines this field (name, data type, processor, fixed value, documentation) at the same position in the other slots, where the bytes are unknown." />
                                     </StackPanel>
                                 </StackPanel>
                             </StackPanel>
@@ -333,8 +337,10 @@
 
                         <StackPanel Spacing="4" IsVisible="{Binding HasNoteSlot}">
                             <TextBlock Text="{Binding SlotNoteCaption}" Classes="section" />
-                            <TextBox Text="{Binding SlotNoteText, UpdateSourceTrigger=LostFocus}" TextWrapping="Wrap"
-                                     PlaceholderText="What is this message? e.g. 'probably the compressor'" />
+                            <TextBox Text="{Binding SlotNoteText, UpdateSourceTrigger=LostFocus}" AcceptsReturn="True" TextWrapping="Wrap"
+                                     MinHeight="50" PlaceholderText="What is this message? e.g. 'probably the compressor'" />
+                            <TextBlock Text="Stored as the midi.doc property of the slot's root in the schema (the first note adds the root)."
+                                       TextWrapping="Wrap" Classes="note" />
                         </StackPanel>
 
                         <StackPanel Spacing="4" IsVisible="{Binding HasSelection}">

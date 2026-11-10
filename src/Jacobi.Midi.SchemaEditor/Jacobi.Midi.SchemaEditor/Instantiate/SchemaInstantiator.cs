@@ -341,7 +341,7 @@ internal sealed class SchemaInstantiator
     // the data open choices of an instance, outside the bodies (a body holds no message)
     private static IEnumerable<InstanceChoice> DataChoices(InstanceNode node)
     {
-        if (node is InstanceChoice { IsOpen: true } choice && AddressMapTags.IsData(choice.Schema))
+        if (node is InstanceChoice { IsOpen: true } choice && MidiProperties.IsData(choice.Schema))
         {
             yield return choice;
             yield break;
@@ -594,7 +594,7 @@ internal sealed class SchemaInstantiator
         bodies.Sort((left, right) => String.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase));
         // the selected index is not used by an open choice
         var open = new InstanceChoice(schema, path, bodies, constantIndex: null);
-        if (AddressMapTags.IsData(schema))
+        if (MidiProperties.IsData(schema))
         {
             open.PropertyChanged += (_, e) =>
             {

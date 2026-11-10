@@ -40,6 +40,19 @@ internal sealed partial class NodeFacets : ObservableObject
     }
 
     /// <summary>
+    /// The documentation of the node (<see cref="EditNode.Doc"/>, the <c>midi.doc</c> property); empty when it has none.
+    /// </summary>
+    public string Doc
+    {
+        get => _node?.Doc ?? String.Empty;
+        set
+        {
+            var text = value?.ReplaceLineEndings("\n").Trim() ?? String.Empty;
+            Edit(nameof(Doc), text, Doc, node => node.Doc = text);
+        }
+    }
+
+    /// <summary>
     /// The data type of a field; a field needs a data type or a node def.
     /// </summary>
     public string DataType

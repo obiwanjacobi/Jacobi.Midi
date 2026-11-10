@@ -91,6 +91,16 @@
             </StackPanel>
         </DataTemplate>
 
+        <!-- the documentation of the selected node: the midi.doc property, edited here instead of in the Properties tab -->
+        <DataTemplate x:Key="DocumentationTemplate" x:DataType="vm:MainViewModel">
+            <StackPanel Spacing="4">
+                <TextBlock Text="Documentation" Classes="label" />
+                <TextBox Text="{Binding NodeFacets.Doc, UpdateSourceTrigger=LostFocus}" AcceptsReturn="True" TextWrapping="Wrap"
+                         MinHeight="60" PlaceholderText="optional: what the node is, e.g. text from the manual" />
+                <TextBlock Text="Stored as the midi.doc property." Classes="kind" />
+            </StackPanel>
+        </DataTemplate>
+
         <!-- the processors and properties of an item (the document, a data type def): add buttons and the effective entries -->
         <DataTemplate x:Key="DetailsSectionsTemplate" x:DataType="ne:ItemDetailsViewModel">
             <StackPanel Spacing="10">
@@ -246,6 +256,7 @@
                         <TextBlock Text="Selected repeat properties" Classes="caption" />
                         <TextBlock Text="Repeats its members a number of times." Classes="kind" />
                         <TextBox PlaceholderText="Repeat name" Text="{Binding NodeFacets.Name, UpdateSourceTrigger=LostFocus}" />
+                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource DocumentationTemplate}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Node def" Classes="label" />
                             <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef, UpdateSourceTrigger=LostFocus}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
@@ -276,6 +287,7 @@
                         <TextBlock Text="Selected choice properties" Classes="caption" />
                         <TextBlock Text="Selects one of its members at runtime." Classes="kind" />
                         <TextBox PlaceholderText="Choice name" Text="{Binding NodeFacets.Name, UpdateSourceTrigger=LostFocus}" />
+                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource DocumentationTemplate}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Node def" Classes="label" />
                             <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef, UpdateSourceTrigger=LostFocus}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
@@ -314,6 +326,7 @@
                         <TextBlock Text="Selected group properties" Classes="caption" />
                         <TextBlock Text="Groups a sequence of fields and nested nodes." Classes="kind" />
                         <TextBox PlaceholderText="Group name" Text="{Binding NodeFacets.Name, UpdateSourceTrigger=LostFocus}" />
+                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource DocumentationTemplate}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Node def" Classes="label" />
                             <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef, UpdateSourceTrigger=LostFocus}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
@@ -332,6 +345,7 @@
                                 DataContext="{Binding $parent[ne:NodeEditorControl].DataContext}">
                         <TextBlock Text="Selected field properties" Classes="caption" />
                         <TextBox PlaceholderText="Field name" Text="{Binding NodeFacets.Name, UpdateSourceTrigger=LostFocus}" />
+                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource DocumentationTemplate}" />
                         <ComboBox Classes="options" ItemsSource="{Binding DataTypeOptions}" IsEditable="True" Text="{Binding NodeFacets.DataType, UpdateSourceTrigger=LostFocus}" />
                         <TextBlock Text="{Binding NodeFacets.DataTypeNote}" Classes="caption" TextWrapping="Wrap"
                                    IsVisible="{Binding NodeFacets.DataTypeNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />

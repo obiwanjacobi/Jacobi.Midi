@@ -132,7 +132,8 @@ Namespace `Jacobi.Midi.Device.Messages`.
 | `DeviceMessage` | A message group of the schemas with its role nodes. |
 | `ReceivedData` | A recognised data message: its device values and block; `Decode` reads its values into a value model. |
 | `MessageMapException`, `MessageMapProblem`, `MessageMapProblemSeverity` | All problems found in a map and its messages, each located at its schema node. |
+| `MidiProperties` | The `midi.*` tags (properties) of the schemas: their names and descriptions (`Descriptors`), the check of a tag on its own (`IsTag`, `Validate`) and the role (`RoleOf`, `IsData`) and documentation (`DocOf`, `midi.doc`) of a node, for tools such as the Schema Editor; their use in all schemas is validated by `MessageMapValidator`. |
 
 Internal: `IMessageMap`, `IMessageMapProvider`, `IDeviceState`, the members of `MessageMaps` that hand out an `IMessageMap`,
 `DumpMap`, `DumpMapProvider`, `DumpDeviceState`, and the shared helpers `DeviceMessages`, `ConformingBodies`,
-`EnvelopeSource`/`EnvelopeSink` and `MidiProperties`.
+`EnvelopeSource`/`EnvelopeSink`, and the helpers of `MidiProperties` that read the tags from nodes.

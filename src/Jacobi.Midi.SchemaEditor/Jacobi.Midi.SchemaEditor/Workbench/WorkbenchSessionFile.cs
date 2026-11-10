@@ -11,11 +11,11 @@ namespace Jacobi.Midi.SchemaEditor.Workbench;
 /// <param name="Captures">The captures, in the order of the captures list.</param>
 /// <param name="Baseline">The index of the baseline in <paramref name="Captures"/>; -1 when there is none.</param>
 /// <param name="Annotations">The notes of the user on byte ranges.</param>
-internal sealed record WorkbenchSession(string Title, IReadOnlyList<Capture> Captures, int Baseline, IReadOnlyList<Annotation> Annotations)
-{
-    /// <summary>The notes of the user on message slots, by slot index.</summary>
-    public IReadOnlyDictionary<int, string> SlotNotes { get; init; } = new Dictionary<int, string>();
-}
+/// <remarks>
+/// The note on a message slot is not part of the session: it is the documentation (<c>midi.doc</c>) of the slot's root
+/// in the target schema.
+/// </remarks>
+internal sealed record WorkbenchSession(string Title, IReadOnlyList<Capture> Captures, int Baseline, IReadOnlyList<Annotation> Annotations);
 
 /// <summary>
 /// Reads and writes a <see cref="WorkbenchSession"/> as JSON (a '.workbench.json' file).
@@ -48,10 +48,7 @@ internal static class WorkbenchSessionFile
                 Start = annotation.Range.Start,
                 Length = annotation.Range.Length,
                 Text = annotation.Text
-            }).ToList(),
-            SlotNotes = session.SlotNotes.OrderBy(note => note.Key)
-                .Select(note => new SlotNoteDto { Slot = note.Key, Text = note.Value })
-                .ToList()
+            }).ToList()
         };
         return JsonSerializer.Serialize(file, WorkbenchJsonContext.Default.SessionDto);
     }
@@ -106,13 +103,8 @@ internal static class WorkbenchSessionFile
             .Where(dto => dto.Slot >= 0 && dto.Start >= 0 && dto.Length > 0 && !String.IsNullOrWhiteSpace(dto.Text))
             .Select(dto => new Annotation(new ByteRange(dto.Slot, dto.Start, dto.Length), dto.Text!))
             .ToList();
-        var slotNotes = new Dictionary<int, string>();
-        foreach (var note in (file.SlotNotes ?? []).Where(dto => dto.Slot >= 0 && !String.IsNullOrWhiteSpace(dto.Text)))
-        {
-            slotNotes[note.Slot] = note.Text!;
-        }
         var baseline = file.Baseline >= 0 && file.Baseline < captures.Count ? file.Baseline : captures.Count > 0 ? 0 : -1;
-        return new WorkbenchSession(file.Title ?? String.Empty, captures, baseline, annotations) { SlotNotes = slotNotes };
+        return new WorkbenchSession(file.Title ?? String.Empty, captures, baseline, annotations);
     }
 
     internal sealed class SessionDto
@@ -122,13 +114,6 @@ internal static class WorkbenchSessionFile
         public int Baseline { get; set; } = -1;
         public List<CaptureDto>? Captures { get; set; }
         public List<AnnotationDto>? Annotations { get; set; }
-        public List<SlotNoteDto>? SlotNotes { get; set; }
-    }
-
-    internal sealed class SlotNoteDto
-    {
-        public int Slot { get; set; }
-        public string? Text { get; set; }
     }
 
     internal sealed class CaptureDto

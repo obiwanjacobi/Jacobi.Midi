@@ -71,7 +71,7 @@ internal static class MessageMapCheck
         return document.Members.Concat(document.NodeDefs).Any(HasTags);
 
         static bool HasTags(EditNode node)
-            => node.Properties.Any(property => AddressMapTags.IsTag(property.Name))
+            => node.Properties.Any(property => MidiProperties.IsTag(property.Name))
             || (node is EditGroup group && group.Members.Any(HasTags));
     }
 

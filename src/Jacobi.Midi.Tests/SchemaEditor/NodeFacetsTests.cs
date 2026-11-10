@@ -24,6 +24,31 @@ public class NodeFacetsTests
     }
 
     [Fact]
+    public void Doc_WritesTheMidiDocPropertyWithNewlinesAndRemovesItWhenEmpty()
+    {
+        var document = new SchemaWorkspaceDocument(SchemaFileService.CreateDocument("test"), SchemaFormat.Json);
+        var root = document.Schema.Members.OfType<EditGroup>().Single();
+        var facets = new NodeFacets(document, root);
+        document.IsDirty = false;
+
+        facets.Doc = "  The output level.\r\n0 is silent.  ";
+
+        Assert.True(document.IsDirty);
+        var property = Assert.Single(root.Properties, p => p.Name == "midi.doc");
+        Assert.Equal("The output level.\n0 is silent.", property.Value);
+        Assert.Equal("The output level.\n0 is silent.", new NodeFacets(document, root).Doc);
+
+        // the same text with other line endings is no change
+        document.IsDirty = false;
+        facets.Doc = "The output level.\r\n0 is silent.";
+        Assert.False(document.IsDirty);
+
+        facets.Doc = "  ";
+        Assert.DoesNotContain(root.Properties, p => p.Name == "midi.doc");
+        Assert.Equal(String.Empty, facets.Doc);
+    }
+
+    [Fact]
     public void ValueOrRef_ReadsAndWritesThePropertyByName()
     {
         var document = new SchemaWorkspaceDocument(SchemaFileService.CreateDocument("test"), SchemaFormat.Json);

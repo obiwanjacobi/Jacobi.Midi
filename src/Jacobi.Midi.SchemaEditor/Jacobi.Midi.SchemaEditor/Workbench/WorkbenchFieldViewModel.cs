@@ -93,6 +93,10 @@ internal sealed partial class WorkbenchFieldViewModel : ObservableObject
     [ObservableProperty]
     public partial string Processor { get; set; } = String.Empty;
 
+    /// <summary>The documentation of the field (<c>midi.doc</c>); written with Define field or Apply.</summary>
+    [ObservableProperty]
+    public partial string Doc { get; set; } = String.Empty;
+
     /// <summary>The data types to choose from (including the data type defs of the target schema).</summary>
     [ObservableProperty]
     public partial IReadOnlyList<string> DataTypeOptions { get; private set; } = Models.DataTypeOptions.Get(null);
@@ -154,6 +158,7 @@ internal sealed partial class WorkbenchFieldViewModel : ObservableObject
                 Processor = field.Processors.FirstOrDefault()?.Processor.ToString() ?? String.Empty;
                 FixedValue = WorkbenchSchema.GetValue(field) ?? String.Empty;
                 IsFixed = FixedValue.Length > 0;
+                Doc = field.Doc ?? String.Empty;
             }
             else if (Mode == FieldMode.Define && (previous is null || previous.Field is not null || previous.Selection != _context!.Selection))
             {
@@ -162,6 +167,7 @@ internal sealed partial class WorkbenchFieldViewModel : ObservableObject
                 (DataType, Processor) = Suggest(_context!.Baseline.AsSpan(_context.Selection.Start, _context.Selection.Length));
                 IsFixed = false;
                 FixedValue = String.Empty;
+                Doc = String.Empty;
             }
         }
         finally
@@ -267,7 +273,7 @@ internal sealed partial class WorkbenchFieldViewModel : ObservableObject
     private bool CanCopy() => Mode != FieldMode.None && CopyTargets.Count > 0;
 
     /// <summary>
-    /// Defines the field (name, data type, processor, fixed value) at the same position in the other slots;
+    /// Defines the field (name, data type, processor, fixed value, documentation) at the same position in the other slots;
     /// while defining, the field is defined for the selected bytes first.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanCopy))]
@@ -301,6 +307,7 @@ internal sealed partial class WorkbenchFieldViewModel : ObservableObject
         var dataType = field.DataType?.ToString() ?? String.Empty;
         var processor = field.Processors.FirstOrDefault()?.Processor.ToString();
         var value = WorkbenchSchema.GetValue(field);
+        var doc = field.Doc;
         var copied = 0;
         try
         {
@@ -309,7 +316,7 @@ internal sealed partial class WorkbenchFieldViewModel : ObservableObject
                 var message = context.Messages[slot];
                 var root = WorkbenchSchema.FindRoot(document.Schema, slot) ?? WorkbenchSchema.CreateRoot(document, slot, message);
                 WorkbenchSchema.DefineField(document, WorkbenchSchema.GetLayout(root, message), fieldRange with { Slot = slot },
-                    field.Name, dataType, processor, value);
+                    field.Name, dataType, processor, value, doc);
                 copied++;
             }
             _setStatus($"Defined {field.Name} in {copied} other slot(s).");
@@ -495,7 +502,7 @@ internal sealed partial class WorkbenchFieldViewModel : ObservableObject
             {
                 throw new InvalidOperationException("Select bytes inside one unknown span (a Wip_ placeholder) to define a field.");
             }
-            field = WorkbenchSchema.DefineField(document, layout, context.Selection, Name, DataType, Processor, GetFixedValue());
+            field = WorkbenchSchema.DefineField(document, layout, context.Selection, Name, DataType, Processor, GetFixedValue(), Doc);
             WorkbenchSchema.EnsureInclude(document, Processor);
             _setStatus($"Defined {WorkbenchSchema.GetPath(field)} ({context.Selection}) in {document.Schema.Name}.");
             return true;
@@ -519,7 +526,7 @@ internal sealed partial class WorkbenchFieldViewModel : ObservableObject
         }
         try
         {
-            WorkbenchSchema.UpdateField(document, field, Name, DataType, Processor, GetFixedValue());
+            WorkbenchSchema.UpdateField(document, field, Name, DataType, Processor, GetFixedValue(), Doc);
             WorkbenchSchema.EnsureInclude(document, Processor);
             _setStatus($"Changed {WorkbenchSchema.GetPath(field)}.");
             _schemaChanged();

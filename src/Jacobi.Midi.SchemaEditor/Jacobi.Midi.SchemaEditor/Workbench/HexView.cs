@@ -223,7 +223,9 @@ internal sealed class HexView : Control
                 : $"{slot.Header} · {layout.Root.Name}: {layout.DescribedCount} of {layout.Spans.Sum(span => span.Length)} bytes described";
             if (SlotNotes?.GetValueOrDefault(slotIndex) is { Length: > 0 } note)
             {
-                header += $" — {note}";
+                // the header is one line: the first line of a multi-line note
+                var lineEnd = note.IndexOf('\n');
+                header += lineEnd < 0 ? $" — {note}" : $" — {note[..lineEnd]} …";
             }
             DrawText(context, header, slot.HasDifference ? accent : muted, SmallFontSize, new Point(Pad + 8, top + 5), HeaderTypeface);
             if (layout is not null)

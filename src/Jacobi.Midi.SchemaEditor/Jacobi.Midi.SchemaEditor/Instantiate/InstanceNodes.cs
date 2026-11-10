@@ -289,7 +289,7 @@ internal sealed partial class InstanceField : InstanceNode
         Value = constant ?? String.Empty;
         IsConstant = constant is not null;
         Options = options ?? [];
-        Role = AddressMapTags.RoleOf(schema);
+        Role = MidiProperties.RoleOf(schema);
     }
 
     public SchemaField Field => (SchemaField)Schema;
