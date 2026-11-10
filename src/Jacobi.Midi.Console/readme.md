@@ -288,7 +288,7 @@ another file (XML or JSON by its extension). A file that was not
 read from disk (a new dashboard) is saved with a file picker. A changed marker (●) shows unsaved changes: of each open
 dashboard next to its name in the list of dashboards, of the rig next to the RIG heading (Edit mode), of the rig or the
 selected dashboard on the file menu, and on the items of *Save*. Unsaved changes are not discarded silently: *Open › Rig…* (in place of a changed rig) and *Close
-dashboard* (of a changed dashboard) ask the user to confirm first. When the dashboard gives a device a color of its own, a new rig
+dashboard* (of a changed dashboard) ask the user to confirm first, and so does closing the window (desktop) while the rig or an open dashboard has unsaved changes, naming them. When the dashboard gives a device a color of its own, a new rig
 color does not show on it; the console says so.
 
 ### Looks

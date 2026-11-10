@@ -16,6 +16,16 @@ Issue: the console started without a rig; devices could not be added until a rig
    is added. *Why:* an assembly holds many devices; the rig has only those the user adds. Listing and removing the
    rig's sources, and keeping a long + menu manageable, wait for later.
 
+## Unsaved changes when the console is closed (2026-11-10)
+
+Issue: closing the console window discarded the unsaved changes of the rig and the open dashboards without asking.
+
+1. **Closing the window asks one confirmation for all changed files** (the rig and the open dashboards, by name),
+   with the console's own confirmation dialog; *Quit* discards them, *Cancel* keeps the window open. No *Save all*
+   from the dialog (for now). *Why:* the same discard-confirmation as *Open rig*, *New rig* and *Close dashboard*.
+2. **Desktop only.** A browser page cannot wait for an in-app dialog when it is closed, and an OS shutdown does not
+   wait either. *Why:* only the desktop window can be held open for the answer.
+
 ## A selector with pages in the console (2026-11-10)
 
 Issue: some parameters are only valid for some options of another parameter (e.g. the wave parameters per oscillator

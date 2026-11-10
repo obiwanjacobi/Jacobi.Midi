@@ -1751,6 +1751,23 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     // the full path of a file; null when it has none (not saved, or the browser)
     private static string? LocalPath(FileOrigin origin) => origin.File?.TryGetLocalPath();
 
+    /// <summary>
+    /// Asks the user to confirm quitting the console when the rig or an open dashboard has unsaved changes, naming
+    /// them; true when there are none or the user confirmed discarding them. False also while another confirmation is
+    /// shown: that one is answered first.
+    /// </summary>
+    public async Task<bool> ConfirmQuit()
+    {
+        if (ConfirmDialog is not null)
+            return false;
+        var changed = Dashboards.Select(entry => entry.Origin).Prepend(RigOrigin)
+            .Where(origin => origin.IsChanged)
+            .Select(origin => $"'{origin.Name}'")
+            .ToList();
+        return changed.Count == 0
+            || await Confirm("UNSAVED CHANGES", "Quit the console", $"{String.Join(", ", changed)} {(changed.Count == 1 ? "has" : "have")} unsaved changes. Quitting discards them. Continue?", "Quit");
+    }
+
     // asks the user to confirm discarding the unsaved changes of a file; true when it has none
     private async Task<bool> ConfirmDiscard(FileOrigin origin, string title, string message, string confirmText)
         => !origin.IsChanged || await Confirm("UNSAVED CHANGES", title, $"{message} Continue?", confirmText);

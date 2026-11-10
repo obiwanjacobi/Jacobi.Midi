@@ -13,7 +13,7 @@ What is planned for the console, and what was done. What the console does now is
 - [ ] A rig (or dashboard) whose schema files or assemblies are not found: prompt the user to locate them, and refer to them there.
 - [x] Rig device values not as a string, but a list with possibile keys from droplist.
 - [x] make droplists for send and receive exchange names.
-- [ ] prompt user for unsaved changes when closing the app.
+- [x] prompt user for unsaved changes when closing the app.
 - [x] **Start with a blank rig.** The console starts without a rig (`_rig` is only set by *Open rig*): the *Add device* menu (+ of the rig) lists no roots, and *From a schema file…* / *From an assembly…* show no file dialog, only "Open a rig first." in the status bar. Start with a new, empty (unsaved) rig instead, so devices can be added right away, saved with *Save rig as*.
 - [x] Phase out `AddressMapAdapter` in `SchemaLibrary` (`Maps`: `IsMap`, `ItemCount`, the order of `Roots`) in favour of the generic `MessageMaps`/`MessageMapInfo`; first decide what these mean for every kind of map (every root has a map now, a dump by default). *`IsMap` done:* replaced by `SchemaLibrary.KindOf` (`MessageMapInfo.Kind`, see [docs/decisions.md](../../docs/decisions.md), *The data of a root for a client*); the roots with a message map come first and are offered as devices. *`ItemCount` done:* `MessageMapInfo.ItemCount`, the schema's count for a root that is no address map (`MessageMapException.Kind`). *Dump files done:* `MessageMaps.Load`/`Save`, for every kind of map; `SchemaLibrary.Maps` is removed.
 - [ ] Add a clear button to the problems window and a X-button to each item.
