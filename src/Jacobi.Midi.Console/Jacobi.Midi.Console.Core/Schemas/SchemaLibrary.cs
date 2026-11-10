@@ -4,7 +4,6 @@ using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Console.Core.Files;
-using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Device.Exchange;
 using Jacobi.Midi.Device.Messages;
 
@@ -18,6 +17,10 @@ namespace Jacobi.Midi.Console.Core.Schemas;
 /// </summary>
 public sealed class SchemaLibrary
 {
+    // the kind of the message map of each root asked for (null: no valid map); the library does not change
+    private readonly Dictionary<SchemaName, MessageMapKind?> _kinds = [];
+    private IReadOnlyList<SchemaName>? _roots;
+
     internal SchemaLibrary(ProcessorManager processors, ExchangeDefinitions exchanges, SchemaSet? schemas, Serializer? serializer,
         IReadOnlyList<SchemaLibraryProblem> problems, IReadOnlyDictionary<string, string> documentSources)
     {
@@ -25,7 +28,6 @@ public sealed class SchemaLibrary
         Exchanges = exchanges;
         Schemas = schemas;
         Serializer = serializer;
-        Maps = serializer is null ? null : new AddressMapAdapter(serializer);
         MessageMaps = serializer is null ? null : new MessageMaps(serializer);
         Problems = problems;
         DocumentSources = documentSources;
@@ -40,39 +42,70 @@ public sealed class SchemaLibrary
 
     /// <summary>
     /// The root groups of the schemas (<c>document.group</c>), any of which can be the root of a device: its groups and
-    /// fields are the device's parameters. The address maps (<see cref="Maps"/>) come first: the roots data messages
-    /// carry; whether and how a device's values are sent and received is up to them (the Device project), not to the
-    /// console. Empty when the schemas do not compile.
+    /// fields are the device's parameters. The roots with a message map (<see cref="KindOf"/>) come first: device data;
+    /// whether and how a device's values are sent and received is up to the Device project, not to the console. Empty
+    /// when the schemas do not compile.
     /// </summary>
-    public IReadOnlyList<SchemaName> Roots
-    {
-        get
-        {
-            if (Schemas is null)
-                return [];
-            var roots = Schemas.Documents.SelectMany(document => document.Roots.Select(root => new SchemaName($"{document.Name}{SchemaName.Separator}{root.Name}"))).ToList();
-            return [.. roots.OrderBy(root => Maps?.IsMap(root) == true ? 0 : 1)];
-        }
-    }
+    public IReadOnlyList<SchemaName> Roots => _roots ??= FindRoots();
 
     /// <summary>True when the name is a root group of the schemas (see <see cref="Roots"/>).</summary>
     public bool HasRoot(SchemaName name) => Roots.Contains(name);
 
     /// <summary>
-    /// The number of items of a repeat of a root: in the address space of an address map (<c>midi.repeat</c>), else the
-    /// repeat's count in the schema; null for a node that is not a repeat, or a repeat whose count is a value.
+    /// How the data of a root is carried in messages (the kind of its message map, see <see cref="MessageMaps"/>); null
+    /// when the root has no valid message map (e.g. an envelope that carries other roots; <see cref="MessageMaps"/>
+    /// tells why) or the schemas do not compile.
+    /// </summary>
+    public MessageMapKind? KindOf(SchemaName root)
+    {
+        if (MessageMaps is not { } maps)
+            return null;
+        lock (_kinds)
+        {
+            if (!_kinds.TryGetValue(root, out var kind))
+            {
+                try
+                {
+                    kind = maps.Info(root).Kind;
+                }
+                catch (Exception exception) when (exception is MessageMapException or ExecutionPlanException
+                    or InvalidOperationException or ArgumentException)
+                {
+                    kind = null;
+                }
+                _kinds[root] = kind;
+            }
+            return kind;
+        }
+    }
+
+    /// <summary>
+    /// The number of items of a repeat of a root as its message map transfers it (<see cref="MessageMapInfo.ItemCount"/>:
+    /// in the address space of an address map, <c>midi.repeat</c>); for a root without a valid map that is not an
+    /// address map, the repeat's count in the schema. Null for a node that is not a repeat, or a repeat whose count is
+    /// a value.
     /// </summary>
     /// <exception cref="MessageMapException">The root is an address map that is not valid.</exception>
     public int? ItemCount(SchemaName root, string repeat)
     {
         ArgumentException.ThrowIfNullOrEmpty(repeat);
-        if (Maps?.IsMap(root) == true)
-            return Maps.ItemCount(root, new SchemaPath(repeat));
-        return Serializer?.GetPlan(root).Find(new SchemaPath(repeat)) is RepeatInfo { Count: int count } ? count : null;
+        var path = new SchemaPath(repeat);
+        if (MessageMaps is { } maps)
+        {
+            try
+            {
+                return maps.Info(root).ItemCount(path);
+            }
+            catch (MessageMapException exception) when (exception.Kind != MessageMapKind.Address)
+            {
+                // no address map: the schema gives the count (the map's problem is shown with the device)
+            }
+        }
+        return Serializer?.GetPlan(root).Find(path) is RepeatInfo { Count: int count } ? count : null;
     }
 
     /// <summary>
-    /// The roots (see <see cref="Roots"/>, address maps first) of the documents a schema file brought, whether or not they
+    /// The roots (see <see cref="Roots"/>, those with a message map first) of the documents a schema file brought, whether or not they
     /// replaced documents of the same name (a schema built into the console).
     /// </summary>
     public IReadOnlyList<SchemaName> RootsFromFile(string path)
@@ -87,6 +120,15 @@ public sealed class SchemaLibrary
     {
         ArgumentException.ThrowIfNullOrEmpty(assemblyName);
         return RootsWhere(source => source.StartsWith(assemblyName + "/", StringComparison.OrdinalIgnoreCase));
+    }
+
+    // the roots of the documents, those with a message map first
+    private IReadOnlyList<SchemaName> FindRoots()
+    {
+        if (Schemas is null)
+            return [];
+        var roots = Schemas.Documents.SelectMany(document => document.Roots.Select(root => new SchemaName($"{document.Name}{SchemaName.Separator}{root.Name}"))).ToList();
+        return [.. roots.OrderBy(root => KindOf(root) is null ? 1 : 0)];
     }
 
     // the roots whose document (the namespace of the root) comes from a matching source
@@ -106,9 +148,6 @@ public sealed class SchemaLibrary
 
     /// <summary>The serializer of the compiled schemas and the processors; null when the schemas do not compile.</summary>
     public Serializer? Serializer { get; }
-
-    /// <summary>The address maps of the schemas (item counts of map repeats); null when the schemas do not compile.</summary>
-    public AddressMapAdapter? Maps { get; }
 
     /// <summary>
     /// The message maps of the roots, any kind (address map or dump), created on first use: what a device of a root

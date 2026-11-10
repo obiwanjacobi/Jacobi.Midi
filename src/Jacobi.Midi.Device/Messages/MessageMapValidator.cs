@@ -1,18 +1,19 @@
 using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Schema;
-using Jacobi.Midi.Device.Messages;
+using Jacobi.Midi.Device.Addressing;
 
-namespace Jacobi.Midi.Device.Addressing;
+namespace Jacobi.Midi.Device.Messages;
 
 /// <summary>
 /// Validates the use of the <c>midi.*</c> tags in all schemas of a serializer, for tools that show the problems while a
 /// schema is written (e.g. the Schema Editor): the tags on their own (<see cref="AddressMapTags.Validate"/>), the roles
-/// in their context, every address map with its envelopes (as when the map is first used), and whether each role is
-/// fulfilled: a data message needs a map root that conforms to its contract, and a <c>device.&lt;name&gt;</c> role is
-/// either fixed by the map root (<c>midi.device.&lt;name&gt;</c>) or supplied by the client.
+/// in their context, the message map of every root, whatever its kind (the provider chain decides: an address map with
+/// its envelopes, a dump carried by a data message, a dump that is a message itself), as when the map is first used,
+/// and whether each role is fulfilled: a data message needs a root that conforms to its contract, and a
+/// <c>device.&lt;name&gt;</c> role is either fixed by the root (<c>midi.device.&lt;name&gt;</c>) or supplied by the client.
 /// </summary>
-public static class AddressMapValidator
+public static class MessageMapValidator
 {
     /// <summary>All problems found, without duplicates; empty when the schemas have no tags or no problems.</summary>
     public static IReadOnlyList<MessageMapProblem> Validate(Serializer serializer)
@@ -53,6 +54,29 @@ public static class AddressMapValidator
             foreach (var root in roots)
             {
                 ValidateMap(maps, root, contract, problems);
+            }
+        }
+
+        // the dumps that are a message themselves (no data message carries them)
+        foreach (var document in serializer.Schemas.Documents)
+        {
+            foreach (var group in document.Roots)
+            {
+                var root = new SchemaName($"{document.Name}{SchemaName.Separator}{group.Name}");
+                bool isMessageDump;
+                try
+                {
+                    isMessageDump = DumpMap.IsMessageDump(serializer, serializer.GetPlan(root));
+                }
+                catch (Exception exception) when (exception is ExecutionPlanException or InvalidOperationException or ArgumentException)
+                {
+                    // a root without a plan is no message (the plan's problems are not message map problems)
+                    continue;
+                }
+                if (isMessageDump)
+                {
+                    ValidateMap(maps, root, contract: null, problems);
+                }
             }
         }
         return [.. problems.Distinct()];
@@ -96,7 +120,8 @@ public static class AddressMapValidator
     }
 
     // the map (of whatever kind its root is: the provider chain decides) with its envelopes, and how its device roles are fulfilled
-    private static void ValidateMap(MessageMaps maps, SchemaName root, SchemaName contract, MessageMapProblems problems)
+    // contract: of the data messages that carry the root; null for a root that is a message itself
+    private static void ValidateMap(MessageMaps maps, SchemaName root, SchemaName? contract, MessageMapProblems problems)
     {
         IMessageMap map;
         try
@@ -133,7 +158,9 @@ public static class AddressMapValidator
         foreach (var (name, _) in map.Device.Where(value => !used.Contains(value.Key)))
         {
             problems.Warning(root.Namespace, new SchemaPath(root.Name),
-                $"'{MidiProperties.DevicePrefix}{name}' is not used: no message of the contract '{contract}' has the role '{MidiProperties.RoleDevicePrefix}{name}'.");
+                contract is { } carriers
+                    ? $"'{MidiProperties.DevicePrefix}{name}' is not used: no message of the contract '{carriers}' has the role '{MidiProperties.RoleDevicePrefix}{name}'."
+                    : $"'{MidiProperties.DevicePrefix}{name}' is not used: the message has no role '{MidiProperties.RoleDevicePrefix}{name}'.");
         }
     }
 

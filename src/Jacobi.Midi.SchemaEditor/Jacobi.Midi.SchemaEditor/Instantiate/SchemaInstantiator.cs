@@ -20,8 +20,9 @@ internal sealed record SerializedMessage(byte[] Bytes, TimeSpan Interval);
 /// Creates the <see cref="InstanceNode"/> trees ("instances") of the roots of a compiled document
 /// (a <see cref="SchemaSetCompilation"/>, see <see cref="SchemaSetWorkspace"/>) and serializes or deserializes their values.
 /// It walks the compiled schema, so node defs are expanded and open choices can look up their bodies in the whole set.
-/// A body that is an address map is detected and handled by the Device addressing code (<see cref="AddressMapAdapter"/>):
-/// its repeats get the item count of the address space, and the groups the user includes are sent at their addresses.
+/// The kind of message map of a body is detected by Midi.Device (<see cref="MessageMaps"/>, <see cref="InstanceBody.MapKind"/>).
+/// Its messages are written, read and described by Midi.Device (<see cref="MessageMaps"/>) for every kind of map: e.g. the
+/// repeats of an address map body get the item count of the address space, and the groups the user includes are sent at their addresses.
 /// </summary>
 internal sealed class SchemaInstantiator
 {
@@ -30,7 +31,7 @@ internal sealed class SchemaInstantiator
     private readonly List<string> _warnings;
     private readonly Serializer _serializer;
     private readonly ExchangeDefinitions? _exchanges;
-    private AddressMapAdapter? _adapter;
+    private MessageMaps? _maps;
 
     /// <param name="compilation">The compiled document with the schemas it was compiled with.</param>
     /// <param name="processors">
@@ -80,8 +81,9 @@ internal sealed class SchemaInstantiator
     /// <exception cref="InvalidOperationException">The document has no such root.</exception>
     public InstanceGroup CreateRoot(string rootName)
     {
-        var root = _schemas.FindRoot(new SchemaName($"{DocumentName}{SchemaName.Separator}{rootName}"));
-        return Top(BuildGroup(new InstanceGroup(root, new SchemaPath(root.Name)), root, DocumentName, CreatePlan(root)), DocumentName);
+        var name = new SchemaName($"{DocumentName}{SchemaName.Separator}{rootName}");
+        var root = _schemas.FindRoot(name);
+        return MarkMessageDump(Top(BuildGroup(new InstanceGroup(root, new SchemaPath(root.Name)), root, DocumentName, CreatePlan(root)), DocumentName), name);
     }
 
     /// <summary>
@@ -94,9 +96,45 @@ internal sealed class SchemaInstantiator
         ArgumentNullException.ThrowIfNull(group);
         var (current, top, names, documentName) = FindCompiled(group);
         var path = String.Join(SchemaPath.Separator, names);
-        return current is null
-            ? throw new InvalidOperationException($"The compiled schema has no node '{path}'.")
-            : Top(Build(current, documentName, new SchemaPath(path), top is SchemaGroup outermost ? CreatePlan(outermost) : null), documentName);
+        if (current is null)
+        {
+            throw new InvalidOperationException($"The compiled schema has no node '{path}'.");
+        }
+        var instance = Top(Build(current, documentName, new SchemaPath(path), top is SchemaGroup outermost ? CreatePlan(outermost) : null), documentName);
+        // the instance of a root: it may be a dump message itself
+        return instance is InstanceGroup root && names.Count == 1 && FindRootName(group) is { } rootName
+            ? MarkMessageDump(root, rootName)
+            : instance;
+    }
+
+    /// <summary>
+    /// Marks how the role fields of a root that is a dump message itself (<see cref="MessageMapKind.MessageDump"/>) get
+    /// their value: the device values the root fixes are supplied by its map (see <see cref="MessageMapInfo.DescribeRole"/>),
+    /// the others are given in the instance. Any other root is left as it is.
+    /// </summary>
+    private InstanceGroup MarkMessageDump(InstanceGroup instance, SchemaName root)
+    {
+        if (KindOf(root) == MessageMapKind.MessageDump)
+        {
+            foreach (var field in RoleFields(instance))
+            {
+                field.RoleSupply = DescribeRole(root, field.Role!);
+            }
+        }
+        return instance;
+    }
+
+    // the kind of the message map of a root; null when it has no valid map (e.g. a plain group)
+    private MessageMapKind? KindOf(SchemaName root)
+    {
+        try
+        {
+            return Maps.Info(root).Kind;
+        }
+        catch (Exception exception) when (exception is MessageMapException or ExecutionPlanException or InvalidOperationException or ArgumentException)
+        {
+            return null;
+        }
     }
 
     // the top node of an instance tree: it knows its document and is expanded
@@ -143,14 +181,16 @@ internal sealed class SchemaInstantiator
         ArgumentNullException.ThrowIfNull(instance);
         ArgumentNullException.ThrowIfNull(warnings);
         var plan = _serializer.GetPlan(root);
-        var isRoot = String.Equals(plan.Root.Path.Value, instance.Path.Value, StringComparison.OrdinalIgnoreCase);
+        var isRoot = IsRoot(root, instance);
         // the engine enters the root with the source itself; the items of a root repeat are found by its path
         var source = new InstanceValueSource(isRoot && instance is not InstanceRepeat ? instance : null, instance);
-        if (FindAddressMap(instance) is { } map)
+        if (TransferOf(root, instance, throwWhenEmpty: true) is { } transfer)
         {
-            var messages = Adapter.WriteData(root, map.Choice.Path, map.Body.Root, Selection(map.Body), source, warnings);
-            var interval = _exchanges?.Find(map.Body.Root, ExchangeNames.SendData)?.MessageInterval ?? TimeSpan.Zero;
-            return [.. messages.Select(message => new SerializedMessage(message.SysEx, interval))];
+            // written by the map from the instance (the whole message): it supplies the roles of each block and the
+            // device values the root fixes
+            var interval = _exchanges?.Find(transfer.Root, ExchangeNames.SendData)?.MessageInterval ?? TimeSpan.Zero;
+            return [.. Maps.SaveMessages(transfer.Ranges, source, new DeviceValues(), transfer.Message, warnings)
+                .Select(bytes => new SerializedMessage(bytes, interval))];
         }
 
         var output = new ArrayBufferWriter<byte>();
@@ -166,29 +206,29 @@ internal sealed class SchemaInstantiator
     }
 
     /// <summary>
-    /// Describes how the included groups of an address map body are sent: the data messages with their address and size,
-    /// or why they cannot be sent. Null when the instance has no address map body.
+    /// Describes how a body with a message map is sent: for an address map the data messages of the included groups
+    /// with their address and size, or why they cannot be sent; for a carried dump the one message with the whole body.
+    /// Null when the instance has no such body.
     /// </summary>
     public string? DescribeTransfer(SchemaName root, InstanceNode instance)
     {
         ArgumentNullException.ThrowIfNull(instance);
-        if (FindAddressMap(instance) is not { } map)
-        {
-            return null;
-        }
-        var selection = Selection(map.Body, throwWhenEmpty: false);
-        if (selection.Count == 0)
-        {
-            return $"Nothing of the address map '{map.Body.Root}' is included: include the groups to send.";
-        }
-
         try
         {
+            if (TransferOf(root, instance, throwWhenEmpty: false) is not { } transfer)
+            {
+                return null;
+            }
+            if (transfer.Ranges.Count == 0)
+            {
+                return $"Nothing of the address map '{transfer.Root}' is included: include the groups to send.";
+            }
+
             var warnings = new List<string>();
-            var plan = Adapter.PlanData(root, map.Choice.Path, map.Body.Root, selection, warnings);
+            var plan = Maps.Plan(transfer.Ranges, new DeviceValues(), transfer.Message, warnings);
             const int shown = 8;
-            var blocks = plan.Blocks.Take(shown).Select(block => $"{plan.AddressSpace.Format(block.Addresses.Start)} ({block.Addresses.Size} bytes)");
-            var text = $"Sends {plan.Blocks.Count} {plan.Message.Name} message(s) at {String.Join(", ", blocks)}{(plan.Blocks.Count > shown ? ", …" : String.Empty)}.";
+            var blocks = plan.Blocks.Take(shown).Select(block => block.Description);
+            var text = $"Sends {plan.Blocks.Count} {plan.Message.Name} message(s): {String.Join(", ", blocks)}{(plan.Blocks.Count > shown ? ", …" : String.Empty)}.";
             return String.Join(Environment.NewLine, [text, .. warnings]);
         }
         catch (Exception exception) when (exception is MessageMapException or ExecutionPlanException
@@ -202,12 +242,14 @@ internal sealed class SchemaInstantiator
     /// Reads <paramref name="bytes"/> into <paramref name="instance"/> with the plan of <paramref name="root"/> (see <see cref="FindRootName"/>):
     /// the reverse of <see cref="Serialize"/>. An instance of a nested node is read as a range of that plan.
     /// The fields are filled out, the items of the repeats added and the alternatives of the choices selected as they are read;
-    /// the body of an open choice must be selected beforehand. When the read fails, the values read up to the failure remain.
-    /// When the schemas hold an address map, the reading is left to <see cref="AddressMapAdapter"/>: it ends the repeats of
-    /// the map and reads a data message into the group of the map it carries; otherwise the serializer reads as is.
+    /// the body of a data open choice is selected from the data (see <see cref="SelectBodies"/>), any other open choice
+    /// must be selected beforehand. When the read fails, the values read up to the failure remain.
+    /// A message whose data body has a message map is read by Midi.Device (<see cref="MessageMaps.ReadMessage"/>): the map
+    /// recognises it (or the read fails with the reason) and places the data at the block it carries, e.g. one patch of
+    /// an address map; otherwise the serializer reads as is.
     /// In an address map body, the part that was read is included (and the rest left out), so it can be sent back.
     /// </summary>
-    /// <param name="warnings">Receives the situations the user may not expect (e.g. a message that is read only partly into a map), also when the read fails.</param>
+    /// <param name="warnings">Receives the situations the user may not expect (e.g. another body selected from the data), also when the read fails.</param>
     /// <param name="accumulate">
     /// True to add the values to those of the earlier reads instead of clearing them first, e.g. the data messages that
     /// each carry a part of one patch; the part that was read is then included as well. A repeat of an address map that holds
@@ -221,6 +263,7 @@ internal sealed class SchemaInstantiator
         ArgumentNullException.ThrowIfNull(instance);
         ArgumentNullException.ThrowIfNull(bytes);
         ArgumentNullException.ThrowIfNull(warnings);
+        SelectBodies(root, instance, bytes, warnings, accumulate);
         var plan = _serializer.GetPlan(root);
         var input = new ReadOnlySequence<byte>(bytes);
         var isRoot = String.Equals(plan.Root.Path.Value, instance.Path.Value, StringComparison.OrdinalIgnoreCase);
@@ -230,9 +273,12 @@ internal sealed class SchemaInstantiator
         var completed = false;
         try
         {
-            var read = isRoot
-                ? Adapter.Deserialize(plan, input, sink, warnings)
-                : Adapter.Deserialize(plan.CreateRange(instance.Path), input, sink, warnings);
+            var read = (FindAddressMap(instance) ?? FindMapBody(instance, MessageMapKind.CarriedDump)) is { } body
+                // any device id: the editor matches what it is given
+                ? Maps.ReadMessage(body.Body.Root, MessageName(root, body.Choice), bytes, sink, new DeviceValues())
+                : isRoot
+                    ? _serializer.Deserialize(plan, input, sink)
+                    : _serializer.Deserialize(plan.CreateRange(instance.Path), input, sink);
             completed = true;
             return read;
         }
@@ -243,6 +289,68 @@ internal sealed class SchemaInstantiator
             foreach (var skipped in sink.Skipped)
             {
                 warnings.Add($"Not read: the message addresses another item than the accumulated values, {skipped}.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Selects the body of each data open choice (<c>midi.role="data"</c>) of the instance from the message, as
+    /// Midi.Device recognises it (<see cref="MessageMaps.FindCarriedRoot"/>, with any device id): e.g. the body the
+    /// model in a dump selects, or the address map of the model. A choice whose message is not recognised keeps its
+    /// selection. Another body than the selected one is selected with a warning; when accumulating, the selected body
+    /// (with its values) is kept, with a warning.
+    /// </summary>
+    private void SelectBodies(SchemaName root, InstanceNode instance, byte[] bytes, ICollection<string> warnings, bool accumulate)
+    {
+        foreach (var choice in DataChoices(instance).ToList())
+        {
+            if (MessageOf(choice) is not { } message)
+            {
+                continue;
+            }
+            SchemaName? carried;
+            try
+            {
+                carried = Maps.FindCarriedRoot(new SchemaName($"{root.Namespace}{SchemaName.Separator}{message.Path.Value}"), bytes, new DeviceValues());
+            }
+            catch (Exception exception) when (exception is ExecutionPlanException or InvalidOperationException or ArgumentException)
+            {
+                warnings.Add($"'{choice.Path}': the body cannot be found from the data: {exception.Message}");
+                continue;
+            }
+            if (carried is not { } found
+                || choice.Options.FirstOrDefault(option => String.Equals(option.Name, found.FullName, StringComparison.OrdinalIgnoreCase)) is not { } carriedOption
+                || ReferenceEquals(carriedOption, choice.SelectedOption))
+            {
+                continue;
+            }
+
+            if (choice.SelectedOption is { } selected)
+            {
+                if (accumulate)
+                {
+                    warnings.Add($"'{choice.Path}': the message carries '{found}', not '{selected.Name}'; the accumulated body is kept.");
+                    continue;
+                }
+                warnings.Add($"'{choice.Path}': the message carries '{found}'; it is selected instead of '{selected.Name}'.");
+            }
+            choice.SelectedOption = carriedOption;
+        }
+    }
+
+    // the data open choices of an instance, outside the bodies (a body holds no message)
+    private static IEnumerable<InstanceChoice> DataChoices(InstanceNode node)
+    {
+        if (node is InstanceChoice { IsOpen: true } choice && AddressMapTags.IsData(choice.Schema))
+        {
+            yield return choice;
+            yield break;
+        }
+        foreach (var child in node.Children())
+        {
+            foreach (var found in DataChoices(child))
+            {
+                yield return found;
             }
         }
     }
@@ -272,33 +380,89 @@ internal sealed class SchemaInstantiator
         }
     }
 
-    // An included node as map occurrences: the node itself, or, when a repeat of the map (which shows one item) is in it,
-    // its parts: the repeat stands for its one item, not for all the items of the address space.
-    private static IEnumerable<MapOccurrence> Occurrences(InstanceNode node)
+    // An included node as the nodes it transfers: the node itself, or, when a repeat of the map (which shows one item) is
+    // in it, its parts: the repeat stands for its one item, not for all the items of the address space.
+    private static IEnumerable<InstanceNode> Occurrences(InstanceNode node)
     {
         if (!HasAddressedRepeat(node))
         {
-            return [new MapOccurrence(node.Path, node.Instance)];
+            return [node];
         }
         return node.Children().Where(child => child.CanInclude).SelectMany(Occurrences);
+    }
+
+    // the range of the root's plan one node occurrence covers: a group or field, all items of a repeat, or one item
+    // (from its first to its last member)
+    private static PlanRange RangeOf(ExecutionPlan plan, InstanceNode node)
+    {
+        if (node is InstanceRepeatItem item)
+        {
+            var members = item.Children().ToList();
+            return members.Count > 0
+                ? plan.CreateRange(members[0].Path, item.Instance, members[^1].Path, item.Instance)
+                : throw new InvalidOperationException($"The item '{item.DisplayPath}' has no members.");
+        }
+        return plan.CreateRange(node.Path, node.Instance, node.Path, node.Instance);
+    }
+
+    // true when the instance is the root of the plan of the root (not a node in it)
+    private static bool IsRoot(SchemaName root, InstanceNode instance)
+        => String.Equals(root.Name, instance.Path.Value, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// What a body with a message map, or a root that is a dump message itself, transfers: the ranges of the root (the
+    /// included nodes of an address map; the whole root of a dump), the data message (the instantiated one) and the
+    /// root (whose exchange file gives the time between the messages). Null when the instance has neither.
+    /// </summary>
+    private (IReadOnlyList<PlanRange> Ranges, SchemaName Message, SchemaName Root)? TransferOf(SchemaName root, InstanceNode instance, bool throwWhenEmpty)
+    {
+        if (FindAddressMap(instance) is { } map)
+        {
+            return (Selection(map.Body, throwWhenEmpty), MessageName(root, map.Choice), map.Body.Root);
+        }
+        if (FindMapBody(instance, MessageMapKind.CarriedDump) is { } dump)
+        {
+            return ([WholeRange(dump.Body.Root)], MessageName(root, dump.Choice), dump.Body.Root);
+        }
+        if (IsRoot(root, instance) && instance is InstanceGroup && KindOf(root) == MessageMapKind.MessageDump)
+        {
+            return ([WholeRange(root)], root, root);
+        }
+        return null;
+    }
+
+    // the schema name of the message that holds a data open choice, e.g. 'Roland.Message16.DT1'
+    private static SchemaName MessageName(SchemaName root, InstanceChoice data)
+        => MessageOf(data) is { } message
+            ? new SchemaName($"{root.Namespace}{SchemaName.Separator}{message.Path.Value}")
+            : throw new InvalidOperationException($"'{data.Path}' is not in a message.");
+
+    private PlanRange WholeRange(SchemaName root)
+    {
+        var plan = _serializer.GetPlan(root);
+        return plan.CreateRange(plan.Root.Path);
     }
 
     private static bool HasAddressedRepeat(InstanceNode node)
         => node is InstanceRepeat { IsAddressed: true } || node.Children().Any(HasAddressedRepeat);
 
-    // created when it is used: it collects the address maps of the schemas
-    private AddressMapAdapter Adapter => _adapter ??= new AddressMapAdapter(_serializer);
+    // created when it is used: the message maps of the roots, any kind (address map or dump)
+    private MessageMaps Maps => _maps ??= new MessageMaps(_serializer);
 
     /// <summary>The open choice (of the instance) whose selected body is an address map; null when there is none.</summary>
     private static (InstanceChoice Choice, InstanceBody Body)? FindAddressMap(InstanceNode node)
+        => FindMapBody(node, MessageMapKind.Address);
+
+    /// <summary>The open choice (of the instance) whose selected body has a message map of the kind; null when there is none.</summary>
+    private static (InstanceChoice Choice, InstanceBody Body)? FindMapBody(InstanceNode node, MessageMapKind kind)
     {
-        if (node is InstanceChoice { Selected: InstanceBody { IsAddressMap: true } body } choice)
+        if (node is InstanceChoice { Selected: InstanceBody body } choice && body.MapKind == kind)
         {
             return (choice, body);
         }
         foreach (var child in node.Children())
         {
-            if (FindAddressMap(child) is { } found)
+            if (FindMapBody(child, kind) is { } found)
             {
                 return found;
             }
@@ -307,9 +471,10 @@ internal sealed class SchemaInstantiator
     }
 
     // the nodes of the map that are included as a whole
-    private static List<MapOccurrence> Selection(InstanceBody body, bool throwWhenEmpty = true)
+    private List<PlanRange> Selection(InstanceBody body, bool throwWhenEmpty = true)
     {
-        var selection = body.IncludedNodes().SelectMany(Occurrences).ToList();
+        var plan = _serializer.GetPlan(body.Root);
+        var selection = body.IncludedNodes().SelectMany(Occurrences).Select(node => RangeOf(plan, node)).ToList();
         if (selection.Count == 0 && throwWhenEmpty)
         {
             throw new InvalidOperationException($"Nothing of the address map '{body.Root}' is included: include the groups to send.");
@@ -444,28 +609,33 @@ internal sealed class SchemaInstantiator
 
     /// <summary>
     /// Marks how the role fields of the message that <paramref name="data"/> is the data of (<c>midi.role="data"</c>) get
-    /// their value: with an address map as the body the map supplies them (see <see cref="AddressMapAdapter.DescribeRole"/>),
-    /// otherwise the values are given in the instance. The message is found as the address map finds a data message:
-    /// the member group of the schema root that holds the data (path 'root.message'), or the root itself when the data
-    /// is one of its members.
+    /// their value: with a body that has a message map (any kind) the map supplies some of them (see
+    /// <see cref="MessageMapInfo.DescribeRole"/>), the others are given in the instance.
     /// </summary>
     private void MarkRoles(InstanceChoice data)
+    {
+        if (MessageOf(data) is not { } group)
+        {
+            return;
+        }
+
+        var map = data.Selected is InstanceBody { MapKind: not null } body ? body.Root : (SchemaName?)null;
+        foreach (var field in RoleFields(group))
+        {
+            field.RoleSupply = map is { } root ? DescribeRole(root, field.Role!) : null;
+        }
+    }
+
+    // The message that holds a data open choice, found as Midi.Device finds a data message: the member group of the
+    // schema root that holds the data (path 'root.message'), or the root itself when the data is one of its members.
+    private static InstanceGroup? MessageOf(InstanceChoice data)
     {
         var message = data.Parent;
         while (message?.Parent is not null && message.Path.Segments.Count() > 2)
         {
             message = message.Parent;
         }
-        if (message is not InstanceGroup group)
-        {
-            return;
-        }
-
-        var map = data.Selected is InstanceBody { IsAddressMap: true } body ? body.Root : (SchemaName?)null;
-        foreach (var field in RoleFields(group))
-        {
-            field.RoleSupply = map is { } root ? DescribeRole(root, field.Role!) : null;
-        }
+        return message as InstanceGroup;
     }
 
     // the role fields of a message; the data (an open choice) has its own fields
@@ -481,11 +651,11 @@ internal sealed class SchemaInstantiator
     {
         try
         {
-            return Adapter.DescribeRole(map, role);
+            return Maps.Info(map).DescribeRole(role);
         }
         catch (Exception exception) when (exception is MessageMapException or ExecutionPlanException or InvalidOperationException or ArgumentException)
         {
-            // the body is only an address map when its map is valid (see DetectAddressMap)
+            // the body only has a map kind when its map is valid (see DetectMessageMap)
             AddWarning($"How the role '{role}' is supplied by '{map}' is not known: {exception.Message}");
             return null;
         }
@@ -498,32 +668,40 @@ internal sealed class SchemaInstantiator
     /// </summary>
     private InstanceBody BuildBody(SchemaGroup compiled, string ns, SchemaName root)
     {
-        var (isMap, note) = DetectAddressMap(root);
-        var body = new InstanceBody(compiled, new SchemaPath(compiled.Name)) { Root = root, IsAddressMap = isMap, Note = note };
-        BuildGroup(body, compiled, ns, CreatePlan(compiled), isMap ? path => Adapter.ItemCount(root, path) : null);
-        if (isMap)
+        var (map, note) = DetectMessageMap(root);
+        var body = new InstanceBody(compiled, new SchemaPath(compiled.Name)) { Root = root, MapKind = map?.Kind, Note = note };
+        // only an address map has repeats whose items are not in the schema (one item of the address space is shown)
+        BuildGroup(body, compiled, ns, CreatePlan(compiled), body.IsAddressMap ? map!.ItemCount : null);
+        if (body.IsAddressMap)
         {
             AllowInclusion(body);
         }
         return body;
     }
 
-    // whether the root is an address map, and why it cannot be used as one (it is then a plain group)
-    private (bool IsMap, string? Note) DetectAddressMap(SchemaName root)
+    /// <summary>
+    /// The message map of a body's root (created and validated by Midi.Device), and why it cannot be used when it is not
+    /// valid (the body is then a plain group). A root that is neither carried by a data message nor a SysEx message
+    /// itself has no map: it is a plain group without a note (e.g. a body of an open choice that is not MIDI data).
+    /// </summary>
+    private (MessageMapInfo? Map, string? Note) DetectMessageMap(SchemaName root)
     {
         try
         {
-            if (!Adapter.IsMap(root))
-            {
-                return (false, null);
-            }
-            // builds and validates the map
-            Adapter.ItemCount(root, new SchemaPath(root.Name));
-            return (true, null);
+            return (Maps.Info(root), null);
         }
-        catch (Exception exception) when (exception is MessageMapException or ExecutionPlanException or InvalidOperationException or ArgumentException)
+        catch (MessageMapException exception) when (exception.Kind is null or MessageMapKind.MessageDump)
         {
-            return (false, $"'{root}' is an address map, but it cannot be used as one (it is a plain group here): {exception.Message}");
+            return (null, null);
+        }
+        catch (MessageMapException exception)
+        {
+            var kind = exception.Kind == MessageMapKind.Address ? "an address map" : "a dump carried by a data message";
+            return (null, $"'{root}' is {kind}, but it cannot be used as one (it is a plain group here): {exception.Message}");
+        }
+        catch (Exception exception) when (exception is ExecutionPlanException or InvalidOperationException or ArgumentException)
+        {
+            return (null, $"'{root}' has no message map (it is a plain group here): {exception.Message}");
         }
     }
 

@@ -39,8 +39,8 @@ public sealed class AddressMatch
 /// The address layout of one address-map root: converts between schema node ranges (<see cref="PlanRange"/>) and
 /// address ranges and knows the atomic groups. Deduced from the root's <see cref="ExecutionPlan"/> and validated
 /// against it, together with the envelope messages that can carry its contract (memberNodeDef).
-/// Immutable (apart from the learned overhead of the data messages, a cache) and thread-safe; <see cref="AddressMaps"/>
-/// creates and caches one per plan.
+/// Immutable (apart from the learned overhead of the data messages, a cache) and thread-safe; <see cref="MessageMaps"/>
+/// creates and caches one per plan (through <see cref="AddressMapProvider"/>).
 /// </summary>
 internal sealed class AddressMap : IMessageMap
 {
@@ -81,7 +81,7 @@ internal sealed class AddressMap : IMessageMap
         if (plan.Name is not { } root)
         {
             throw new MessageMapException(plan.Root.Path.Value,
-                [new MessageMapProblem(String.Empty, plan.Root.Path, "the plan has no schema name; create it with the serializer (GetPlan).")]);
+                [new MessageMapProblem(String.Empty, plan.Root.Path, "the plan has no schema name; create it with the serializer (GetPlan).")]) { Kind = MessageMapKind.Address };
         }
 
         var problems = new MessageMapProblems();
@@ -91,7 +91,7 @@ internal sealed class AddressMap : IMessageMap
         if (group.NodeDef is not { } contract)
         {
             throw new MessageMapException(root.FullName,
-                [new MessageMapProblem(document, plan.Root.Path, "the map root does not conform to a message contract (it has no nodeDef).")]);
+                [new MessageMapProblem(document, plan.Root.Path, "the map root does not conform to a message contract (it has no nodeDef).")]) { Kind = MessageMapKind.Address };
         }
         contract = String.IsNullOrEmpty(contract.Namespace) ? new SchemaName($"{root.Namespace}.{contract.Name}") : contract;
 
@@ -107,12 +107,13 @@ internal sealed class AddressMap : IMessageMap
 
         if (problems.HasErrors)
         {
-            throw new MessageMapException(root.FullName, problems);
+            throw new MessageMapException(root.FullName, problems) { Kind = MessageMapKind.Address };
         }
         return new AddressMap(serializer, root, plan, protocol, device, layout);
     }
 
     public SchemaName Root { get; }
+    public MessageMapKind Kind => MessageMapKind.Address;
     public ExecutionPlan Plan { get; }
     /// <summary>The messages that can carry this map (with the map root's overrides applied).</summary>
     public AddressProtocol Protocol { get; }
@@ -141,23 +142,6 @@ internal sealed class AddressMap : IMessageMap
     /// <summary>A range from one node occurrence up to and including another (in plan order).</summary>
     public PlanRange CreateRange(SchemaPath fromPath, InstancePath fromInstance, SchemaPath toPath, InstancePath toInstance)
         => Plan.CreateRange(fromPath, fromInstance, toPath, toInstance);
-
-    /// <summary>
-    /// A range over one node occurrence (see <see cref="MapOccurrence"/>): a group or field, all items of a repeat, or one
-    /// item of a repeat when the instance has an index for the repeat itself.
-    /// </summary>
-    internal PlanRange CreateOccurrenceRange(SchemaPath path, InstancePath instance)
-    {
-        var layout = _layout.Find(path) ?? throw new ArgumentException($"'{path}' is not a node of the map '{Root}'.", nameof(path));
-        if (layout.IsRepeat && instance.Length > AddressLayout.RepeatDepth(layout))
-        {
-            // one item: from its first to its last member
-            return layout.Members is [var first, ..]
-                ? CreateRange(first.Node.Path, instance, layout.Members[^1].Node.Path, instance)
-                : throw new ArgumentException($"The repeat '{path}' has no members.", nameof(path));
-        }
-        return CreateRange(path, instance);
-    }
 
     /// <summary>The addresses a node range occupies (widened to whole addresses, gaps included).</summary>
     public AddressRange GetAddressRange(PlanRange range)
@@ -413,18 +397,7 @@ internal sealed class AddressMap : IMessageMap
         => DeviceValues.Missing(messages, Device.With(client));
 
     /// <summary>The number of items of a repeat of the map in the address space (<c>midi.repeat</c>, or its constant count); null for any other node.</summary>
-    internal int? ItemCount(SchemaPath repeat) => _layout.Find(repeat) is { IsRepeat: true } layout ? layout.Count : null;
-
-    /// <summary>
-    /// The data message (of the messages that can carry this map) whose data is the open choice at
-    /// <paramref name="dataChoice"/> in the plan of <paramref name="envelope"/>; null when there is none.
-    /// </summary>
-    internal DeviceMessage? FindDataMessage(SchemaName envelope, SchemaPath dataChoice)
-        => Protocol.DataMessages.FirstOrDefault(message =>
-            message.Range.ExecutionPlan.Name is { } name
-            && String.Equals(name.FullName, envelope.FullName, StringComparison.OrdinalIgnoreCase)
-            && message.Roles.TryGetValue(MidiProperties.RoleData, out var data)
-            && String.Equals(data.Path.Value, dataChoice.Value, StringComparison.OrdinalIgnoreCase));
+    public int? ItemCount(SchemaPath repeat) => _layout.Find(repeat) is { IsRepeat: true } layout ? layout.Count : null;
 
     /// <summary>
     /// Recognises a data message for this map and device: the constants and checksum match, the device values read
@@ -490,20 +463,6 @@ internal sealed class AddressMap : IMessageMap
     /// <inheritdoc cref="WrapBody(IValueSource, SchemaPath, InstancePath)"/>
     internal IValueSink WrapBody(IValueSink sink, SchemaPath target, InstancePath instance)
         => WrapBody(sink, CreateRange(target, instance));
-
-    /// <summary>
-    /// Wraps the scope of a read with the map plan itself (not through a data message, e.g. a dump of the map), so the
-    /// repeats of the map end after <paramref name="range"/> (null: the whole map) or at the end of the data.
-    /// </summary>
-    internal IValueSink WrapMap(IValueSink sink, PlanRange? range)
-        => new MapRepeatSink(sink, range is null ? MapRepeatItems.All(_layout) : MapRepeatItems.Of(_layout, range));
-
-    /// <summary>
-    /// The block the data of a message at the address is read into when the message is not recognised
-    /// (<see cref="TryReadData"/>): the largest group that starts at the address; null when no group starts there.
-    /// </summary>
-    internal AddressBlock? LargestGroupAt(long address)
-        => GroupBlocks(address, Int64.MaxValue) is [.., var largest] ? largest : null;
 
     internal long Decode(ReceivedData data, IValueSink sink)
     {
@@ -656,47 +615,6 @@ internal sealed class AddressMap : IMessageMap
         }
     }
 
-    /// <summary>
-    /// The blocks of the group occurrences that start at the address and are at most <paramref name="maxSize"/>
-    /// addresses long, smallest first.
-    /// </summary>
-    private List<AddressBlock> GroupBlocks(long address, long maxSize)
-    {
-        var targets = new List<AddressBlock>();
-        var first = _layout.Fields(new AddressRange(address, 1)).FirstOrDefault(f => f.Range.Start == address);
-        if (first.Layout is null)
-        {
-            return targets;
-        }
-
-        for (var node = first.Layout.Parent; node is not null; node = node.Parent)
-        {
-            if (node.IsRepeat)
-            {
-                continue;
-            }
-
-            var depth = AddressLayout.RepeatDepth(node);
-            var instance = new InstancePath(first.Instance.AsSpan()[..depth].ToArray());
-            if (AddressLayout.FirstField(node) is not { } firstField || AddressLayout.LastField(node) is not { } lastField
-                || _layout.AddressOf(firstField, instance, lastItem: false) != address)
-            {
-                break;
-            }
-
-            var end = _layout.AddressOf(lastField, instance, lastItem: true) + lastField.Size;
-            if (end - address > maxSize)
-            {
-                break;
-            }
-            if (Resolve(new AddressRange(address, end - address)).Block is { } block)
-            {
-                targets.Add(block);
-            }
-        }
-        return targets;
-    }
-
     private AddressBlock CreateBlock(IReadOnlyList<AddressOccurrence> fields)
     {
         var first = fields[0];
@@ -713,6 +631,24 @@ internal sealed class AddressMap : IMessageMap
     // IMessageMap: the address map as one kind of message map
 
     IReadOnlyList<DeviceMessage> IMessageMap.DataMessages => Protocol.DataMessages;
+
+    string? IMessageMap.DescribeRole(string role)
+    {
+        ArgumentNullException.ThrowIfNull(role);
+        if (String.Equals(role, MidiProperties.RoleAddress, StringComparison.OrdinalIgnoreCase))
+        {
+            return "address: calculated from the map";
+        }
+        if (String.Equals(role, MidiProperties.RoleSize, StringComparison.OrdinalIgnoreCase))
+        {
+            return "size: calculated from the map";
+        }
+        if (String.Equals(role, MidiProperties.RoleData, StringComparison.OrdinalIgnoreCase))
+        {
+            return "data: the included groups of the map";
+        }
+        return null;
+    }
 
     bool IMessageMap.IsData(DeviceMessage message) => Protocol.DataMessages.Contains(message);
 
@@ -735,6 +671,20 @@ internal sealed class AddressMap : IMessageMap
         => message.IsData
             ? CreateData(message, block, source ?? throw new ArgumentNullException(nameof(source), $"'{message.FullName}': there are no values to send."), device)
             : Protocol.CreateMessage(message, GetAddressRange(block), device);
+
+    byte[] IMessageMap.WriteMessage(DeviceMessage message, PlanRange block, IValueSource client, DeviceValues device)
+        => CreateMessage(message, BlockOf(block), client, device);
+
+    IValueSink IMessageMap.WrapBody(IValueSink sink, PlanRange block) => WrapBody(sink, block);
+
+    string IMessageMap.DescribeBlock(PlanRange block)
+    {
+        var addresses = GetAddressRange(block);
+        return $"{Protocol.AddressSpace.Format(addresses.Start)} ({addresses.Size} bytes)";
+    }
+
+    IReadOnlyList<PlanRange> IMessageMap.Order(IReadOnlyList<PlanRange> blocks)
+        => [.. blocks.OrderBy(block => GetAddressRange(block).Start)];
 
     MessageMatch IMessageMap.Match(DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device)
     {

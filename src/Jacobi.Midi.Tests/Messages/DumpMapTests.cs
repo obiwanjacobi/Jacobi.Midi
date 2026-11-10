@@ -121,6 +121,127 @@ public class DumpMapTests
     }
 
     [Fact]
+    public void Save_WritesTheWholeDump_AndLoadReadsItBack()
+    {
+        var serializer = CreateSerializer();
+        var maps = new MessageMaps(serializer);
+        var device = new DeviceValues { ["deviceId"] = 3 };
+
+        // a part of the dump is widened to the whole root
+        var saved = maps.Save([Range(serializer, "Voice.Level")], Voice(100, 20), device);
+
+        Assert.Equal([VoiceDump(100, 20, deviceId: 3)], saved);
+        var loaded = new FieldValueStore();
+        var warnings = new List<string>();
+        Assert.Equal(1, maps.Load(VoiceName, [saved[0], VoiceDump(1, 2, deviceId: 4)], device, loaded, warnings));
+        Assert.Equal(100, Value(loaded, "Voice.Level"));
+        Assert.Equal(20, Value(loaded, "Voice.Cutoff"));
+        // the dump of another device is skipped and reported
+        Assert.Contains("Message 2", Assert.Single(warnings), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Save_PartsOfADump_AreOneMessage_WithAWarningPerPart()
+    {
+        var serializer = CreateSerializer();
+        var warnings = new List<string>();
+
+        var saved = new MessageMaps(serializer).Save([Range(serializer, "Voice.Level"), Range(serializer, "Voice.Cutoff")],
+            Voice(100, 20), new DeviceValues { ["deviceId"] = 0 }, warnings: warnings);
+
+        Assert.Equal([VoiceDump(100, 20)], saved);
+        Assert.Equal(2, warnings.Count);
+        Assert.All(warnings, warning => Assert.Contains("the whole 'Dump.Voice'", warning, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Save_AMessageThatIsNoDataMessageOfTheRoot_IsRejected()
+    {
+        var serializer = CreateSerializer();
+        var maps = new MessageMaps(serializer);
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            maps.Save([Range(serializer, "Voice.Level")], Voice(1, 2), new DeviceValues { ["deviceId"] = 0 }, new SchemaName("Dump.VoiceRequest")));
+        Assert.Contains("not a data message", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Save_WithoutTheDeviceValues_IsRejected()
+    {
+        var serializer = CreateSerializer();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            new MessageMaps(serializer).Save([Range(serializer, "Voice.Level")], Voice(1, 2), new DeviceValues()));
+        Assert.Contains("deviceId", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Root_NotASysExMessage_IsNotADump()
+    {
+        const string plain = """
+            <schema name="Plain">
+              <members>
+                <group name="Settings">
+                  <members>
+                    <field name="Level" datatype="sys.uint8" />
+                  </members>
+                </group>
+              </members>
+            </schema>
+            """;
+        var maps = new MessageMaps(CreateSerializer(plain));
+
+        var exception = Assert.Throws<MessageMapException>(() => maps.Info(new SchemaName("Plain.Settings")));
+        Assert.Contains("not a SysEx message", exception.Message);
+        Assert.Equal(MessageMapKind.MessageDump, exception.Kind);
+    }
+
+    [Fact]
+    public void Info_ItemCount_IsTheMapsItemCount()
+    {
+        const string bank = """
+            <schema name="Bank">
+              <includes>
+                <include schema="midi" />
+              </includes>
+              <members>
+                <group name="Dump">
+                  <processors>
+                    <processor name="midi.sysex" />
+                  </processors>
+                  <members>
+                    <field name="Id" datatype="sys.uint8" value="0x7D" />
+                    <repeat name="Voice" count="4">
+                      <members>
+                        <field name="Level" datatype="sys.uint8" />
+                      </members>
+                    </repeat>
+                  </members>
+                </group>
+              </members>
+            </schema>
+            """;
+        var maps = new MessageMaps(CreateSerializer(bank));
+
+        var dump = maps.Info(new SchemaName("Bank.Dump"));
+        var address = maps.Info(TestDevice.MapName);
+
+        Assert.Equal(4, dump.ItemCount(new SchemaPath("Dump.Voice")));
+        Assert.Null(dump.ItemCount(new SchemaPath("Dump.Id")));
+        // a repeat of an address map has its items in the address space (midi.repeat), not in the schema
+        Assert.Equal(8, address.ItemCount(new SchemaPath("AddressMap.Memory")));
+    }
+
+    [Fact]
+    public void Info_Kind_TellsHowTheRootIsCarried()
+    {
+        var maps = new MessageMaps(CreateSerializer());
+
+        Assert.Equal(MessageMapKind.MessageDump, maps.Info(VoiceName).Kind);
+        Assert.Equal(MessageMapKind.Address, maps.Info(TestDevice.MapName).Kind);
+    }
+
+    [Fact]
     public void Split_AnyRange_IsTheWholeRoot()
     {
         var serializer = CreateSerializer();

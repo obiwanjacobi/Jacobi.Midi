@@ -788,21 +788,18 @@ public class SchemaInstantiatorTests
     }
 
     [Fact]
-    public void Match_AnIncompleteDataMessageOfAnAddressMap_ReadsAsMuchAsPossibleAndWarns()
+    public void Match_AnIncompleteDataMessageOfAnAddressMap_IsAnErrorWithTheReason()
     {
-        var (dialog, memory) = MatchGp8DataMessage();
+        var (dialog, _) = MatchGp8DataMessage();
         var complete = File.ReadAllBytes(TestHelpers.PathOf(Gp8BulkDumpFile)).AsSpan(5 * Gp8MessageSize, Gp8MessageSize).ToArray();
         // half of the patch data, then a checksum and the end of exclusive
         byte[] bytes = [.. complete.AsSpan(0, 7 + 20), 0x00, 0xF7];
 
         dialog.Match!.SelectedBuffer = new SysExBuffer("partial", bytes);
 
-        Assert.True(dialog.Match.HasWarning);
-        Assert.Contains("not recognised", dialog.Match.Warning);
-        Assert.Contains("Gp8.AddressMap", dialog.Match.Warning);
+        // not read into the map as far as the data goes (decision 18): an error that names the map
         Assert.True(dialog.Match.HasError);
-        Assert.Equal(5, memory.ItemIndex);
-        Assert.Contains(Assert.Single(memory.Items).Fields(), field => !field.IsConstant && field.Value.Length > 0);
+        Assert.Contains("Gp8.AddressMap", dialog.Match.Error);
     }
 
     /// <summary>A GP-8 DT1 message (Roland.Message16) instantiated with the GP-8 address map selected as its body.</summary>
@@ -880,7 +877,7 @@ public class SchemaInstantiatorTests
         gp8.Temporary.IsIncluded = true;
 
         Assert.Null(gp8.Body.IsIncluded);
-        Assert.Contains("Sends 1 Message16.DT1 message(s) at 0x00-00 (50 bytes)", gp8.Transfer);
+        Assert.Contains("Sends 1 Message16.DT1 message(s): 0x00-00 (50 bytes)", gp8.Transfer);
     }
 
     [Fact]
@@ -890,14 +887,14 @@ public class SchemaInstantiatorTests
         gp8.Memory.IsIncluded = true;
 
         // the memory patches from 0x40-00 (linear 0x2000), 0x40 addresses each
-        Assert.Contains("Sends 1 Message16.DT1 message(s) at 0x40-00 (50 bytes)", gp8.Transfer);
+        Assert.Contains("Sends 1 Message16.DT1 message(s): 0x40-00 (50 bytes)", gp8.Transfer);
 
         gp8.Memory.ItemIndex = 5;
 
         var item = Assert.Single(gp8.Memory.Items);
         Assert.Equal(5, item.Index);
         Assert.EndsWith("Memory[5]", item.DisplayPath);
-        Assert.Contains("Sends 1 Message16.DT1 message(s) at 0x42-40 (50 bytes)", gp8.Transfer);
+        Assert.Contains("Sends 1 Message16.DT1 message(s): 0x42-40 (50 bytes)", gp8.Transfer);
     }
 
     [Fact]
@@ -908,7 +905,7 @@ public class SchemaInstantiatorTests
 
         gp8.Body.IsIncluded = true;
 
-        Assert.Contains("Sends 2 Message16.DT1 message(s) at 0x00-00 (50 bytes), 0x43-00 (50 bytes)", gp8.Transfer);
+        Assert.Contains("Sends 2 Message16.DT1 message(s): 0x00-00 (50 bytes), 0x43-00 (50 bytes)", gp8.Transfer);
     }
 
     [Fact]
@@ -1009,10 +1006,10 @@ public class SchemaInstantiatorTests
         Assert.Contains("Nothing of the address map", dialog.Transfer);
 
         memory.IsIncluded = true;
-        Assert.Contains("Sends 1 Message16.DT1 message(s) at 0x40-00 (50 bytes)", dialog.Transfer);
+        Assert.Contains("Sends 1 Message16.DT1 message(s): 0x40-00 (50 bytes)", dialog.Transfer);
 
         memory.ItemIndex = 5;
-        Assert.Contains("Sends 1 Message16.DT1 message(s) at 0x42-40 (50 bytes)", dialog.Transfer);
+        Assert.Contains("Sends 1 Message16.DT1 message(s): 0x42-40 (50 bytes)", dialog.Transfer);
     }
 
     [Fact]
@@ -1186,6 +1183,187 @@ public class SchemaInstantiatorTests
         var (instantiator, document) = CreateInstantiator(Serializable);
 
         Assert.Null(instantiator.FindRootName((EditGroup)document.NodeDefs.Single()));
+    }
+
+    // a made-up program dump (manufacturer id 7D) whose body is selected by the model in the message
+    private const string CarriedDump = """
+        <schema name="Env">
+          <nodeDefs>
+            <group name="program" />
+          </nodeDefs>
+          <members>
+            <group name="Message">
+              <processors>
+                <processor name="midi.sysex" />
+              </processors>
+              <members>
+                <group name="Dump">
+                  <members>
+                    <field name="Id" datatype="sys.uint8" value="0x7D" />
+                    <field name="Device" datatype="sys.uint8" midi.role="device.deviceId" />
+                    <field name="Model" datatype="sys.uint8" midi.role="device.model" />
+                    <choice name="Body" memberNodeDef="program" midi.role="data" />
+                  </members>
+                </group>
+              </members>
+            </group>
+            <group name="Program" nodeDef="program" midi.device.model="1">
+              <members>
+                <field name="Level" datatype="sys.uint8" />
+              </members>
+            </group>
+            <group name="OtherProgram" nodeDef="program" midi.device.model="2">
+              <members>
+                <field name="Volume" datatype="sys.uint8" />
+              </members>
+            </group>
+          </members>
+        </schema>
+        """;
+
+    // the Dump message of the carried dump schema, without a body selected
+    private static (SchemaInstantiator Instantiator, SchemaName RootName, InstanceGroup Root, InstanceChoice Body) InstantiateCarriedDump()
+    {
+        var document = EditNodeMapper.ToEditDocument(Jacobi.BinarySerializer.Schema.Xml.XmlSerializer.Deserialize(CarriedDump));
+        var instantiator = SchemaInstantiator.Create(document, [document], TestHelpers.CreateProcessors());
+        var dump = (EditGroup)((EditGroup)document.Members.Single(member => member.Name == "Message")).Members.Single(member => member.Name == "Dump");
+        var root = Assert.IsType<InstanceGroup>(instantiator.Create(dump));
+        return (instantiator, instantiator.FindRootName(dump)!.Value, root, FindChoice(root, "Body")!);
+    }
+
+    private static string BodyValue(InstanceChoice choice, string field)
+        => ((InstanceField)Assert.IsType<InstanceBody>(choice.Selected).Members.Single(member => member.Name == field)).Value;
+
+    [Fact]
+    public void Match_CarriedDump_SelectsTheBodyFromTheData()
+    {
+        var (instantiator, rootName, root, body) = InstantiateCarriedDump();
+        var warnings = new List<string>();
+
+        instantiator.Deserialize(rootName, root, [0xF0, 0x7D, 0x05, 0x02, 7, 0xF7], warnings);
+
+        Assert.Equal("Env.OtherProgram", body.SelectedOption!.Name);
+        Assert.Equal("7", BodyValue(body, "Volume"));
+        Assert.Empty(warnings);
+    }
+
+    [Fact]
+    public void Match_CarriedDump_AnotherBodyThanTheSelectedOne_IsSelectedWithAWarning()
+    {
+        var (instantiator, rootName, root, body) = InstantiateCarriedDump();
+        body.SelectedOption = body.Options.Single(option => option.Name == "Env.Program");
+        var warnings = new List<string>();
+
+        instantiator.Deserialize(rootName, root, [0xF0, 0x7D, 0x05, 0x02, 7, 0xF7], warnings);
+
+        Assert.Equal("Env.OtherProgram", body.SelectedOption!.Name);
+        Assert.Contains("instead of 'Env.Program'", Assert.Single(warnings), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Match_AddressMap_SelectsTheMapOfTheModel()
+    {
+        var gp8 = InstantiateGp8DataMessage();
+        var data = FindChoice(gp8.Root, "Data")!;
+        data.SelectedOption = null;
+        var warnings = new List<string>();
+
+        gp8.Instantiator.Deserialize(gp8.RootName, gp8.Root, Gp8Patch(1), warnings);
+
+        Assert.Equal("Gp8.AddressMap", data.SelectedOption!.Name);
+    }
+
+    [Fact]
+    public void CarriedDumpBody_HasItsMapKind_AndIsNoAddressMap()
+    {
+        var document = EditNodeMapper.ToEditDocument(Jacobi.BinarySerializer.Schema.Xml.XmlSerializer.Deserialize(CarriedDump));
+        var instantiator = SchemaInstantiator.Create(document, [document], TestHelpers.CreateProcessors());
+        var message = (EditGroup)document.Members.Single(member => member.Name == "Message");
+        var root = Assert.IsType<InstanceGroup>(instantiator.Create((EditGroup)message.Members.Single(member => member.Name == "Dump")));
+        var data = FindChoice(root, "Body")!;
+
+        data.SelectedOption = data.Options.Single(option => option.Name == "Env.Program");
+
+        var body = Assert.IsType<InstanceBody>(data.Selected);
+        Assert.Equal(Jacobi.Midi.Device.Messages.MessageMapKind.CarriedDump, body.MapKind);
+        Assert.False(body.IsAddressMap);
+        Assert.Null(body.Note);
+    }
+
+    [Fact]
+    public void CarriedDumpBody_TheRootFixesItsDeviceValues_AndTheMessageIsWrittenByTheMap()
+    {
+        var document = EditNodeMapper.ToEditDocument(Jacobi.BinarySerializer.Schema.Xml.XmlSerializer.Deserialize(CarriedDump));
+        var instantiator = SchemaInstantiator.Create(document, [document], TestHelpers.CreateProcessors());
+        var dump = (EditGroup)((EditGroup)document.Members.Single(member => member.Name == "Message")).Members.Single(member => member.Name == "Dump");
+        var root = Assert.IsType<InstanceGroup>(instantiator.Create(dump));
+        var data = FindChoice(root, "Body")!;
+        data.SelectedOption = data.Options.Single(option => option.Name == "Env.Program");
+        var model = (InstanceField)root.Members.Single(member => member.Name == "Model");
+        var device = (InstanceField)root.Members.Single(member => member.Name == "Device");
+
+        // the root fixes the model; the device id is given here
+        Assert.False(model.IsEditable);
+        Assert.Contains("0x01", model.RoleNote);
+        Assert.True(device.IsEditable);
+        Assert.Null(device.RoleSupply);
+
+        device.Value = "5";
+        ((InstanceField)((InstanceBody)data.Selected!).Members.Single(member => member.Name == "Level")).Value = "100";
+        var messages = instantiator.Serialize(instantiator.FindRootName(dump)!.Value, root, new List<string>());
+
+        Assert.Equal(new byte[] { 0xF0, 0x7D, 0x05, 0x01, 100, 0xF7 }, Assert.Single(messages).Bytes);
+        Assert.Equal("Sends 1 Message.Dump message(s): the whole 'Env.Program'.", instantiator.DescribeTransfer(instantiator.FindRootName(dump)!.Value, root));
+    }
+
+    [Fact]
+    public void MessageDumpRoot_TheRootFixesItsDeviceValues_AndTheMessageIsWrittenByTheMap()
+    {
+        var document = EditNodeMapper.ToEditDocument(Jacobi.BinarySerializer.Schema.Xml.XmlSerializer.Deserialize("""
+            <schema name="Dump">
+              <members>
+                <group name="Voice" midi.device.modelId="0x10">
+                  <processors>
+                    <processor name="midi.sysex" />
+                  </processors>
+                  <members>
+                    <field name="Id" datatype="sys.uint8" value="0x7D" />
+                    <field name="Device" datatype="sys.uint8" midi.role="device.deviceId" />
+                    <field name="Model" datatype="sys.uint8" midi.role="device.modelId" />
+                    <field name="Level" datatype="sys.uint8" />
+                  </members>
+                </group>
+              </members>
+            </schema>
+            """));
+        var instantiator = SchemaInstantiator.Create(document, [document], TestHelpers.CreateProcessors());
+        var root = instantiator.CreateRoot("Voice");
+        var model = (InstanceField)root.Members.Single(member => member.Name == "Model");
+        var device = (InstanceField)root.Members.Single(member => member.Name == "Device");
+
+        // the root fixes the model; the device id is given here
+        Assert.False(model.IsEditable);
+        Assert.Contains("0x10", model.RoleNote);
+        Assert.True(device.IsEditable);
+
+        device.Value = "2";
+        ((InstanceField)root.Members.Single(member => member.Name == "Level")).Value = "100";
+        var messages = instantiator.Serialize(new SchemaName("Dump.Voice"), root, new List<string>());
+
+        Assert.Equal(new byte[] { 0xF0, 0x7D, 0x02, 0x10, 100, 0xF7 }, Assert.Single(messages).Bytes);
+    }
+
+    [Fact]
+    public void BodyOfAnOpenChoiceThatIsNoMidiData_IsAPlainGroupWithoutANote()
+    {
+        var root = CreateRoot(Envelope, "Root");
+        var choice = FindChoice(root, "Msg")!;
+
+        choice.SelectedOption = choice.Options.Single(option => option.Name == "Env.BodyA");
+
+        var body = Assert.IsType<InstanceBody>(choice.Selected);
+        Assert.Null(body.MapKind);
+        Assert.Null(body.Note);
     }
 
     private static InstanceField Field(InstanceGroup root, string group, string field)

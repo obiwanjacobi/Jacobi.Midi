@@ -260,11 +260,14 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     public IReadOnlyList<PaletteItem> LayoutPalette { get; }
         = [.. ControlCatalog.LayoutKinds.Select(kind => new PaletteItem(kind, IsAvailable: true))];
 
-    /// <summary>The root groups of the schema library (address maps first), for the root of a device.</summary>
+    /// <summary>The root groups of the schema library (device data first), for the root of a device.</summary>
     public IReadOnlyList<string> MapRoots => Rig?.Library.Roots.Select(name => name.ToString()).ToList() ?? [];
 
-    /// <summary>True when a root of the schema library is an address map: a root data messages carry.</summary>
-    public bool IsAddressMap(string root) => Rig?.Library.Maps?.IsMap(new BinarySerializer.Schema.SchemaName(root)) == true;
+    /// <summary>
+    /// True when a root of the schema library is device data: it has a message map of any kind (address map or dump,
+    /// see <see cref="SchemaLibrary.KindOf"/>).
+    /// </summary>
+    public bool IsDeviceData(string root) => Rig?.Library.KindOf(new BinarySerializer.Schema.SchemaName(root)) is not null;
 
     /// <summary>
     /// The message map of a root of the schema library, any kind (address map or dump): what a device of the root

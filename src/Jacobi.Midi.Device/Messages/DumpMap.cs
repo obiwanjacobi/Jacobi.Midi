@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.Device.Processors;
 
 namespace Jacobi.Midi.Device.Messages;
 
@@ -11,7 +12,7 @@ namespace Jacobi.Midi.Device.Messages;
 /// transferred whole (one block: the whole root), and a block is complete after one message. Two kinds of root:
 /// <list type="bullet">
 /// <item>a root that is a message itself (e.g. an Identity Reply, or a function-code dump written out as one message
-/// group): the root is its only data message;</item>
+/// group): the root is its only data message, a complete SysEx message (<c>midi.sysex</c>);</item>
 /// <item>a root carried as the body of a message's open choice (<c>midi.role="data"</c>, its nodeDef the
 /// <c>memberNodeDef</c>): the messages that hold such an open choice are its data messages, and of the roots that
 /// conform to the contract the device values read from a message select the body (<see cref="ConformingBodies"/>).</item>
@@ -54,13 +55,17 @@ internal sealed class DumpMap : IMessageMap
         var problems = new MessageMapProblems();
         var device = DeviceValues.FromProperties(plan.Root.Group, document, plan.Root.Path, problems);
 
-        var map = IsCarried(serializer, root)
+        var carried = IsCarried(serializer, root);
+        var map = carried
             ? CreateCarried(serializer, plan, root, device, problems)
             : CreateMessage(serializer, plan, root, device, problems);
-        return problems.HasErrors ? throw new MessageMapException(root.FullName, problems) : map!;
+        return problems.HasErrors
+            ? throw new MessageMapException(root.FullName, problems) { Kind = carried ? MessageMapKind.CarriedDump : MessageMapKind.MessageDump }
+            : map!;
     }
 
     public SchemaName Root { get; }
+    public MessageMapKind Kind => IsCarriedRoot ? MessageMapKind.CarriedDump : MessageMapKind.MessageDump;
     public DeviceValues Device { get; }
     public IReadOnlyList<DeviceMessage> DataMessages { get; }
 
@@ -72,6 +77,15 @@ internal sealed class DumpMap : IMessageMap
 
     public DeviceMessage Message(SchemaName name)
         => _named.GetOrAdd(name.FullName, _ => new Lazy<DeviceMessage>(() => Resolve(name))).Value;
+
+    // a dump holds what the schema gives: a constant count, or as many items as the data has
+    public int? ItemCount(SchemaPath repeat) => _plan.Find(repeat) is RepeatInfo { Count: int count } ? count : null;
+
+    // a carrier's data is the whole root
+    public string? DescribeRole(string role)
+        => IsCarriedRoot && String.Equals(role, MidiProperties.RoleData, StringComparison.OrdinalIgnoreCase)
+            ? $"data: the whole '{Root}'"
+            : null;
 
     public bool IsData(DeviceMessage message) => DataMessages.Any(data => ReferenceEquals(data, message));
 
@@ -106,6 +120,29 @@ internal sealed class DumpMap : IMessageMap
         return writer.WrittenSpan.ToArray();
     }
 
+    public byte[] WriteMessage(DeviceMessage message, PlanRange block, IValueSource client, DeviceValues device)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(client);
+        if (!IsData(message))
+        {
+            throw new ArgumentException($"'{message.FullName}' is not a data message of '{Root}'.", nameof(message));
+        }
+        // a carrier: the body is the client's scope for the open choice; the root itself: the client's values are the message's
+        var envelope = IsCarriedRoot
+            ? new EnvelopeSource(EnvelopeSource.NoBlockRoles, device, clientBody => new EnvelopeBody<IValueSource>(Root, null,
+                clientBody ?? throw new InvalidOperationException($"'{message.FullName}': the value model has no body for the data of the message.")), client)
+            : new EnvelopeSource(EnvelopeSource.NoBlockRoles, device, client: client);
+        var writer = new ArrayBufferWriter<byte>();
+        _serializer.Serialize(message.Range, envelope, writer);
+        return writer.WrittenSpan.ToArray();
+    }
+
+    public string DescribeBlock(PlanRange block) => $"the whole '{Root}'";
+
+    // the body is the whole root: the read ends with it
+    public IValueSink WrapBody(IValueSink sink, PlanRange block) => sink;
+
     public MessageMatch Match(DeviceMessage message, ReadOnlyMemory<byte> sysEx, DeviceValues device)
     {
         ArgumentNullException.ThrowIfNull(message);
@@ -129,9 +166,14 @@ internal sealed class DumpMap : IMessageMap
             ? new HashSet<string>(StringComparer.Ordinal)
             : DataMessages[0].Roles.Values.Select(node => node.Path.Value).ToHashSet(StringComparer.Ordinal));
 
-    // the root is a message itself: it is its own data message
+    // the root is a message itself: it is its own data message, a complete SysEx message (midi.sysex)
     private static DumpMap? CreateMessage(Serializer serializer, ExecutionPlan plan, SchemaName root, DeviceValues device, MessageMapProblems problems)
     {
+        if (!IsSysEx(plan))
+        {
+            problems.Error(root.Namespace, plan.Root.Path, "the root is not a SysEx message (no midi.sysex processor) and no data message carries it: it cannot be transferred as a dump.");
+            return null;
+        }
         var dump = DeviceMessages.Create(plan, plan.Root, root.Namespace, problems);
         if (dump.IsData)
         {
@@ -170,6 +212,19 @@ internal sealed class DumpMap : IMessageMap
         }
         return new DumpMap(serializer, plan, root, device, dataMessages, bodies);
     }
+
+    /// <summary>
+    /// True when the root of the plan is a dump that is a message itself: no data message carries it, it is a SysEx
+    /// message (<c>midi.sysex</c>) and it has no data open choice (an envelope carries other roots).
+    /// </summary>
+    internal static bool IsMessageDump(Serializer serializer, ExecutionPlan plan)
+        => plan.Name is { } root
+        && IsSysEx(plan)
+        && !IsCarried(serializer, root)
+        && !DeviceMessages.Create(plan, plan.Root, root.Namespace, new MessageMapProblems()).IsData;
+
+    private static bool IsSysEx(ExecutionPlan plan)
+        => plan.Root.Pipeline.LayoutProcessors.Any(binding => binding.Processor is SysExProcessor);
 
     // true when a data open choice can select the root (it is a body)
     private static bool IsCarried(Serializer serializer, SchemaName root)
@@ -248,7 +303,7 @@ internal sealed class DumpMap : IMessageMap
         }
         if (problems.HasErrors)
         {
-            throw new MessageMapException(name.FullName, problems);
+            throw new MessageMapException(name.FullName, problems) { Kind = Kind };
         }
         return message;
     }

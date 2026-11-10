@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Device.Addressing;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.SchemaEditor.Instantiate;
 
@@ -308,8 +309,8 @@ internal sealed partial class InstanceField : InstanceNode
     public string? Role { get; }
 
     /// <summary>
-    /// How the value of a role field is supplied while the message carries an address map (see
-    /// <see cref="AddressMapAdapter.DescribeRole"/>), e.g. 'address: calculated from the map';
+    /// How the value of a role field is supplied while the message carries a body with a message map (see
+    /// <see cref="MessageMapInfo.DescribeRole"/>), e.g. 'address: calculated from the map';
     /// null when the value is given here.
     /// </summary>
     [ObservableProperty]
@@ -391,12 +392,18 @@ internal sealed class InstanceBody(SchemaGroup schema, SchemaPath path) : Instan
     public required SchemaName Root { get; init; }
 
     /// <summary>
+    /// How the data of the body's root is carried in messages (the kind of its message map, see
+    /// <see cref="MessageMaps"/>); null when the root has no valid message map (it is a plain group).
+    /// </summary>
+    public MessageMapKind? MapKind { get; init; }
+
+    /// <summary>
     /// True when the body is an address map: its repeats have the item count of the address space, and the groups that are
     /// included (<see cref="InstanceNode.IsIncluded"/>) are sent, at the addresses the map gives them.
     /// </summary>
-    public bool IsAddressMap { get; init; }
+    public bool IsAddressMap => MapKind == MessageMapKind.Address;
 
-    /// <summary>Why the body could not be used as an address map (it is used as a plain group); null when there is no problem.</summary>
+    /// <summary>Why the body could not be used with its message map (it is used as a plain group); null when there is no problem.</summary>
     public string? Note { get; init; }
 
     public bool HasNote => Note is not null;

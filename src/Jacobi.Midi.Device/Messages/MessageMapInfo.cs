@@ -18,6 +18,31 @@ public sealed class MessageMapInfo
     /// <summary>The root the map is for.</summary>
     public SchemaName Root => _map.Root;
 
+    /// <summary>How the data of the root is carried in messages.</summary>
+    public MessageMapKind Kind => _map.Kind;
+
+    /// <summary>
+    /// The number of items of a repeat of the root as the map transfers it: the items of the address space for an
+    /// address map (<c>midi.repeat</c>), the constant count of the schema for a dump; null for a node that is not a
+    /// repeat, or a repeat whose count the data gives.
+    /// </summary>
+    public int? ItemCount(SchemaPath repeat) => _map.ItemCount(repeat);
+
+    /// <summary>
+    /// How the value of an envelope node with <paramref name="role"/> (<c>midi.role</c>) is supplied when a data message
+    /// carries the root: a short description (e.g. <c>address: calculated from the map</c>, or a device value the root
+    /// fixes); null when the client supplies it (a device value the root does not fix, or not a role of the map).
+    /// </summary>
+    public string? DescribeRole(string role)
+    {
+        ArgumentNullException.ThrowIfNull(role);
+        if (DeviceValues.NameOfRole(role) is { } name && _map.Device.TryGet(name, out var value))
+        {
+            return $"{role}: 0x{value:X2}, fixed by '{Root}'";
+        }
+        return _map.DescribeRole(role);
+    }
+
     /// <summary>The device values the root fixes (<c>midi.device.*</c>).</summary>
     public DeviceValues Device => _map.Device;
 

@@ -149,7 +149,7 @@ internal sealed class AddressProtocol
         Validate(document, group.Path, message, settings, problems);
         if (problems.HasErrors)
         {
-            throw new MessageMapException(fullName, problems);
+            throw new MessageMapException(fullName, problems) { Kind = MessageMapKind.Address };
         }
         _settings[message] = _maxDataSize is { } size ? settings with { MaxDataSize = size } : settings;
         return message;
@@ -173,12 +173,6 @@ internal sealed class AddressProtocol
     /// </summary>
     public byte[] CreateMessage(DeviceMessage message, AddressRange addresses, DeviceValues device)
         => DeviceMessages.WriteWithoutData(_serializer, message, RolesOf(addresses), device);
-
-    /// <summary>
-    /// The address-map roots in the schemas: the roots whose nodeDef is the contract (memberNodeDef) of an open choice
-    /// with <c>midi.role="data"</c>, i.e. the groups a data message can carry.
-    /// </summary>
-    internal static IReadOnlyList<SchemaName> FindMapRoots(SchemaSet schemas) => DeviceMessages.FindCarriedRoots(schemas);
 
     // the address settings of a message group, as the schema gives them
     private static AddressSettings SettingsOf(string document, GroupInfo group, MessageMapProblems problems)

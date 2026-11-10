@@ -26,9 +26,6 @@ internal sealed class MapRepeatItems
     /// <summary>The items up to the last node of a range of the map plan (e.g. the target of a data message body).</summary>
     public static MapRepeatItems Of(AddressLayout layout, PlanRange range) => new(layout, range.Last.Path, range.ToInstance);
 
-    /// <summary>All the items of the address space (the whole map, e.g. a dump of it).</summary>
-    public static MapRepeatItems All(AddressLayout layout) => new(layout, default, default);
-
     public OpenRepeatAction NextItem(OpenRepeatContext context)
     {
         if (_layout.Find(context.Repeat.Path) is not { IsRepeat: true } repeat)

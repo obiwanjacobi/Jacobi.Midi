@@ -3,6 +3,111 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## The data of a root for a client (2026-11-10)
+
+Issue: the console (dump files, `IsMap`, `ItemCount`) and the Schema Editor (instantiate, match, the role fields) both
+still use the address-only `AddressMapAdapter`; both must also work with dump messages. A first proposal added an
+adapter shaped after the Schema Editor's needs.
+
+1. **Midi.Device is a generic API; the console and the Schema Editor are two example clients.** A change to its API is
+   checked against both, not designed from one. *Why:* no API that fits one app only.
+2. **A new type or layer is fine for a generic concept of Midi.Device, not to fix a problem of one app.** This is
+   the intent of decision 7 of *Message exchange in the console* ("no new layer"); it is not a ban. *Why:* prevents
+   layers upon layers of app-specific fixes.
+3. **The offline read and write of a root's data (`Load`, `Save`) and the lookup of the root a message carries go on
+   `MessageMaps`; the facts of a root go on `MessageMapInfo`. `IMessageMap` stays internal.** Built once from the
+   internal `IMessageMap` members, so every kind of map has them. Revises decision 7 of *Message exchange in the
+   console* (`Load`/`Save` on a public `IMessageMap`). *Why:* `MessageMaps` is already the public entry point its
+   owner creates; the other members of `IMessageMap` (`Split`, `Match`, `IsComplete`, `CreateState`) are for the
+   exchange, not for a client.
+4. **`IsMap` is replaced by a kind on `MessageMapInfo`: how the data of the root travels** (in parts by address, whole
+   as the carried body of a dump message, or the root is the message itself). Every root has a message map since the
+   provider chain, so "is a map" no longer tells anything; each app decides what to do with the kind. *Why:* the
+   console (*Add device* menu, root order, dump files) and the Schema Editor (the address map UI of a body) branch on
+   the same question. Named **`MessageMapKind`** (`MessageMapInfo.Kind`) with `Address`, `CarriedDump` and
+   `MessageDump`. *Why:* "kind of map" is the jargon already used; not `MessageKind` (there are no message kinds,
+   decision 3 of *Exchange definitions*), not `...TransferKind` (`midi.transfer` means how a group is cut into blocks).
+5. **The console offers every root that can be device data as a device**, also one without an exchange file: its
+   messages are then sent as is, and received when the user dumps them from the device (Console todo, *Devices
+   without message exchange patterns*). *Why:* a device without exchange patterns is still usable.
+6. **The dump provider is for SysEx messages: a root that is a message itself must be a complete SysEx message**
+   (`midi.sysex` on the root); a root that is neither carried by a data message nor a SysEx message gets an error (no
+   valid map), so it is not device data. A range of a dump is widened to the whole root (`DumpMap.Split`; decision 23
+   of *Device messages without an address map*). *Why:* otherwise every plain group counted as a dump and was offered
+   as a device. Such a root keeps getting an error from the dump provider (it does not decline it; decision 5 of
+   *Device messages without an address map*).
+7. **The item count of a repeat is a fact of the map: `MessageMapInfo.ItemCount(repeat)`** (`IMessageMap.ItemCount`):
+   the items of the address space for an address map, the constant count of the schema for a dump. *Why:* the
+   console (parameter tree, index variables) and the Schema Editor (addressed repeats) both need it, whatever the kind.
+8. **`MessageMapException.Kind`: the kind of map that claimed the root and found the problems.** A client tells an
+   invalid address map (reported) from a root that is no address map (e.g. a plain group: the console takes the
+   schema's count). No other context properties for now: `Root` and the `Problems` (document, path, severity) cover
+   the known cases. *Why:* both apps need it (the console's item counts, the Schema Editor's note "is an address map,
+   but it cannot be used as one").
+9. **`MessageMaps.Save(range, source, device, message?)` writes one data message per block; the message is optional.**
+   Given: that data message (e.g. the one the Schema Editor's user instantiated); omitted: the first data message of
+   the map whose device values are known. The range is split (and widened) by the map for that message.
+   `MessageMaps.Load(root, messages, device, sink, warnings)` decodes the data messages of the root and reports the
+   others (with the reason of a near miss). They replace `AddressMapAdapter.ReadData`/`EncodeData`; the console's dump
+   files use them, so they work for dump messages too (un-parks decision 8 of *Message exchange in the console*).
+   *Why:* offline there is no exchange file to name the message; the default covers the console, the parameter the
+   Schema Editor. Not the map's own choice per block (`AddressMap.SelectBlocks`): one message per call is predictable.
+10. **How a role field is supplied is a fact of the map: `MessageMapInfo.DescribeRole(role)`**, replacing
+    `AddressMapAdapter.DescribeRole`. The device values the root fixes are described for every kind of map; the roles
+    of a map's own (`address`, `size`, `data`) by the map (`IMessageMap.DescribeRole`). `DeviceValues.NameOfRole`
+    gives the device value of a role (`device.deviceId`: `deviceId`), so a client does not parse the role. *Why:* the
+    same fact as `RequiredDeviceValues`, seen from the message; a carried dump's root fixes device values too.
+11. **The Schema Editor writes a message that carries a dump with `MessageMaps.Save`**, with the instantiated data
+    message, the body's values and the device values of the role fields the root does not fix. *Why:* a role field
+    the root fixes is no longer typed in the instance, so the map must supply it, as `WriteData` does for an address
+    map.
+12. **`MessageMaps.FindCarriedRoot(message, sysEx, device)`: the root a data message of the device carries**, tried
+    with the map of every root that message can carry (a dump's body selected by its device values, the address map
+    of the model). The Schema Editor's Match selects the body of a data open choice with it before the read; another
+    body than the selected one is selected with a warning (kept when accumulating). *Why:* the user no longer has to
+    pick the body first; the maps recognise the messages, the editor does not.
+13. **What is an address map is decided in one place: `AddressMapProvider.Claims`.** `AddressProtocol.FindMapRoots`
+    (used by `AddressMapAdapter` and `AddressMaps`) listed every carried root, so a carried dump body was read as an
+    address map by the adapter. *Why:* a single place of truth; found when the editor read a carried dump.
+14. **`AddressMapValidator` becomes `MessageMapValidator` (in `Messages`)**: it already validated every carried root
+    through the provider chain; it now also validates the dumps that are a message themselves (`DumpMap.IsMessageDump`:
+    a SysEx root that no data message carries and that has no data open choice). A root that is no SysEx message is
+    not validated as a map (it is no device data). The Schema Editor's check follows (`MessageMapCheck`, *Message map*
+    in the schema panel). *Why:* the check shows the problems of every kind of map; a plain group or an envelope gives
+    no noise.
+15. **A root that is a dump message itself is handled like a carried dump in the Schema Editor:** its role fields
+    are marked with `MessageMapInfo.DescribeRole` and the instance of the root is written by `MessageMaps.Save` (the
+    root is its own data message). An instance of a nested node of it is written plainly. *Why:* the same rules for
+    every kind of map; a part of a dump is no message of its own.
+16. **`AddressMapAdapter.PlanData`/`WriteData` move into `MessageMaps`, not `MessageMapInfo`** (operations on
+    `MessageMaps`, facts on `MessageMapInfo`; decision 3): `Save` takes several ranges (duplicate blocks once),
+    reports widening in optional warnings and takes **one model source for the whole message** (envelope and body,
+    as `WriteData` does) instead of the body's values only; a `Plan` with the same arguments returns the blocks
+    without writing, each with a description by its map (`IMessageMap.DescribeBlock`). *Why:* generic for every kind
+    of map (a dump is one block); closes the envelope gap of `Save`; *Describe transfer* is no longer address-only.
+    One source rather than a separate envelope source: the clients have one model of the message.
+17. **Two shapes of one model source, two methods (2026-11-10):** `Save(ranges, source, …)` takes a model of the
+    root's values (the console's `DeviceState`, the exchange's state), `SaveMessages(ranges, source, …)` a model of
+    the whole message (the Schema Editor's instance; the map supplies the block roles and the device values the root
+    fixes, the model the rest). `Plan` is shared; the map orders the blocks (`IMessageMap.Order`, by address for an
+    address map) and describes them (`IMessageMap.DescribeBlock`). `AddressMapAdapter` keeps only the read
+    (`Deserialize`, see the Device todo); `PlanData`, `WriteData`, `DataPlan`, `EncodedDataMessage`, `MapOccurrence`
+    and its `IsMap`/`ItemCount`/`MapRoots` are removed; `DeviceValues.NameOfRole` is internal again (the editor no
+    longer reads device values from its role fields). *Why:* the console has no model of an envelope, the editor's
+    model is the envelope; each method keeps one source and the shapes never mix.
+18. **The Schema Editor's read loses two cases of `AddressMapAdapter.Deserialize`:** reading the plan of a map root
+    directly (raw map bytes without an envelope; ends the map's repeats) is removed, as is the fallback for a message
+    the map does not recognise (read into the largest group at the address, with a warning): such a message is a
+    plain error with the reason. *Why:* not a typical use case; the Schema Editor works on one schema at a time, so
+    messages of another model are very unlikely.
+19. **`MessageMaps.ReadMessage(root, message, sysEx, sink, device)`: the mirror of `SaveMessages`.** The map recognises
+    the message (`IMessageMap.Match`; a near miss fails with its reason) and the body the model selects for the data
+    open choice is narrowed to the recognised block and wrapped by the map (`IMessageMap.WrapBody`: an address map
+    ends its repeats there; a dump's body is the whole root). The Schema Editor reads a message with a map body
+    through it (with no device values: any device id) and everything else with the serializer. `AddressMapAdapter`
+    and `AddressMaps` are removed, with `AddressMap.WrapMap`/`LargestGroupAt` and `AddressProtocol.FindMapRoots`.
+    *Why:* the rest of `Deserialize` was generic map knowledge; both apps now use only the generic `MessageMaps` API.
+
 ## Messages that are received but not accepted (2026-11-09)
 
 Issue: every SysEx from the port is tried against the messages a transfer can receive; a message that does not fit is
@@ -125,6 +230,8 @@ address maps. See the [proposal](../src/Jacobi.Midi.Console/sync-proposal.md).
    every map has (`DataMessages`, `TryRead`, `Split`, `Write`). `IMessageMap` and `MessageMaps` become public; the
    members the exchange uses stay internal. `Save` is on the Device todo. *Why:* no extra type next to the maps; every
    map gets it without code of its own; the Device API is a generic API, not only for the console and Schema Editor.
+   *Revised (2026-11-10):* `Load`/`Save` go on `MessageMaps`, `IMessageMap` stays internal (see *The data of a root
+   for a client*).
 8. **A dump file holds real SysEx messages**, as the device sends and accepts them: a file and a MIDI connection
    differ only in the target, both need the same message maps. Decisions 5 and 7 are **parked**: the console keeps
    `AddressMapAdapter.ReadData`/`EncodeData` for its dump files for now (address maps only); dump files with dump

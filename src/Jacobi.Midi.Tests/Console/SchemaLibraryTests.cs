@@ -27,7 +27,7 @@ public sealed class SchemaLibraryTests : IDisposable
     {
         Assert.True(Library.IsCompiled, String.Join(Environment.NewLine, Library.Problems));
         Assert.DoesNotContain(Library.Problems, problem => problem.IsError);
-        Assert.True(Library.Maps!.IsMap(new(Gp8)));
+        Assert.Equal(Jacobi.Midi.Device.Messages.MessageMapKind.Address, Library.KindOf(new(Gp8)));
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public sealed class SchemaLibraryTests : IDisposable
 
         var problem = Assert.Single(BindingResolver.Resolve(With("Gp8.Nothing"), new BindingContext { Library = Library }).Problems);
         Assert.Contains("'Gp8.Nothing' (device 'gp8') is not a root group", problem.Message);
-        // not an address map, but a root group of the schemas
+        // no message map, but a root group of the schemas
         Assert.Empty(BindingResolver.Resolve(With("Roland.Message16"), new BindingContext { Library = Library }).Problems);
     }
 
@@ -126,7 +126,8 @@ public sealed class SchemaLibraryTests : IDisposable
         var library = ConsoleLibrary.BuiltIn().AddSchemaFile(path).Build();
         var plain = new Jacobi.BinarySerializer.Schema.SchemaName("Plain.Settings");
         Assert.True(library.HasRoot(plain));
-        Assert.False(library.Maps!.IsMap(plain));
+        // not a SysEx message and not carried by one: no message map, not device data
+        Assert.Null(library.KindOf(plain));
         Assert.Equal(["Plain.Settings"], library.RootsFromFile(path).Select(root => root.FullName));
         Assert.Equal(4, library.ItemCount(plain, "Settings.Slot"));
 
@@ -143,7 +144,7 @@ public sealed class SchemaLibraryTests : IDisposable
 
         var load = rigSession.Devices["plain"].LoadDump([0xF0, 0x41, 0x00, 0x13, 0x12, 0x00, 0x00, 0x00, 0x00, 0xF7]);
         Assert.Equal(0, load.Decoded);
-        Assert.Contains("not an address map", Assert.Single(load.Warnings));
+        Assert.Contains("has no message map", Assert.Single(load.Warnings));
     }
 
     [Fact]

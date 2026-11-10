@@ -1,19 +1,20 @@
 using Jacobi.BinarySerializer;
 using Jacobi.Midi.Device.Addressing;
+using Jacobi.Midi.Tests.Addressing;
 using Jacobi.Midi.Tests.Schema;
 using Xunit;
 using Jacobi.Midi.Device.Messages;
 
-namespace Jacobi.Midi.Tests.Addressing;
+namespace Jacobi.Midi.Tests.Messages;
 
 /// <summary>
-/// Tests <see cref="AddressMapValidator"/> and <see cref="AddressMapTags"/>: the use of the midi.* tags in the schemas and
+/// Tests <see cref="MessageMapValidator"/> and <see cref="AddressMapTags"/>: the use of the midi.* tags in the schemas and
 /// how the roles of the envelope messages are fulfilled.
 /// </summary>
-public class AddressMapValidatorTests
+public class MessageMapValidatorTests
 {
     private static IReadOnlyList<MessageMapProblem> Validate(params string[] xml)
-        => AddressMapValidator.Validate(TestDevice.CreateSerializer([.. xml.Select(TestDevice.Parse)]));
+        => MessageMapValidator.Validate(TestDevice.CreateSerializer([.. xml.Select(TestDevice.Parse)]));
 
     private static IEnumerable<MessageMapProblem> Of(IEnumerable<MessageMapProblem> problems, MessageMapProblemSeverity severity)
         => problems.Where(problem => problem.Severity == severity);
@@ -32,6 +33,41 @@ public class AddressMapValidatorTests
     }
 
     [Fact]
+    public void Validate_ADumpThatIsAMessageItself_IsValidatedLikeAnyMap()
+    {
+        var problems = Validate("""
+            <schema name="Dump">
+              <includes>
+                <include schema="midi" />
+              </includes>
+              <members>
+                <group name="Voice" midi.device.modelId="0x10" midi.device.unused="1">
+                  <processors>
+                    <processor name="midi.sysex" />
+                  </processors>
+                  <members>
+                    <field name="Id" datatype="sys.uint8" value="0x7D" />
+                    <field name="Device" datatype="sys.uint8" midi.role="device.deviceId" />
+                    <field name="Model" datatype="sys.uint8" midi.role="device.modelId" />
+                    <field name="Level" datatype="sys.uint8" />
+                  </members>
+                </group>
+                <group name="Plain">
+                  <members>
+                    <field name="Value" datatype="sys.uint8" />
+                  </members>
+                </group>
+              </members>
+            </schema>
+            """).Where(problem => problem.Document == "Dump").ToList();
+
+        // the device id is the client's, the model is fixed by the root; a value no role uses is a warning
+        Assert.Empty(Of(problems, MessageMapProblemSeverity.Error));
+        Assert.Equal(["Voice.Device"], Of(problems, MessageMapProblemSeverity.Information).Select(p => p.Path.Value));
+        Assert.Contains("midi.device.unused", Assert.Single(Of(problems, MessageMapProblemSeverity.Warning)).Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Validate_RolandSchemas_NoErrorsOrWarnings()
     {
         var serializer = new SerializerBuilder()
@@ -39,7 +75,7 @@ public class AddressMapValidatorTests
             .AddProcessors(TestHelpers.CreateProcessors())
             .Build();
 
-        var problems = AddressMapValidator.Validate(serializer);
+        var problems = MessageMapValidator.Validate(serializer);
 
         Assert.Empty(Of(problems, MessageMapProblemSeverity.Error));
         Assert.Empty(Of(problems, MessageMapProblemSeverity.Warning));
@@ -225,14 +261,14 @@ public class AddressMapValidatorTests
         => Assert.False(AddressMapTags.IsTag(name));
 
     [Fact]
-    public void Adapter_DescribeRole()
+    public void Info_DescribeRole_OfAnAddressMap()
     {
-        var adapter = new AddressMapAdapter(TestDevice.CreateSerializer());
+        var map = new MessageMaps(TestDevice.CreateSerializer()).Info(TestDevice.MapName);
 
-        Assert.NotNull(adapter.DescribeRole(TestDevice.MapName, "address"));
-        Assert.NotNull(adapter.DescribeRole(TestDevice.MapName, "size"));
-        Assert.Contains("0x42", adapter.DescribeRole(TestDevice.MapName, "device.modelId"));
+        Assert.NotNull(map.DescribeRole("address"));
+        Assert.NotNull(map.DescribeRole("size"));
+        Assert.Contains("0x42", map.DescribeRole("device.modelId"));
         // the map root does not fix the device id: the client supplies it
-        Assert.Null(adapter.DescribeRole(TestDevice.MapName, "device.deviceId"));
+        Assert.Null(map.DescribeRole("device.deviceId"));
     }
 }

@@ -19,7 +19,8 @@ internal sealed class AddressMapProvider : IMessageMapProvider
     public IMessageMap? TryCreate(Serializer serializer, ExecutionPlan plan)
         => Claims(serializer, plan) ? AddressMap.Create(serializer, plan) : null;
 
-    private static bool Claims(Serializer serializer, ExecutionPlan plan)
+    /// <summary>True when the root of the plan is an address map (valid or not): the provider claims it.</summary>
+    internal static bool Claims(Serializer serializer, ExecutionPlan plan)
     {
         if (HasMapTag(plan.Root))
         {

@@ -128,6 +128,51 @@ public class CarriedDumpTests
     }
 
     [Fact]
+    public void Save_WritesTheCarrier_AndLoadSelectsTheBody()
+    {
+        var serializer = CreateSerializer();
+        var maps = new MessageMaps(serializer);
+        var device = new DeviceValues { ["deviceId"] = 0 };
+        var values = new FieldValueStore();
+        values.Set("Program.Level", InstancePath.Empty, new LogicalField("Level", typeof(byte), (byte)100));
+        values.Set("Program.Cutoff", InstancePath.Empty, new LogicalField("Cutoff", typeof(byte), (byte)20));
+
+        // the data message named explicitly; the model comes from the root (midi.device.model)
+        var saved = maps.Save([Range(serializer, "Program.Cutoff")], values, device, new SchemaName("Env.Message.Dump"));
+
+        Assert.Equal([ProgramDump(100, 20)], saved);
+        var loaded = new FieldValueStore();
+        var warnings = new List<string>();
+        // a dump of the other model is the body of another root: skipped
+        Assert.Equal(1, maps.Load(ProgramName, [ProgramDump(1, 2, model: 2), saved[0]], device, loaded, warnings));
+        Assert.Equal(100, Value(loaded, "Program.Level"));
+        Assert.Equal(20, Value(loaded, "Program.Cutoff"));
+        Assert.Contains("Message 1", Assert.Single(warnings), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FindCarriedRoot_TheModelInTheMessageSelectsTheRoot()
+    {
+        var maps = new MessageMaps(CreateSerializer());
+        var dump = new SchemaName("Env.Message.Dump");
+
+        Assert.Equal(ProgramName, maps.FindCarriedRoot(dump, ProgramDump(1, 2, model: 1), new DeviceValues()));
+        Assert.Equal(new SchemaName("Synth.OtherProgram"), maps.FindCarriedRoot(dump, ProgramDump(1, 2, model: 2), new DeviceValues()));
+        // no body for the model, or another device than the one given
+        Assert.Null(maps.FindCarriedRoot(dump, ProgramDump(1, 2, model: 3), new DeviceValues()));
+        Assert.Null(maps.FindCarriedRoot(dump, ProgramDump(1, 2), new DeviceValues { ["deviceId"] = 4 }));
+    }
+
+    [Fact]
+    public void Info_Kind_IsCarriedDump()
+    {
+        var maps = new MessageMaps(CreateSerializer());
+
+        Assert.Equal(MessageMapKind.CarriedDump, maps.Info(ProgramName).Kind);
+        Assert.Equal(MessageMapKind.CarriedDump, maps.Info(new SchemaName("Synth.OtherProgram")).Kind);
+    }
+
+    [Fact]
     public async Task RequestData_ReceivesTheBody()
     {
         var serializer = CreateSerializer();
@@ -193,7 +238,7 @@ public class CarriedDumpTests
     [Fact]
     public void Validator_ACarrierWithoutAddress_IsNoError()
     {
-        var problems = AddressMapValidator.Validate(CreateSerializer());
+        var problems = MessageMapValidator.Validate(CreateSerializer());
 
         Assert.DoesNotContain(problems, problem => problem.Severity == MessageMapProblemSeverity.Error);
     }
@@ -228,5 +273,6 @@ public class CarriedDumpTests
 
         var exception = Assert.Throws<MessageMapException>(() => new MessageMaps(serializer).Get(serializer.GetPlan(new SchemaName("Nested.Inner"))));
         Assert.Contains(exception.Errors, error => error.Contains("only carried inside another body (Nested.Outer)", StringComparison.Ordinal));
+        Assert.Equal(MessageMapKind.CarriedDump, exception.Kind);
     }
 }

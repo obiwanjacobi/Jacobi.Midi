@@ -8,10 +8,10 @@ using Xunit;
 namespace Jacobi.Midi.Tests.SchemaEditor;
 
 /// <summary>
-/// Tests the Schema Editor's use of the address map validation: <see cref="AddressMapCheck"/> relates the problems to the
+/// Tests the Schema Editor's use of the address map validation: <see cref="MessageMapCheck"/> relates the problems to the
 /// authored nodes (<see cref="CompiledNodeLocator.FindAuthored"/>), and <see cref="EditNode.AddressTag"/> marks the nodes.
 /// </summary>
-public class AddressMapCheckTests
+public class MessageMapCheckTests
 {
     private static (MainViewModel ViewModel, EditDocument Roland, EditDocument Gp8) LoadRoland()
     {
@@ -31,7 +31,7 @@ public class AddressMapCheckTests
     {
         var (viewModel, roland, gp8) = LoadRoland();
 
-        var issues = AddressMapCheck.Run(viewModel.LoadedSchemas.Compile(gp8), viewModel.OpenedAssemblies.Processors);
+        var issues = MessageMapCheck.Run(viewModel.LoadedSchemas.Compile(gp8), viewModel.OpenedAssemblies.Processors);
 
         Assert.All(issues, issue => Assert.True(issue.IsInformation, issue.Problem.ToString()));
         var dt1DeviceId = Member(Member(roland.Members.Single(member => member.Name == "Message16"), "DT1"), "DeviceId");
@@ -43,7 +43,7 @@ public class AddressMapCheckTests
     {
         var (viewModel, roland, _) = LoadRoland();
 
-        var issues = AddressMapCheck.Run(viewModel.LoadedSchemas.Compile(roland), viewModel.OpenedAssemblies.Processors);
+        var issues = MessageMapCheck.Run(viewModel.LoadedSchemas.Compile(roland), viewModel.OpenedAssemblies.Processors);
 
         Assert.NotEmpty(issues);
         Assert.All(issues, issue => Assert.Equal("Roland", issue.Problem.Document, ignoreCase: true));

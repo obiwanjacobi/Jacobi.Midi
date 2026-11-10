@@ -15,8 +15,25 @@ internal interface IMessageMap
     /// <summary>The root the map is for (the <c>for</c> of an exchange file).</summary>
     SchemaName Root { get; }
 
+    /// <summary>How the data of the root is carried in messages.</summary>
+    MessageMapKind Kind { get; }
+
     /// <summary>The device values the root fixes (<c>midi.device.*</c>).</summary>
     DeviceValues Device { get; }
+
+    /// <summary>
+    /// The number of items of a repeat of the root as the map transfers it (e.g. the items of the address space of an
+    /// address map, the constant count of a dump); null for a node that is not a repeat, or a repeat whose count the
+    /// data gives.
+    /// </summary>
+    int? ItemCount(SchemaPath repeat);
+
+    /// <summary>
+    /// How the value of a node with a role of the map's own (<c>midi.role</c>, e.g. <c>address</c>, <c>size</c>,
+    /// <c>data</c>) is supplied when a data message carries the root: a short description; null when the map does not
+    /// supply it. The device values the root fixes are described by <see cref="MessageMapInfo.DescribeRole"/>.
+    /// </summary>
+    string? DescribeRole(string role);
 
     /// <summary>The messages that can carry the data of the root.</summary>
     IReadOnlyList<DeviceMessage> DataMessages { get; }
@@ -37,6 +54,25 @@ internal interface IMessageMap
 
     /// <summary>The message for a block as a complete SysEx message; <paramref name="source"/> gives the values of a data message.</summary>
     byte[] Write(DeviceMessage message, PlanRange block, IValueSource? source, DeviceValues device);
+
+    /// <summary>
+    /// A data message for a block as a complete SysEx message, written from the client's model of the whole message
+    /// (envelope and body, scope by scope; e.g. the instance of an editor): the map supplies the roles of the block
+    /// and <paramref name="device"/> the device values it holds; the client the other values and the body.
+    /// </summary>
+    byte[] WriteMessage(DeviceMessage message, PlanRange block, IValueSource client, DeviceValues device);
+
+    /// <summary>
+    /// Wraps the client's sink for the body of a data message that carries <paramref name="block"/>, so the read ends
+    /// with the block (e.g. the repeats of an address map, which have no count); the sink itself when nothing is needed.
+    /// </summary>
+    IValueSink WrapBody(IValueSink sink, PlanRange block);
+
+    /// <summary>A short description of a block for a person, e.g. its address and size, or the whole root.</summary>
+    string DescribeBlock(PlanRange block);
+
+    /// <summary>The blocks in the order the map transfers them (e.g. by address); by default as given.</summary>
+    IReadOnlyList<PlanRange> Order(IReadOnlyList<PlanRange> blocks) => blocks;
 
     /// <summary>
     /// Matches a message of the device with <paramref name="message"/> for the device values: recognised (for a data

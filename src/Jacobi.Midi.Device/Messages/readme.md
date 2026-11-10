@@ -96,8 +96,25 @@ range for the message (`IMessageMap.Validate`). A map that is not valid throws a
 problems (`MessageMapProblem`), each located at a schema node, whatever the kind of map.
 
 A client outside Midi.Device sees a map through `MessageMaps.Info(root)`: a `MessageMapInfo`, a read-only view of
-what a client needs to know about a root, whatever the kind of map (for now: the device values the root fixes and the
-`RequiredDeviceValues` the client supplies, e.g. `deviceId`). The map's operations stay internal.
+what a client needs to know about a root, whatever the kind of map (for now: its `Kind`, the `ItemCount` of a repeat
+as the map transfers it, `DescribeRole` (how the map supplies a role field of a message that carries the root), the device values the root fixes and the `RequiredDeviceValues` the client supplies, e.g.
+`deviceId`). The map's operations stay internal. A map that is not valid throws a `MessageMapException` whose `Kind`
+is the kind of map that claimed the root.
+
+Without a connection or exchange file (e.g. dump files), a client reads and writes the data of a root with
+`MessageMaps.Load` (the data messages of the root in a list of SysEx messages, decoded into a sink; the others are
+reported) and `MessageMaps.Save` (ranges written as one data message per block, from a model of the root's values;
+the data message is optional: by default the first one whose device values are known). `MessageMaps.SaveMessages`
+does the same from a model of the whole message (envelope and body, e.g. an editor's instance), and
+`MessageMaps.Plan` returns the blocks without writing (`TransferPlan`, each block described by its map, e.g. its
+address and size). `MessageMaps.ReadMessage` is the mirror of `SaveMessages`: it reads one data message into a model
+of the whole message, the body narrowed to the block the map recognises (or it fails with the reason).
+`MessageMaps.FindCarriedRoot` tells which root a data message
+of the device carries (e.g. to select the body of an open choice before reading a message).
+`Kind` (`MessageMapKind`) tells how the data of the root is carried: `Address` (in parts, by address), `CarriedDump`
+(whole, as the body of a data message's open choice) or `MessageDump` (the root is a message itself). A client decides
+with it what to offer for a root. A `MessageDump` root must be a complete SysEx message (`midi.sysex` on the root); a
+root that is neither carried nor a SysEx message has no valid map.
 
 ## Types
 
@@ -105,8 +122,11 @@ Namespace `Jacobi.Midi.Device.Messages`.
 
 | Type | Purpose |
 | ---- | ------- |
-| `MessageMaps` | The message maps of a serializer's roots, created on first use and cached; `Info(root)` for a client. |
-| `MessageMapInfo` | A read-only view of the map of one root: the device values it fixes and the ones the client must supply. |
+| `MessageMaps` | The message maps of a serializer's roots, created on first use and cached; `Info(root)`, `Load` and `Save` for a client. |
+| `MessageMapInfo` | A read-only view of the map of one root: its kind, the device values it fixes and the ones the client must supply. |
+| `MessageMapValidator` | Validates the `midi.*` tags of all schemas and the message map of every root, whatever its kind (address map, carried dump, dump that is a message itself), for tools such as the Schema Editor. |
+| `TransferPlan`, `PlannedBlock` | How ranges of a root are transferred (`MessageMaps.Plan`): the data message and its blocks, each with a description. |
+| `MessageMapKind` | How the data of a root is carried in messages: `Address`, `CarriedDump` or `MessageDump`. |
 | `DeviceValues` | The device values by name (`deviceId`, `modelId`, ...): those of the root plus those of the client. |
 | `FieldValueStore` | A flat value model of field values by path and instance of a root's plan. |
 | `DeviceMessage` | A message group of the schemas with its role nodes. |

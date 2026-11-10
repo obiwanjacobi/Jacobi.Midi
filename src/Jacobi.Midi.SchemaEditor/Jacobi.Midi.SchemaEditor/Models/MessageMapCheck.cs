@@ -6,11 +6,11 @@ using Jacobi.Midi.Device.Messages;
 namespace Jacobi.Midi.SchemaEditor.Models;
 
 /// <summary>
-/// One problem with the address map tags (<c>midi.*</c>) of the compiled schemas, with the authored node it is about.
+/// One problem with the message map tags (<c>midi.*</c>) of the compiled schemas, of any kind of map,, with the authored node it is about.
 /// </summary>
 /// <param name="Problem">The problem as the Device addressing code reports it.</param>
 /// <param name="Node">The authored node of the problem; null when it is not in an authored document (or has no node).</param>
-internal sealed record AddressMapIssue(MessageMapProblem Problem, EditNode? Node)
+internal sealed record MessageMapIssue(MessageMapProblem Problem, EditNode? Node)
 {
     public bool IsError => Problem.Severity == MessageMapProblemSeverity.Error;
 
@@ -36,11 +36,11 @@ internal sealed record AddressMapIssue(MessageMapProblem Problem, EditNode? Node
 }
 
 /// <summary>
-/// Checks the use of the address map tags in a compiled schema set with the Device addressing code
-/// (<see cref="AddressMapValidator"/>) and relates each problem to its authored node
+/// Checks the use of the message map tags in a compiled schema set, for every kind of map, with the Device code
+/// (<see cref="MessageMapValidator"/>) and relates each problem to its authored node
 /// (<see cref="CompiledNodeLocator.FindAuthored"/>). The editor only shows the results; the rules live in the Device.
 /// </summary>
-internal static class AddressMapCheck
+internal static class MessageMapCheck
 {
     /// <summary>
     /// The issues in the compiled document and the documents it includes, errors first; empty when they have no tags or
@@ -48,7 +48,7 @@ internal static class AddressMapCheck
     /// document), but their own issues are left out.
     /// </summary>
     /// <param name="processors">The processors the schemas use (the plans are built with them).</param>
-    public static IReadOnlyList<AddressMapIssue> Run(SchemaSetCompilation compilation, IProcessorProvider processors)
+    public static IReadOnlyList<MessageMapIssue> Run(SchemaSetCompilation compilation, IProcessorProvider processors)
     {
         ArgumentNullException.ThrowIfNull(compilation);
         ArgumentNullException.ThrowIfNull(processors);
@@ -57,9 +57,9 @@ internal static class AddressMapCheck
             .AddProcessors(processors)
             .Build();
         var shown = IncludeClosure(compilation.Document, compilation.Documents);
-        return [.. AddressMapValidator.Validate(serializer)
+        return [.. MessageMapValidator.Validate(serializer)
             .Where(problem => shown.Contains(problem.Document))
-            .Select(problem => new AddressMapIssue(problem,
+            .Select(problem => new MessageMapIssue(problem,
                 CompiledNodeLocator.FindAuthored(compilation.Documents, problem.Document, problem.Path)))
             .OrderBy(issue => issue.Problem.Severity)];
     }

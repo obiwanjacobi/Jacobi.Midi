@@ -7,7 +7,7 @@ namespace Jacobi.Midi.Device.Addressing;
 /// <summary>
 /// The <c>midi.*</c> tags of the address map mechanism as a tool sees them (e.g. the Schema Editor): which property
 /// names are tags, their descriptions, the check of a tag's value on its own and the role of a node. The checks that
-/// need the whole map and its envelopes are done by <see cref="AddressMapValidator"/>.
+/// need the whole map and its envelopes are done by <see cref="MessageMapValidator"/>.
 /// </summary>
 public static class AddressMapTags
 {
@@ -44,7 +44,7 @@ public static class AddressMapTags
 
     /// <summary>
     /// Checks a tag and its value on their own; null when valid. The rules that relate tags (e.g. a device value is fixed
-    /// by the map root) are checked by <see cref="AddressMapValidator"/>.
+    /// by the map root) are checked by <see cref="MessageMapValidator"/>.
     /// </summary>
     public static string? Validate(string name, string? value)
     {

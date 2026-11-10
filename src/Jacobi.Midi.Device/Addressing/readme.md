@@ -14,8 +14,7 @@ layout, framing and checksum, plus `midi.*` tags that say what the nodes *mean*.
 
 The address map is one kind of [message map](../Messages/readme.md): the address provider claims a root that has
 address-map tags or that a data message with the role `address` carries. The map is internal: it is deduced from the
-plan of a range (`range.ExecutionPlan`) when the range is first used, and cached per plan (`MessageMaps`; for the
-tools, `AddressMaps`). Clients only see `PlanRange`s and the public types below.
+plan of a range (`range.ExecutionPlan`) when the range is first used, and cached per plan (`MessageMaps`). Clients only see `PlanRange`s and the public types below.
 
 Devices without addresses (e.g. Korg dumps selected by a function code) are not a concern of the address map: their
 dumps are ordinary schemas, transferred by the default dump map (see [Messages](../Messages/readme.md)).
@@ -228,7 +227,7 @@ one field, a few fields of a group, a group, or neighbouring groups.
   1. The block whose size the overhead of the data message implies: the bytes outside the data (envelope, checksum, framing) as measured on the last message of that kind that was recognised. One address is one data byte, so the data size is the message length minus the overhead. This takes one read for messages whose envelope has a fixed size.
   2. When that fails (the first message, or an envelope whose size varies): every block that starts at the address, ends on a field boundary and fits in the message, largest first.
 - **Ending the repeats.** The repeats of a map have no `count` (a dump may hold fewer items), so the value model ends them (`IOpenRepeatSink`/`IOpenRepeatSource` of the BinarySerializer). The map wraps the client's scope for the body (`AddressMap.WrapBody`): a repeat ends after the item that holds the last node of the target (a block or a range), after its `midi.repeat` items, or at the end of the data. A client that reads or writes a map body with its own open choice model must wrap its scope the same way.
-- **Tools with their own value model.** `AddressMapAdapter` lets a client that reads and writes arbitrary messages into its own value model (e.g. the Schema Editor's instantiate, match and workbench) work with the maps. Without address maps in the schemas its reads are plain serializer reads.
+- **Tools with their own value model.** A client with a model of the whole message (e.g. the Schema Editor's instantiate and match) uses the generic `MessageMaps.Plan`, `SaveMessages` and `ReadMessage`: the address map places the data of a message by its address and ends its repeats there.
   - *Item counts:* `ItemCount` gives the number of items of a map repeat in the address space, so the client can show them all.
   - *Reading:* a read with a map root plan (a dump of the map) ends the repeats after `midi.repeat` items or at the end of the data. When the client selects a map root as the body of an open choice, the adapter narrows the body to the block the message carries, recognised as `TryReadData` does (any device id for now). When the message is not recognised, the largest group at the address is read as far as the data goes, with a warning.
   - *Roles:* `DescribeRole` tells how an envelope field with a role gets its value when a message carries the map (calculated, fixed by the map root), or null when the client supplies it.
@@ -250,7 +249,7 @@ every kind of [message map](../Messages/readme.md):
 - **Envelope**: at least one data message carries the map; the data messages have an `address` field with a constant `byteLength`, agree on the address space and have no `size` role. A message an exchange file names is checked when it is first used: a `size` role only with an `address` role on a `range` message, which needs one.
 - **Device values**: the device values the messages need (`deviceId` for the GP-8) are checked when an exchange first uses the map; they come from the map root or the client.
 
-Tools that show problems while a schema is written (the Schema Editor) use `AddressMapValidator.Validate`: it checks
+Tools that show problems while a schema is written (the Schema Editor) use `MessageMapValidator.Validate` (in `Messages`: it validates every kind of map, see its readme): it checks
 all tags of all schemas of a serializer, also those that no map uses, and reports errors, warnings and information:
 
 - **Tags on their own** (`AddressMapTags.Validate`, also used per property): a known `midi.*` name and a valid value.
@@ -270,13 +269,11 @@ Namespace `Jacobi.Midi.Device.Addressing`.
 | `AddressMatch` | The result of resolving an address range: the block of whole fields it covers, whether it is aligned to field boundaries, and the unmapped addresses. |
 | `AddressSettings`, `AddressUnit` | The address settings of a message: its unit (`midi.unit`) and maximum data size (`midi.maxDataSize`). |
 | `NodeAccess` | The access of an addressed node (`midi.access`). |
-| `AddressMapValidator`, `AddressMapTags` | Validate the use of the tags in all schemas, and the tags on their own (names, descriptions, values, the role of a node), for tools such as the Schema Editor. |
-| `AddressMapAdapter`, `MapOccurrence`, `DataPlan`, `EncodedDataMessage` | Reads and writes any message with the client's value model and lets the address maps in the schemas give the item counts, place the data of a message and calculate the addresses of the data messages for a selection of map nodes (for tools such as the Schema Editor); reads and writes the data of a map offline (a dump). |
+| `AddressMapTags` | Validate the tags on their own (names, descriptions, values, the role of a node), for tools such as the Schema Editor; their use in all schemas is validated by `MessageMapValidator` (`Messages`). |
 
 The generic types (`DeviceMessage`, `DeviceValues`, `ReceivedData`, `FieldValueStore` and the problems) are in
 `Jacobi.Midi.Device.Messages` (see [Messages](../Messages/readme.md)). Internal: `AddressMap` (an `IMessageMap`),
-`AddressMapProvider`, `AddressDeviceState`, `AddressProtocol`, `AddressLayout` and `AddressMaps` (the cache of
-`AddressMapAdapter`).
+`AddressMapProvider`, `AddressDeviceState`, `AddressProtocol` and `AddressLayout`.
 
 ## Limitations
 

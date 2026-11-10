@@ -131,7 +131,7 @@ internal partial class MainView : UserControl
         foreach (var root in viewModel.MapRoots)
         {
             var item = new MenuItem { Header = root, Command = viewModel.AddDeviceCommand, CommandParameter = root };
-            if (viewModel.IsAddressMap(root))
+            if (viewModel.IsDeviceData(root))
                 menu.Items.Add(item);
             else
                 others.Items.Add(item);

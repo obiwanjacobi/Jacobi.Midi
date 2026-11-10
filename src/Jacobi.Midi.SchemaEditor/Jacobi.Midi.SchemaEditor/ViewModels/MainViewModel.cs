@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
@@ -99,7 +99,7 @@ internal sealed partial class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(DocumentSourceNote));
             OnPropertyChanged(nameof(HasDocumentSourceNote));
             // any edit may change how the address map tags are used
-            ScheduleAddressMapCheck();
+            ScheduleMessageMapCheck();
         };
         // pre-loaded: the 'sys' processors of the serializer, and the base 'midi' schema and 'midi' processors
         // that the vendor and device schemas build on
@@ -1304,7 +1304,7 @@ internal sealed partial class MainViewModel : ViewModelBase
     partial void OnSelectedDocumentChanged(SchemaWorkspaceDocument? value)
     {
         OnPropertyChanged(nameof(HasSelectedDocument));
-        ScheduleAddressMapCheck();
+        ScheduleMessageMapCheck();
         // a document that is not in the tree yet replaces the unpinned documents in it
         if (value is not null && !_treeDocuments.Contains(value))
         {

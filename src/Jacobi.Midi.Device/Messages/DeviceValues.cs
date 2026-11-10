@@ -25,6 +25,15 @@ public sealed class DeviceValues : IEnumerable<KeyValuePair<string, long>>
     public bool TryGet(string name, out long value)
         => _values.TryGetValue(name, out value);
 
+    /// <summary>The name of the device value a role holds (<c>device.deviceId</c>: <c>deviceId</c>); null for any other role.</summary>
+    internal static string? NameOfRole(string role)
+    {
+        ArgumentNullException.ThrowIfNull(role);
+        return role.StartsWith(MidiProperties.RoleDevicePrefix, StringComparison.OrdinalIgnoreCase) && role.Length > MidiProperties.RoleDevicePrefix.Length
+            ? role[MidiProperties.RoleDevicePrefix.Length..]
+            : null;
+    }
+
     /// <summary>These values with the other's values added or overriding them (client over map root).</summary>
     public DeviceValues With(DeviceValues other)
     {

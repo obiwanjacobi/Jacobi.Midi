@@ -9,6 +9,12 @@ public sealed class MessageMapException(string root, IReadOnlyList<MessageMapPro
 {
     public string Root { get; } = root;
 
+    /// <summary>
+    /// The kind of map that claimed the root and found the problems (e.g. <see cref="MessageMapKind.Address"/> for a
+    /// root with address map tags); null when it is not known (e.g. a plan without a schema name).
+    /// </summary>
+    public MessageMapKind? Kind { get; init; }
+
     /// <summary>The problems found, each located at its schema node.</summary>
     public IReadOnlyList<MessageMapProblem> Problems { get; } = problems;
 

@@ -371,7 +371,7 @@ public class MessageExchangeTests
     {
         var serializer = CreateSerializer();
 
-        Assert.Equal([MapName.FullName], AddressProtocol.FindMapRoots(serializer.Schemas).Select(r => r.FullName));
+        Assert.Equal(MessageMapKind.Address, new MessageMaps(serializer).Info(MapName).Kind);
         new MessageMaps(serializer).PrepareAll();
     }
 
@@ -399,6 +399,7 @@ public class MessageExchangeTests
         maps.Prepare(MapName);
         var exception = Assert.Throws<MessageMapException>(maps.PrepareAll);
         Assert.Equal("Invalid.AddressMap", exception.Root);
+        Assert.Equal(MessageMapKind.Address, exception.Kind);
         Assert.Contains(exception.Errors, e => e.StartsWith("AddressMap.B:", StringComparison.Ordinal));
     }
 

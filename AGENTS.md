@@ -20,6 +20,7 @@
 - When analyzing or proposing new functionality or changes, work with the user in small incremental steps: one concept per step, kept short, ending with one or two concrete questions. Build a shared mental picture first (how the code works now, then what changes), before going into types and members. Propose a minimal API that covers the known cases and extend it when a real need arises; do not cover theoretical options.
 - When discussing code options, also provide clickable-links to the code being discussed next to the usual `type` references.
 - Record the design decisions made with the user in [docs/decisions.md](docs/decisions.md): per decision a short summary of the issue, the decided direction and briefly why. Add them as they are made; check the file before proposing a change in an area it covers.
+- The Midi.Device API is still in development. That means that all changes to it have to be viewed from a generic perspective, even if the incentive is to fix a problem in a single application. To this end, earlier decisions may have to be changed for a better (API) outcome.
 
 ## Project Overview
 

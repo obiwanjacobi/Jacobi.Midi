@@ -19,13 +19,13 @@ namespace Jacobi.Midi.Console.Core.Devices;
 /// <see cref="CreateSink"/> and sends from <see cref="Source"/>) or loaded from and saved to a dump offline.
 /// A parameter without a value is unknown. Thread-safe; <see cref="ValueChanged"/> is raised on the thread that
 /// changed the value, after the change. The root (<see cref="MapRoot"/>) is any root group of the schemas: its values
-/// work the same; only an address map has data messages to load, save and exchange them (the Device project decides).
+/// work the same; a root with a message map (address map or dump) has data messages to load, save and exchange them (the Device project decides).
 /// </summary>
 public sealed class DeviceState
 {
     private readonly Lock _lock = new();
     private readonly FieldValueStore _values = new();
-    private readonly AddressMapAdapter _maps;
+    private readonly MessageMaps _maps;
     private readonly SchemaLibrary _library;
 
     /// <param name="device">The device instance of the rig: its alias, map root and device values.</param>
@@ -35,7 +35,7 @@ public sealed class DeviceState
     {
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(library);
-        if (library.Serializer is null || library.Maps is null)
+        if (library.Serializer is null || library.MessageMaps is null)
             throw new ArgumentException("The schemas do not compile; see the problems of the library.", nameof(library));
 
         MapRoot = new SchemaName(device.MapRoot);
@@ -48,7 +48,7 @@ public sealed class DeviceState
             DeviceValues[name] = value;
         Plan = library.Serializer.GetPlan(MapRoot);
         Source = new StateSource(this);
-        _maps = library.Maps;
+        _maps = library.MessageMaps;
         _library = library;
     }
 
@@ -150,18 +150,18 @@ public sealed class DeviceState
     {
         ArgumentNullException.ThrowIfNull(dump);
         var messages = SysExSplitter.Split(dump);
-        // only an address map has data messages (the Device project decides); another root takes none of them
-        if (!_maps.IsMap(MapRoot))
-            return new DumpLoadResult(messages.Count, 0, [$"'{MapRoot}' is not an address map: no data message carries its values."]);
+        // only a root with a message map has data messages (the Device project decides); another root takes none of them
+        if (_library.KindOf(MapRoot) is null)
+            return new DumpLoadResult(messages.Count, 0, [$"'{MapRoot}' has no message map: no data message carries its values."]);
         var warnings = new List<string>();
-        var decoded = _maps.ReadData(MapRoot, messages.Select(message => (ReadOnlyMemory<byte>)message), DeviceValues,
+        var decoded = _maps.Load(MapRoot, messages.Select(message => (ReadOnlyMemory<byte>)message), DeviceValues,
             CreateSink(ValueOrigin.Dump), warnings);
         return new DumpLoadResult(messages.Count, decoded, warnings);
     }
 
     /// <summary>
     /// Saves a range of the map as a dump: the data messages that transfer it (as the device would get them), one
-    /// after the other. The range is widened to the atomic groups it overlaps; all their values must be known.
+    /// after the other. The range may be widened (the atomic groups it overlaps, the whole root of a dump); all their values must be known.
     /// </summary>
     /// <exception cref="InvalidOperationException">A value of the range, or a device value the messages need, is not known.</exception>
     /// <exception cref="MessageMapException">The map is not valid.</exception>
@@ -170,9 +170,9 @@ public sealed class DeviceState
         ArgumentNullException.ThrowIfNull(range);
         if (!ReferenceEquals(range.ExecutionPlan, Plan))
             throw new ArgumentException($"The range is not of the plan of '{MapRoot}'.", nameof(range));
-        if (!_maps.IsMap(MapRoot))
-            throw new InvalidOperationException($"'{MapRoot}' is not an address map: no data message carries its values.");
-        return [.. _maps.EncodeData(range, Source, DeviceValues).SelectMany(message => message.SysEx)];
+        if (_library.KindOf(MapRoot) is null)
+            throw new InvalidOperationException($"'{MapRoot}' has no message map: no data message carries its values.");
+        return [.. _maps.Save([range], Source, DeviceValues).SelectMany(message => message)];
     }
 
     // the exchange and the dump write through this sink: every value with its origin
