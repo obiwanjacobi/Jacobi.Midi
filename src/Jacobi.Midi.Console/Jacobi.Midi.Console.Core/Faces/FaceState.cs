@@ -13,18 +13,12 @@ public readonly record struct RangeFaceState(double? Fraction, double Origin, bo
 public readonly record struct SwitchFaceState(bool? IsOn);
 
 /// <summary>
-/// The face state of a selector: a row of segments, one per option, or with more options than
-/// <see cref="MaxSegments"/> a display with the selected option and ▲/▼ (<see cref="IsList"/>).
+/// The face state of a selector: a display with the selected option and ▲/▼ (<see cref="IsList"/>), or a key per
+/// option, in as many rows as they need.
 /// </summary>
 /// <param name="Selected">The index into <paramref name="Options"/>; null when the value is unknown.</param>
-public readonly record struct SelectorFaceState(IReadOnlyList<string> Options, int? Selected)
-{
-    /// <summary>The most options shown as segments.</summary>
-    public const int MaxSegments = 6;
-
-    /// <summary>True when the options are too many for segments: the selected one is shown in a display.</summary>
-    public bool IsList => Options.Count > MaxSegments;
-}
+/// <param name="IsList">True for the display (the presentation <c>List</c>), false for the keys (<c>Buttons</c>).</param>
+public readonly record struct SelectorFaceState(IReadOnlyList<string> Options, int? Selected, bool IsList);
 
 /// <summary>The face state of a text.</summary>
 /// <param name="Text">Null when the value is unknown.</param>

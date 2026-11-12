@@ -13,7 +13,7 @@ namespace Jacobi.Midi.Console.Faces;
 /// A face draws on two layers: the static parts (<see cref="RenderStatic"/>: a track, a body, a slot) are only drawn
 /// again when the brushes change or the value becomes known or unknown; the value (<see cref="RenderValue"/>: an arc, a
 /// pointer, lit LEDs) is drawn again on every change of the value. Its size is given in cells (<see cref="Cells"/>);
-/// the dashboard scales as a whole with its cell size.
+/// the control's face size scales it (with its chrome), the dashboard scales as a whole with its cell size.
 /// </para>
 /// <para>
 /// A face with a direction (<see cref="IsDirectional"/>, a fader) is drawn upright, in its <see cref="Extent"/>; when its
@@ -194,10 +194,17 @@ public abstract class Face : Control
     /// <summary>The glow brush of the finish around a lit part in the accent; null without glow.</summary>
     protected IBrush? AccentGlow => GlowOpacity > 0 ? FaceDrawing.Glow(AccentBrush, GlowOpacity) : null;
 
+    /// <summary>
+    /// The size of the face in pixels in the room its chrome gives it (unlimited when the control's own size is asked):
+    /// by default its <see cref="Cells"/>, as drawn; a face that wraps its parts (a selector's keys) fits them into the
+    /// room's width.
+    /// </summary>
+    protected virtual Size SizeIn(Size room) => new(CellsAsDrawn.Width * CellPixels, CellsAsDrawn.Height * CellPixels);
+
     protected override Size MeasureOverride(Size availableSize)
     {
         _measuredCells = CellsAsDrawn;
-        var size = new Size(_measuredCells.Width * CellPixels, _measuredCells.Height * CellPixels);
+        var size = SizeIn(availableSize);
         _static.Measure(size);
         _value.Measure(size);
         return size;

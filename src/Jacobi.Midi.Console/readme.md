@@ -45,7 +45,7 @@ change the control type afterwards.
 | Knob | value | a number with a range (`min`/`max`) |
 | Slider (horizontal, vertical) | value | one number, or two numbers (min/max), both with a range; horizontal when its cells are wider than tall (`GridLayout.IsWide`), else vertical |
 | Switch | value | a `sys.bool` (e.g. `roland.switch`); only a bool: a switch bound to anything else is reported and not bound, a parameter that is not a bool cannot be dropped on it, and a control bound to one cannot become a switch (`ControlCatalog.Accepts`) |
-| Selector | value | a data type with `options`: a row of segments, or with more than six options (`SelectorFaceState.MaxSegments`) a display with ▲/▼ whose option opens the list on a click |
+| Selector | value | a data type with `options`: by its presentation (`DisplaySettings.Presentation`) a display with ▲/▼ whose option opens the list on a click (`list`, the default), or a key per option, all of the same size, in as many rows as the plate's width needs (`buttons`) |
 | Selector tabs | value | not suggested: a selector becomes one in the control panel. A data type with `options` whose options each have parameters of their own (see below) |
 | Number box | value | any number, when typing or stepping the exact value matters; an index variable (`$patch`) |
 | Text | value | a string (a patch name) |
@@ -113,11 +113,12 @@ a dashboard is a tree.
 **Everything is on a grid of cells** (`GridLayout`). Every control has a **size in cells** (`size`: columns,rows); the
 cell is the unit of the whole dashboard and the dashboard's cell size scales it as a whole. The root (usually a grid)
 and every grid and section place their children at a **cell position** (`at`: column,row, zero based from the top left
-of the grid; for a section, of the grid inside its frame). A parameter control is fitted to its cells (`CellFit`):
-scaled by the side that limits it, so making it bigger makes its knob bigger, and its chrome stretched along the other
-side, so its plate fills its cells and lines up with the grid (the scale follows from its size when it is first laid
-out, so a value text that grows does not rescale it); a new control gets a default size per kind in which it fits
-unscaled (a knob is 5×7). A section's frame and title take a fixed number of cells around its grid
+of the grid; for a section, of the grid inside its frame). A parameter control's plate fills its cells; its face is
+shown at its **face size** (`faceScale`, 0.5 to 3, 1 by default; `FaceHost`), not fitted to the cells, so controls of
+the same kind and face size look alike whatever their plate. The face size scales the face only, not the plate, label
+or value text. A face larger than the room it has on its plate is cut off; the user makes the cells larger or the face
+smaller. The label never sizes the control: a long label is cut off ("…") and shown in full in a tip. A new control
+gets a default size per kind in which it fits at face size 1 (a knob is 5×7). A section's frame and title take a fixed number of cells around its grid
 (`GridLayout.SectionInset`: one on the sides and bottom, two on top), in every look. Positions and sizes are never
 empty: a file that leaves them out gets them when it is opened (the controls side by side below those that have a
 position), and the console says so.

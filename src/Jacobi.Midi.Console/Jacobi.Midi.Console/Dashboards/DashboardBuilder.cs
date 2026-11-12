@@ -26,7 +26,7 @@ namespace Jacobi.Midi.Console.Dashboards;
 /// tabs, spacer, separator, label), parameter controls the controls of their kind bound to their parameter. Kinds
 /// that are not built yet are shown as a placeholder, not left out. Everything is laid out in cells of
 /// <see cref="Face.CellPixels"/> (see <see cref="GridLayout"/>): every control has the size of its cells, a parameter
-/// control is fitted to them (<see cref="CellFit"/>); in a grid or section the children are at their cell positions, a section's frame
+/// control's face is shown at its face size (<see cref="FaceHost"/>); in a grid or section the children are at their cell positions, a section's frame
 /// takes the cells of its inset. The dashboard as a whole is scaled to its cell size, so controls, fonts, gaps and
 /// grids scale together.
 /// <para>
@@ -406,10 +406,6 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
             ParameterControl parameter => BuildParameter(parameter),
             _ => Placeholder(control, "control", null),
         };
-        // a parameter control (chrome and face) is fitted to its cells; selector tabs have no chrome
-        if (control is ParameterControl and not SelectorTabsControl)
-            built = new CellFit { Child = built };
-
         if (control.Size is { } size)
         {
             built.Width = size.Columns * Cell;
@@ -641,7 +637,7 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         [ParameterControlKind.NumberBox] = control => new NumberBoxControl { Unit = control.Display.Unit, Decimals = control.Display.Decimals },
         [ParameterControlKind.Switch] = _ => new SwitchControl(),
         [ParameterControlKind.Text] = _ => new TextControl(),
-        [ParameterControlKind.Selector] = _ => new SelectorControl(),
+        [ParameterControlKind.Selector] = control => new SelectorControl { IsList = control.Display.Presentation == SelectorPresentation.List },
         [ParameterControlKind.XyPad] = _ => new XyPadControl(),
         [ParameterControlKind.Envelope] = control => new EnvelopeCurveControl
         {
@@ -663,6 +659,8 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         if (!Faced.TryGetValue(control.Kind, out var create))
             return Placeholder(control, control.Kind.ToString(), session.ValueOf(control, SlotNames.Value)?.Info.Name);
         var built = create(control);
+        // the face (not the chrome) at the control's face size
+        FaceHost.SetScale(built, (double)control.Display.FaceScale);
         // a slider runs along the long side of its cells
         if (control.Kind == ParameterControlKind.Slider && control.Size is { } size && GridLayout.IsWide(size))
             ControlOrientation.SetOrientation(built, Orientation.Horizontal);

@@ -83,7 +83,9 @@ public static class DashboardFile
             case ParameterControl parameter:
                 element
                     .Set("unit", parameter.Display.Unit)
-                    .Set("decimals", parameter.Display.Decimals);
+                    .Set("decimals", parameter.Display.Decimals)
+                    .Set("faceScale", parameter.Display.FaceScale == DisplaySettings.Default.FaceScale ? null : parameter.Display.FaceScale)
+                    .Set("presentation", parameter.Display.Presentation == DisplaySettings.Default.Presentation ? null : FileNames.Of(parameter.Display.Presentation));
                 AddSlots(element, parameter);
                 break;
         }
@@ -208,6 +210,9 @@ public static class DashboardFile
             {
                 Unit = element.Get("unit"),
                 Decimals = ConsoleFile.GetInt(element, "decimals", minimum: 0),
+                FaceScale = ConsoleFile.GetDecimal(element, "faceScale", DisplaySettings.MinimumFaceScale, DisplaySettings.MaximumFaceScale)
+                    ?? DisplaySettings.Default.FaceScale,
+                Presentation = ConsoleFile.GetEnum<SelectorPresentation>(element, "presentation") ?? DisplaySettings.Default.Presentation,
             };
             control = kind switch
             {

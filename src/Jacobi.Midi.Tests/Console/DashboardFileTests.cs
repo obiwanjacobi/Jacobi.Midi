@@ -171,6 +171,33 @@ public class DashboardFileTests
         Assert.Equal(AreaColors.None, readSection.Children[1].Colors);
     }
 
+    [Theory]
+    [InlineData(FileFormat.Xml)]
+    [InlineData(FileFormat.Json)]
+    public void Write_HasTheFaceSizeAndPresentation_OnlyWhenNotTheDefault(FileFormat format)
+    {
+        var xml = """
+            <dashboard format="jacobi.midi.dashboard/1" name="Test">
+              <row>
+                <selector label="Wave" faceScale="1.3" presentation="buttons" />
+                <selector label="Mode" />
+              </row>
+            </dashboard>
+            """;
+
+        var written = DashboardFile.Write(DashboardFile.Read(xml, FileFormat.Xml), format);
+        var read = DashboardFile.Read(written, format);
+
+        var wave = Assert.IsType<ValueControl>(read.Layout.Children[0]);
+        Assert.Equal(new DisplaySettings { FaceScale = 1.3m, Presentation = SelectorPresentation.Buttons }, wave.Display);
+        var mode = Assert.IsType<ValueControl>(read.Layout.Children[1]);
+        Assert.Equal(DisplaySettings.Default, mode.Display);
+        Assert.Equal(1, CountOf(written, "faceScale"));
+        Assert.Equal(1, CountOf(written, "presentation"));
+    }
+
+    private static int CountOf(string text, string part) => (text.Length - text.Replace(part, "", StringComparison.Ordinal).Length) / part.Length;
+
     [Fact]
     public void Write_Json_GroupsChildrenByRole()
     {
@@ -205,6 +232,9 @@ public class DashboardFileTests
     [InlineData("""<numberBox><bind slot="value" parameter="$1patch" /></numberBox>""", "'1patch' is not a variable name")]
     [InlineData("""<indexSelector label="Patch" variable="patch" />""", "'indexSelector' is not a control")]
     [InlineData("""<knob><variable name="patch" /></knob>""", "'knob' cannot contain 'variable'")]
+    [InlineData("""<knob faceScale="3.5" />""", "'faceScale': 3.5 is not from 0.5 to 3")]
+    [InlineData("""<knob faceScale="big" />""", "'faceScale': 'big' is not a number")]
+    [InlineData("""<selector presentation="tiles" />""", "'presentation': 'tiles' is not one of list, buttons")]
     public void Read_ReportsWhatDoesNotFit(string control, string message)
     {
         var xml = $"""<dashboard format="jacobi.midi.dashboard/1" name="Test"><row>{control}</row></dashboard>""";

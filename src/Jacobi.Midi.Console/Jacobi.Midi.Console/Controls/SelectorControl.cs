@@ -7,15 +7,19 @@ using Jacobi.Midi.Console.Faces;
 namespace Jacobi.Midi.Console.Controls;
 
 /// <summary>
-/// The selector: one of the options of a choice. A row of segments, one per option, where a click selects one; with
-/// more options than fit (<see cref="SelectorFaceState.IsList"/>) a display with the selected option, where ▲/▼ step and
-/// a click on the option opens the list. The mouse wheel and the arrow keys step too.
+/// The selector: one of the options of a choice. A display with the selected option (<see cref="IsList"/>), where ▲/▼
+/// step and a click on the option opens the list; or a key per option, where a click selects one. The mouse wheel and
+/// the arrow keys step too.
 /// </summary>
 public sealed class SelectorControl : ParameterControlBase
 {
     /// <summary>The number of the selected option; null when it is not known.</summary>
     public static readonly StyledProperty<int?> SelectedProperty =
         AvaloniaProperty.Register<SelectorControl, int?>(nameof(Selected));
+
+    /// <summary>True to show the selected option in a display with a list (the default), false for a key per option.</summary>
+    public static readonly StyledProperty<bool> IsListProperty =
+        AvaloniaProperty.Register<SelectorControl, bool>(nameof(IsList), defaultValue: true);
 
     public SelectorControl()
     {
@@ -28,9 +32,13 @@ public sealed class SelectorControl : ParameterControlBase
         set => SetValue(SelectedProperty, value);
     }
 
-    private IReadOnlyList<string> Options => Parameter?.Info.Options ?? [];
+    public bool IsList
+    {
+        get => GetValue(IsListProperty);
+        set => SetValue(IsListProperty, value);
+    }
 
-    private bool IsList => Options.Count > SelectorFaceState.MaxSegments;
+    private IReadOnlyList<string> Options => Parameter?.Info.Options ?? [];
 
     protected override void Refresh()
     {
@@ -41,6 +49,8 @@ public sealed class SelectorControl : ParameterControlBase
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
+        if (change.Property == IsListProperty)
+            UpdateFace();
         if (change.Property != SelectedProperty)
             return;
         UpdateFace();
@@ -57,7 +67,11 @@ public sealed class SelectorControl : ParameterControlBase
             return;
         }
         if (!IsList)
-            Selected = FaceDrawing.SegmentAt(size.Width, Options.Count, point.X);
+        {
+            // between the keys nothing is selected
+            if (FaceDrawing.KeyAt(size, Options.Count, point) is { } key)
+                Selected = key;
+        }
         else if (point.X >= size.Width * (1 - FaceDrawing.ArrowsWidth))
             Step(point.Y < size.Height / 2 ? -1 : 1);
         else
@@ -110,10 +124,10 @@ public sealed class SelectorControl : ParameterControlBase
         flyout.ShowAt(this);
     }
 
-    // segments show the option names and the chrome the selected one; a list shows it in its display
+    // keys show the option names and the chrome the selected one; a list shows it in its display
     private void UpdateFace()
     {
-        FaceState = new SelectorFaceState(Options, Selected);
+        FaceState = new SelectorFaceState(Options, Selected, IsList);
         ValueText = IsList ? null : Selected is { } selected && selected < Options.Count ? Options[selected] : "–";
     }
 }

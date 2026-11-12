@@ -7,8 +7,8 @@ namespace Jacobi.Midi.Console.Faces;
 
 /// <summary>
 /// Drawing code the faces of all kits share: the angles of the knob sweep, arcs, glow, lit segments, display text, the
-/// step arrows, the segments of a selector and the plot of an XY pad and an envelope. The controls find their parts with
-/// the same geometry (<see cref="ArrowsWidth"/>, <see cref="SegmentAt"/>, <see cref="PlotArea"/>).
+/// step arrows, the keys of a selector and the plot of an XY pad and an envelope. The controls find their parts with
+/// the same geometry (<see cref="ArrowsWidth"/>, <see cref="KeyAt"/>, <see cref="PlotArea"/>).
 /// </summary>
 internal static class FaceDrawing
 {
@@ -18,8 +18,8 @@ internal static class FaceDrawing
     /// <summary>The space around the plot of an XY pad or an envelope, for the points on its edges.</summary>
     public const double PlotInset = 7;
 
-    /// <summary>The space between the segments of a selector.</summary>
-    public const double SegmentGap = 3;
+    /// <summary>The space between the keys of a selector.</summary>
+    private const double KeyGap = 3;
 
     /// <summary>A knob's track runs clockwise from bottom-left (135°) to bottom-right (405°); angles from +x, y down.</summary>
     public const double StartAngle = 135;
@@ -120,24 +120,59 @@ internal static class FaceDrawing
         return geometry;
     }
 
-    /// <summary>The rectangle of a segment of a row of <paramref name="count"/> in an area, with a gap between them.</summary>
-    public static Rect Segment(Rect area, int count, int index)
+    /// <summary>
+    /// The size of a key of a selector shown as buttons, in cells, the gap to the next key included: the same for every
+    /// selector, whatever its number of options.
+    /// </summary>
+    public static readonly Size KeyCells = new(1.75, 1.5);
+
+    // the distance from one key to the next, in pixels (the key and the gap)
+    private static Size KeyPitch => new(KeyCells.Width * Face.CellPixels, KeyCells.Height * Face.CellPixels);
+
+    /// <summary>
+    /// The number of keys of <paramref name="count"/> in a row across a width; one in an unlimited width, so the keys
+    /// never widen their control: they take the width of their plate.
+    /// </summary>
+    public static int KeyColumns(double width, int count)
+        => Double.IsInfinity(width) ? 1 : Math.Clamp((int)Math.Floor((width + KeyGap) / KeyPitch.Width), 1, Math.Max(1, count));
+
+    /// <summary>The size of <paramref name="count"/> keys across a width: as many rows as they need.</summary>
+    public static Size KeysSize(int count, double width)
     {
-        var width = (area.Width - SegmentGap * (count - 1)) / count;
-        return new Rect(area.X + index * (width + SegmentGap), area.Y, width, area.Height);
+        var columns = KeyColumns(width, count);
+        var rows = (Math.Max(1, count) + columns - 1) / columns;
+        return new Size(Math.Min(Math.Max(1, count), columns) * KeyPitch.Width - KeyGap, rows * KeyPitch.Height - KeyGap);
     }
 
-    /// <summary>The segment of a row of <paramref name="count"/> across a width at a position (from the left).</summary>
-    public static int SegmentAt(double width, int count, double x)
-        => Math.Clamp((int)Math.Floor(x / Math.Max(1, width) * count), 0, count - 1);
-
-    /// <summary>Text centred in a rectangle, smaller (down to a third) when it does not fit its width.</summary>
-    public static void DrawFittedText(DrawingContext context, string text, Rect area, FontFamily font, IBrush? brush, double size)
+    /// <summary>The rectangle of a key of <paramref name="count"/> in the keys' area (see <see cref="KeysSize"/>).</summary>
+    public static Rect Key(Size area, int count, int index)
     {
-        var formatted = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, new Typeface(font), size, brush);
-        if (formatted.Width > area.Width - 4 && formatted.Width > 0)
-            size = Math.Max(size / 3, size * (area.Width - 4) / formatted.Width);
-        DrawCenteredText(context, text, area, font, brush, size);
+        var columns = KeyColumns(area.Width, count);
+        var pitch = KeyPitch;
+        return new Rect(index % columns * pitch.Width, index / columns * pitch.Height, pitch.Width - KeyGap, pitch.Height - KeyGap);
+    }
+
+    /// <summary>The key of <paramref name="count"/> at a position in the keys' area; null between or beside the keys.</summary>
+    public static int? KeyAt(Size area, int count, Point position)
+    {
+        for (var index = 0; index < count; index++)
+        {
+            if (Key(area, count, index).Contains(position))
+                return index;
+        }
+        return null;
+    }
+
+    /// <summary>Text centred in a rectangle at its size, cut off ("…") when it does not fit its width.</summary>
+    public static void DrawTrimmedText(DrawingContext context, string text, Rect area, FontFamily font, IBrush? brush, double size)
+    {
+        var formatted = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, new Typeface(font), size, brush)
+        {
+            MaxTextWidth = Math.Max(1, area.Width - 4),
+            MaxLineCount = 1,
+            Trimming = TextTrimming.CharacterEllipsis,
+        };
+        context.DrawText(formatted, new Point(area.X + (area.Width - formatted.Width) / 2, area.Y + (area.Height - formatted.Height) / 2));
     }
 
     /// <summary>Text centred in a rectangle, in a font of the typography.</summary>

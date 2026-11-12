@@ -3,6 +3,31 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## The label and the selector's options in the console (2026-11-12)
+
+Issue: the size of a control's content (its face) followed from the length of its label and, for a selector, from
+the number of options, so controls of the same kind and plate size looked different.
+
+1. **The label never sizes the control**; a label longer than the plate is cut off ("…") and shown in full in a tip.
+   Splitting it over more lines was dropped: the extra rows would size the face again (in height).
+2. **The selector's presentation (buttons or list) is a setting of the control**, in its display settings, without
+   an *Auto* that picks one by the number of options. *Why:* an automatic choice is almost never what is wanted.
+3. **The buttons of all selectors have the same size**, whatever their number; more buttons than fit in a row go on
+   to the next row. *Why:* two selectors should look alike, not differ by their number of options.
+4. **The size of the face is a setting of every parameter control**, apart from the size of its plate (cells): the
+   face is no longer fitted (scaled) to the plate. *Why:* controls of the same kind and setting look alike, whatever
+   their plate.
+   The setting sizes the face only: the plate, its label, value text and the parts of the look (screws) keep their
+   size.
+5. **A face larger than its plate is cut off**, within the room the label and value text leave for it. *Why:* the user sees it and makes the plate (or the face) fit; no
+   automatic scaling that makes one control differ from the others.
+6. **The face size is a free number** (a scale), edited with a numeric up/down in steps of 0.1. *Why:* fine control
+   where needed.
+7. **The face size is set per control only**, not inherited from a section or the dashboard. *Why:* the dashboard's
+   zoom (its cell size) already scales everything; start minimal.
+8. **The face size runs from 0.5 to 3.0**, defined in one place. 1.0 is the face's own size (its cells).
+9. **A selector shows a list unless it is set to buttons.** *Why:* a list fits any number of options.
+
 ## Dismissing notifications in the console (2026-11-10)
 
 Issue: the notifications could not be cleared; they hold both reports of what happened and the problems of the

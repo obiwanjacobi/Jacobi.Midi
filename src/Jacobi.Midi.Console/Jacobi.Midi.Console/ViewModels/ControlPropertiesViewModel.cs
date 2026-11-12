@@ -123,6 +123,49 @@ internal sealed partial class ControlPropertiesViewModel(MainViewModel owner, Da
         }
     }
 
+    /// <summary>True for a parameter control with a face (and chrome): it has a face size; selector tabs have none.</summary>
+    public bool HasFace => control is ParameterControl and not SelectorTabsControl;
+
+    /// <summary>The size of the face (not of its plate, label or value text): 1 is the face's own size.</summary>
+    public decimal? FaceScale
+    {
+        get => (control as ParameterControl)?.Display.FaceScale;
+        set
+        {
+            if (control is not ParameterControl parameter || value is not { } scale)
+                return;
+            scale = DisplaySettings.ClampFaceScale(scale);
+            EditDisplay(parameter, "face size", parameter.Display with { FaceScale = scale }, scale.ToString("0.0#", CultureInfo.InvariantCulture));
+        }
+    }
+
+    // the range of the face size, for its field (instance properties for the compiled bindings)
+#pragma warning disable CA1822
+    public decimal MinimumFaceScale => DisplaySettings.MinimumFaceScale;
+
+    public decimal MaximumFaceScale => DisplaySettings.MaximumFaceScale;
+
+    public decimal FaceScaleStep => DisplaySettings.FaceScaleStep;
+
+    public IReadOnlyList<SelectorPresentation> Presentations => PresentationValues;
+#pragma warning restore CA1822
+
+    private static readonly IReadOnlyList<SelectorPresentation> PresentationValues = Enum.GetValues<SelectorPresentation>();
+
+    /// <summary>True for a selector: it shows its options as a list or as buttons (<see cref="Presentation"/>).</summary>
+    public bool IsSelector => control is ParameterControl { Kind: ParameterControlKind.Selector } and not SelectorTabsControl;
+
+    /// <summary>How a selector shows its options.</summary>
+    public SelectorPresentation Presentation
+    {
+        get => (control as ParameterControl)?.Display.Presentation ?? DisplaySettings.Default.Presentation;
+        set
+        {
+            if (control is ParameterControl parameter)
+                EditDisplay(parameter, "presentation", parameter.Display with { Presentation = value }, value.ToString());
+        }
+    }
+
     /// <summary>The device alias of the bindings in and below the control; empty to inherit it.</summary>
     public string? Device
     {

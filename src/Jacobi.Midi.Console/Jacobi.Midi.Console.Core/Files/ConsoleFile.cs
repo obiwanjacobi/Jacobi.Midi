@@ -1,3 +1,4 @@
+using System.Globalization;
 using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Core.Schemas;
 
@@ -94,5 +95,25 @@ internal static class ConsoleFile
         return value < minimum
             ? throw element.Error($"'{attribute}': {value} is less than {minimum}.")
             : value;
+    }
+
+    /// <summary>A number from <paramref name="minimum"/> to <paramref name="maximum"/>.</summary>
+    public static decimal? GetDecimal(FileElement element, string attribute, decimal minimum, decimal maximum)
+    {
+        var value = element.GetDecimal(attribute);
+        return value < minimum || value > maximum
+            ? throw element.Error(String.Create(CultureInfo.InvariantCulture, $"'{attribute}': {value} is not from {minimum} to {maximum}."))
+            : value;
+    }
+
+    /// <summary>The name of a value of an enum (camel case, see <see cref="FileNames"/>).</summary>
+    public static TEnum? GetEnum<TEnum>(FileElement element, string attribute)
+        where TEnum : struct, Enum
+    {
+        if (element.Get(attribute) is not { } text)
+            return null;
+        return FileNames.TryParse<TEnum>(text, out var value)
+            ? value
+            : throw element.Error($"'{attribute}': '{text}' is not one of {String.Join(", ", Enum.GetValues<TEnum>().Select(FileNames.Of))}.");
     }
 }

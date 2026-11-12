@@ -498,6 +498,19 @@
                                         <TextBox Text="{Binding Decimals, UpdateSourceTrigger=LostFocus}" PlaceholderText="as many as the value has" />
                                     </StackPanel>
 
+                                    <StackPanel Spacing="10" IsVisible="{Binding HasFace}">
+                                        <TextBlock Text="Face size (1 is its own size)" Classes="caption" />
+                                        <NumericUpDown Value="{Binding FaceScale}" Minimum="{Binding MinimumFaceScale}" Maximum="{Binding MaximumFaceScale}"
+                                                       Increment="{Binding FaceScaleStep}" FormatString="0.0#"
+                                                       ToolTip.Tip="The size of the face only, not of the plate, label or value: a face larger than its room on the plate is cut off" />
+                                    </StackPanel>
+
+                                    <StackPanel Spacing="10" IsVisible="{Binding IsSelector}">
+                                        <TextBlock Text="Presentation" Classes="caption" />
+                                        <ComboBox ItemsSource="{Binding Presentations}" SelectedItem="{Binding Presentation}" HorizontalAlignment="Stretch"
+                                                  ToolTip.Tip="List: the selected option with a droplist. Buttons: a button per option, more rows when they do not fit" />
+                                    </StackPanel>
+
                                     <StackPanel Spacing="10" IsVisible="{Binding IsFlex}">
                                         <TextBlock Text="Gap between the controls (cells)" Classes="caption" />
                                         <NumericUpDown Value="{Binding Gap}" Minimum="0" Increment="1" FormatString="0" />

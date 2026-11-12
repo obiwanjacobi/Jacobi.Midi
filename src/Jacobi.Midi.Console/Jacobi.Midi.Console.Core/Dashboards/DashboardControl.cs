@@ -263,6 +263,37 @@ public sealed record DisplaySettings
 
     /// <summary>The number of decimals shown; null for as many as the value has.</summary>
     public int? Decimals { get; init; }
+
+    /// <summary>The smallest <see cref="FaceScale"/>.</summary>
+    public const decimal MinimumFaceScale = 0.5m;
+
+    /// <summary>The largest <see cref="FaceScale"/>.</summary>
+    public const decimal MaximumFaceScale = 3m;
+
+    /// <summary>The step of <see cref="FaceScale"/> in the control panel.</summary>
+    public const decimal FaceScaleStep = 0.1m;
+
+    /// <summary>
+    /// The size of the control's face, apart from the size of its plate (its cells); the plate, label and value text
+    /// keep their size. 1 is the face's own size. A face larger than its room on the plate is cut off.
+    /// </summary>
+    public decimal FaceScale { get; init; } = 1;
+
+    /// <summary>The face size within its range (<see cref="MinimumFaceScale"/> to <see cref="MaximumFaceScale"/>).</summary>
+    public static decimal ClampFaceScale(decimal scale) => Math.Clamp(scale, MinimumFaceScale, MaximumFaceScale);
+
+    /// <summary>How a selector shows its options.</summary>
+    public SelectorPresentation Presentation { get; init; }
+}
+
+/// <summary>How a selector shows its options: the selected one in a display with a droplist, or a button per option.</summary>
+public enum SelectorPresentation
+{
+    /// <summary>A display with the selected option and ▲/▼; a click on the option opens the list.</summary>
+    List,
+
+    /// <summary>A button per option, all the same size; more than fit in a row go on to the next row.</summary>
+    Buttons,
 }
 
 /// <summary>

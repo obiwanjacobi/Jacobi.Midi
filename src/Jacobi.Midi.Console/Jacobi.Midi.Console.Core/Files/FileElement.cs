@@ -50,6 +50,9 @@ internal sealed class FileElement(string name, FileRole? role = null)
     public FileElement Set(string attribute, int? value)
         => Set(attribute, value?.ToString(CultureInfo.InvariantCulture), FileValueKind.Number);
 
+    public FileElement Set(string attribute, decimal? value)
+        => Set(attribute, value?.ToString(CultureInfo.InvariantCulture), FileValueKind.Number);
+
     /// <summary>Writes the flag only when it is true.</summary>
     public FileElement SetFlag(string attribute, bool value)
         => value ? Set(attribute, "true", FileValueKind.Boolean) : this;
@@ -81,6 +84,15 @@ internal sealed class FileElement(string name, FileRole? role = null)
         return Int32.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
             ? value
             : throw Error($"'{attribute}': '{text}' is not a whole number.");
+    }
+
+    public decimal? GetDecimal(string attribute)
+    {
+        if (Get(attribute) is not { } text)
+            return null;
+        return Decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : throw Error($"'{attribute}': '{text}' is not a number.");
     }
 
     public bool GetFlag(string attribute)
