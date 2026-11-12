@@ -129,6 +129,10 @@ What is planned for the console, and what was done. What the console does now is
 
 ## Browser support
 
+- [ ] **The browser host does not build.** The native WebAssembly link (`emcc`) fails with `undefined symbol: saveSetjmp` / `testSetjmp`; the Schema Editor's browser host fails the same way. It started with the .NET 11.0.0 WebAssembly SDK (its Emscripten toolchain was installed on 2026-11-11; the last successful browser build is from 2026-10-23). Cause: `Avalonia.Skia` 12.1.x depends on `SkiaSharp.NativeAssets.WebAssembly` 3.119.4 and `HarfBuzzSharp.NativeAssets.WebAssembly` 8.3.1.3, whose static libraries for net9.0 and later are built with Emscripten 3.1.56 and its old setjmp/longjmp support. The new toolchain links with wasm exceptions (`-fwasm-exceptions`, `-wasm-enable-sjlj`) and no longer provides those symbols. Updating Avalonia (12.1.6 still uses SkiaSharp 3.119.4) does not help. Options:
+  - Wait for an Avalonia release whose SkiaSharp/HarfBuzzSharp native assets are built for the .NET 11 toolchain.
+  - Reference newer native asset packages (SkiaSharp 4.x, HarfBuzzSharp 14.x/15.x) directly in both browser hosts. Risky: the managed SkiaSharp stays at 3.119.4, so its native calls may no longer match.
+  - Work around it with linker flags (`EmccExtraLDFlags`). Fragile: the libraries and the runtime are built for different exception models.
 - [ ] **MIDI in the browser host.** The host exists and works offline. A browser host is attractive (nothing to install, the same dashboards on any computer), but it has pitfalls:
   - **MIDI in the browser is Web MIDI.** A browser `IMidiApi` (the Core contract) would be implemented with JavaScript interop on the Web MIDI API. Web MIDI is MIDI 1.0 bytes, not UMP: the adapter converts SysEx to and from SysEx7 packets, and the UMP group is always 0.
   - **SysEx needs permission.** SysEx access is requested explicitly (`requestMIDIAccess({ sysex: true })`), only on a secure (HTTPS) page, and the user must allow it. The console is useless without SysEx, so the UI must explain the permission prompt and handle a refusal.
