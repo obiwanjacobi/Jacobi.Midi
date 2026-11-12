@@ -21,7 +21,7 @@ What is planned for the console, and what was done. What the console does now is
 - [ ] Dashboard user-controls: A reusable layout that can be dropped in to compose new dashboards.
 - [ ] Dashoboard name in top-bar droplist is not changed after name change in props-pane or file save.
 - [ ] Make the Selector's presentation Droplist or radio-buttons an explicit option.
-- [ ] Control label Tooltip cuts of last letter(s)?
+- [x] Control label Tooltip cuts of last letter(s)?
 - [ ] Scrollbars should stay expanded. Needing to hover slows down design-workflow. Shortcuts (mouse+key?) for panning.
 - [ ] Drop-grid of section (with label) has to span complete surface. Label is drawn on top of it (last). This allows tabs to extent into dead-space the section-label row generates.
 - [ ] Saving new dashboard and rig is confusing. You get 2 save-as dialogs and it is not clear which is which. Use `.dashboard.xml/json` and `.rig.xml/json` as default extensions. Also set the title of the save dlg. Add a check that rig and dashboard file names are not the same.

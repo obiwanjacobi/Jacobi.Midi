@@ -70,7 +70,7 @@
                     <!-- the label, the face (the room the label and value leave: a fader stretches into it) and the value -->
                     <Grid Margin="{TemplateBinding Padding}" RowDefinitions="Auto,*,Auto">
                         <!-- engraved: a light copy one pixel lower; cut off at the plate's width (LabelSlot), in full in the tip -->
-                        <chrome:LabelSlot Margin="0,0,0,6" ToolTip.Tip="{TemplateBinding Label}">
+                        <chrome:LabelSlot Margin="0,0,0,6" Tip="{TemplateBinding Label}">
                             <Panel HorizontalAlignment="Center">
                                 <TextBlock Text="{TemplateBinding Label, Converter={x:Static chrome:UpperCaseConverter.Instance}}"
                                            FontFamily="{DynamicResource ConsoleLabelFont}" TextTrimming="CharacterEllipsis"
