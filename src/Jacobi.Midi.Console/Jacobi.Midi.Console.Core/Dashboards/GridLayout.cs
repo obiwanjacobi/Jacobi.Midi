@@ -190,6 +190,38 @@ public static class GridLayout
         return needsMore;
     }
 
+    /// <summary>
+    /// How many rows each child of a grid moves up when some of its children are shown shorter (a collapsed section),
+    /// by the rows they lose (<paramref name="shrunk"/>). A child moves up as far as every child directly above it (its
+    /// columns overlapping, its bottom at or above the child's top) moved up and shrank, the least of those: a stack
+    /// closes up, the gaps stay, and nothing comes to overlap. Only children that move are returned; the positions in
+    /// the dashboard do not change (the grid is only shown so).
+    /// </summary>
+    public static IReadOnlyDictionary<DashboardControl, int> ShiftsUp(LayoutControl grid, IReadOnlyDictionary<DashboardControl, int> shrunk)
+    {
+        ArgumentNullException.ThrowIfNull(grid);
+        ArgumentNullException.ThrowIfNull(shrunk);
+        var none = new Dictionary<DashboardControl, Placement>();
+        var children = grid.Children.Select(child => (Control: child, Placement: PlacementOf(child, none))).ToList();
+        var shifts = new Dictionary<DashboardControl, int>();
+        // from the top down: the children above a child have their shift when it gets its own
+        foreach (var (child, placement) in children.OrderBy(child => child.Placement.At.Row))
+        {
+            var above = children
+                .Where(other => other.Control != child && other.Placement.At.Row + other.Placement.Size.Rows <= placement.At.Row
+                    && OverlapsColumns(other.Placement, placement))
+                .Select(other => shifts.GetValueOrDefault(other.Control) + shrunk.GetValueOrDefault(other.Control))
+                .DefaultIfEmpty(0)
+                .Min();
+            if (above > 0)
+                shifts[child] = above;
+        }
+        return shifts;
+    }
+
+    private static bool OverlapsColumns(Placement first, Placement second)
+        => first.At.Column < second.At.Column + second.Size.Columns && second.At.Column < first.At.Column + first.Size.Columns;
+
     // the siblings the control overlaps move down below it, and so on for the siblings those then overlap
     private static void PushAside(LayoutControl grid, DashboardControl fixedControl, Dictionary<DashboardControl, Placement> changes)
     {
@@ -287,7 +319,7 @@ public static class GridLayout
             : new Placement(control.At ?? default, control.Size ?? new CellSize(1, 1));
 
     private static bool Overlaps(Placement first, Placement second)
-        => first.At.Column < second.At.Column + second.Size.Columns && second.At.Column < first.At.Column + first.Size.Columns
+        => OverlapsColumns(first, second)
             && first.At.Row < second.At.Row + second.Size.Rows && second.At.Row < first.At.Row + first.Size.Rows;
 }
 

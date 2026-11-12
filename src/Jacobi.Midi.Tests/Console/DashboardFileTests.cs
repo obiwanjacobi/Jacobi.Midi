@@ -18,7 +18,7 @@ public class DashboardFileTests
           <assembly path="Custom.dll" />
           <row gap="1" wrap="true">
             <variable name="patch" value="5" />
-            <section label="Filter" device="synth" base="AddressMap.Edit.Filter">
+            <section label="Filter" device="synth" base="AddressMap.Edit.Filter" collapsible="true">
               <knob label="Cutoff" unit="Hz" decimals="1">
                 <bind slot="value" parameter="Cutoff" />
               </knob>
@@ -61,7 +61,7 @@ public class DashboardFileTests
             "type": "row", "gap": 1, "wrap": true,
             "variables": [ { "name": "patch", "value": 5 } ],
             "children": [
-              { "type": "section", "label": "Filter", "device": "synth", "base": "AddressMap.Edit.Filter",
+              { "type": "section", "label": "Filter", "device": "synth", "base": "AddressMap.Edit.Filter", "collapsible": true,
                 "children": [
                   { "type": "knob", "label": "Cutoff", "unit": "Hz", "decimals": 1, "bind": { "value": "Cutoff" } },
                   { "type": "knob", "label": "Resonance", "color": "#E8590C", "grow": 2, "bind": { "value": "Resonance" } }
@@ -106,6 +106,8 @@ public class DashboardFileTests
         var section = Assert.IsType<LayoutControl>(row.Children[0]);
         Assert.Equal(LayoutControlKind.Section, section.Kind);
         Assert.Equal(("synth", "AddressMap.Edit.Filter"), (section.Device, section.Base));
+        Assert.True(section.Collapsible);
+        Assert.False(row.Collapsible);
 
         var cutoff = Assert.IsType<ValueControl>(section.Children[0]);
         Assert.Equal(ParameterControlKind.Knob, cutoff.Kind);

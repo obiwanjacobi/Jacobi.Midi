@@ -95,10 +95,22 @@
                                    FontFamily="{DynamicResource ConsoleLabelFont}"
                                    IsVisible="{TemplateBinding Header, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                    Foreground="{DynamicResource ConsoleAccentDisplayBrush}" FontSize="13" FontWeight="SemiBold" LetterSpacing="2.5" />
+                        <!-- a collapsible section: the chevron, at the right of the title -->
+                        <TextBlock Name="PART_Chevron" Text="▾" IsVisible="False" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,12,16,0"
+                                   Foreground="{DynamicResource ConsoleAccentDisplayBrush}" FontSize="14" />
                         <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" Margin="{TemplateBinding Padding}" />
                     </Panel>
                 </Border>
             </ControlTemplate>
         </Setter>
+        <Style Selector="^:collapsible /template/ TextBlock#PART_Chevron">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+        <Style Selector="^:collapsed /template/ TextBlock#PART_Chevron">
+            <Setter Property="Text" Value="▸" />
+        </Style>
+        <Style Selector="^:collapsed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
     </ControlTheme>
 </ResourceDictionary>

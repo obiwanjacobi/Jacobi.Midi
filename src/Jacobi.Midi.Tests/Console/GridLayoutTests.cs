@@ -15,6 +15,45 @@ public class GridLayoutTests
     private static LayoutControl Grid(params DashboardControl[] children)
         => new() { Kind = LayoutControlKind.Grid, Children = children };
 
+    private static LayoutControl Section(string label, int column, int row, int columns, int rows)
+        => new() { Kind = LayoutControlKind.Section, Label = label, At = new(column, row), Size = new(columns, rows) };
+
+    [Fact]
+    public void ShiftsUp_OfAStack_MovesAllBelowUp_KeepingTheGaps()
+    {
+        var a = Section("a", 0, 0, 12, 10);
+        var b = Section("b", 0, 11, 12, 5);
+        var c = Section("c", 0, 17, 12, 5);
+        var grid = Grid(a, b, c);
+
+        var shifts = GridLayout.ShiftsUp(grid, new Dictionary<DashboardControl, int> { [a] = 7 });
+
+        Assert.Equal(new Dictionary<DashboardControl, int> { [b] = 7, [c] = 7 }, shifts);
+    }
+
+    [Fact]
+    public void ShiftsUp_BelowTwoSideBySide_MovesTheLeast()
+    {
+        var left = Section("left", 0, 0, 12, 10);
+        var right = Section("right", 12, 0, 12, 10);
+        var underLeft = Knob("under left", 0, 10);
+        var underBoth = Section("under both", 6, 12, 12, 5);
+        var grid = Grid(left, right, underLeft, underBoth);
+
+        var shifts = GridLayout.ShiftsUp(grid, new Dictionary<DashboardControl, int> { [left] = 7 });
+
+        // the control under both stays: the right section did not shrink
+        Assert.Equal(new Dictionary<DashboardControl, int> { [underLeft] = 7 }, shifts);
+    }
+
+    [Fact]
+    public void ShiftsUp_NothingShrunk_MovesNothing()
+    {
+        var grid = Grid(Section("a", 0, 0, 12, 10), Knob("b", 0, 10));
+
+        Assert.Empty(GridLayout.ShiftsUp(grid, new Dictionary<DashboardControl, int>()));
+    }
+
     [Fact]
     public void Complete_GivesDefaultSizes_AndPlacesSideBySide()
     {

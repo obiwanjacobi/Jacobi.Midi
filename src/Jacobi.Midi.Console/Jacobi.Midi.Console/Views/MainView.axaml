@@ -501,6 +501,9 @@
                                         <CheckBox Content="Wrap onto more lines" IsChecked="{Binding Wrap}" />
                                     </StackPanel>
 
+                                    <CheckBox Content="Collapsible (in Play mode, by its title)" IsChecked="{Binding Collapsible}" IsVisible="{Binding IsSection}"
+                                              ToolTip.Tip="A click on the title collapses the section to its title, and expands it again. It opens expanded." />
+
                                     <TextBlock Text="Colors" Classes="heading" />
                                     <Grid ColumnDefinitions="64,*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="8">
                                         <TextBlock Text="Accent" VerticalAlignment="Center" />

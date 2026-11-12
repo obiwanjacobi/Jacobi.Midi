@@ -546,6 +546,27 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
             _ => "control",
         };
 
+    // a section collapsed or expanded: the controls below it in its grid move up or back (GridLayout.ShiftsUp), as far
+    // as all collapsed sections of that grid allow; the grid keeps its size and the positions in the dashboard stay. In
+    // a row or column the others close up by themselves.
+    private void CloseUp(LayoutControl section)
+    {
+        if (GridLayout.ParentOf(session.Dashboard.Layout, section) is not LayoutControl grid || !GridLayout.IsGrid(grid))
+            return;
+        var shrunk = new Dictionary<DashboardControl, int>();
+        foreach (var child in grid.Children)
+        {
+            if (child is LayoutControl layout && child.Size is { } size && _controls.GetValueOrDefault(child) is SectionFrame { IsCollapsed: true })
+                shrunk[child] = size.Rows - GridLayout.InsetOf(layout).Top - GridLayout.InsetOf(layout).Bottom;
+        }
+        var shifts = GridLayout.ShiftsUp(grid, shrunk);
+        foreach (var child in grid.Children)
+        {
+            if (child.At is { } at && _controls.GetValueOrDefault(child) is { } built)
+                Canvas.SetTop(built, (at.Row - shifts.GetValueOrDefault(child)) * Cell);
+        }
+    }
+
     private Control BuildLayout(LayoutControl layout, ColorScope scope)
     {
         var gap = layout.Gap * Cell;
@@ -557,12 +578,23 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
 
             case LayoutControlKind.Section:
                 var inset = GridLayout.InsetOf(layout);
-                return new SectionFrame
+                var frame = new SectionFrame
                 {
                     Header = layout.Label,
+                    // only in Play mode: in Edit mode it is always expanded
+                    IsCollapsible = layout.Collapsible && !isEditing,
                     Padding = new Thickness(inset.Left * Cell, inset.Top * Cell, inset.Right * Cell, inset.Bottom * Cell),
                     Content = BuildGrid(layout, scope),
                 };
+                if (frame.IsCollapsible)
+                {
+                    frame.PropertyChanged += (_, e) =>
+                    {
+                        if (e.Property == SectionFrame.IsCollapsedProperty)
+                            CloseUp(layout);
+                    };
+                }
+                return frame;
 
             case LayoutControlKind.Grid:
                 return BuildGrid(layout, scope);

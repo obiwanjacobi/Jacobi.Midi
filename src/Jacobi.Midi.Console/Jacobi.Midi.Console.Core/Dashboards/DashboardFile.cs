@@ -72,6 +72,7 @@ public static class DashboardFile
                 if (layout.Gap != 0)
                     element.Set("gap", layout.Gap);
                 element.SetFlag("wrap", layout.Wrap);
+                element.SetFlag("collapsible", layout.Collapsible);
                 foreach (var variable in layout.Variables)
                 {
                     element.Add(new FileElement(FileRoles.Variables.ElementName!, FileRoles.Variables)
@@ -200,6 +201,7 @@ public static class DashboardFile
                 Label = label, Size = size, At = at, Grow = grow, Colors = colors, Device = device, Base = basePath,
                 Gap = ConsoleFile.GetInt(element, "gap", minimum: 0) ?? 0,
                 Wrap = element.GetFlag("wrap"),
+                Collapsible = element.GetFlag("collapsible"),
                 Variables = ReadVariables(element, children.Where(IsVariable)),
                 Children = [.. children.Where(child => !IsVariable(child)).Select(ReadControl)],
             };

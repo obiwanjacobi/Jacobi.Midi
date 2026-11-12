@@ -134,7 +134,7 @@ itself. A file whose pages do not fit their tabs gets that when it is opened, an
 | Control | Arranges its children | Used for |
 |---------|-----------------------|----------|
 | Grid | on cells, each child at its position (`at`) in its size | the root of a dashboard; exact placement, e.g. to copy a device's panel layout |
-| Section | as a grid, inside a frame with a title | a group of parameters: "Filter", "Amp", a device |
+| Section | as a grid, inside a frame with a title; `collapsible`: in Play mode a click on the title collapses it to its title and expands it again, the controls below it in its grid moving up and back (`GridLayout.ShiftsUp`; the grid keeps its size, the positions in the file stay); it opens expanded | a group of parameters: "Filter", "Amp", a device |
 | Row, Column | next to / below each other (flex): `gap`, `wrap`; a child's `grow` shares the remaining space; the children have no position | a strip of controls that adapts when controls are added or removed |
 | Tabs | one page at a time (the headers take two rows, in the look's label font and colors); each child is a page, named by its label: a grid or section; any other control put on tabs gets a grid page of its own (`ControlCatalog.PageFor`) | many parameters on a small screen; the sections of a patch. For the parameters of the options of one parameter: [selector tabs](#selector-tabs-show-a-page-per-option) |
 | Spacer, Separator | — | room or a line between controls; a separator is a line along the long side of its cells (`GridLayout.IsWide`) |
@@ -361,7 +361,7 @@ any of its repeat items is bound to, and fainter, a device, group or repeat with
 - its three colors (each opens the color chooser, ✕ makes it inherited);
 - its kind, with a button per kind (one single-value control into another, also into selector tabs and back, a grid into a section, a row into a column: `ControlCatalog.WithKind`); selector tabs get a page per option and at least their default size, and lose their pages when they become another kind; a page keeps its kind;
 - the pages of selector tabs: a list of the options to check (see [Selector tabs](#selector-tabs-show-a-page-per-option));
-- the bindings of the slots as text (`[device:]path` or `$name`), the device and base (with what is inherited as the placeholder), the index variables of a layout control, the gap and wrap of a row or column, and the segments of an envelope.
+- the bindings of the slots as text (`[device:]path` or `$name`), the device and base (with what is inherited as the placeholder), the index variables of a layout control, the gap and wrap of a row or column, whether a section is collapsible, and the segments of an envelope.
 
 With nothing selected it shows the dashboard's name and zoom (its `cellSize` as a percentage of the default 24 pixels,
 25-400%: the whole dashboard scales with it and it is saved with the dashboard), its look, and the device aliases the dashboard

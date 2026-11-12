@@ -205,6 +205,11 @@ public sealed class LayoutControl : DashboardControl
 
     /// <summary>Whether a row or column wraps its children onto more lines.</summary>
     public bool Wrap { get; set; }
+
+    /// <summary>
+    /// Whether a section can be collapsed to its title in Play mode. Collapsed or not is not saved: it opens expanded.
+    /// </summary>
+    public bool Collapsible { get; set; }
 }
 
 /// <summary>

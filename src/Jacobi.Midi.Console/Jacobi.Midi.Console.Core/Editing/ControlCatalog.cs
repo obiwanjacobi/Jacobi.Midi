@@ -121,6 +121,7 @@ public static class ControlCatalog
                 Variables = layout.Variables,
                 Gap = layout.Gap,
                 Wrap = layout.Wrap,
+                Collapsible = layout.Collapsible,
             },
             _ => throw new ArgumentException($"A {KindOf(control)} cannot change its kind.", nameof(control)),
         };

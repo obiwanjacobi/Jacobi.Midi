@@ -218,6 +218,19 @@ internal sealed partial class ControlPropertiesViewModel(MainViewModel owner, Da
         }
     }
 
+    public bool IsSection => control is LayoutControl { Kind: LayoutControlKind.Section };
+
+    /// <summary>Whether a section can be collapsed to its title in Play mode.</summary>
+    public bool Collapsible
+    {
+        get => (control as LayoutControl)?.Collapsible ?? false;
+        set
+        {
+            if (control is LayoutControl layout)
+                owner.EditControl(layout, "collapsible", () => layout.Collapsible, collapsible => layout.Collapsible = collapsible, value);
+        }
+    }
+
     /// <summary>The slots of a parameter control: those of its kind, the time and level of each segment of an envelope.</summary>
     public IReadOnlyList<SlotViewModel> Slots
         => control switch

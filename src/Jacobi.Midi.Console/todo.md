@@ -14,7 +14,7 @@ What is planned for the console, and what was done. What the console does now is
 - [ ] A rig (or dashboard) whose schema files or assemblies are not found: prompt the user to locate them, and refer to them there.
 - [x] A rig-device does not need its own schema/exchange files. A device can only be created from an existing (global) schema/exchange definition.
 - [ ] Additional Section options as an (settings) option (default off):
-  - [ ] collapse/expand
+  - [x] collapse/expand
   - [ ] Side (top/bottom) panel slide-in
   - [ ] Float (in main window) / New Window
 - [ ] Analyze option to make a dashboard design on a NodeDef and let the user select the actual base (incl exchange send/recv). Example: Patch-dashboard can be used on user-memory, preset (read-only) and temporary areas - because they all use the Patch definition.

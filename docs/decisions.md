@@ -3,6 +3,23 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## Collapsible sections in the console (2026-11-12)
+
+Issue: a section always shows all its controls; the user wants to fold one away in Play mode.
+
+1. **`collapsible` is a setting of a section (default off), saved in the dashboard; collapsing is Play mode only.**
+   A click on the title collapses it to its title and expands it again. *Why:* an option per section, as asked; Edit
+   mode always shows the controls to edit.
+2. **In a grid the controls below a collapsed section move up, in Play mode only** (`GridLayout.ShiftsUp`): a control
+   moves up as far as every control directly above it moved up and shrank, the least of those. A stack closes up,
+   the gaps stay, nothing comes to overlap; the positions in the dashboard do not change. In a row or column the
+   others close up by themselves. *Why:* the dashboard's root is a grid, and closing its main groups was the reason
+   for the feature. (First decided as "the cells stay taken"; changed the same day.)
+3. **Collapsed or not is not saved:** a dashboard opens with its sections expanded. *Why:* it is a view state.
+4. **The grid around a collapsed section keeps its size** (also a section around it: it does not shrink, the space is
+   at its bottom); every section can be collapsible, not only those on the root. *Why:* passing the shrink up goes
+   through every kind of parent (grid, row, column, tabs) and is not needed yet.
+
 ## No schema sources on a rig device (2026-11-12)
 
 Issue: a device of the rig had sources of its own (schema files and assemblies, `DeviceInstance.Sources`), added in
