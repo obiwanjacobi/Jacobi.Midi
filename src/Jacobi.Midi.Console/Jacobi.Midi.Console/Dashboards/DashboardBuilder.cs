@@ -581,6 +581,7 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
                 var frame = new SectionFrame
                 {
                     Header = layout.Label,
+                    Doc = session.DocOf(layout),
                     // only in Play mode: in Edit mode it is always expanded
                     IsCollapsible = layout.Collapsible && !isEditing,
                     Padding = new Thickness(inset.Left * Cell, inset.Top * Cell, inset.Right * Cell, inset.Bottom * Cell),
@@ -600,7 +601,7 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
                 return BuildGrid(layout, scope);
 
             case LayoutControlKind.Tabs:
-                return BuildPages(layout, new TabControl(), scope, (child, index) => child.Label ?? $"Page {index + 1}");
+                return BuildPages(layout, new TabControl(), scope, (child, index) => child.Label ?? $"Page {index + 1}", session.DocOf);
 
             case LayoutControlKind.Spacer:
                 return new Border { Width = Cell, Height = Cell };
@@ -631,17 +632,26 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     }
 
     // a row or column: a stack, a wrap panel, or a grid when children share the remaining space (grow)
-    // the pages of tabs or selector tabs, a tab item each; the page shown is UI state, kept when the dashboard is built
-    // again, unless the value of selector tabs decides it (Play mode)
-    private TabControl BuildPages(DashboardControl holder, TabControl tabs, ColorScope scope, Func<DashboardControl, int, string> headerOf)
+    // the pages of tabs or selector tabs, a tab item each, its header with the documentation of the page in its tip;
+    // the page shown is UI state, kept when the dashboard is built again, unless the value of selector tabs decides it
+    // (Play mode)
+    private TabControl BuildPages(DashboardControl holder, TabControl tabs, ColorScope scope, Func<DashboardControl, int, string> headerOf,
+        Func<DashboardControl, string?> docOf)
     {
-        var pages = holder.Children.Select((child, index) => new TabItem
+        var pages = holder.Children.Select((child, index) =>
         {
-            // the headers in the look (Themes/Controls.axaml)
-            Theme = Application.Current?.FindResource(TabItemTheme) as ControlTheme,
-            Header = headerOf(child, index),
-            Tag = child,
-            Content = Build(child, scope),
+            var header = headerOf(child, index);
+            var page = new TabItem
+            {
+                // the headers in the look (Themes/Controls.axaml)
+                Theme = Application.Current?.FindResource(TabItemTheme) as ControlTheme,
+                Header = header,
+                Tag = child,
+                Content = Build(child, scope),
+            };
+            DocTip.SetTitle(page, header);
+            DocTip.SetDoc(page, docOf(child));
+            return page;
         }).ToList();
         tabs.ItemsSource = pages;
         tabs.SelectedIndex = Math.Min(ShownPages.TryGetValue(holder, out var shown) ? shown.Value : 0, pages.Count - 1);
@@ -662,9 +672,12 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     {
         var parameter = session.ValueOf(control, SlotNames.Value);
         var options = parameter?.Info.Options ?? [];
-        // a header has the option's name as the schema writes it
+        // a header has the option's name as the schema writes it; its tip the documentation of the page, then that of
+        // the selector's field (which documents the options)
+        var selectorDoc = session.DocOf(control);
         var tabs = BuildPages(control, new SelectorTabsView(control), scope,
-            (page, index) => SelectorPages.OptionOf(page, options) is { } option ? options[option] : page.Label ?? $"Page {index + 1}");
+            (page, index) => SelectorPages.OptionOf(page, options) is { } option ? options[option] : page.Label ?? $"Page {index + 1}",
+            page => String.Join(Environment.NewLine + Environment.NewLine, new[] { session.DocOf(page), selectorDoc }.OfType<string>()) is { Length: > 0 } doc ? doc : null);
         if (!isEditing)
             ((SelectorTabsView)tabs).Parameter = parameter;
         return tabs;
@@ -776,6 +789,7 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
             built.SlotValues = slots;
         built.Parameter = parameter;
         built.Label = control.Label ?? parameter?.Info.Name ?? control.Kind.ToString();
+        built.Doc = session.DocOf(control);
         // an unbound control (no binding, or a problem with it) shows that it does nothing; in Edit mode it is selected
         built.IsEnabled = slots.Count > 0 || isEditing;
         if (built.IsEnabled && !isEditing)

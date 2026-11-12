@@ -6,7 +6,8 @@ namespace Jacobi.Midi.Console.Chrome;
 
 /// <summary>
 /// The chrome of a section: the frame around a group of controls, with its title. What it looks like is decided by
-/// its control theme, which a look replaces. A collapsible section collapses to its title (the top of its padding) and
+/// its control theme, which a look replaces; the theme shows the documentation (<see cref="Doc"/>) in the tip of the
+/// title (<see cref="DocTip"/>). A collapsible section collapses to its title (the top of its padding) and
 /// expands again with a click on the title; the theme shows it with the <c>:collapsible</c> and <c>:collapsed</c>
 /// pseudo-classes (e.g. a chevron, the content hidden).
 /// </summary>
@@ -14,6 +15,10 @@ public class SectionFrame : ContentControl
 {
     public static readonly StyledProperty<string?> HeaderProperty =
         AvaloniaProperty.Register<SectionFrame, string?>(nameof(Header));
+
+    /// <summary>The documentation of the schema node the section is about (its <c>midi.doc</c>), shown in the title's tip.</summary>
+    public static readonly StyledProperty<string?> DocProperty =
+        AvaloniaProperty.Register<SectionFrame, string?>(nameof(Doc));
 
     public static readonly StyledProperty<bool> IsCollapsibleProperty =
         AvaloniaProperty.Register<SectionFrame, bool>(nameof(IsCollapsible));
@@ -28,6 +33,12 @@ public class SectionFrame : ContentControl
     {
         get => GetValue(HeaderProperty);
         set => SetValue(HeaderProperty, value);
+    }
+
+    public string? Doc
+    {
+        get => GetValue(DocProperty);
+        set => SetValue(DocProperty, value);
     }
 
     /// <summary>Whether a click on the title collapses and expands the section.</summary>

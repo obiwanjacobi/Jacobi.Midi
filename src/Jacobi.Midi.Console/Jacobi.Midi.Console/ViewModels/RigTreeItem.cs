@@ -29,6 +29,12 @@ internal sealed class RigTreeItem : ViewModelBase
     /// <summary>What it is: the device's name and map root, a repeat's number of items, a field's range or options.</summary>
     public string Detail { get; }
 
+    /// <summary>
+    /// The documentation of the node in the schema (its <c>midi.doc</c>; for a device that of its map root), shown in the
+    /// item's tip; null when it has none.
+    /// </summary>
+    public string? Doc => Node?.Doc;
+
     /// <summary>The device of the rig; null for a node of its parameter tree.</summary>
     public DeviceInstance? Instance { get; private init; }
 

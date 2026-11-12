@@ -139,6 +139,130 @@ public class DashboardSessionTests
     }
 
     [Fact]
+    public void DocOf_ALayoutControl_IsTheDocumentationOfTheNodeOfItsOwnBase()
+    {
+        // documentation on a group, a repeat, a field and a nodeDef (used twice: once as is, once with a doc of its own)
+        const string schema = """
+            <schema name="Documented">
+              <nodeDefs>
+                <group name="channel" midi.doc="A channel.">
+                  <members>
+                    <field name="Level" datatype="sys.uint8" midi.doc="The level." />
+                  </members>
+                </group>
+              </nodeDefs>
+              <members>
+                <group name="Settings" midi.doc="All settings.">
+                  <members>
+                    <group name="Left" nodeDef="channel" />
+                    <group name="Right" nodeDef="channel" midi.doc="The right channel." />
+                    <repeat name="Slot" count="4" midi.doc="The slots.">
+                      <members>
+                        <field name="Value" datatype="sys.uint8" />
+                      </members>
+                    </repeat>
+                  </members>
+                </group>
+              </members>
+            </schema>
+            """;
+        const string rig = """
+            <rig format="jacobi.midi.rig/1">
+              <device alias="doc" mapRoot="Documented.Settings" />
+            </rig>
+            """;
+        const string dashboard = """
+            <dashboard format="jacobi.midi.dashboard/1" name="Docs">
+              <device alias="doc" mapRoot="Documented.Settings" />
+              <column device="doc" base="Settings">
+                <variable name="slot" value="0" />
+                <section label="Left" base="Settings.Left"><knob><bind slot="value" parameter="Level" /></knob></section>
+                <tabs>
+                  <grid label="Right" base="Settings.Right" />
+                  <grid label="Slot" base="Settings.Slot[$slot]" />
+                  <grid label="Inherited" />
+                </tabs>
+              </column>
+            </dashboard>
+            """;
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var path = Path.Combine(directory.FullName, "Documented.xml");
+            File.WriteAllText(path, schema);
+            var library = ConsoleLibrary.BuiltIn().AddSchemaFile(path).Build();
+            var rigSession = RigSession.Open(RigFile.Read(rig, FileFormat.Xml), library);
+            using var session = DashboardSession.Open(rigSession, DashboardFile.Read(dashboard, FileFormat.Xml));
+            Assert.Empty(rigSession.Problems);
+            Assert.Empty(session.Problems);
+
+            var column = session.Dashboard.Layout;
+            var section = column.Children[0];
+            var tabs = column.Children[1];
+            Assert.Equal("All settings.", session.DocOf(column));
+            Assert.Equal("A channel.", session.DocOf(section));
+            Assert.Equal("The level.", session.DocOf(section.Children[0]));
+            Assert.Equal("The right channel.", session.DocOf(tabs.Children[0]));
+            Assert.Equal("The slots.", session.DocOf(tabs.Children[1]));
+            // no base of its own: not the documentation of the base it inherits
+            Assert.Null(session.DocOf(tabs));
+            Assert.Null(session.DocOf(tabs.Children[2]));
+
+            // the parameter tree: every node with its own
+            var tree = rigSession.Devices["doc"].Parameters;
+            Assert.Equal("All settings.", tree.Doc);
+            Assert.Equal(["A channel.", "The right channel.", "The slots."], tree.Children.Select(node => node.Doc));
+            Assert.Equal("The level.", tree.Children[0].Children[0].Doc);
+            Assert.Null(tree.Children[2].Children[0].Doc);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void DocOf_IsTheDocumentationOfTheBoundFields()
+    {
+        const string rig = """
+            <rig format="jacobi.midi.rig/1">
+              <device alias="gx" mapRoot="Gx700.AddressMap"><deviceValue name="deviceId" value="0" /></device>
+            </rig>
+            """;
+        const string dashboard = """
+            <dashboard format="jacobi.midi.dashboard/1" name="Docs">
+              <device alias="gx" mapRoot="Gx700.AddressMap" />
+              <column device="gx" base="AddressMap.Temporary.Compressor">
+                <knob><bind slot="value" parameter="Tone" /></knob>
+                <xyPad><bind slot="x" parameter="Sustain" /><bind slot="y" parameter="Tone" /></xyPad>
+                <xyPad><bind slot="x" parameter="Tone" /><bind slot="y" parameter="Tone" /></xyPad>
+              </column>
+            </dashboard>
+            """;
+        using var session = DashboardSession.Open(
+            RigSession.Open(RigFile.Read(rig, FileFormat.Xml), ConsoleLibrary.BuiltInLibrary), DashboardFile.Read(dashboard, FileFormat.Xml));
+        var controls = session.Dashboard.Layout.Children.Cast<ParameterControl>().ToList();
+        Assert.Empty(session.Problems);
+
+        // one field: its text, multi-line as in the schema
+        Assert.Equal("Adjusts the tone.", session.DocOf(controls[0]));
+        Assert.Equal("Adjusts the tone.", ValueOf(session, 0).Info.Doc);
+        // more fields: each under its name, in the order of the slots
+        var both = session.DocOf(controls[1]);
+        Assert.StartsWith("Sustain:", both);
+        Assert.Contains($"Larger values will result in longer sustain.\nWhen 'COMPRESSOR' is selected.", both);
+        Assert.EndsWith($"Tone:{Environment.NewLine}Adjusts the tone.", both);
+        // the same field in two slots: once
+        Assert.Equal("Adjusts the tone.", session.DocOf(controls[2]));
+        // the section on the group has no documentation of its own (none in the GX-700 schema)
+        Assert.Null(session.DocOf(session.Dashboard.Layout));
+        // a schema without documentation (GP-8), and a control bound to an index variable
+        using var gp8 = Open();
+        Assert.Null(gp8.DocOf((ParameterControl)gp8.Dashboard.Layout.Children[Sens]));
+        Assert.Null(gp8.DocOf((ParameterControl)gp8.Dashboard.Layout.Children[Patch]));
+    }
+
+    [Fact]
     public void Values_AreUnknown_UntilADumpIsLoaded()
     {
         using var session = Open();

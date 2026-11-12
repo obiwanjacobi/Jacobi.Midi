@@ -1,6 +1,7 @@
 using System.Globalization;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.Midi.Console.Core.Faces;
+using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.Console.Core.Parameters;
 
@@ -24,6 +25,11 @@ public sealed record ParameterInfo(string Name, Type ValueType, ValueRange? Rang
     /// range) and off for a switch; null when there is none (a text).
     /// </summary>
     public object? Default { get; init; }
+
+    /// <summary>
+    /// The documentation of the field (its <c>midi.doc</c>): plain, possibly multi-line text; null when it has none.
+    /// </summary>
+    public string? Doc { get; init; }
 
     public ParameterKind Kind
         => Options is not null ? ParameterKind.Choice
@@ -64,8 +70,19 @@ public sealed record ParameterInfo(string Name, Type ValueType, ValueRange? Rang
                 : range is { } known ? known.Clamp(0)
                 : null);
         // the scale of a choice is of its physical values, not of the option numbers
-        return new ParameterInfo(field.Field.Name, valueType, range, options is null ? dataType.Scale ?? 1 : 1, options) { Default = defaultValue };
+        return new ParameterInfo(field.Field.Name, valueType, range, options is null ? dataType.Scale ?? 1 : 1, options)
+        {
+            Default = defaultValue,
+            Doc = DocOf(field),
+        };
     }
+
+    /// <summary>
+    /// The documentation of a node of a plan (its <c>midi.doc</c>); null when it has none or it is blank. The one place
+    /// the console reads it.
+    /// </summary>
+    public static string? DocOf(NodeInfo node)
+        => MidiProperties.DocOf(node) is { } doc && !String.IsNullOrWhiteSpace(doc) ? doc : null;
 
     /// <summary>
     /// Converts a value for the parameter (e.g. a decimal of a knob) to its value type: a number is on when it is not 0,

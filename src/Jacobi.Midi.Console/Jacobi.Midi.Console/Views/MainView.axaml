@@ -6,6 +6,7 @@
              xmlns:local="using:Jacobi.Midi.Console.Views"
              xmlns:palettes="using:Jacobi.Midi.Console.Core.Palettes"
              xmlns:primitives="using:Avalonia.Controls.Primitives"
+             xmlns:chrome="using:Jacobi.Midi.Console.Chrome"
              mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
              x:Class="Jacobi.Midi.Console.Views.MainView"
              x:DataType="vm:MainViewModel"
@@ -245,7 +246,7 @@
                 <TreeView Grid.Row="1" ItemsSource="{Binding RigTree}" SelectedItem="{Binding SelectedRigItem}">
                     <TreeView.ItemTemplate>
                         <TreeDataTemplate x:DataType="vm:RigTreeItem" ItemsSource="{Binding Children}">
-                            <Border Background="Transparent" PointerPressed="OnDragSourcePressed" ToolTip.Tip="{Binding Detail}">
+                            <Border Background="Transparent" PointerPressed="OnDragSourcePressed" chrome:DocTip.Title="{Binding Name}" chrome:DocTip.Doc="{Binding Doc}">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <Border Width="10" Height="10" CornerRadius="5" VerticalAlignment="Center"
                                             Background="{Binding ColorBrush}" IsVisible="{Binding IsDevice}"

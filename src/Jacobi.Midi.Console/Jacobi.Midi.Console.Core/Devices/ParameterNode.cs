@@ -32,6 +32,9 @@ public sealed class ParameterNode
     /// <summary>What the schema says about a field; null for a group or repeat.</summary>
     public ParameterInfo? Info { get; private init; }
 
+    /// <summary>The documentation of the node (its <c>midi.doc</c>); null when it has none.</summary>
+    public string? Doc { get; private init; }
+
     /// <summary>The group or repeat this node is in; null for the map root.</summary>
     public ParameterNode? Parent { get; private set; }
 
@@ -56,7 +59,8 @@ public sealed class ParameterNode
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(itemCount);
-        return Of(plan.Root, itemCount) ?? new ParameterNode(plan.Root.Name, plan.Root.Path.Value, ParameterNodeKind.Group);
+        return Of(plan.Root, itemCount)
+            ?? new ParameterNode(plan.Root.Name, plan.Root.Path.Value, ParameterNodeKind.Group) { Doc = ParameterInfo.DocOf(plan.Root) };
     }
 
     private static ParameterNode? Of(NodeInfo info, Func<string, int?> itemCount)
@@ -66,7 +70,7 @@ public sealed class ParameterNode
         {
             case FieldInfo field:
                 return IsParameter(field)
-                    ? new ParameterNode(field.Name, path, ParameterNodeKind.Field) { Info = ParameterInfo.From(field) }
+                    ? new ParameterNode(field.Name, path, ParameterNodeKind.Field) { Info = ParameterInfo.From(field), Doc = ParameterInfo.DocOf(field) }
                     : null;
 
             case GroupInfo group:
@@ -74,8 +78,8 @@ public sealed class ParameterNode
                 if (children.Count == 0)
                     return null;
                 var node = group is RepeatInfo
-                    ? new ParameterNode(group.Name, path, ParameterNodeKind.Repeat) { ItemCount = itemCount(path), Children = children }
-                    : new ParameterNode(group.Name, path, ParameterNodeKind.Group) { Children = children };
+                    ? new ParameterNode(group.Name, path, ParameterNodeKind.Repeat) { ItemCount = itemCount(path), Children = children, Doc = ParameterInfo.DocOf(group) }
+                    : new ParameterNode(group.Name, path, ParameterNodeKind.Group) { Children = children, Doc = ParameterInfo.DocOf(group) };
                 foreach (var child in children)
                     child.Parent = node;
                 return node;

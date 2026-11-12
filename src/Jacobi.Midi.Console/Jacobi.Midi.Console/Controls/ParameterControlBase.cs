@@ -23,6 +23,10 @@ public abstract class ParameterControlBase : TemplatedControl
     public static readonly StyledProperty<string?> LabelProperty =
         AvaloniaProperty.Register<ParameterControlBase, string?>(nameof(Label));
 
+    /// <summary>The documentation of the parameters of the control (their <c>midi.doc</c>), shown in the label's tip.</summary>
+    public static readonly StyledProperty<string?> DocProperty =
+        AvaloniaProperty.Register<ParameterControlBase, string?>(nameof(Doc));
+
     /// <summary>The parameter the control shows and changes; null for an unbound control.</summary>
     public static readonly StyledProperty<IControlValue?> ParameterProperty =
         AvaloniaProperty.Register<ParameterControlBase, IControlValue?>(nameof(Parameter));
@@ -63,6 +67,12 @@ public abstract class ParameterControlBase : TemplatedControl
     {
         get => GetValue(LabelProperty);
         set => SetValue(LabelProperty, value);
+    }
+
+    public string? Doc
+    {
+        get => GetValue(DocProperty);
+        set => SetValue(DocProperty, value);
     }
 
     public IControlValue? Parameter

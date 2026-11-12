@@ -8,7 +8,8 @@ namespace Jacobi.Midi.Device.Messages;
 
 /// <summary>
 /// The <c>midi.*</c> schema properties (tags) of the Device API as a tool sees them (e.g. the Schema Editor): their
-/// names and descriptions, the check of a tag's value on its own and the role and documentation of a node; and
+/// names and descriptions, the check of a tag's value on its own and the role and documentation of a node (of a schema
+/// or a plan); and
 /// helpers to read them from schema and plan nodes. The checks that need the whole map and its envelopes are done by
 /// <see cref="MessageMapValidator"/>.
 /// </summary>
@@ -165,6 +166,17 @@ public static class MidiProperties
     /// The documentation of a node (<c>midi.doc</c>); null when it has none. Only the node's own: not inherited.
     /// </summary>
     public static string? DocOf(SchemaNode node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        return Find(node, Doc);
+    }
+
+    /// <summary>
+    /// The documentation of a node of a plan (<c>midi.doc</c>): a field, group, repeat or choice; null when it has none.
+    /// Only the node's own: not inherited. A doc on a nodeDef is the doc of every node that uses it, unless the node
+    /// gives its own.
+    /// </summary>
+    public static string? DocOf(NodeInfo node)
     {
         ArgumentNullException.ThrowIfNull(node);
         return Find(node, Doc);

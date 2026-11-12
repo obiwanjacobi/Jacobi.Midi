@@ -197,6 +197,18 @@ the console can show on its controls (as a tooltip).
    without a root creates the root (and the schema). The slot notes are no longer kept in the session file; old notes
    are dropped (no backward compatibility). The note on bytes stays a session note: it also covers bytes that are no
    field. *Why:* what the user learns about a message belongs in the schema; the console can show it.
+6. **The console shows the `midi.doc` of the bound fields in the tip of a control's label** (2026-11-12), below the
+   full label; read once with the rest of the field's info (`ParameterInfo.Doc`, from `MidiProperties.DocOf`), joined
+   per control by `DashboardSession.DocOf` (a control with more documented fields: each under its field name, a field
+   in two slots once). No change to Midi.Device was needed. *Why:* the label already has the tip with the full name; a
+   tip on the whole control would pop up while the user turns a knob.
+7. **Group docs: a layout control shows the doc of the node its own `base` refers to** (2026-11-12): in the tip of a
+   section's title and of a tab page's header; a control that only inherits its base shows none. A header of selector
+   tabs shows the page's doc and then the selector field's (the options have no node of their own to document). The
+   rig tree shows every node's doc in its tip, instead of the detail it already shows as text. One tip for all of these
+   (`DocTip`). Midi.Device got `MidiProperties.DocOf(NodeInfo)`: the doc of any plan node (field, group, repeat,
+   choice), next to `DocOf(SchemaNode)`. *Why:* an inherited base would repeat the outer doc on every nested control;
+   clients work with plan nodes, so reading a doc from one is a generic need, not a console one.
 
 ## The data of a root for a client (2026-11-10)
 

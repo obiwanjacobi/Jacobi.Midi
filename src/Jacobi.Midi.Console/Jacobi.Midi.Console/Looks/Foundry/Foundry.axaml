@@ -70,7 +70,7 @@
                     <!-- the label, the face (the room the label and value leave: a fader stretches into it) and the value -->
                     <Grid Margin="{TemplateBinding Padding}" RowDefinitions="Auto,*,Auto">
                         <!-- engraved: a light copy one pixel lower; cut off at the plate's width (LabelSlot), in full in the tip -->
-                        <chrome:LabelSlot Margin="0,0,0,6" Tip="{TemplateBinding Label}">
+                        <chrome:LabelSlot Margin="0,0,0,6" Tip="{TemplateBinding Label}" Doc="{TemplateBinding Doc}">
                             <Panel HorizontalAlignment="Center">
                                 <TextBlock Text="{TemplateBinding Label, Converter={x:Static chrome:UpperCaseConverter.Instance}}"
                                            FontFamily="{DynamicResource ConsoleLabelFont}" TextTrimming="CharacterEllipsis"
@@ -103,6 +103,7 @@
                         <Border Classes="accentArea" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="16,12,0,0"
                                 Background="{DynamicResource ConsoleAccentBrush}" CornerRadius="3" Padding="12,3"
                                 BoxShadow="inset 0 1 0 0 #8CFFFFFF, 0 1 2 0 #B3000000"
+                                chrome:DocTip.Title="{TemplateBinding Header}" chrome:DocTip.Doc="{TemplateBinding Doc}"
                                 IsVisible="{TemplateBinding Header, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                             <TextBlock Text="{TemplateBinding Header, Converter={x:Static chrome:UpperCaseConverter.Instance}}"
                                        FontFamily="{DynamicResource ConsoleLabelFont}"

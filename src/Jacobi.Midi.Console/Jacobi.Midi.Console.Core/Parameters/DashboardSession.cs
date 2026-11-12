@@ -75,6 +75,49 @@ public sealed class DashboardSession : IDisposable
         return new BoundField(device, parsed.Path, ParameterInfo.From(field));
     }
 
+    /// <summary>
+    /// The documentation (<c>midi.doc</c>) of the schema nodes a control is about; null when none is documented.
+    /// A parameter control: the fields its slots are bound to now (<see cref="ParameterInfo.Doc"/>), in the order of the
+    /// slots, a field bound to more than one slot only once; with one documented field its text, with more each text
+    /// under the name of its field. A layout control: the node (a group, repeat or field) its own
+    /// <see cref="DashboardControl.Base"/> refers to; nothing when it only inherits a base.
+    /// </summary>
+    public string? DocOf(DashboardControl control)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        return control switch
+        {
+            ParameterControl parameters => DocOf(parameters),
+            LayoutControl { Base: not null } layout => BaseNodeOf(layout) is { } node ? ParameterInfo.DocOf(node) : null,
+            _ => null,
+        };
+    }
+
+    // the node of the plan the base of a layout control refers to (any repeat item: the node is the path without indices)
+    private NodeInfo? BaseNodeOf(LayoutControl layout)
+        => BindingScope.Of(Dashboard.Layout, layout) is { Device: { } device, Base: { } text }
+            && SchemaPaths.TryParse(text, _ => 0, out var parsed, out _)
+            && DeviceOf(device) is { } state
+                ? state.Plan.Find(parsed.Path)
+                : null;
+
+    private string? DocOf(ParameterControl control)
+    {
+        var documented = control.Slots.Keys
+            .Select(slot => ValueOf(control, slot))
+            .OfType<ParameterValue>()
+            .DistinctBy(value => (value.Parameter.Device.ToUpperInvariant(), value.Parameter.Path))
+            .Where(value => value.Info.Doc is not null)
+            .Select(value => value.Info)
+            .ToList();
+        return documented.Count switch
+        {
+            0 => null,
+            1 => documented[0].Doc,
+            _ => String.Join(Environment.NewLine + Environment.NewLine, documented.Select(info => $"{info.Name}:{Environment.NewLine}{info.Doc}")),
+        };
+    }
+
     /// <summary>The device state of a device of the dashboard; null when the rig does not have it.</summary>
     public DeviceState? DeviceOf(string alias) => Rig.Devices.GetValueOrDefault(alias);
 

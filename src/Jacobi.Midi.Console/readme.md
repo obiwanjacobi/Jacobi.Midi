@@ -117,7 +117,18 @@ of the grid; for a section, of the grid inside its frame). A parameter control's
 shown at its **face size** (`faceScale`, 0.5 to 3, 1 by default; `FaceHost`), not fitted to the cells, so controls of
 the same kind and face size look alike whatever their plate. The face size scales the face only, not the plate, label
 or value text. A face larger than the room it has on its plate is cut off; the user makes the cells larger or the face
-smaller. The label never sizes the control: a long label is cut off ("…") and shown in full in a tip. A new control
+smaller. The label never sizes the control: a long label is cut off ("…") and shown in full in a tip.
+
+**The documentation of the schema** (`midi.doc`) is shown in tips (`DocTip`), from `DashboardSession.DocOf`:
+
+- the label of a parameter control: the bound fields; with more than one documented field (an XY pad, an envelope)
+  each text under the name of its field;
+- the title of a section and the header of a page of tabs: the node (group, repeat or field) the control's own `base`
+  refers to; a control that only inherits its base shows none;
+- the header of a page of selector tabs: the page's, then the selector's field (which documents the options);
+- the rig tree in Edit mode: every node (a device: its map root).
+
+A new control
 gets a default size per kind in which it fits at face size 1 (a knob is 5×7). A section's frame and title take a fixed number of cells around its grid
 (`GridLayout.SectionInset`: one on the sides and bottom, two on top), in every look. Positions and sizes are never
 empty: a file that leaves them out gets them when it is opened (the controls side by side below those that have a
