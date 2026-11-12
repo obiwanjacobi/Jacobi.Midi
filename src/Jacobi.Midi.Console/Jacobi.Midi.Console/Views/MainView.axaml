@@ -298,9 +298,10 @@
         <GridSplitter Grid.Column="3" Width="5" ResizeDirection="Columns" Background="#30FFFFFF" IsVisible="{Binding IsEditing}" />
 
         <!-- the selected device, the selected control, or the dashboard -->
-        <Border Grid.Column="4" Padding="16" Background="#50000000" IsVisible="{Binding IsEditing}">
+        <!-- the right padding is inside the scroll viewer: its (overlaid) scroll bar sits at the edge, clear of the properties -->
+        <Border Grid.Column="4" Padding="16,16,0,16" Background="#50000000" IsVisible="{Binding IsEditing}">
             <ScrollViewer>
-                <Panel>
+                <Panel Margin="0,0,16,0">
                     <StackPanel Spacing="10" IsVisible="{Binding !ShowsSelection}">
                         <TextBlock Text="Dashboard" FontSize="18" FontWeight="SemiBold" />
                         <TextBlock Text="Name" Classes="caption" />
@@ -583,7 +584,7 @@
                                             <Button.Flyout>
                                                 <Flyout Placement="BottomEdgeAlignedLeft">
                                                     <ScrollViewer MaxHeight="400">
-                                                        <ItemsControl ItemsSource="{Binding Pages}" MinWidth="200">
+                                                        <ItemsControl ItemsSource="{Binding Pages}" MinWidth="200" Margin="0,0,16,0">
                                                             <ItemsControl.ItemTemplate>
                                                                 <DataTemplate x:DataType="vm:PageChoiceViewModel">
                                                                     <CheckBox Content="{Binding Name}" IsChecked="{Binding HasPage}" IsEnabled="{Binding CanChange}" ToolTip.Tip="{Binding Tip}"
@@ -619,8 +620,8 @@
             </ScrollViewer>
         </Border>
 
-        <!-- the room around the dashboard: a press on it selects nothing -->
-        <ScrollViewer Grid.Column="2" HorizontalScrollBarVisibility="Auto" Background="Transparent" PointerPressed="OnBesideDashboardPressed">
+        <!-- the room around the dashboard: a press on it selects nothing; Space+drag pans (see SpacePanning) -->
+        <ScrollViewer x:Name="DashboardScroller" Grid.Column="2" HorizontalScrollBarVisibility="Auto" Background="Transparent" PointerPressed="OnBesideDashboardPressed">
             <ContentControl x:Name="DashboardHost" Margin="24" HorizontalAlignment="Left" VerticalAlignment="Top" />
         </ScrollViewer>
         </Grid>

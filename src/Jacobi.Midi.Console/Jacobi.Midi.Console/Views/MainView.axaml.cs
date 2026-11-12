@@ -31,10 +31,12 @@ internal partial class MainView : UserControl
     private MainViewModel? _viewModel;
     private DashboardBuilder? _builder;
     private PendingDrag? _pendingDrag;
+    private readonly SpacePanning _panning;
 
     public MainView()
     {
         InitializeComponent();
+        _panning = new SpacePanning(DashboardScroller);
         // the drag starts when the pointer moved away from a pressed drag source, wherever it is now
         AddHandler(PointerMovedEvent, OnPointerMovedForDrag, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(PointerReleasedEvent, (_, _) => _pendingDrag = null, RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -69,12 +71,14 @@ internal partial class MainView : UserControl
             _viewModel.StorageProvider = topLevel.StorageProvider;
         // on the window: a key reaches it wherever the focus is (also when nothing in the view has it)
         topLevel.AddHandler(KeyDownEvent, OnSelectionKeyDown, RoutingStrategies.Bubble);
+        _panning.Attach(topLevel);
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromVisualTree(e);
         TopLevel.GetTopLevel(this)?.RemoveHandler(KeyDownEvent, OnSelectionKeyDown);
+        _panning.Detach();
     }
 
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)

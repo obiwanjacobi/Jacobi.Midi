@@ -13,7 +13,6 @@ What is planned for the console, and what was done. What the console does now is
 - [x] A dashboard file should have references to its dependent files and assembly resources. Loading a dashboard file should make everything work and prompt the user if files cannot be found.
 - [ ] A rig (or dashboard) whose schema files or assemblies are not found: prompt the user to locate them, and refer to them there.
 - [x] A rig-device does not need its own schema/exchange files. A device can only be created from an existing (global) schema/exchange definition.
-- [ ] Right property pane needs more right-margin/padding to make room for the vertical scrollbar. They now overlap.
 - [ ] Additional Section options as an (settings) option (default off):
   - [ ] collapse/expand
   - [ ] Side (top/bottom) panel slide-in
@@ -23,7 +22,8 @@ What is planned for the console, and what was done. What the console does now is
 - [ ] Dashoboard name in top-bar droplist is not changed after name change in props-pane or file save.
 - [x] Make the Selector's presentation Droplist or radio-buttons an explicit option.
 - [x] Control label Tooltip cuts of last letter(s)?
-- [ ] Scrollbars should stay expanded. Needing to hover slows down design-workflow. Shortcuts (mouse+key?) for panning.
+- [x] Scrollbars should stay expanded. Needing to hover slows down design-workflow. Shortcuts (mouse+key?) for panning.
+- [x] Right property pane needs more right-margin/padding to make room for the vertical scrollbar. They now overlap.
 - [ ] Drop-grid of section (with label) has to span complete surface. Label is drawn on top of it (last). This allows tabs to extent into dead-space the section-label row generates.
 - [ ] Saving new dashboard and rig is confusing. You get 2 save-as dialogs and it is not clear which is which. Use `.dashboard.xml/json` and `.rig.xml/json` as default extensions. Also set the title of the save dlg. Add a check that rig and dashboard file names are not the same.
 - [x] Rig device values not as a string, but a list with possibile keys from droplist.

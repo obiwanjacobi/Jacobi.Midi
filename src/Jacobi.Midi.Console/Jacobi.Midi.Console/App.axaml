@@ -19,5 +19,9 @@
         <Style Selector="FlyoutPresenter">
             <Setter Property="Cursor" Value="Arrow" />
         </Style>
+        <!-- scroll bars stay expanded: no hover needed to grab them while designing -->
+        <Style Selector="ScrollViewer">
+            <Setter Property="AllowAutoHide" Value="False" />
+        </Style>
     </Application.Styles>
 </Application>
