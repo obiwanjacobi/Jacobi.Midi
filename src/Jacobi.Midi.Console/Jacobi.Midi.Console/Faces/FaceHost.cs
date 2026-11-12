@@ -15,7 +15,8 @@ namespace Jacobi.Midi.Console.Faces;
 /// <para>
 /// The face is shown at the control's face size (<see cref="ScaleProperty"/>, inherited from the control), centred in
 /// the room the chrome gives it: only the face is scaled, not the chrome (plate, label, value text). A face larger than
-/// its room is cut off at its edges; a face that stretches (a fader) takes the room along its direction.
+/// its room is cut off at its edges; a face that stretches takes the room along its direction (a fader) or across its
+/// width (a selector, a number box).
 /// </para>
 /// </summary>
 public sealed class FaceHost : Decorator

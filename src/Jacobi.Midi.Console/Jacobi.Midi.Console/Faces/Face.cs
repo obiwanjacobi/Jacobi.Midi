@@ -20,7 +20,7 @@ namespace Jacobi.Midi.Console.Faces;
 /// state runs horizontally (<see cref="RangeFaceState.IsHorizontal"/>) the face turns its drawing a quarter clockwise
 /// (the bottom of the upright drawing on the left) and takes its cells the other way round. A face takes its own size,
 /// centred in the room its chrome gives it; a directional face stretches along its direction into all of it (a long
-/// fader has a long slot).
+/// fader has a long slot), and a face that fills the width (<see cref="FillsWidth"/>, a selector, a number box) stretches across it.
 /// </para>
 /// </summary>
 public abstract class Face : Control
@@ -176,6 +176,12 @@ public abstract class Face : Control
     /// <summary>True for a face that runs in a direction: it is turned when its control is horizontal.</summary>
     protected virtual bool IsDirectional => false;
 
+    /// <summary>
+    /// True for a face that takes the whole width of its room, never less than its own (<see cref="Cells"/>): a wider
+    /// plate gives its text more room (a selector's option names, a number box's number).
+    /// </summary>
+    protected virtual bool FillsWidth => false;
+
     /// <summary>True when the face is drawn turned: a directional face whose state runs horizontally.</summary>
     private bool IsTurned => IsDirectional && IsHorizontal(State);
 
@@ -258,10 +264,10 @@ public abstract class Face : Control
         }
     }
 
-    // centred at its own size; a directional face stretched along its direction
+    // centred at its own size; a directional face stretched along its direction, a face that fills the width across it
     private void UpdateAlignment()
     {
-        HorizontalAlignment = IsDirectional && IsTurned ? Avalonia.Layout.HorizontalAlignment.Stretch : Avalonia.Layout.HorizontalAlignment.Center;
+        HorizontalAlignment = FillsWidth || IsDirectional && IsTurned ?Avalonia.Layout.HorizontalAlignment.Stretch : Avalonia.Layout.HorizontalAlignment.Center;
         VerticalAlignment = IsDirectional && !IsTurned ? Avalonia.Layout.VerticalAlignment.Stretch : Avalonia.Layout.VerticalAlignment.Center;
     }
 

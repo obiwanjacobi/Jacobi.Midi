@@ -66,6 +66,15 @@ the number of options, so controls of the same kind and plate size looked differ
    zoom (its cell size) already scales everything; start minimal.
 8. **The face size runs from 0.5 to 3.0**, defined in one place. 1.0 is the face's own size (its cells).
 9. **A selector shows a list unless it is set to buttons.** *Why:* a list fits any number of options.
+10. **A selector's face always takes the width of its plate** (amends 3 and 4 for the width): the list's display and
+    the buttons stretch across the room the chrome gives the face, never narrower than the face's own size; the
+    buttons of a row share the width equally (all equally wider), their height and minimum width stay the same for
+    every selector. No setting for it. *Why:* making the plate wider is how the user makes room to show the option
+    names in full.
+11. **The ▲/▼ step arrows of a display have a fixed width** (a selector's list and the number box), whatever the
+    width of the display; the extra width goes to the text. *Why:* a wider list showed wide, mostly empty arrows.
+12. **The number box takes the width of its plate too**, as a selector's list (10, 11). *Why:* a number of a choice
+    shows the name of its option, which needs the same room.
 
 ## Dismissing notifications in the console (2026-11-10)
 

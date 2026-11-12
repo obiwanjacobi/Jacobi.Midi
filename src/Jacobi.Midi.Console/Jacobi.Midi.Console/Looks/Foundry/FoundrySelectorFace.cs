@@ -8,11 +8,13 @@ namespace Jacobi.Midi.Console.Looks.Foundry;
 
 /// <summary>
 /// Foundry selector: an amber readout with the selected option and ▲/▼ at the right; or bakelite keys with the option
-/// names engraved in brass, the selected key lit in the accent, in as many rows as the plate's width needs. An unknown
-/// value has a dash in the readout, or no key lit.
+/// names engraved in brass, the selected key lit in the accent, in as many rows as the plate's width needs. The readout
+/// and the keys take the plate's width. An unknown value has a dash in the readout, or no key lit.
 /// </summary>
 public sealed class FoundrySelectorFace : Face
 {
+    protected override bool FillsWidth => true;
+
     protected override Size Cells
         => State is { } known && known is SelectorFaceState { IsList: false } selector
             ? new Size(Math.Max(1, selector.Options.Count) * KeyCells.Width, KeyCells.Height)
@@ -33,7 +35,7 @@ public sealed class FoundrySelectorFace : Face
             var area = new Rect(Bounds.Size);
             context.DrawRectangle(DisplayBrush, outline, area, 3, 3);
             using (context.PushOpacity(0.75))
-                DrawStepArrows(context, area, ArrowsWidth, DisplayTextBrush, outline);
+                DrawStepArrows(context, area, DisplayTextBrush, outline);
             return;
         }
         for (var index = 0; index < selector.Options.Count; index++)
@@ -46,7 +48,7 @@ public sealed class FoundrySelectorFace : Face
             return;
         if (selector.IsList)
         {
-            var name = new Rect(0, 0, Bounds.Width * (1 - ArrowsWidth), Bounds.Height);
+            var name = StepValueArea(new Rect(Bounds.Size));
             var text = selector.Selected is { } selected && selected < selector.Options.Count ? selector.Options[selected] : null;
             using (context.PushOpacity(text is null ? 0.4 : 1))
                 DrawTrimmedText(context, text ?? "–", name, DisplayFont, DisplayTextBrush, 16);

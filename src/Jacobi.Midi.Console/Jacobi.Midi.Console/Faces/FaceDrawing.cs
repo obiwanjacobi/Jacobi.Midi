@@ -8,12 +8,15 @@ namespace Jacobi.Midi.Console.Faces;
 /// <summary>
 /// Drawing code the faces of all kits share: the angles of the knob sweep, arcs, glow, lit segments, display text, the
 /// step arrows, the keys of a selector and the plot of an XY pad and an envelope. The controls find their parts with
-/// the same geometry (<see cref="ArrowsWidth"/>, <see cref="KeyAt"/>, <see cref="PlotArea"/>).
+/// the same geometry (<see cref="IsOnStepArrows"/>, <see cref="KeyAt"/>, <see cref="PlotArea"/>).
 /// </summary>
 internal static class FaceDrawing
 {
-    /// <summary>The part of the width of a display, at the right, with the ▲/▼ step arrows.</summary>
-    public const double ArrowsWidth = 0.3;
+    /// <summary>
+    /// The width of the ▲/▼ step arrows at the right of a display, in pixels of the face: the same in a display of any
+    /// width, so a wider display gives all its extra room to the text.
+    /// </summary>
+    private const double StepArrowsWidth = 1.25 * Face.CellPixels;
 
     /// <summary>The space around the plot of an XY pad or an envelope, for the points on its edges.</summary>
     public const double PlotInset = 7;
@@ -65,19 +68,32 @@ internal static class FaceDrawing
     public static bool IsLit(double fraction, double origin, double value)
         => fraction >= Math.Min(origin, value) - 0.001 && fraction <= Math.Max(origin, value) + 0.001;
 
-    /// <summary>
-    /// The ▲ and ▼ of a number box in the right part of a display (<paramref name="arrowsWidth"/> of its width), with
-    /// a line between them and the number. Returns the area left for the number.
-    /// </summary>
-    public static Rect DrawStepArrows(DrawingContext context, Rect display, double arrowsWidth, IBrush? brush, IPen divider)
+    /// <summary>The part of a display at its right with the ▲/▼ step arrows (<see cref="StepArrowsWidth"/>).</summary>
+    public static Rect StepArrowsArea(Rect display)
     {
-        var arrows = new Rect(display.Right - display.Width * arrowsWidth, display.Y, display.Width * arrowsWidth, display.Height);
+        var width = Math.Min(StepArrowsWidth, display.Width);
+        return new Rect(display.Right - width, display.Y, width, display.Height);
+    }
+
+    /// <summary>The part of a display left of its ▲/▼ step arrows, for the value (a number, an option's name).</summary>
+    public static Rect StepValueArea(Rect display)
+        => new(display.X, display.Y, display.Width - StepArrowsArea(display).Width, display.Height);
+
+    /// <summary>True when a position in a face that is a display with step arrows is on the arrows.</summary>
+    public static bool IsOnStepArrows(Size face, Point position) => position.X >= StepArrowsArea(new Rect(face)).X;
+
+    /// <summary>
+    /// The ▲ and ▼ of a display with step arrows (a number box, a selector's list) at its right
+    /// (<see cref="StepArrowsArea"/>), with a line between them and the value.
+    /// </summary>
+    public static void DrawStepArrows(DrawingContext context, Rect display, IBrush? brush, IPen divider)
+    {
+        var arrows = StepArrowsArea(display);
         context.DrawLine(divider, arrows.TopLeft + new Vector(0, 4), arrows.BottomLeft - new Vector(0, 4));
         var center = arrows.Center;
         var half = Math.Min(arrows.Width, arrows.Height) * 0.18;
         context.DrawGeometry(brush, null, Triangle(new Point(center.X, center.Y - display.Height / 4), half, up: true));
         context.DrawGeometry(brush, null, Triangle(new Point(center.X, center.Y + display.Height / 4), half, up: false));
-        return new Rect(display.X, display.Y, display.Width - arrows.Width, display.Height);
     }
 
     private static StreamGeometry Triangle(Point center, double half, bool up)
@@ -121,8 +137,9 @@ internal static class FaceDrawing
     }
 
     /// <summary>
-    /// The size of a key of a selector shown as buttons, in cells, the gap to the next key included: the same for every
-    /// selector, whatever its number of options.
+    /// The smallest size of a key of a selector shown as buttons, in cells, the gap to the next key included: the same
+    /// for every selector, whatever its number of options. The keys of a row share the width of their area (see
+    /// <see cref="Key"/>), so a wider plate widens them all alike.
     /// </summary>
     public static readonly Size KeyCells = new(1.75, 1.5);
 
@@ -136,7 +153,7 @@ internal static class FaceDrawing
     public static int KeyColumns(double width, int count)
         => Double.IsInfinity(width) ? 1 : Math.Clamp((int)Math.Floor((width + KeyGap) / KeyPitch.Width), 1, Math.Max(1, count));
 
-    /// <summary>The size of <paramref name="count"/> keys across a width: as many rows as they need.</summary>
+    /// <summary>The smallest size of <paramref name="count"/> keys across a width: as many rows as they need.</summary>
     public static Size KeysSize(int count, double width)
     {
         var columns = KeyColumns(width, count);
@@ -144,11 +161,14 @@ internal static class FaceDrawing
         return new Size(Math.Min(Math.Max(1, count), columns) * KeyPitch.Width - KeyGap, rows * KeyPitch.Height - KeyGap);
     }
 
-    /// <summary>The rectangle of a key of <paramref name="count"/> in the keys' area (see <see cref="KeysSize"/>).</summary>
+    /// <summary>
+    /// The rectangle of a key of <paramref name="count"/> in the keys' area (at least <see cref="KeysSize"/>): the keys
+    /// of a row share its width equally.
+    /// </summary>
     public static Rect Key(Size area, int count, int index)
     {
         var columns = KeyColumns(area.Width, count);
-        var pitch = KeyPitch;
+        var pitch = new Size(Math.Max(KeyPitch.Width, (area.Width + KeyGap) / columns), KeyPitch.Height);
         return new Rect(index % columns * pitch.Width, index / columns * pitch.Height, pitch.Width - KeyGap, pitch.Height - KeyGap);
     }
 

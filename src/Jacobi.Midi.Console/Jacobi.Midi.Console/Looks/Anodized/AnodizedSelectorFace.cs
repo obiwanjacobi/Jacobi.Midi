@@ -9,11 +9,13 @@ namespace Jacobi.Midi.Console.Looks.Anodized;
 /// <summary>
 /// Anodized selector: an OLED display with the selected option and ▲/▼ at the right; or keys with an LED above each
 /// option name, the LED and the name of the selected option lit in the accent, in as many rows as the plate's width
-/// needs. An unknown value has a dash in the display, or all LEDs off.
+/// needs. The display and the keys take the plate's width. An unknown value has a dash in the display, or all LEDs off.
 /// </summary>
 public sealed class AnodizedSelectorFace : Face
 {
     private const double LedHeight = 4;
+
+    protected override bool FillsWidth => true;
 
     protected override Size Cells
         => State is { } known && known is SelectorFaceState { IsList: false } selector
@@ -33,7 +35,7 @@ public sealed class AnodizedSelectorFace : Face
         {
             var area = new Rect(Bounds.Size);
             context.DrawRectangle(DisplayBrush, new Pen(OutlineBrush, 1), area, 3, 3);
-            DrawStepArrows(context, area, ArrowsWidth, TrackBrush, new Pen(TrackBrush, 1));
+            DrawStepArrows(context, area, TrackBrush, new Pen(TrackBrush, 1));
             return;
         }
         var off = new Pen(TrackBrush, 1);
@@ -51,7 +53,7 @@ public sealed class AnodizedSelectorFace : Face
             return;
         if (selector.IsList)
         {
-            var name = new Rect(0, 0, Bounds.Width * (1 - ArrowsWidth), Bounds.Height);
+            var name = StepValueArea(new Rect(Bounds.Size));
             var text = selector.Selected is { } selected && selected < selector.Options.Count ? selector.Options[selected] : null;
             using (context.PushOpacity(text is null ? 0.4 : 1))
                 DrawTrimmedText(context, text ?? "–", name, DisplayFont, AccentDisplayBrush, 16);

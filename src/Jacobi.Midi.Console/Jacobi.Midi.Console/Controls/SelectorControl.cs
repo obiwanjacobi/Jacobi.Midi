@@ -72,7 +72,7 @@ public sealed class SelectorControl : ParameterControlBase
             if (FaceDrawing.KeyAt(size, Options.Count, point) is { } key)
                 Selected = key;
         }
-        else if (point.X >= size.Width * (1 - FaceDrawing.ArrowsWidth))
+        else if (FaceDrawing.IsOnStepArrows(size, point))
             Step(point.Y < size.Height / 2 ? -1 : 1);
         else
             OpenList();

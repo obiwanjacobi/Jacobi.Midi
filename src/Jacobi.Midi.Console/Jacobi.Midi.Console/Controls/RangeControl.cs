@@ -301,7 +301,7 @@ public sealed class NumberBoxControl : RangeControl
     // the arrows are in the face, which the chrome surrounds; +1 for ▲, -1 for ▼, null outside the arrows
     private int? ArrowAt(Point position)
     {
-        if (FacePoint(position) is not (Point point, Size size) || point.X < size.Width * (1 - Faces.FaceDrawing.ArrowsWidth))
+        if (FacePoint(position) is not (Point point, Size size) || !Faces.FaceDrawing.IsOnStepArrows(size, point))
             return null;
         return point.Y < size.Height / 2 ? 1 : -1;
     }

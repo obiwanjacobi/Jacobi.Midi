@@ -7,11 +7,14 @@ using static Jacobi.Midi.Console.Faces.FaceDrawing;
 namespace Jacobi.Midi.Console.Looks.Foundry;
 
 /// <summary>
-/// Foundry number box: an amber readout with the number and ▲/▼ at the right. An unknown value shows a dash.
+/// Foundry number box: an amber readout with the number and ▲/▼ at the right. An unknown value shows a dash. The
+/// readout takes the plate's width.
 /// </summary>
 public sealed class FoundryNumberBoxFace : Face
 {
     protected override Size Cells => new(4, 1.5);
+
+    protected override bool FillsWidth => true;
 
     private Rect Window => new(Bounds.Size);
 
@@ -19,7 +22,7 @@ public sealed class FoundryNumberBoxFace : Face
     {
         context.DrawRectangle(DisplayBrush, new Pen(OutlineBrush, 1), Window, 3, 3);
         using (context.PushOpacity(0.75))
-            DrawStepArrows(context, Window, ArrowsWidth, DisplayTextBrush, new Pen(OutlineBrush, 1));
+            DrawStepArrows(context, Window, DisplayTextBrush, new Pen(OutlineBrush, 1));
     }
 
     protected override void RenderValue(DrawingContext context, FaceState state)
@@ -27,7 +30,7 @@ public sealed class FoundryNumberBoxFace : Face
         if (state is not TextFaceState text)
             return;
 
-        var number = new Rect(0, 0, Bounds.Width * (1 - ArrowsWidth), Bounds.Height);
+        var number = StepValueArea(Window);
         using (context.PushOpacity(text.Text is null ? 0.4 : 1))
             DrawCenteredText(context, text.Text ?? "–", number, DisplayFont, DisplayTextBrush, 18);
     }
