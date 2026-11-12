@@ -10,7 +10,9 @@ namespace Jacobi.Midi.Console.ViewModels;
 /// </summary>
 internal sealed partial class FileOrigin : ObservableObject
 {
-    public string Name { get; set; } = "untitled.xml";
+    /// <summary>The file name (observable: shown in the rig's heading and the window title, it changes on Save as).</summary>
+    [ObservableProperty]
+    public partial string Name { get; set; } = "untitled.xml";
 
     public IStorageFile? File { get; set; }
 

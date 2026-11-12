@@ -5,6 +5,7 @@
              xmlns:vm="using:Jacobi.Midi.Console.ViewModels"
              xmlns:local="using:Jacobi.Midi.Console.Views"
              xmlns:palettes="using:Jacobi.Midi.Console.Core.Palettes"
+             xmlns:primitives="using:Avalonia.Controls.Primitives"
              mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
              x:Class="Jacobi.Midi.Console.Views.MainView"
              x:DataType="vm:MainViewModel"
@@ -71,6 +72,8 @@
     </UserControl.Styles>
 
     <Panel>
+    <!-- the adorners of the content (selection, cell grid, drag box) are drawn in its own layer: below the overlays -->
+    <primitives:VisualLayerManager>
     <DockPanel>
         <Border DockPanel.Dock="Top" Padding="20,10" Background="#40000000">
             <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
@@ -231,12 +234,13 @@
         <!-- the rig with the parameters of its devices, and the palettes of controls: what is dragged onto the dashboard -->
         <Border Grid.Column="0" Padding="12" Background="#50000000" IsVisible="{Binding IsEditing}">
             <Grid RowDefinitions="Auto,*,Auto,Auto,Auto,Auto" RowSpacing="6">
-                <Grid ColumnDefinitions="*,Auto">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <TextBlock Text="RIG" Classes="heading" VerticalAlignment="Center" Margin="0" />
-                        <TextBlock Classes="changed" IsVisible="{Binding RigOrigin.IsChanged}" />
-                    </StackPanel>
-                    <Button Grid.Column="1" Content="+" ToolTip.Tip="Add a device to the rig for an address map of the schemas; bring in the schemas of a schema file or assembly; or start a new rig" Click="OnAddDeviceClicked" />
+                <!-- the rig's file name, trimmed when it does not fit (in full in its tooltip) -->
+                <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" ColumnSpacing="6">
+                    <TextBlock Text="RIG" Classes="heading" VerticalAlignment="Center" Margin="0" />
+                    <TextBlock Grid.Column="1" Text="{Binding RigOrigin.Name}" ToolTip.Tip="{Binding RigOrigin.Name}" MaxWidth="190"
+                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Classes="caption" />
+                    <TextBlock Grid.Column="2" Classes="changed" IsVisible="{Binding RigOrigin.IsChanged}" VerticalAlignment="Center" />
+                    <Button Grid.Column="4" Content="+" ToolTip.Tip="Add a device to the rig for an address map of the schemas; bring in the schemas of a schema file or assembly; or start a new rig" Click="OnAddDeviceClicked" />
                 </Grid>
                 <TreeView Grid.Row="1" ItemsSource="{Binding RigTree}" SelectedItem="{Binding SelectedRigItem}">
                     <TreeView.ItemTemplate>
@@ -629,6 +633,7 @@
         </ScrollViewer>
         </Grid>
     </DockPanel>
+    </primitives:VisualLayerManager>
 
     <!-- modal overlay of a confirmation (e.g. closing a changed dashboard) -->
     <Panel IsVisible="{Binding ConfirmDialog, Converter={x:Static ObjectConverters.IsNotNull}}">

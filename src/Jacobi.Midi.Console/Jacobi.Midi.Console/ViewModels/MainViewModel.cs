@@ -524,6 +524,17 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     [RelayCommand]
     private async Task Save()
     {
+        // both files are new: explain the two save dialogs that follow, and their order, before the first one
+        if (RigOrigin is { IsChanged: true, File: null }
+            && SelectedDashboard is { Origin: { IsChanged: true, File: null } dashboardOrigin }
+            && !await Confirm("SAVE", "Save the rig and the dashboard",
+                $"The rig '{RigOrigin.Name}' and the dashboard '{dashboardOrigin.Name}' are saved as two separate files: " +
+                "the rig holds the devices and can be used by several dashboards; the dashboard refers to its rig. " +
+                "Neither has a file yet, so you are asked where to save each: first the rig, then the dashboard " +
+                "(the dashboard refers to where the rig is saved).",
+                "Continue"))
+            return;
+
         var saved = new List<string>();
         if (RigOrigin.IsChanged && await WriteRig(saveAs: false))
             saved.Add(RigOrigin.Name);

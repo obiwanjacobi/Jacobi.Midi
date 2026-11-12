@@ -19,13 +19,13 @@ What is planned for the console, and what was done. What the console does now is
   - [ ] Float (in main window) / New Window
 - [ ] Analyze option to make a dashboard design on a NodeDef and let the user select the actual base (incl exchange send/recv). Example: Patch-dashboard can be used on user-memory, preset (read-only) and temporary areas - because they all use the Patch definition.
 - [ ] Dashboard user-controls: A reusable layout that can be dropped in to compose new dashboards.
-- [ ] Dashoboard name in top-bar droplist is not changed after name change in props-pane or file save.
+- [x] Dashoboard name in top-bar droplist is not changed after name change in props-pane or file save.
 - [x] Make the Selector's presentation Droplist or radio-buttons an explicit option.
 - [x] Control label Tooltip cuts of last letter(s)?
 - [x] Scrollbars should stay expanded. Needing to hover slows down design-workflow. Shortcuts (mouse+key?) for panning.
 - [x] Right property pane needs more right-margin/padding to make room for the vertical scrollbar. They now overlap.
 - [ ] Drop-grid of section (with label) has to span complete surface. Label is drawn on top of it (last). This allows tabs to extent into dead-space the section-label row generates.
-- [ ] Saving new dashboard and rig is confusing. You get 2 save-as dialogs and it is not clear which is which. Use `.dashboard.xml/json` and `.rig.xml/json` as default extensions. Also set the title of the save dlg. Add a check that rig and dashboard file names are not the same.
+- [x] Saving new dashboard and rig is confusing. You get 2 save-as dialogs and it is not clear which is which. Use `.dashboard.xml/json` and `.rig.xml/json` as default extensions. Also set the title of the save dlg. Add a check that rig and dashboard file names are not the same.
 - [x] Rig device values not as a string, but a list with possibile keys from droplist.
 - [x] make droplists for send and receive exchange names.
 - [x] prompt user for unsaved changes when closing the app.
@@ -34,7 +34,7 @@ What is planned for the console, and what was done. What the console does now is
 - [x] Add a clear button to the problems window and a X-button to each item. *Done:* only the reports of what happened (`Report`/`Inform`, `Notification.IsReport`) can be dismissed, one by one (✕) or all (*Clear*); the problems of the current state (rig, dashboard, schema library) stay until their cause is gone.
 - [x] Control label should not determine scale of control. Cutoff text... Controls with long (default) names now show very small knobs.
 - [ ] Display schema documentation for each control.
-- [ ] Play-mode should display the rig name.
+- [ ] Play-mode should display the rig name. Perhaps a rig panel (slide-in left) that simply displays the status of each device and displays the name of the rig.
 - [x] Save the chosen look (it is chosen in the toolbar and not saved). It is now saved as dashboard data. User can still change in play-mode.
 - [x] Slider/Knob value change-drag jumps values when pressing/releasing shift (for fine/coarse changes). Seems like both modes work with their own values.
 

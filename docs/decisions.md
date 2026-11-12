@@ -3,6 +3,18 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## Saving a new rig and a new dashboard (2026-11-12)
+
+Issue: *Save* with a new rig and a new dashboard shows two save dialogs in a row; it is not clear which is which, nor
+that two files are written.
+
+1. **Before the two dialogs, a message explains that the rig and the dashboard are separate files, and the order:
+   first the rig, then the dashboard** (it refers to where the rig is saved); *Cancel* saves nothing. *Why:* the
+   user typically keeps a few central rigs for many dashboards, so the rig is not placed next to the dashboard
+   automatically; a message is the simplest step for now.
+2. **A new rig with an already saved dashboard gets no message and is not placed next to the dashboard.** *Why:* only
+   the two dialogs in a row are confusing; the rig's place is the user's choice.
+
 ## Collapsible sections in the console (2026-11-12)
 
 Issue: a section always shows all its controls; the user wants to fold one away in Play mode.
