@@ -1489,6 +1489,9 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         if (SelectedControl is { } control && EntryOf(control)?.Dashboard is null)
             SelectedControl = null;
         DashboardChanged?.Invoke(this, EventArgs.Empty);
+        // an undo or redo may be of a dashboard that is not the selected one
+        foreach (var entry in Dashboards)
+            entry.Refresh();
         Properties?.Refresh();
         DeviceProperties?.Refresh();
         OnPropertyChanged(nameof(Title));
