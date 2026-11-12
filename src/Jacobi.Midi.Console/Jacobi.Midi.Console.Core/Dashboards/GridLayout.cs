@@ -192,10 +192,11 @@ public static class GridLayout
 
     /// <summary>
     /// How many rows each child of a grid moves up when some of its children are shown shorter (a collapsed section),
-    /// by the rows they lose (<paramref name="shrunk"/>). A child moves up as far as every child directly above it (its
-    /// columns overlapping, its bottom at or above the child's top) moved up and shrank, the least of those: a stack
-    /// closes up, the gaps stay, and nothing comes to overlap. Only children that move are returned; the positions in
-    /// the dashboard do not change (the grid is only shown so).
+    /// by the rows they lose (<paramref name="shrunk"/>). A child keeps its nearest gap to the children above it (their
+    /// columns overlapping, their bottom at or above the child's top) and comes to overlap none of them: from each it
+    /// may move up as far as that one moved up and shrank, plus how much further away it is than the nearest; it moves
+    /// the least of those. A stack closes up below any collapsed section in it, the gaps stay. Only children that move
+    /// are returned; the positions in the dashboard do not change (the grid is only shown so).
     /// </summary>
     public static IReadOnlyDictionary<DashboardControl, int> ShiftsUp(LayoutControl grid, IReadOnlyDictionary<DashboardControl, int> shrunk)
     {
@@ -210,11 +211,14 @@ public static class GridLayout
             var above = children
                 .Where(other => other.Control != child && other.Placement.At.Row + other.Placement.Size.Rows <= placement.At.Row
                     && OverlapsColumns(other.Placement, placement))
-                .Select(other => shifts.GetValueOrDefault(other.Control) + shrunk.GetValueOrDefault(other.Control))
-                .DefaultIfEmpty(0)
-                .Min();
-            if (above > 0)
-                shifts[child] = above;
+                .Select(other => (other.Control, Gap: placement.At.Row - other.Placement.At.Row - other.Placement.Size.Rows))
+                .ToList();
+            if (above.Count == 0)
+                continue;
+            var nearest = above.Min(other => other.Gap);
+            var shift = above.Min(other => shifts.GetValueOrDefault(other.Control) + shrunk.GetValueOrDefault(other.Control) + other.Gap - nearest);
+            if (shift > 0)
+                shifts[child] = shift;
         }
         return shifts;
     }

@@ -422,7 +422,7 @@
         <!-- 0x06: 0-15 = hiCut -->
         <field name="HighCut" datatype="hiCut" midi.doc="The high cut filter cuts the frequencies above the specified frequency. This setting adjusts the frequency at which the high cut filter will begin to take effect. When 'FLAT' is selected, the high cut filter will have no effect." />
         <!-- 0x07: 0-10 (= T10:S0 - T0:S10, the mix of triangle and sine) -->
-        <field name="ModWave" datatype="uint10" midi.doc="Determines the waveform of the LFO (Low Frequency Oscillator) that will modulate the chorus effect. You can specify the proportions of 'TRI' (triangle wave) and 'SIN' (sine wave) to use in order to apply chorus using a mixed waveform.&#10;Ordinarily, chorus is applied using 'TRI'." />
+        <field name="ModWave" datatype="chorusModWave" midi.doc="Determines the waveform of the LFO (Low Frequency Oscillator) that will modulate the chorus effect. You can specify the proportions of 'TRI' (triangle wave) and 'SIN' (sine wave) to use in order to apply chorus using a mixed waveform.&#10;Ordinarily, chorus is applied using 'TRI'." />
         <!-- 0x08: 0-100 -->
         <field name="EffectLevel" datatype="roland.level" midi.doc="Adjusts the volume of the effect sound." />
       </members>
@@ -1410,7 +1410,7 @@
     </dataTypeDef>
 
     <!-- High cut filter (Delay, Chorus, Reverb; Table-15). -->
-    <dataTypeDef name="hiCut" basedOn="sys.uint8" optionsDefault="500 Hz">
+    <dataTypeDef name="hiCut" basedOn="sys.uint8" optionsDefault="Flat">
       <options>
         <option value="0" name="500 Hz" />
         <option value="1" name="630 Hz" />
@@ -1456,6 +1456,23 @@
       <options>
         <option value="0" name="Mono" />
         <option value="1" name="Stereo" />
+      </options>
+    </dataTypeDef>
+
+    <!-- Chorus.Mode. -->
+    <dataTypeDef name="chorusModWave" basedOn="sys.uint8" optionsDefault="tri 10-sin 0">
+      <options>
+        <option value="0" name="tri 10-sin 0" />
+        <option value="1" name="tri 9-sin 1" />
+        <option value="2" name="tri 8-sin 2" />
+        <option value="3" name="tri 7-sin 3" />
+        <option value="4" name="tri 6-sin 4" />
+        <option value="5" name="tri 5-sin 5" />
+        <option value="6" name="tri 4-sin 6" />
+        <option value="7" name="tri 3-sin 7" />
+        <option value="8" name="tri 2-sin 8" />
+        <option value="9" name="tri 1-sin 9" />
+        <option value="10" name="tri 0-sin 10" />
       </options>
     </dataTypeDef>
 

@@ -32,6 +32,33 @@ public class GridLayoutTests
     }
 
     [Fact]
+    public void ShiftsUp_OfASectionInTheMiddleOfAStack_MovesThoseBelowItUp()
+    {
+        var a = Section("a", 0, 0, 12, 10);
+        var b = Section("b", 0, 11, 12, 5);
+        var c = Section("c", 0, 17, 12, 5);
+        var d = Section("d", 0, 23, 12, 5);
+        var grid = Grid(a, b, c, d);
+
+        var shifts = GridLayout.ShiftsUp(grid, new Dictionary<DashboardControl, int> { [b] = 3 });
+
+        Assert.Equal(new Dictionary<DashboardControl, int> { [c] = 3, [d] = 3 }, shifts);
+    }
+
+    [Fact]
+    public void ShiftsUp_OfTwoSectionsInAStack_AddsUp()
+    {
+        var a = Section("a", 0, 0, 12, 10);
+        var b = Section("b", 0, 11, 12, 5);
+        var c = Section("c", 0, 17, 12, 5);
+        var grid = Grid(a, b, c);
+
+        var shifts = GridLayout.ShiftsUp(grid, new Dictionary<DashboardControl, int> { [a] = 7, [b] = 3 });
+
+        Assert.Equal(new Dictionary<DashboardControl, int> { [b] = 7, [c] = 10 }, shifts);
+    }
+
+    [Fact]
     public void ShiftsUp_BelowTwoSideBySide_MovesTheLeast()
     {
         var left = Section("left", 0, 0, 12, 10);

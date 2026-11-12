@@ -1,6 +1,6 @@
 <dashboard format="jacobi.midi.dashboard/1" name="GX-700 Individual" cellSize="20" look="Foundry" rig="Gx700.rig.xml">
   <device alias="gx700" mapRoot="Gx700.AddressMap" receive="requestData" send="sendData" />
-  <grid size="46,183">
+  <grid size="55,194" color="#5FB3A1" plateColor="#C9A55A">
     <section label="Common" size="39,22" at="0,0" device="gx700" base="AddressMap.IndividualTemporary.Common" collapsible="true">
       <knob label="Level" size="5,7" at="9,0">
         <bind slot="value" parameter="OutputLevel" />
@@ -88,13 +88,13 @@
           <knob size="5,7" at="5,0">
             <bind slot="value" parameter="Peak" />
           </knob>
-          <knob size="5,7" at="10,0">
+          <knob label="Pedal Min" size="5,7" at="10,0">
             <bind slot="value" parameter="PedalMin" />
           </knob>
-          <knob size="5,7" at="15,0">
+          <knob label="Pedal Max" size="5,7" at="15,0">
             <bind slot="value" parameter="PedalMax" />
           </knob>
-          <selector size="6,4" at="20,1">
+          <selector size="8,4" at="20,1">
             <bind slot="value" parameter="Pedal" />
           </selector>
         </grid>
@@ -105,13 +105,13 @@
           <knob size="5,7" at="5,0">
             <bind slot="value" parameter="Peak" />
           </knob>
-          <knob size="5,7" at="10,0">
+          <knob label="Pedal Min" size="5,7" at="10,0">
             <bind slot="value" parameter="PedalMin" />
           </knob>
-          <knob size="5,7" at="15,0">
+          <knob label="Pedal Max" size="5,7" at="15,0">
             <bind slot="value" parameter="PedalMax" />
           </knob>
-          <selector size="6,4" at="20,1">
+          <selector size="8,4" at="20,1">
             <bind slot="value" parameter="Pedal" />
           </selector>
         </grid>
@@ -136,59 +136,59 @@
           </knob>
         </grid>
       </selectorTabs>
-      <knob size="5,7" at="36,2">
+      <knob label="Level" size="5,7" at="36,2">
         <bind slot="value" parameter="EffectLevel" />
       </knob>
     </section>
-    <section label="OverdriveDistortion" size="32,10" at="0,46" device="gx700" base="AddressMap.IndividualTemporary.OverdriveDistortion" collapsible="true">
+    <section label="Overdrive / Distortion" size="34,10" at="0,46" device="gx700" base="AddressMap.IndividualTemporary.OverdriveDistortion" collapsible="true">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
-      <selector size="6,4" at="4,0">
+      <selector size="8,4" at="4,1">
         <bind slot="value" parameter="Type" />
       </selector>
-      <knob size="5,7" at="10,0">
+      <knob size="5,7" at="12,0">
         <bind slot="value" parameter="Drive" />
       </knob>
-      <knob size="5,7" at="15,0">
+      <knob size="5,7" at="17,0">
         <bind slot="value" parameter="Bass" />
       </knob>
-      <knob size="5,7" at="20,0">
+      <knob size="5,7" at="22,0">
         <bind slot="value" parameter="Treble" />
       </knob>
-      <knob size="5,7" at="25,0">
+      <knob label="Level" size="5,7" at="27,0">
         <bind slot="value" parameter="EffectLevel" />
       </knob>
     </section>
-    <section label="Preamp" size="46,11" at="0,56" device="gx700" base="AddressMap.IndividualTemporary.Preamp" collapsible="true">
+    <section label="Preamp" size="51,11" at="0,56" device="gx700" base="AddressMap.IndividualTemporary.Preamp" collapsible="true">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
-      <selector size="6,4" at="4,0">
+      <selector size="10,4" at="4,0">
         <bind slot="value" parameter="Type" />
       </selector>
-      <knob size="5,7" at="10,0">
+      <knob size="5,7" at="14,0">
         <bind slot="value" parameter="Volume" />
       </knob>
-      <knob size="5,7" at="15,0">
+      <knob size="5,7" at="19,0">
         <bind slot="value" parameter="Bass" />
       </knob>
-      <knob size="5,7" at="20,0">
+      <knob size="5,7" at="24,0">
         <bind slot="value" parameter="Middle" />
       </knob>
-      <knob size="5,7" at="25,0">
+      <knob size="5,7" at="29,0">
         <bind slot="value" parameter="Treble" />
       </knob>
-      <knob size="5,7" at="30,0">
+      <knob size="5,7" at="34,0">
         <bind slot="value" parameter="Presence" />
       </knob>
-      <knob size="5,7" at="35,0">
+      <knob size="5,7" at="39,0">
         <bind slot="value" parameter="Master" />
       </knob>
-      <switch size="4,7" at="40,0">
+      <switch size="4,7" at="44,0">
         <bind slot="value" parameter="Bright" />
       </switch>
-      <selector size="6,4" at="4,4">
+      <selector size="10,4" at="4,4">
         <bind slot="value" parameter="Gain" />
       </selector>
     </section>
@@ -196,40 +196,40 @@
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
-      <knob size="5,7" at="4,0">
+      <knob label="Return" size="5,7" at="9,0">
         <bind slot="value" parameter="ReturnLevel" />
       </knob>
-      <knob size="5,7" at="9,0">
+      <knob label="Send" size="5,7" at="4,0">
         <bind slot="value" parameter="SendLevel" />
       </knob>
-      <selector size="6,4" at="14,0">
+      <selector size="6,4" at="14,1">
         <bind slot="value" parameter="Mode" />
       </selector>
     </section>
-    <section label="Equalizer" size="38,10" at="0,77" device="gx700" base="AddressMap.IndividualTemporary.Equalizer" collapsible="true">
+    <section label="Equalizer" size="32,11" at="0,77" device="gx700" base="AddressMap.IndividualTemporary.Equalizer" collapsible="true">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
-      <knob size="5,7" at="4,0">
+      <knob label="Low" size="5,7" at="4,0">
         <bind slot="value" parameter="LowGain" />
       </knob>
-      <selector size="6,4" at="9,0">
+      <selector label="Mid Freq" size="6,4" at="9,0">
         <bind slot="value" parameter="MiddleFrequency" />
       </selector>
-      <knob size="5,7" at="15,0">
+      <knob label="Mid" size="5,7" at="15,0">
         <bind slot="value" parameter="MiddleGain" />
       </knob>
-      <selector size="6,4" at="20,0">
+      <selector label="Mid Q" size="6,4" at="9,4">
         <bind slot="value" parameter="MiddleQ" />
       </selector>
-      <knob size="5,7" at="26,0">
+      <knob label="High" size="5,7" at="20,0">
         <bind slot="value" parameter="HighGain" />
       </knob>
-      <knob size="5,7" at="31,0">
+      <knob size="5,7" at="25,0">
         <bind slot="value" parameter="Level" />
       </knob>
     </section>
-    <section label="NoiseSuppressor" size="27,10" at="0,97" device="gx700" base="AddressMap.IndividualTemporary.NoiseSuppressor" collapsible="true">
+    <section label="Noise Suppressor" size="28,10" at="0,98" device="gx700" base="AddressMap.IndividualTemporary.NoiseSuppressor" collapsible="true">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
@@ -239,15 +239,15 @@
       <knob size="5,7" at="9,0">
         <bind slot="value" parameter="Release" />
       </knob>
-      <selector size="6,4" at="14,0">
+      <selector size="7,4" at="14,1">
         <bind slot="value" parameter="Detect" />
       </selector>
-      <knob size="5,7" at="20,0">
+      <knob label="Level" size="5,7" at="21,0">
         <bind slot="value" parameter="EffectLevel" />
       </knob>
     </section>
-    <section label="Modulation" size="44,25" at="0,107" device="gx700" base="AddressMap.IndividualTemporary.Modulation" collapsible="true">
-      <switch size="4,7" at="0,2">
+    <section label="Modulation" size="44,26" at="0,108" device="gx700" base="AddressMap.IndividualTemporary.Modulation" collapsible="true">
+      <switch size="4,7" at="0,4">
         <bind slot="value" parameter="On" />
       </switch>
       <selectorTabs size="38,12" at="4,0">
@@ -265,15 +265,15 @@
           <knob size="5,7" at="15,0">
             <bind slot="value" parameter="Resonance" />
           </knob>
-          <knob size="5,7" at="20,0">
+          <knob label="Seperation" size="5,7" at="20,0">
             <bind slot="value" parameter="FlangerSeparation" />
           </knob>
-          <knob size="5,7" at="25,0">
+          <knob label="Gate" size="5,7" at="25,0">
             <bind slot="value" parameter="FlangerGate" />
           </knob>
         </grid>
         <grid label="Phaser" size="38,10">
-          <selector size="6,4" at="0,1">
+          <selector label="Type" size="6,4" at="0,1">
             <bind slot="value" parameter="PhaserType" />
           </selector>
           <knob size="5,7" at="6,0">
@@ -288,54 +288,54 @@
           <knob size="5,7" at="21,0">
             <bind slot="value" parameter="Resonance" />
           </knob>
-          <knob size="5,7" at="26,0">
+          <knob label="Step" size="5,7" at="26,0">
             <bind slot="value" parameter="PhaserStep" />
           </knob>
         </grid>
         <grid label="Pitch Shifter" size="38,10">
-          <selector size="6,4" at="0,3">
+          <selector label="Mode" size="6,4" at="0,3">
             <bind slot="value" parameter="PitchShifterMode" />
           </selector>
           <tabs label="Voices" size="21,9" at="6,0">
             <grid label="Voice 1" size="21,7">
-              <knob size="5,7" at="0,0">
+              <knob label="Pitch" size="5,7" at="0,0">
                 <bind slot="value" parameter="Pitch1" />
               </knob>
-              <knob size="5,7" at="5,0">
+              <knob label="Fine" size="5,7" at="5,0">
                 <bind slot="value" parameter="Fine1" />
               </knob>
-              <knob size="5,7" at="10,0">
+              <knob label="Pan" size="5,7" at="10,0">
                 <bind slot="value" parameter="Pan1" />
               </knob>
-              <knob size="5,7" at="15,0">
+              <knob label="Level" size="5,7" at="15,0">
                 <bind slot="value" parameter="Level1" />
               </knob>
             </grid>
             <grid label="Voice 2" size="21,7">
-              <knob size="5,7" at="0,0">
+              <knob label="Pitch" size="5,7" at="0,0">
                 <bind slot="value" parameter="Pitch2" />
               </knob>
-              <knob size="5,7" at="5,0">
+              <knob label="Fine" size="5,7" at="5,0">
                 <bind slot="value" parameter="Fine2" />
               </knob>
-              <knob size="5,7" at="10,0">
+              <knob label="Pan" size="5,7" at="10,0">
                 <bind slot="value" parameter="Pan2" />
               </knob>
-              <knob size="5,7" at="15,0">
+              <knob label="Level" size="5,7" at="15,0">
                 <bind slot="value" parameter="Level2" />
               </knob>
             </grid>
             <grid label="Voice 3" size="21,7">
-              <knob size="5,7" at="0,0">
+              <knob label="Pitch" size="5,7" at="0,0">
                 <bind slot="value" parameter="Pitch3" />
               </knob>
-              <knob size="5,7" at="5,0">
+              <knob label="Fine" size="5,7" at="5,0">
                 <bind slot="value" parameter="Fine3" />
               </knob>
-              <knob size="5,7" at="10,0">
+              <knob label="Pan" size="5,7" at="10,0">
                 <bind slot="value" parameter="Pan3" />
               </knob>
-              <knob size="5,7" at="15,0">
+              <knob label="Level" size="5,7" at="15,0">
                 <bind slot="value" parameter="Level3" />
               </knob>
             </grid>
@@ -343,45 +343,45 @@
           <knob size="5,7" at="27,2">
             <bind slot="value" parameter="Balance" />
           </knob>
-          <knob size="5,7" at="32,2">
+          <knob label="Master" size="5,7" at="32,2">
             <bind slot="value" parameter="TotalLevel" />
           </knob>
         </grid>
         <grid label="Harmonist" size="38,10">
-          <selector size="6,4" at="0,2">
+          <selector label="Key" size="6,4" at="0,3">
             <bind slot="value" parameter="HarmonistKey" />
           </selector>
           <tabs label="Voices" size="17,9" at="6,0">
             <grid label="Voice 1" size="17,7">
-              <selector size="6,4" at="0,0">
+              <selector label="Interval" size="6,4" at="0,1">
                 <bind slot="value" parameter="HarmonistInterval1" />
               </selector>
-              <knob size="5,7" at="6,0">
+              <knob label="Pan" size="5,7" at="6,0">
                 <bind slot="value" parameter="Pan1" />
               </knob>
-              <knob size="5,7" at="11,0">
+              <knob label="Level" size="5,7" at="11,0">
                 <bind slot="value" parameter="Level1" />
               </knob>
             </grid>
             <grid label="Voice 2" size="17,7">
-              <selector size="6,4" at="0,0">
+              <selector label="Interval" size="6,4" at="0,1">
                 <bind slot="value" parameter="HarmonistInterval2" />
               </selector>
-              <knob size="5,7" at="6,0">
+              <knob label="Pan" size="5,7" at="6,0">
                 <bind slot="value" parameter="Pan2" />
               </knob>
-              <knob size="5,7" at="11,0">
+              <knob label="Level" size="5,7" at="11,0">
                 <bind slot="value" parameter="Level2" />
               </knob>
             </grid>
             <grid label="Voice 3" size="17,7">
-              <selector size="6,4" at="0,0">
+              <selector label="Interval" size="6,4" at="0,1">
                 <bind slot="value" parameter="HarmonistInterval3" />
               </selector>
-              <knob size="5,7" at="6,0">
+              <knob label="Pan" size="5,7" at="6,0">
                 <bind slot="value" parameter="Pan3" />
               </knob>
-              <knob size="5,7" at="11,0">
+              <knob label="Level" size="5,7" at="11,0">
                 <bind slot="value" parameter="Level3" />
               </knob>
             </grid>
@@ -389,15 +389,15 @@
           <knob size="5,7" at="23,2">
             <bind slot="value" parameter="Balance" />
           </knob>
-          <knob size="5,7" at="28,2">
+          <knob label="Master" size="5,7" at="28,2">
             <bind slot="value" parameter="TotalLevel" />
           </knob>
         </grid>
         <grid label="Vibrato" size="38,10">
-          <selector size="6,4" at="0,1">
+          <selector label="Trigger" size="6,4" at="0,1">
             <bind slot="value" parameter="VibratoTrigger" />
           </selector>
-          <knob size="5,7" at="6,0">
+          <knob label="Rise Time" size="5,7" at="6,0">
             <bind slot="value" parameter="VibratoRiseTime" />
           </knob>
           <knob size="5,7" at="11,0">
@@ -408,155 +408,153 @@
           </knob>
         </grid>
         <grid label="Ring Modulator" size="38,10">
-          <knob size="5,7" at="0,0">
+          <knob label="Frequency" size="5,7" at="0,0">
             <bind slot="value" parameter="RingModFrequency" />
           </knob>
-          <knob size="5,7" at="5,0">
+          <knob label="Effect" size="5,7" at="5,0">
             <bind slot="value" parameter="RingModEffectLevel" />
           </knob>
-          <knob size="5,7" at="10,0">
+          <knob label="Direct" size="5,7" at="10,0">
             <bind slot="value" parameter="RingModDirectLevel" />
           </knob>
         </grid>
         <grid label="Humanizer" size="38,10">
-          <selector size="6,4" at="22,0">
-            <bind slot="value" parameter="HumanizerTrigger" />
-          </selector>
-          <selector size="6,4" at="22,4">
-            <bind slot="value" parameter="HumanizerPedal" />
-          </selector>
-          <selector size="6,4" at="0,1">
+          <selectorTabs label="Mode" size="17,9" at="6,0">
             <bind slot="value" parameter="HumanizerMode" />
-          </selector>
-          <selector size="6,4" at="6,0">
+            <grid label="Auto" size="17,7">
+              <knob size="5,7" at="0,0">
+                <bind slot="value" parameter="Rate" />
+              </knob>
+              <knob size="5,7" at="5,0">
+                <bind slot="value" parameter="Depth" />
+              </knob>
+              <selector label="Trigger" size="6,4" at="10,0">
+                <bind slot="value" parameter="HumanizerTrigger" />
+              </selector>
+            </grid>
+            <grid label="Pedal" size="17,7">
+              <selector label="Pedal" size="8,4" at="0,0">
+                <bind slot="value" parameter="HumanizerPedal" />
+              </selector>
+            </grid>
+          </selectorTabs>
+          <selector label="Vowel 1" size="6,4" at="0,2">
             <bind slot="value" parameter="HumanizerVowel1" />
           </selector>
-          <selector size="6,4" at="6,4">
+          <selector label="Vowel 2" size="6,4" at="0,6">
             <bind slot="value" parameter="HumanizerVowel2" />
           </selector>
-          <knob size="5,7" at="12,0">
-            <bind slot="value" parameter="Rate" />
-          </knob>
-          <knob size="5,7" at="17,0">
-            <bind slot="value" parameter="Depth" />
-          </knob>
         </grid>
       </selectorTabs>
-      <section label="HarmonistScale" size="23,10" at="0,12" base="AddressMap.IndividualTemporary.Modulation.HarmonistScale[$harmonistScale]">
+      <section label="Harmonist Scale" size="23,10" at="0,13" base="AddressMap.IndividualTemporary.Modulation.HarmonistScale[$harmonistScale]">
         <variable name="harmonistScale" value="0" />
-        <numberBox label="HarmonistScale" size="6,4" at="0,1">
+        <numberBox label="Scale" size="6,4" at="0,1">
           <bind slot="value" parameter="$harmonistScale" />
         </numberBox>
-        <knob size="5,7" at="6,0">
+        <knob label="Interval 1" size="5,7" at="6,0">
           <bind slot="value" parameter="Scale.Interval1" />
         </knob>
-        <knob size="5,7" at="11,0">
+        <knob label="Interval 2" size="5,7" at="11,0">
           <bind slot="value" parameter="Scale.Interval2" />
         </knob>
-        <knob size="5,7" at="16,0">
+        <knob label="Interval 3" size="5,7" at="16,0">
           <bind slot="value" parameter="Scale.Interval3" />
         </knob>
       </section>
     </section>
-    <section label="Delay" size="44,19" at="0,132" device="gx700" base="AddressMap.IndividualTemporary.Delay" collapsible="true">
+    <section label="Delay" size="44,19" at="0,134" device="gx700" base="AddressMap.IndividualTemporary.Delay" collapsible="true">
       <switch size="4,7" at="0,5">
         <bind slot="value" parameter="On" />
       </switch>
-      <selectorTabs size="38,16" at="4,0">
+      <selectorTabs size="33,16" at="4,0">
         <bind slot="value" parameter="Mode" />
-        <grid label="Normal" size="38,14">
-          <knob size="5,7" at="0,0">
+        <grid label="Normal" size="33,14">
+          <knob label="Time L" size="5,7" at="0,0">
             <bind slot="value" parameter="TimeLeft" />
           </knob>
-          <knob size="5,7" at="5,0">
+          <knob label="Time C" size="5,7" at="5,0">
             <bind slot="value" parameter="TimeCenter" />
           </knob>
-          <knob size="5,7" at="10,0">
+          <knob label="Time R" size="5,7" at="10,0">
             <bind slot="value" parameter="TimeRight" />
           </knob>
           <knob size="5,7" at="15,0">
             <bind slot="value" parameter="Feedback" />
           </knob>
-          <knob size="5,7" at="0,7">
+          <knob label="Level L" size="5,7" at="0,7">
             <bind slot="value" parameter="LevelLeft" />
           </knob>
-          <knob size="5,7" at="5,7">
+          <knob label="Level C" size="5,7" at="5,7">
             <bind slot="value" parameter="LevelCenter" />
           </knob>
-          <knob size="5,7" at="10,7">
+          <knob label="Level R" size="5,7" at="10,7">
             <bind slot="value" parameter="LevelRight" />
           </knob>
-          <knob size="5,7" at="20,0">
+          <knob label="Hi Damp" size="5,7" at="20,0">
             <bind slot="value" parameter="HighDamp" />
           </knob>
-          <selector size="6,4" at="19,8">
+          <selector label="High Cut" size="6,4" at="19,8">
             <bind slot="value" parameter="HighCut" />
           </selector>
           <switch size="4,7" at="15,7">
             <bind slot="value" parameter="Smooth" />
           </switch>
-          <knob size="5,7" at="25,0">
-            <bind slot="value" parameter="EffectLevel" />
-          </knob>
-          <knob size="5,7" at="25,7">
-            <bind slot="value" parameter="DirectLevel" />
-          </knob>
         </grid>
-        <grid label="Tempo" size="38,14">
-          <selector size="7,4" at="0,1">
+        <grid label="Tempo" size="33,14">
+          <selector label="Controller" size="7,4" at="0,1">
             <bind slot="value" parameter="TempoIn" />
           </selector>
           <knob size="5,7" at="1,7">
             <bind slot="value" parameter="Tempo" />
           </knob>
-          <knob size="5,7" at="7,0">
+          <knob label="Interval L" size="5,7" at="7,0">
             <bind slot="value" parameter="TimeLeft" />
           </knob>
-          <selector size="11,4" at="12,1">
+          <selector label="Interval Center" size="11,4" at="12,1">
             <bind slot="value" parameter="IntervalCenter" />
           </selector>
-          <knob size="5,7" at="23,0">
+          <knob label="Interval R" size="5,7" at="23,0">
             <bind slot="value" parameter="TimeRight" />
           </knob>
-          <knob size="5,7" at="15,7">
+          <knob label="Level C" size="5,7" at="15,7">
             <bind slot="value" parameter="LevelCenter" />
           </knob>
-          <knob size="5,7" at="7,7">
+          <knob label="Level L" size="5,7" at="7,7">
             <bind slot="value" parameter="LevelLeft" />
           </knob>
-          <knob size="5,7" at="23,7">
+          <knob label="Level R" size="5,7" at="23,7">
             <bind slot="value" parameter="LevelRight" />
           </knob>
           <switch size="4,7" at="28,0">
             <bind slot="value" parameter="Smooth" />
           </switch>
-          <knob size="5,7" at="32,0">
-            <bind slot="value" parameter="EffectLevel" />
-          </knob>
-          <knob size="5,7" at="32,7">
-            <bind slot="value" parameter="DirectLevel" />
-          </knob>
         </grid>
       </selectorTabs>
+      <knob label="Effect Lvl" size="5,7" at="37,2">
+        <bind slot="value" parameter="EffectLevel" />
+      </knob>
+      <knob label="Direct Lvl" size="5,7" at="37,9">
+        <bind slot="value" parameter="DirectLevel" />
+      </knob>
     </section>
-    <section label="TremoloPan" size="27,10" at="0,162" device="gx700" base="AddressMap.IndividualTemporary.TremoloPan" collapsible="true">
+    <section label="Tremolo / Pan" size="30,10" at="0,164" device="gx700" base="AddressMap.IndividualTemporary.TremoloPan" collapsible="true">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
-      <selector size="6,4" at="4,1">
+      <selector size="9,4" at="4,1">
         <bind slot="value" parameter="Mode" />
       </selector>
-      <knob size="5,7" at="10,0">
+      <knob size="5,7" at="13,0">
         <bind slot="value" parameter="Rate" />
       </knob>
-      <knob size="5,7" at="15,0">
+      <knob size="5,7" at="18,0">
         <bind slot="value" parameter="Depth" />
       </knob>
-      <knob size="5,7" at="20,0">
+      <knob size="5,7" at="23,0">
         <bind slot="value" parameter="Balance" />
       </knob>
     </section>
-    <section label="Reverb" size="43,11" at="0,172" device="gx700" base="AddressMap.IndividualTemporary.Reverb" collapsible="true">
+    <section label="Reverb" size="43,11" at="0,174" device="gx700" base="AddressMap.IndividualTemporary.Reverb" collapsible="true">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
@@ -566,68 +564,68 @@
       <knob size="5,7" at="10,0">
         <bind slot="value" parameter="Time" />
       </knob>
-      <knob size="5,7" at="15,0">
+      <knob label="Pre Delay" size="5,7" at="15,0">
         <bind slot="value" parameter="PreDelay" />
       </knob>
-      <selector size="6,4" at="20,4">
+      <selector label="Low Cut" size="6,4" at="20,4">
         <bind slot="value" parameter="LowCut" />
       </selector>
-      <selector size="6,4" at="20,0">
+      <selector label="High Cut" size="6,4" at="20,0">
         <bind slot="value" parameter="HighCut" />
       </selector>
       <knob size="5,7" at="26,0">
         <bind slot="value" parameter="Diffusion" />
       </knob>
-      <knob size="5,7" at="31,0">
+      <knob label="Effect" size="5,7" at="31,0">
         <bind slot="value" parameter="EffectLevel" />
       </knob>
-      <knob size="5,7" at="36,0">
+      <knob label="Direct" size="5,7" at="36,0">
         <bind slot="value" parameter="DirectLevel" />
       </knob>
     </section>
-    <section label="Chorus" size="43,11" at="0,151" device="gx700" base="AddressMap.IndividualTemporary.Chorus" collapsible="true">
+    <section label="Chorus" size="40,11" at="0,153" device="gx700" base="AddressMap.IndividualTemporary.Chorus" collapsible="true">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
-      <selector size="6,4" at="4,1">
+      <selector size="8,4" at="4,0">
         <bind slot="value" parameter="Mode" />
       </selector>
-      <knob size="5,7" at="10,0">
+      <knob size="5,7" at="12,0">
         <bind slot="value" parameter="Rate" />
       </knob>
-      <knob size="5,7" at="15,0">
+      <knob size="5,7" at="17,0">
         <bind slot="value" parameter="Depth" />
       </knob>
-      <knob size="5,7" at="20,0">
+      <knob label="Pre Delay" size="5,7" at="22,0">
         <bind slot="value" parameter="PreDelay" />
       </knob>
-      <selector size="6,4" at="25,4">
+      <selector label="Low Cut" size="6,4" at="27,4">
         <bind slot="value" parameter="LowCut" />
       </selector>
-      <selector size="6,4" at="25,0">
+      <selector label="High Cut" size="6,4" at="27,0">
         <bind slot="value" parameter="HighCut" />
       </selector>
-      <knob size="5,7" at="31,0">
+      <selector label="LFO Wave" size="8,4" at="4,4">
         <bind slot="value" parameter="ModWave" />
-      </knob>
-      <knob size="5,7" at="36,0">
+      </selector>
+      <knob label="Level" size="5,7" at="33,0">
         <bind slot="value" parameter="EffectLevel" />
       </knob>
     </section>
-    <section label="SpeakerSimulator" size="27,10" at="0,87" device="gx700" base="AddressMap.IndividualTemporary.SpeakerSimulator" collapsible="true">
+    <section label="Speaker Simulator" size="29,10" at="0,88" device="gx700" base="AddressMap.IndividualTemporary.SpeakerSimulator" collapsible="true">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
-      <selector size="6,4" at="4,0">
+      <selector size="8,4" at="4,1">
         <bind slot="value" parameter="Type" />
       </selector>
-      <knob size="5,7" at="10,0">
+      <knob label="Mic Place" size="5,7" at="12,0">
         <bind slot="value" parameter="MicSetting" />
       </knob>
-      <knob size="5,7" at="15,0">
+      <knob label="Mic Level" size="5,7" at="17,0">
         <bind slot="value" parameter="MicLevel" />
       </knob>
-      <knob size="5,7" at="20,0">
+      <knob label="Direct" size="5,7" at="22,0">
         <bind slot="value" parameter="DirectLevel" />
       </knob>
     </section>
