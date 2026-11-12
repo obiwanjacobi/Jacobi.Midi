@@ -18,6 +18,7 @@ using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Core.Parameters;
 using Jacobi.Midi.Console.Faces;
 using Jacobi.Midi.Console.Looks;
+using Jacobi.Midi.Console.Views;
 
 namespace Jacobi.Midi.Console.Dashboards;
 
@@ -85,7 +86,11 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     private Control? _selected;
     private Canvas? _shownGrid;
     private Canvas? _targetGrid;
+    // the outline of the moved control during a drag (an adorner of the root)
+    private Rectangle? _dragBox;
     private Drag? _drag;
+    // scrolls the dashboard while a dragged control is near the edge of the room around it
+    private EdgeScrolling? _edgeScrolling;
 
     public Control Build()
     {
@@ -241,6 +246,8 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         // the layout control under a moved control is found through it
         built.IsHitTestVisible = isSizing;
         e.Pointer.Capture(_root);
+        if (_root?.FindAncestorOfType<ScrollViewer>() is { } viewer)
+            _edgeScrolling = new EdgeScrolling(viewer, e, pointer => OnEdgeScrolled(viewer, pointer));
     }
 
     // dragging: the control follows the pointer by whole cells (moved or sized), nothing is changed yet
@@ -248,13 +255,41 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     {
         if (_drag is not { } drag)
             return;
-        var delta = e.GetPosition(drag.Reference) - drag.Start;
+        _edgeScrolling?.Track(e);
+        Follow(drag, e.GetPosition(drag.Reference), e.GetPosition(_root));
+        e.Handled = true;
+    }
+
+    // the dashboard scrolled under the pointer during a drag: the control follows it, as when the pointer moved
+    private void OnEdgeScrolled(ScrollViewer viewer, Point pointer)
+    {
+        if (_drag is not { } drag || _root is null)
+        {
+            StopEdgeScrolling();
+            return;
+        }
+        if (viewer.TranslatePoint(pointer, drag.Reference) is { } inReference && viewer.TranslatePoint(pointer, _root) is { } inRoot)
+            Follow(drag, inReference, inRoot);
+    }
+
+    private void StopEdgeScrolling()
+    {
+        _edgeScrolling?.Stop();
+        _edgeScrolling = null;
+    }
+
+    // the dragged control at the pointer (in the reference of the drag and in the root)
+    private void Follow(Drag drag, Point inReference, Point inRoot)
+    {
+        var delta = inReference - drag.Start;
         var columns = (int)Math.Round(delta.X / Cell);
         var rows = (int)Math.Round(delta.Y / Cell);
         var original = drag.Original;
         drag.Current = drag.IsSizing
             ? original with { Size = new CellSize(Math.Max(drag.Minimum.Columns, original.Size.Columns + columns), Math.Max(drag.Minimum.Rows, original.Size.Rows + rows)) }
-            : original with { At = new CellPosition(Math.Max(0, original.At.Column + columns), Math.Max(0, original.At.Row + rows)) };
+            // a moved control follows the pointer out of its grid too (up, left), toward another layout control; placed
+            // in its own grid, it stays inside (GridLayout.Place)
+            : original with { At = new CellPosition(original.At.Column + columns, original.At.Row + rows) };
         drag.Built.Width = drag.Current.Size.Columns * Cell;
         drag.Built.Height = drag.Current.Size.Rows * Cell;
         if (!drag.IsSizing)
@@ -264,9 +299,40 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
                 Canvas.SetLeft(drag.Built, drag.Current.At.Column * Cell);
                 Canvas.SetTop(drag.Built, drag.Current.At.Row * Cell);
             }
-            ShowTarget(MoveTargetAt(drag, e) is { } target ? target.Container : null);
+            // in a grid by whole cells, elsewhere (a row, a column: it is not moved itself) with the pointer
+            ShowDragBox(drag, drag.InGrid
+                ? new Point(drag.Current.At.Column * Cell, drag.Current.At.Row * Cell)
+                : inReference - new Vector(drag.Grab.X, drag.Grab.Y));
+            ShowTarget(MoveTargetAt(drag, inRoot) is { } target ? target.Container : null);
         }
-        e.Handled = true;
+    }
+
+    // the outline of a moved control, on top of the dashboard: it shows where the control goes, also where the control
+    // itself is hidden (cut off by its section, behind other controls); its top left is in the reference of the drag
+    private void ShowDragBox(Drag drag, Point topLeft)
+    {
+        if (_root is null)
+            return;
+        if (_dragBox is null)
+        {
+            _dragBox = new Rectangle { Stroke = SelectionBrush, StrokeThickness = 2, StrokeDashArray = [3, 2] };
+            AdornerLayer.SetAdorner(_root, new Canvas { IsHitTestVisible = false, Children = { _dragBox } });
+        }
+        var size = new Vector(drag.Current.Size.Columns * Cell, drag.Current.Size.Rows * Cell);
+        if (drag.Reference.TranslatePoint(topLeft, _root) is not { } from || drag.Reference.TranslatePoint(topLeft + size, _root) is not { } to)
+            return;
+        Canvas.SetLeft(_dragBox, from.X);
+        Canvas.SetTop(_dragBox, from.Y);
+        _dragBox.Width = to.X - from.X;
+        _dragBox.Height = to.Y - from.Y;
+    }
+
+    private void HideDragBox()
+    {
+        if (_dragBox is null || _root is null)
+            return;
+        AdornerLayer.SetAdorner(_root, null);
+        _dragBox = null;
     }
 
     // let go: the control is placed where it was dragged to (the dashboard is built again)
@@ -275,11 +341,15 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         if (_drag is not { } drag)
             return;
         _drag = null;
+        StopEdgeScrolling();
         e.Pointer.Capture(null);
         e.Handled = true;
+        // the target before the moved control can be hit again: it is under the pointer itself
+        var moveTarget = drag.IsSizing ? null : MoveTargetAt(drag, e.GetPosition(_root));
         drag.Built.IsHitTestVisible = true;
         ShowTarget(null);
-        if (!drag.IsSizing && MoveTargetAt(drag, e) is { } target)
+        HideDragBox();
+        if (moveTarget is { } target)
         {
             // the control's top left where it was let go, in the cells of the other grid
             var at = _grids.GetValueOrDefault(target.Container) is { } canvas ? CellAt(e.GetPosition(canvas) - drag.Grab) : default;
@@ -292,9 +362,9 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     }
 
     // a moved control over another layout control than its own goes into it
-    private DropTarget? MoveTargetAt(Drag drag, PointerEventArgs e)
+    private DropTarget? MoveTargetAt(Drag drag, Point inRoot)
     {
-        if (_root?.InputHitTest(e.GetPosition(_root)) is not Visual hit || TargetUnder(hit, e.GetPosition(_root), drag.Control) is not { } target)
+        if (_root?.InputHitTest(inRoot) is not Visual hit || TargetUnder(hit, inRoot, drag.Control) is not { } target)
             return null;
         return target.Container == GridLayout.ParentOf(session.Dashboard.Layout, drag.Control) ? null : target;
     }
