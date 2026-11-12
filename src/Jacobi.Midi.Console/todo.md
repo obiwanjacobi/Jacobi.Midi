@@ -6,12 +6,13 @@ What is planned for the console, and what was done. What the console does now is
 
 - [ ] Selecting several controls.
 - [ ] Copy and paste.
+- [ ] Scroll up/down+left/right during drag. When moving controls over large distances.
 - [ ] Allow drag-drop of schema group onto dashboard parameter to fill paths (base path)
 - [x] Add option to have tabs be Selector control.
 - [x] Edit/Play switch also switches when pressing on the selected option. When in Play, clicking on Play switches to Edit.
 - [x] A dashboard file should have references to its dependent files and assembly resources. Loading a dashboard file should make everything work and prompt the user if files cannot be found.
 - [ ] A rig (or dashboard) whose schema files or assemblies are not found: prompt the user to locate them, and refer to them there.
-- [ ] A rig-device does not need its own schema/exchange files. A device can only be created from an existing (global) schema/exchange definition.
+- [x] A rig-device does not need its own schema/exchange files. A device can only be created from an existing (global) schema/exchange definition.
 - [ ] Right property pane needs more right-margin/padding to make room for the vertical scrollbar. They now overlap.
 - [ ] Additional Section options as an (settings) option (default off):
   - [ ] collapse/expand
@@ -20,7 +21,7 @@ What is planned for the console, and what was done. What the console does now is
 - [ ] Analyze option to make a dashboard design on a NodeDef and let the user select the actual base (incl exchange send/recv). Example: Patch-dashboard can be used on user-memory, preset (read-only) and temporary areas - because they all use the Patch definition.
 - [ ] Dashboard user-controls: A reusable layout that can be dropped in to compose new dashboards.
 - [ ] Dashoboard name in top-bar droplist is not changed after name change in props-pane or file save.
-- [ ] Make the Selector's presentation Droplist or radio-buttons an explicit option.
+- [x] Make the Selector's presentation Droplist or radio-buttons an explicit option.
 - [x] Control label Tooltip cuts of last letter(s)?
 - [ ] Scrollbars should stay expanded. Needing to hover slows down design-workflow. Shortcuts (mouse+key?) for panning.
 - [ ] Drop-grid of section (with label) has to span complete surface. Label is drawn on top of it (last). This allows tabs to extent into dead-space the section-label row generates.
@@ -59,7 +60,7 @@ What is planned for the console, and what was done. What the console does now is
 - [ ] **Several open dashboards and the exchange.** The first steps assume one dashboard. With several open on one rig: does only the dashboard that is shown request its parameters (the others when the user switches to them), or all open dashboards at once? The device states are shared (`RigSession`), so a value received for one dashboard shows on the others too. => Only the active dashboard is actively updated.
 - [ ] **Detect the receive group** in the device panel (see the [Device todo](../Jacobi.Midi.Device/todo.md): detect the receive group of a device).
 - [ ] **The message interval as the pause on the wire** (see [Device todo](../Jacobi.Midi.Device/todo.md)). Dragging a knob streams messages; over a DIN connection the transmission time must be part of the pause.
-- [ ] **Exchange files next to schema files** (decision 11 in [docs/decisions.md](../../docs/decisions.md)). Custom schema files the user authors are loaded already (`SchemaSources.Schemas` of the rig, a device or the dashboard); custom exchange files are not. The library (`SchemaLibrary.Exchanges`) only has the exchange files embedded in its assemblies. A rig, device or dashboard that brings schema files should be able to bring exchange files (`*.exchange.xml`, `*.exchange.json`) too: in the `SchemaSources`, read with `ExchangeDefinitions.AddFile`, a later file replacing the one for the same root, problems reported in `SchemaLibrary.Problems`. Without its exchange file a device of a schema file cannot be synchronised.
+- [ ] **Exchange files next to schema files** (decision 11 in [docs/decisions.md](../../docs/decisions.md)). Custom schema files the user authors are loaded already (`SchemaSources.Schemas` of the rig or the dashboard); custom exchange files are not. The library (`SchemaLibrary.Exchanges`) only has the exchange files embedded in its assemblies. A rig or dashboard that brings schema files should be able to bring exchange files (`*.exchange.xml`, `*.exchange.json`) too: in the `SchemaSources`, read with `ExchangeDefinitions.AddFile`, a later file replacing the one for the same root, problems reported in `SchemaLibrary.Problems`. Without its exchange file a device of a schema file cannot be synchronised.
 - [ ] **Exchange patterns the console does not support.** The message exchange of a device is described in its exchange file, not in code: a pattern of one device is a file of that device (in its assembly, or next to its schemas), and the console asks for the standard patterns by name (`ExchangeNames`: `requestData`, `sendData`), whatever the device -outdated!-. Some patterns cannot be described yet (see *Message exchange patterns* in the [Device todo](../Jacobi.Midi.Device/todo.md)): the Roland handshake for sending, Yamaha Bulk Header/Footer and store requests (`before`/`after`), device modes, a manual operation on the device (prompts) and patterns the device starts. The console must not assume that every device in a rig can be synchronised:
   - **Detect it, show it.** When a device cannot be exchanged (no exchange file for its map root, no `requestData` or `sendData` in it, a message the exchange cannot use: see *Ask up front* above), the device is marked in the rig and on its controls with the reason. Its dashboards still open and work offline; nothing fails silently.
   - **Partial use.** A device whose exchange file has a `sendData` but no `requestData` (or one that cannot run) is used write-only: its parameters stay *unknown* until set, as for the parameters that cannot be read back (see *Parameter sources and targets* below). One with only a `requestData` is used read-only.

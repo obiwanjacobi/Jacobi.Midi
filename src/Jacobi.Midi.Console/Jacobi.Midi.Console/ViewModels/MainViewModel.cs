@@ -1120,7 +1120,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             var problems = library.Problems.Where(problem => problem.IsError).Select(problem => $"{problem.Source}: {problem.Message}").ToList();
             Report($"'{name}'", problems.Count > 0
                 ? $"it is not added to the rig: {String.Join(" ", problems)}"
-                : "it has no root group: it is not added to the rig. Add it to a device in its panel when that device's schema needs it.");
+                : "it has no root group: it is not added to the rig.");
             return;
         }
         if (!DoRigEdit(new ValueEdit<SchemaSources>("schemas of the rig", () => rig.Sources, value => rig.Sources = value, sources), rebuildsLibrary: true))
@@ -1139,39 +1139,6 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         {
             return Path.GetFileNameWithoutExtension(path);
         }
-    }
-
-    /// <summary>Adds a schema file or an assembly the user picks to a device; the library is built again with it.</summary>
-    public async Task AddDeviceSource(DeviceInstance device, SchemaSourceKind kind)
-    {
-        ArgumentNullException.ThrowIfNull(device);
-        if (await PickSource(kind) is not { } path)
-            return;
-        if (device.Sources.Schemas.Concat(device.Sources.Assemblies).Contains(path, StringComparer.OrdinalIgnoreCase))
-        {
-            Status = $"Device '{device.Alias}' has '{Path.GetFileName(path)}' already.";
-            return;
-        }
-        EditDeviceSources(device, SourcesWith(device.Sources, kind, path), $"'{Path.GetFileName(path)}' added");
-    }
-
-    /// <summary>Takes a schema file or an assembly out of the sources of a device; the library is built again without it.</summary>
-    public void RemoveDeviceSource(DeviceInstance device, string path)
-    {
-        ArgumentNullException.ThrowIfNull(device);
-        var sources = device.Sources with
-        {
-            Schemas = [.. device.Sources.Schemas.Where(schema => schema != path)],
-            Assemblies = [.. device.Sources.Assemblies.Where(assembly => assembly != path)],
-        };
-        EditDeviceSources(device, sources, $"'{Path.GetFileName(path)}' removed");
-    }
-
-    private void EditDeviceSources(DeviceInstance device, SchemaSources sources, string shown)
-    {
-        if (!DoRigEdit(new ValueEdit<SchemaSources>($"schemas of device '{device.Alias}'", () => device.Sources, value => device.Sources = value, sources), rebuildsLibrary: true))
-            return;
-        Status = $"Device '{device.Alias}': {shown}; the schemas were built again, so the values of the devices were reset. Save to keep it in the rig.";
     }
 
     // the alias of a new device: the first part of its map root in lower case (Gp8.AddressMap: gp8), unique in the rig
@@ -1579,7 +1546,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     }
 
     // the schema library: the built-in assemblies and the sources of the rig (or other sources of the rig, to see what
-    // they bring), its devices and all open dashboards
+    // they bring) and of all open dashboards
     private SchemaLibrary BuildLibrary(SchemaSources? rigSources = null)
     {
         var builder = new SchemaLibraryBuilder();
@@ -1588,8 +1555,6 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         builder.AddAssembly(typeof(Jacobi.Midi.Roland.Processors.ProcessorFactory).Assembly);
         builder.AddAssembly(typeof(Jacobi.Midi.Yamaha.Processors.ProcessorFactory).Assembly);
         builder.Add(rigSources ?? _rig.Sources, RigOrigin.Directory);
-        foreach (var device in _rig.Devices)
-            builder.Add(device.Sources, RigOrigin.Directory);
         foreach (var (dashboard, origin) in Dashboards.Select(entry => (entry.Dashboard, entry.Origin)))
             builder.Add(dashboard.Sources, origin.Directory);
         return builder.Build();
@@ -1823,8 +1788,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     private async Task<bool> WriteRig(bool saveAs)
     {
         var rig = _rig;
-        var sources = rig.Devices.Select(device => device.Sources).Prepend(rig.Sources);
-        return await SaveFile("Rig", RigOrigin, saveAs, [.. sources], (format, _) => RigFile.Write(rig, format));
+        return await SaveFile("Rig", RigOrigin, saveAs, [rig.Sources], (format, _) => RigFile.Write(rig, format));
     }
 
     // writes a file to where it was read from, or where the user picks (Save as, or a file not saved before);

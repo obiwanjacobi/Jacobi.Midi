@@ -42,7 +42,6 @@ public static class RigFile
                 .Set("alias", device.Alias)
                 .Set("name", device.Name)
                 .Set("mapRoot", device.MapRoot), device.Colors));
-            ConsoleFile.AddSources(element, device.Sources);
             foreach (var (name, value) in device.DeviceValues)
             {
                 element.Add(new FileElement(FileRoles.DeviceValues.ElementName!, FileRoles.DeviceValues)
@@ -99,14 +98,12 @@ public static class RigFile
     private static DeviceInstance ReadDevice(FileElement element)
     {
         var values = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-        var assemblies = new List<string>();
-        var schemas = new List<string>();
         EndpointReference? endpoint = null;
         foreach (var child in element.TakeChildren())
         {
-            if (ConsoleFile.TryReadSource(child, assemblies, schemas))
+            if (child.Name == FileRoles.Assemblies.ElementName || child.Name == FileRoles.Schemas.ElementName)
             {
-                continue;
+                throw child.Error($"a device cannot contain '{child.Name}': the schemas come from the rig (or the dashboard).");
             }
             if (child.Name == FileRoles.DeviceValues.ElementName)
             {
@@ -138,7 +135,6 @@ public static class RigFile
             Colors = ConsoleFile.GetColors(element),
             DeviceValues = values,
             Endpoint = endpoint,
-            Sources = new SchemaSources { Assemblies = assemblies, Schemas = schemas },
         };
         element.EnsureAllRead();
         return device;

@@ -399,23 +399,6 @@
                                     <SelectableTextBlock Text="{Binding TestResult}" IsVisible="{Binding TestResult, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                                          TextWrapping="Wrap" FontSize="12" FontFamily="Cascadia Mono, Consolas, monospace" />
 
-                                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
-                                        <TextBlock Text="Its own schemas" Classes="heading" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Content="+ Schema…" FontSize="12" Padding="6,2" ToolTip.Tip="Add a schema file (.xml, .json) for this device" Command="{Binding AddSchemaFileCommand}" />
-                                        <Button Grid.Column="2" Content="+ Assembly…" FontSize="12" Padding="6,2" ToolTip.Tip="Add an assembly (.dll) with schemas and processors for this device" Command="{Binding AddAssemblyCommand}" />
-                                    </Grid>
-                                    <TextBlock Text="none: the built-in schemas" Opacity="0.6" FontSize="12" IsVisible="{Binding !Sources.Count}" />
-                                    <ItemsControl ItemsSource="{Binding Sources}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:SourceViewModel">
-                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" Margin="0,0,0,4">
-                                                    <TextBlock Text="{Binding Name}" ToolTip.Tip="{Binding Tip}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                                    <Button Grid.Column="1" Content="✕" ToolTip.Tip="Take it out of the device's schemas" Command="{Binding RemoveCommand}" />
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-
                                     <TextBlock Text="Colors of its controls" Classes="heading" />
                                     <Grid ColumnDefinitions="64,*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="8">
                                         <TextBlock Text="Accent" VerticalAlignment="Center" />

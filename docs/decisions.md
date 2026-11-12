@@ -3,6 +3,16 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## No schema sources on a rig device (2026-11-12)
+
+Issue: a device of the rig had sources of its own (schema files and assemblies, `DeviceInstance.Sources`), added in
+its panel. A device is made from a root group the library already has, so they were not needed.
+
+1. **A device has no sources; the rig (and the dashboard) list them.** `DeviceInstance.Sources` and the device panel's
+   *Its own schemas* are removed; a `schema` or `assembly` in a device of a rig file is reported as an error, not
+   ignored. *Why:* one place that decides what is loaded (see *A dashboard refers to its rig*); exchange files follow
+   the same sources (decision 11 of *Message exchange in the console*).
+
 ## The label and the selector's options in the console (2026-11-12)
 
 Issue: the size of a control's content (its face) followed from the length of its label and, for a selector, from

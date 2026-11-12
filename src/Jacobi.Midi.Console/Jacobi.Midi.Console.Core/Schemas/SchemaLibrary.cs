@@ -12,7 +12,7 @@ namespace Jacobi.Midi.Console.Core.Schemas;
 /// <summary>
 /// The schemas and processors the console works with, compiled into one <see cref="SchemaSet"/> and
 /// <see cref="Serializer"/> with the serializer's own objects. Built from the built-in assemblies and the sources of
-/// the rig, its devices and a dashboard (see <see cref="SchemaLibraryBuilder"/>). Problems with a source do not stop
+/// the rig and a dashboard (see <see cref="SchemaLibraryBuilder"/>). Problems with a source do not stop
 /// the others; all are reported in <see cref="Problems"/>, and a set that does not compile has no serializer.
 /// </summary>
 public sealed class SchemaLibrary
@@ -170,7 +170,7 @@ public sealed record SchemaLibraryProblem(string Source, string Message, bool Is
 
 /// <summary>
 /// Collects assemblies and schema files in order and builds a <see cref="SchemaLibrary"/>. A schema document of a
-/// later source replaces an earlier one with the same name: a device or dashboard can customise a built-in schema.
+/// later source replaces an earlier one with the same name: a rig or dashboard can customise a built-in schema.
 /// </summary>
 public sealed class SchemaLibraryBuilder
 {
@@ -253,7 +253,7 @@ public sealed class SchemaLibraryBuilder
         return this;
     }
 
-    /// <summary>Adds the assemblies and schema files of a rig, device or dashboard; relative paths are relative to <paramref name="baseDirectory"/>.</summary>
+    /// <summary>Adds the assemblies and schema files of a rig or dashboard; relative paths are relative to <paramref name="baseDirectory"/>.</summary>
     public SchemaLibraryBuilder Add(SchemaSources sources, string? baseDirectory = null)
     {
         ArgumentNullException.ThrowIfNull(sources);

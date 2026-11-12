@@ -16,7 +16,7 @@ the devices) is in the [todo list](todo.md).
 |------|---------|
 | **Rig** | The devices of the user: a list of device instances, and the assemblies and schema files they need. Saved in its own file, so the same rig serves all dashboards. |
 | **Device instance** | One device of the rig: an **alias** (`synth`, `pedalboard`), a display name, the **map root**: the root group of its schema (any root group; usually an address map, e.g. `Gx700.AddressMap`), the `DeviceValues` the map root does not fix (e.g. `deviceId`), how to reach it (the endpoint by name and the UMP groups to send and receive on; usually the same group), its color, and its own assemblies and schema files. |
-| **Schema library** | The schemas and processors the console works with, compiled into one `SchemaSet` and `Serializer`: the built-in assemblies plus the assemblies and schema files of the rig, its devices and the dashboard (see [Schemas](#schemas)). |
+| **Schema library** | The schemas and processors the console works with, compiled into one `SchemaSet` and `Serializer`: the built-in assemblies plus the assemblies and schema files of the rig and the dashboard (see [Schemas](#schemas)). |
 | **Index variable** | A repeat index the user changes in the UI, e.g. the patch number: declared on a layout control and used in binding paths as `Programs[$patch]`. Changed by a control bound to `$patch`. |
 | **Parameter** | One field of the root group of a device (usually its address map), identified by its schema path and `InstancePath` (e.g. the `Rate` of the phaser in the temporary patch). The display name, value range, steps and option names come from the schema's data type (`min`, `max`, `scale`, `shift`, `options`). |
 | **Dashboard** | A tree of controls: layout controls that contain parameter controls and other layout controls. It refers to devices by alias only, so it is portable between rigs. |
@@ -377,8 +377,8 @@ of the library, `SchemaLibrary.Roots`, address maps first), device values (a lis
 device values the map root needs (`MessageMapInfo.RequiredDeviceValues`, e.g. `deviceId`) or typed, and a value; a name
 the map root does not need is marked, and so are the required ones still without a value, or why the map root's are
 not known), the MIDI endpoint and UMP groups with the
-device's connection and its tests (see [MIDI](#midi)), colors and its own schemas (schema files and assemblies, added
-and removed there); *Remove* takes it out. The *+* of the rig adds a device for an address map of the library (the
+device's connection and its tests (see [MIDI](#midi)) and colors; *Remove* takes it out. A device has no schema files
+or assemblies of its own: it is made from a root group of the library. The *+* of the rig adds a device for an address map of the library (the
 other root groups in a submenu; named after it: `Gp8.AddressMap` is `gp8`). It also brings in the schemas (and
 exchange files) of a schema file or an assembly the user picks: the file becomes a schema source of the rig
 (`Rig.Sources`), and the root groups of the documents it brings (`SchemaLibrary.RootsFromFile`) are offered by the *+*
@@ -466,11 +466,10 @@ them, in this order:
 
 1. the built-in assemblies: the serializer's processors (`sys`) and the base `midi` schema with its processors (`SchemaLibraryBuilder.CoreAssemblies`), and the device assemblies the host preloads (Roland, Yamaha, ...);
 2. the assemblies and schema files of the rig;
-3. those of the rig's devices;
-4. those of the dashboard.
+3. those of the dashboard.
 
 An assembly brings its embedded schemas (`.xml`, `.json` resources) and its processor factories. A schema document of a
-later source replaces an earlier one with the same name, so a device or a dashboard can customise a built-in schema;
+later source replaces an earlier one with the same name, so a rig or a dashboard can customise a built-in schema;
 the replacement is shown as information in the notifications. A source that cannot be loaded (a missing file, an
 assembly that does not load, an invalid schema) is reported and the others are still used; schemas that do not compile
 are reported and the library then has no serializer.
@@ -511,7 +510,6 @@ one.
       "alias": "synth",
       "name": "Acme S-1",
       "mapRoot": "Acme.AddressMap",
-      "schemas": [ "AcmeS1Custom.xml" ],
       "deviceValues": { "deviceId": "0x10" },
       "endpoint": { "name": "USB MIDI Interface", "sendGroup": 0, "receiveGroup": 0 },
       "color": "#3D8BFD"
@@ -527,14 +525,13 @@ The same rig in XML:
   <assembly path="Acme.Midi.dll" />
   <schema path="C:/Schemas/Acme.xml" />
   <device alias="synth" name="Acme S-1" mapRoot="Acme.AddressMap" color="#3D8BFD">
-    <schema path="AcmeS1Custom.xml" />
     <deviceValue name="deviceId" value="0x10" />
     <endpoint name="USB MIDI Interface" group="0" />
   </device>
 </rig>
 ```
 
-- `assemblies`, `schemas`: on the rig for all its devices, on a device for that device only (see [Schemas](#schemas)); a relative path is relative to the rig file. A dashboard has them too.
+- `assemblies`, `schemas`: on the rig for all its devices (see [Schemas](#schemas)); a relative path is relative to the rig file. A dashboard has them too; a device does not (reported when it has).
 - `deviceValues`: in the notation of the schemas (`0x10`, `10H` or decimal); written in hex.
 - `endpoint`: the endpoint is matched by its **name** and UMP group (0-15 in the file, shown as 1-16). Endpoint ids are not portable (native Windows ids) and do not identify an instrument behind a DIN port. When no endpoint with that name is found, the device is shown as not connected and the user can pick another endpoint.
 - `color`, `plateColor`, `panelColor`: the colors of the device's controls (see [Color](#color)).

@@ -18,7 +18,6 @@ public class RigFileTests
           <assembly path="Acme.Midi.dll" />
           <schema path="C:/Schemas/Acme.xml" />
           <device alias="synth" name="Acme S-1" mapRoot="Acme.AddressMap" color="#3D8BFD">
-            <schema path="Schemas/AcmeCustom.xml" />
             <deviceValue name="deviceId" value="0x10" />
             <deviceValue name="groupId" value="7F1CH" />
             <endpoint name="USB MIDI Interface" sendGroup="2" receiveGroup="3" />
@@ -35,7 +34,6 @@ public class RigFileTests
           "devices": [
             {
               "alias": "synth", "name": "Acme S-1", "mapRoot": "Acme.AddressMap", "color": "#3D8BFD",
-              "schemas": [ "Schemas/AcmeCustom.xml" ],
               "deviceValues": { "deviceId": "0x10", "groupId": 32540 },
               "endpoint": { "name": "USB MIDI Interface", "sendGroup": 2, "receiveGroup": 3 }
             },
@@ -54,8 +52,6 @@ public class RigFileTests
         Assert.Equal(2, rig.Devices.Count);
 
         var synth = rig.Find("SYNTH")!;
-        Assert.Equal(["Schemas/AcmeCustom.xml"], synth.Sources.Schemas);
-        Assert.Empty(synth.Sources.Assemblies);
         Assert.Equal(("Acme S-1", "Acme.AddressMap", "#3D8BFD"), (synth.Name, synth.MapRoot, synth.Colors.Accent));
         Assert.Equal(0x10, synth.DeviceValues["deviceId"]);
         Assert.Equal(0x7F1C, synth.DeviceValues["GROUPID"]);
@@ -141,6 +137,8 @@ public class RigFileTests
     [InlineData("""<endpoint name="Port" /><endpoint name="Other" />""", "one endpoint")]
     [InlineData("""<endpoint sendGroup="1" />""", "'name' is required")]
     [InlineData("""<port name="Port" />""", "a device cannot contain 'port'")]
+    [InlineData("""<schema path="Acme.xml" />""", "a device cannot contain 'schema'")]
+    [InlineData("""<assembly path="Acme.dll" />""", "a device cannot contain 'assembly'")]
     public void Read_ReportsWhatDoesNotFit(string content, string message)
     {
         var xml = $"""<rig format="jacobi.midi.rig/1"><device alias="synth" mapRoot="Acme.AddressMap">{content}</device></rig>""";

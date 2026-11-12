@@ -23,7 +23,8 @@ public sealed class Rig
 
 /// <summary>
 /// One device of the rig: what it is (the map root of its schema and the device values the map root does not fix),
-/// how to reach it and its color.
+/// how to reach it and its color. Its schema and exchange file come from the schema library (the built-in assemblies
+/// and the sources of the rig); a device has no sources of its own.
 /// </summary>
 public sealed class DeviceInstance
 {
@@ -47,9 +48,6 @@ public sealed class DeviceInstance
     /// them in the console.
     /// </summary>
     public AreaColors Colors { get; set; } = AreaColors.None;
-
-    /// <summary>Assemblies and schema files for this device only: its schema or customisations of it.</summary>
-    public SchemaSources Sources { get; set; } = SchemaSources.None;
 }
 
 /// <summary>
