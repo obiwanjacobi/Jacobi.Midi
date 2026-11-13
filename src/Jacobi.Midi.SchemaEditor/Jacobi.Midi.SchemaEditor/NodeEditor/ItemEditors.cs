@@ -32,7 +32,7 @@ internal abstract class ItemEditor(SchemaWorkspaceDocument document) : Observabl
         ItemEditor? editor = item switch
         {
             EditDocumentRef include => new DocumentRefEditor(document, include, schemas),
-            EditDataTypeDef definition => new DataTypeDefEditor(document, definition),
+            EditDataTypeDef definition => new DataTypeDefEditor(document, definition, schemas),
             EditProcessorDef definition => new ProcessorDefEditor(document, definition),
             EditProcessorRef processor => new ProcessorRefEditor(document, processor),
             EditProperty property => new PropertyEditor(document, property),
@@ -112,12 +112,15 @@ internal sealed partial class DataTypeDefEditor : ItemEditor
 {
     private readonly SchemaWorkspaceDocument _document;
     private readonly EditDataTypeDef _definition;
+    private readonly SchemaSetWorkspace? _schemas;
 
-    public DataTypeDefEditor(SchemaWorkspaceDocument document, EditDataTypeDef definition)
+    /// <param name="schemas">The loaded schemas: the data type defs of the schemas the document includes are known; null for the document only.</param>
+    public DataTypeDefEditor(SchemaWorkspaceDocument document, EditDataTypeDef definition, SchemaSetWorkspace? schemas = null)
         : base(document)
     {
         _document = document;
         _definition = definition;
+        _schemas = schemas;
         Options = new(definition.Options?.Select(option => new OptionRow(this, option.Key, option.Value)) ?? []);
     }
 
@@ -134,10 +137,10 @@ internal sealed partial class DataTypeDefEditor : ItemEditor
     }
 
     /// <summary>
-    /// The data types to base the def on: the registered types and the other data type defs of the document.
+    /// The data types to base the def on: the registered types and the other data type defs of the document and the schemas it includes.
     /// Taken from the document each time the editor is created (when a def is selected or added).
     /// </summary>
-    public IReadOnlyList<string> BasedOnOptions => DataTypeOptions.Get(_document.Schema, _definition);
+    public IReadOnlyList<DataTypeOption> BasedOnOptions => DataTypeOptions.Get(SchemaScope.Of(_document.Schema, _schemas), _definition);
 
     /// <summary>The data type of the logical value; empty for the implied value type.</summary>
     public string? ValueType
@@ -210,7 +213,7 @@ internal sealed partial class DataTypeDefEditor : ItemEditor
     /// A warning when <paramref name="value"/> is not a physical value of the base type (a literal of <see cref="BasedOn"/>); otherwise null.
     /// </summary>
     internal string? ValidatePhysical(string value)
-        => DataTypeValueValidator.ValidatePhysical(_document.Schema, _definition.BasedOn.ToString(), value);
+        => DataTypeValueValidator.ValidatePhysical(SchemaScope.Of(_document.Schema, _schemas), _definition.BasedOn.ToString(), value);
 
     /// <summary>
     /// Writes the rows to the def. A value used by more than one row keeps the label of the last row.

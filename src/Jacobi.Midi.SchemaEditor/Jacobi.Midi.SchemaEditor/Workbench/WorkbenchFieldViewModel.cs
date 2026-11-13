@@ -24,6 +24,9 @@ internal sealed class WorkbenchSchemaHost
     /// The instantiator uses the processors the schemas use. Throws <see cref="InvalidOperationException"/> when it does not compile.
     /// </summary>
     public required Func<EditDocument, SchemaWorkspaceDocument?, SchemaInstantiator> Compile { get; init; }
+
+    /// <summary>The schemas a document can refer to: itself and the loaded schemas it includes (see <see cref="SchemaScope"/>).</summary>
+    public required Func<EditDocument, SchemaScope> GetScope { get; init; }
 }
 
 /// <summary>The value of the field in one capture, as shown in the field panel.</summary>
@@ -97,9 +100,9 @@ internal sealed partial class WorkbenchFieldViewModel : ObservableObject
     [ObservableProperty]
     public partial string Doc { get; set; } = String.Empty;
 
-    /// <summary>The data types to choose from (including the data type defs of the target schema).</summary>
+    /// <summary>The data types to choose from (including the data type defs of the target schema and the schemas it includes).</summary>
     [ObservableProperty]
-    public partial IReadOnlyList<string> DataTypeOptions { get; private set; } = Models.DataTypeOptions.Get(null);
+    public partial IReadOnlyList<DataTypeOption> DataTypeOptions { get; private set; } = Models.DataTypeOptions.Get(null);
 
     /// <summary>The processors that are often needed for SysEx data.</summary>
     public IReadOnlyList<string> ProcessorOptions { get; } = ["", "Midi.sysexbyte", "Midi.string"];
@@ -141,7 +144,7 @@ internal sealed partial class WorkbenchFieldViewModel : ObservableObject
             ? new FieldContext(title, range, messages[range.Slot], layout, captures,
                 layout?.Find(range.Start) is { IsPlaceholder: false } span ? span.Field : null, messages, layouts)
             : null;
-        DataTypeOptions = Models.DataTypeOptions.Get(_host.FindDocument(title)?.Schema);
+        DataTypeOptions = Models.DataTypeOptions.Get(_host.FindDocument(title) is { } target ? _host.GetScope(target.Schema) : null);
 
         Mode = GetMode(_context, out var hint);
         Hint = hint;

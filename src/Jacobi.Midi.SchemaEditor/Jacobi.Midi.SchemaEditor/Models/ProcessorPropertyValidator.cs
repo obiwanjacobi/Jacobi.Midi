@@ -25,10 +25,10 @@ internal static class ProcessorPropertyValidator
     /// Returns a warning when the property <paramref name="name"/> with <paramref name="value"/> does not match the
     /// properties published by the processor <paramref name="processorKey"/>; otherwise null.
     /// </summary>
-    /// <param name="document">The document the property is in; its data type defs are known for the value check.</param>
+    /// <param name="scope">The document the property is in and the schemas it includes; their data type defs are known for the value check.</param>
     /// <param name="dataTypes">The registered data types, including those of the processor factories.</param>
     public static string? Validate(string processorKey, IReadOnlyList<PropertyDescriptor> descriptors, string name, string? value,
-        EditDocument? document, DataTypeRegistry dataTypes)
+        SchemaScope? scope, DataTypeRegistry dataTypes)
     {
         if (String.IsNullOrWhiteSpace(name))
         {
@@ -42,8 +42,7 @@ internal static class ProcessorPropertyValidator
         {
             return $"'{descriptor.Name}' is read-only for {processorKey}.";
         }
-        return DataTypeValueValidator.Validate(document is null ? [] : [document], document?.Name ?? String.Empty,
-            descriptor.DataType.FullName, value ?? String.Empty, dataTypes);
+        return DataTypeValueValidator.Validate(scope, descriptor.DataType.FullName, value ?? String.Empty, dataTypes);
     }
 
     /// <summary>

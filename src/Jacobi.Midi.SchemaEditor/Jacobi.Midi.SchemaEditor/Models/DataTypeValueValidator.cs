@@ -6,48 +6,54 @@ namespace Jacobi.Midi.SchemaEditor.Models;
 
 /// <summary>
 /// Checks the constant Value of a field against its data type: the data type is resolved from the
-/// <see cref="DataTypeRegistry"/> and the (local) data type defs of the document. The Value is a logical value:
-/// it must parse with the value type of the descriptor, be one of its Options and respect its Min and Max facets.
-/// The data type defs are resolved by the serializer itself (<see cref="DataTypeRegistry.RegisterDataTypeDefs"/>),
+/// <see cref="DataTypeRegistry"/> and the data type defs of the document and the schemas it includes (its <see cref="SchemaScope"/>).
+/// The Value is a logical value: it must parse with the value type of the descriptor, be one of its Options and respect
+/// its Min and Max facets. The data type defs are resolved by the serializer itself (<see cref="DataTypeRegistry.RegisterDataTypeDefs"/>),
 /// so facet inheritance and the implied value type are the same as when the schema is compiled.
 /// Produces warnings only; data types that cannot be resolved (custom types) are not validated.
+/// A data type def of a loaded schema that the document does not include is not resolved either: it gets a warning instead
+/// (see <see cref="ValidateInclude"/>).
 /// </summary>
 internal static class DataTypeValueValidator
 {
     private static readonly DataTypeRegistry Registry = DataTypeRegistry.CreateDefault();
 
     /// <summary>
-    /// True when <paramref name="dataType"/> is not empty but is neither registered nor a data type def of the
-    /// <paramref name="document"/> (based on a registered type): it is a custom data type.
+    /// True when <paramref name="dataType"/> is not empty but is neither registered nor a data type def in the
+    /// <paramref name="scope"/> (based on a registered type) nor a data type def of a loaded schema that is not included:
+    /// it is a custom data type.
     /// </summary>
-    public static bool IsCustom(EditDocument? document, string dataType)
-        => document is null ? IsCustom([], String.Empty, dataType) : IsCustom([document], document.Name, dataType);
+    public static bool IsCustom(SchemaScope? scope, string dataType)
+        => !String.IsNullOrWhiteSpace(dataType) && Resolve(scope, dataType, Registry) is null && ValidateInclude(scope, dataType) is null;
 
     /// <summary>
-    /// True when <paramref name="dataType"/> is not empty but is neither registered nor a data type def of one of the
-    /// <paramref name="documents"/> (based on a registered type). Unqualified names are looked up in <paramref name="ownerName"/>.
+    /// Returns a warning when <paramref name="dataType"/> is a data type def of a loaded schema that the document of
+    /// <paramref name="scope"/> does not include (directly or through another include); otherwise null.
     /// </summary>
-    public static bool IsCustom(IReadOnlyList<EditDocument> documents, string ownerName, string dataType)
-        => !String.IsNullOrWhiteSpace(dataType) && Resolve(documents, ownerName, dataType, Registry) is null;
+    public static string? ValidateInclude(SchemaScope? scope, string dataType)
+    {
+        if (scope is null || String.IsNullOrWhiteSpace(dataType))
+        {
+            return null;
+        }
+        var name = new SchemaName(dataType.Trim());
+        return !String.IsNullOrEmpty(name.Namespace) && !Registry.TryGet(name, out _)
+            && scope.FindNotIncluded(name.Namespace) is { } schema && FindDef([schema], schema.Name, name) is not null
+            ? $"The data type {name} is a data type def of the schema '{schema.Name}', which '{scope.Document.Name}' does not include."
+            : null;
+    }
 
     /// <summary>
     /// Returns a warning when <paramref name="value"/> is not valid for <paramref name="dataType"/>; otherwise null.
-    /// Empty values, references ('ref:', 'pub:') and custom data types are not validated.
+    /// The data type defs in the <paramref name="scope"/> are known (so also those of included schemas);
+    /// unqualified names are looked up in its document. Empty values, references ('ref:', 'pub:') and custom data types are not validated.
     /// </summary>
-    public static string? Validate(EditDocument? document, string dataType, string value)
-        => document is null ? Validate([], String.Empty, dataType, value) : Validate([document], document.Name, dataType, value);
-
-    /// <summary>
-    /// Returns a warning when <paramref name="value"/> is not valid for <paramref name="dataType"/>; otherwise null.
-    /// The data type defs of all <paramref name="documents"/> are known (so also those of included schemas);
-    /// unqualified names are looked up in <paramref name="ownerName"/>.
-    /// </summary>
+    /// <param name="scope">The document and the schemas it includes; null for the registered data types only.</param>
     /// <param name="registry">The registered data types; null for the built-in data types.</param>
-    public static string? Validate(IReadOnlyList<EditDocument> documents, string ownerName, string dataType, string value,
-        DataTypeRegistry? registry = null)
+    public static string? Validate(SchemaScope? scope, string dataType, string value, DataTypeRegistry? registry = null)
     {
         value = value?.Trim() ?? String.Empty;
-        if (IsDerived(value) || Resolve(documents, ownerName, dataType, registry ?? Registry) is not { } resolved)
+        if (IsDerived(value) || Resolve(scope, dataType, registry ?? Registry) is not { } resolved)
         {
             return null;
         }
@@ -101,13 +107,14 @@ internal static class DataTypeValueValidator
 
     /// <summary>
     /// Returns a warning when <paramref name="value"/> is not a literal of the physical part of <paramref name="dataType"/>
-    /// (as the physical value of an option); otherwise null. Facets are not applied. Custom data types are not validated.
+    /// (as the physical value of an option); otherwise null. Facets are not applied. Custom data types are not validated;
+    /// a data type def of a schema that is not included gets the warning of <see cref="ValidateInclude"/>.
     /// </summary>
-    public static string? ValidatePhysical(EditDocument? document, string dataType, string value)
+    public static string? ValidatePhysical(SchemaScope? scope, string dataType, string value)
     {
-        if (Resolve(document is null ? [] : [document], document?.Name ?? String.Empty, dataType, Registry) is not { } resolved)
+        if (Resolve(scope, dataType, Registry) is not { } resolved)
         {
-            return null;
+            return ValidateInclude(scope, dataType);
         }
         if (resolved.Error is { } error)
         {
@@ -122,16 +129,18 @@ internal static class DataTypeValueValidator
     private sealed record Resolution(DataTypeDescriptor? Descriptor, string? Error);
 
     /// <summary>
-    /// Resolves a registered data type, or a data type def of the documents together with the defs it depends on (its base and value type)
-    /// into a copy of <paramref name="registry"/>. A reference without namespace is looked up in the document of the referring def.
-    /// Returns null when the data type is neither registered nor a data type def (a custom type).
+    /// Resolves a registered data type, or a data type def in the <paramref name="scope"/> together with the defs it depends on
+    /// (its base and value type) into a copy of <paramref name="registry"/>. A reference without namespace is looked up in the
+    /// document of the referring def. Returns null when the data type is neither registered nor a data type def in the scope.
     /// </summary>
-    private static Resolution? Resolve(IReadOnlyList<EditDocument> documents, string ownerName, string dataType, DataTypeRegistry registry)
+    private static Resolution? Resolve(SchemaScope? scope, string dataType, DataTypeRegistry registry)
     {
         if (String.IsNullOrWhiteSpace(dataType))
         {
             return null;
         }
+        var documents = scope?.Documents ?? [];
+        var ownerName = scope?.Document.Name ?? String.Empty;
         var name = new SchemaName(dataType.Trim());
         if (registry.TryGet(name, out var registered))
         {

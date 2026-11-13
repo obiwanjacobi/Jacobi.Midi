@@ -173,6 +173,19 @@ internal sealed class SchemaSetWorkspace
     }
 
     /// <summary>
+    /// The schemas <paramref name="document"/> can refer to: itself and the loaded schemas it includes (transitively),
+    /// found by name as when it is compiled (see <see cref="Compile(EditDocument, SchemaWorkspaceDocument?)"/>);
+    /// and the other loaded schemas. An include that is not loaded is left out.
+    /// </summary>
+    public SchemaScope GetScope(EditDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        var candidates = GetDocuments(document);
+        var closure = GetClosure(document, candidates, out _);
+        return new SchemaScope(document, [.. closure.Skip(1)], [.. candidates.Where(candidate => !closure.Contains(candidate))]);
+    }
+
+    /// <summary>
     /// The loaded schemas, one per name, as <paramref name="document"/> sees them: it answers to its own name
     /// (also an embedded schema that an open document replaces), every other name as <see cref="Find"/> tells.
     /// </summary>

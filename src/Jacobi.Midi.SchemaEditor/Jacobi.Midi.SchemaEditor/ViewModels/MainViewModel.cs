@@ -195,7 +195,8 @@ internal sealed partial class MainViewModel : ViewModelBase
         // the target schema must be an open document: an embedded schema cannot be changed
         FindDocument = name => LoadedSchemas.Find(name) is { IsEmbedded: false } entry ? entry.Document : null,
         CreateDocument = CreateWorkbenchDocument,
-        Compile = (copy, copyOf) => new SchemaInstantiator(LoadedSchemas.Compile(copy, copyOf), OpenedAssemblies.Processors)
+        Compile = (copy, copyOf) => new SchemaInstantiator(LoadedSchemas.Compile(copy, copyOf), OpenedAssemblies.Processors),
+        GetScope = LoadedSchemas.GetScope
     });
 
     // the target schema of the workbench: an empty XML document (like the device schemas)
@@ -218,9 +219,10 @@ internal sealed partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// The data types to choose from for a field: the types registered in the <see cref="DataTypeRegistry"/>
-    /// followed by the data type defs of the <see cref="ActiveDocument"/>. The data type editors also accept a custom value.
+    /// followed by the data type defs of the <see cref="ActiveDocument"/> and the schemas it includes. The data type editors also accept a custom value.
     /// </summary>
-    public IReadOnlyList<string> DataTypeOptions => Models.DataTypeOptions.Get(ActiveDocument?.Schema);
+    public IReadOnlyList<DataTypeOption> DataTypeOptions
+        => Models.DataTypeOptions.Get(ActiveDocument is null ? null : SchemaScope.Of(ActiveDocument.Schema, LoadedSchemas));
 
     /// <summary>
     /// The processors a processor def can reference: the processors of the processor namespaces of the opened assemblies (e.g. 'sys.*').
@@ -252,15 +254,12 @@ internal sealed partial class MainViewModel : ViewModelBase
             .Select(def => def.Name)
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        foreach (var include in document.Includes)
+        foreach (var included in SchemaScope.Of(document, LoadedSchemas).DirectIncludes)
         {
-            if (LoadedSchemas.Find(include.Schema, document)?.Schema is { } included)
-            {
-                names.AddRange(included.NodeDefs
-                    .Where(def => def.Kind == kind)
-                    .Select(def => $"{included.Name}{SchemaName.Separator}{def.Name}")
-                    .Order(StringComparer.OrdinalIgnoreCase));
-            }
+            names.AddRange(included.NodeDefs
+                .Where(def => def.Kind == kind)
+                .Select(def => $"{included.Name}{SchemaName.Separator}{def.Name}")
+                .Order(StringComparer.OrdinalIgnoreCase));
         }
         return names;
     }
@@ -1626,7 +1625,7 @@ internal sealed partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(ProcessorKeyOptions));
         OnPropertyChanged(nameof(NodeDefOptions));
         OnPropertyChanged(nameof(MemberNodeDefOptions));
-        NodeFacets = new NodeFacets(ActiveDocument, node);
+        NodeFacets = new NodeFacets(ActiveDocument, node, LoadedSchemas);
     }
 
     private bool IsEditorTabAvailable(int tab) => tab switch

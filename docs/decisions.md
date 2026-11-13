@@ -3,6 +3,26 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## Data type defs of included schemas in the Schema Editor (2026-11-13)
+
+Issue: the data type drop-downs and the field Value validation only knew the registered types and the data type defs
+of the edited document; a def of an included schema counted as a custom type and was not validated.
+
+1. **The drop-downs list the defs of the document's own includes only**, not those of transitive includes, as the
+   node def options do. *Why:* the user refers to what the document includes itself.
+2. **The validation knows the defs of all (transitive) includes.** *Why:* a def of an include can be based on a def of
+   that schema's own include; the value must be checked against the whole chain.
+3. **A def of a loaded schema that the document does not include gets a warning** (next to the data type), not the
+   "custom data type" note. *Why:* it may resolve when compiled with all loaded schemas, but the document does not
+   say it depends on that schema.
+4. **One place tells which schemas a document sees: `SchemaSetWorkspace.GetScope` (`SchemaScope`)**, found by name as
+   when compiling. The node def options use it too. *Why:* single place of truth for resolving includes.
+5. **Every data type in the drop-downs shows what it is, muted, after its name** (`DataTypeOption`): a def its base
+   type and the facets that are set (range, number of options, scale/shift, value type), then its processors (at the
+   end); a registered type its size
+   and CLR type, taken from the descriptor (it has no description). *Why:* the user sees what a type represents
+   without opening the def; nothing to maintain for the registered types.
+
 ## Following node references in the Schema Editor (2026-11-13)
 
 Issue: node def names and `ref:` paths in the node editor are plain text; finding the node they refer to means

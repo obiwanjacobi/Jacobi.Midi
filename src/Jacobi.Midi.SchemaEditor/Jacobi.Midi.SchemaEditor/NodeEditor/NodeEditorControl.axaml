@@ -372,6 +372,8 @@
                         <TextBox PlaceholderText="Field name" Text="{Binding NodeFacets.Name, UpdateSourceTrigger=LostFocus}" />
                         <ContentControl Content="{Binding}" ContentTemplate="{StaticResource DocumentationTemplate}" />
                         <ComboBox Classes="options" ItemsSource="{Binding DataTypeOptions}" IsEditable="True" Text="{Binding NodeFacets.DataType, UpdateSourceTrigger=LostFocus}" />
+                        <TextBlock Text="{Binding NodeFacets.DataTypeWarning}" Foreground="Orange" FontSize="11" TextWrapping="Wrap"
+                                   IsVisible="{Binding NodeFacets.DataTypeWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                         <TextBlock Text="{Binding NodeFacets.DataTypeNote}" Classes="caption" TextWrapping="Wrap"
                                    IsVisible="{Binding NodeFacets.DataTypeNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                         <StackPanel Spacing="4">

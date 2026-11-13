@@ -1,4 +1,5 @@
 using System.Reflection;
+using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.SchemaEditor.Assemblies;
 using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.SchemaEditor.NodeEditor;
@@ -107,6 +108,90 @@ public class AssemblyWorkspaceTests
 
         Assert.Equal(["localField", $"{library.Name}.libraryField"], viewModel.NodeDefOptions);
         Assert.Equal(["localGroup", $"{library.Name}.libraryGroup"], viewModel.MemberNodeDefOptions);
+    }
+
+    [Fact]
+    public void DataTypeOptions_AreTheDataTypeDefsLocalAndOfTheOwnIncludes()
+    {
+        var viewModel = new MainViewModel();
+        viewModel.NewDocumentCommand.Execute(null);
+        var nested = viewModel.SelectedDocument!.Schema;
+        nested.DataTypeDefs.Add(new EditDataTypeDef { Name = "nestedType", BasedOn = new SchemaName("sys.uint8") });
+        viewModel.NewDocumentCommand.Execute(null);
+        var library = viewModel.SelectedDocument!;
+        library.AddInclude(nested.Name);
+        library.Schema.DataTypeDefs.Add(new EditDataTypeDef { Name = "libraryType", BasedOn = new SchemaName("sys.uint8") });
+        viewModel.NewDocumentCommand.Execute(null);
+        var document = viewModel.SelectedDocument!;
+        document.AddInclude(library.Schema.Name);
+        document.Schema.DataTypeDefs.Add(new EditDataTypeDef { Name = "localType", BasedOn = new SchemaName("sys.uint8") });
+        var root = (EditGroup)document.Schema.Members[0];
+        var field = new EditField(root) { Name = "field", Processors = [], Properties = [] };
+        root.Members.Add(field);
+
+        viewModel.SelectedItem = field;
+
+        Assert.Contains($"{document.Schema.Name}.localType", viewModel.DataTypeOptions.Select(option => option.Name));
+        Assert.Contains($"{library.Schema.Name}.libraryType", viewModel.DataTypeOptions.Select(option => option.Name));
+        // only the own includes are offered
+        Assert.DoesNotContain($"{nested.Name}.nestedType", viewModel.DataTypeOptions.Select(option => option.Name));
+    }
+
+    [Fact]
+    public void FieldValue_IsValidatedWithTheDataTypeDefsOfTheIncludes()
+    {
+        var viewModel = new MainViewModel();
+        viewModel.NewDocumentCommand.Execute(null);
+        var nested = viewModel.SelectedDocument!.Schema;
+        nested.DataTypeDefs.Add(new EditDataTypeDef { Name = "small", BasedOn = new SchemaName("sys.uint8"), Max = "10" });
+        viewModel.NewDocumentCommand.Execute(null);
+        var library = viewModel.SelectedDocument!;
+        library.AddInclude(nested.Name);
+        // based on a def of its own include
+        library.Schema.DataTypeDefs.Add(new EditDataTypeDef { Name = "tiny", BasedOn = new SchemaName($"{nested.Name}.small"), Max = "5" });
+        viewModel.NewDocumentCommand.Execute(null);
+        var document = viewModel.SelectedDocument!;
+        document.AddInclude(library.Schema.Name);
+        var root = (EditGroup)document.Schema.Members[0];
+        var field = new EditField(root) { Name = "field", Processors = [], Properties = [] };
+        root.Members.Add(field);
+        viewModel.SelectedItem = field;
+        var facets = viewModel.NodeFacets!;
+
+        facets.DataType = $"{library.Schema.Name}.tiny";
+        facets.Value = "7";
+        Assert.Contains("maximum", facets.ValueWarning);
+        Assert.Null(facets.DataTypeNote);
+        Assert.Null(facets.DataTypeWarning);
+
+        // a transitive include is known as well
+        facets.DataType = $"{nested.Name}.small";
+        Assert.Null(facets.ValueWarning);
+        Assert.Null(facets.DataTypeWarning);
+    }
+
+    [Fact]
+    public void FieldDataType_OfALoadedSchemaThatIsNotIncluded_IsAWarning()
+    {
+        var viewModel = new MainViewModel();
+        viewModel.NewDocumentCommand.Execute(null);
+        var other = viewModel.SelectedDocument!.Schema;
+        other.DataTypeDefs.Add(new EditDataTypeDef { Name = "otherType", BasedOn = new SchemaName("sys.uint8"), Max = "10" });
+        viewModel.NewDocumentCommand.Execute(null);
+        var document = viewModel.SelectedDocument!;
+        var root = (EditGroup)document.Schema.Members[0];
+        var field = new EditField(root) { Name = "field", Processors = [], Properties = [] };
+        root.Members.Add(field);
+        viewModel.SelectedItem = field;
+        var facets = viewModel.NodeFacets!;
+
+        facets.DataType = $"{other.Name}.otherType";
+        facets.Value = "20";
+
+        Assert.Contains("does not include", facets.DataTypeWarning);
+        Assert.Null(facets.DataTypeNote);
+        Assert.Null(facets.ValueWarning);
+        Assert.DoesNotContain($"{other.Name}.otherType", viewModel.DataTypeOptions.Select(option => option.Name));
     }
 
     private static EditField NewField(string name) => new(null) { Name = name, Processors = [], Properties = [] };

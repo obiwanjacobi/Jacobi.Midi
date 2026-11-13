@@ -16,6 +16,7 @@ internal sealed partial class NodeFacets : ObservableObject
 {
     private readonly SchemaWorkspaceDocument? _document;
     private readonly EditNode? _node;
+    private readonly SchemaSetWorkspace? _schemas;
 
     /// <summary>The pipeline choices of an open choice; empty inherits the mode of a node definition.</summary>
     public static IReadOnlyList<string> PipelineOptions { get; } = [String.Empty, nameof(SchemaPipelineMode.Integrate), nameof(SchemaPipelineMode.Isolate)];
@@ -23,10 +24,14 @@ internal sealed partial class NodeFacets : ObservableObject
     /// <summary>
     /// Edits <paramref name="node"/> of <paramref name="document"/>; without a node the values are empty and edits are ignored.
     /// </summary>
-    public NodeFacets(SchemaWorkspaceDocument? document = null, EditNode? node = null)
+    /// <param name="schemas">
+    /// The loaded schemas: the data type defs of the schemas the document includes are known to the value check; null for the document only.
+    /// </param>
+    public NodeFacets(SchemaWorkspaceDocument? document = null, EditNode? node = null, SchemaSetWorkspace? schemas = null)
     {
         _document = document;
         _node = node;
+        _schemas = schemas;
     }
 
     public string Name
@@ -70,7 +75,7 @@ internal sealed partial class NodeFacets : ObservableObject
                 throw new ArgumentException("A field data type or node definition is required.");
             }
             fieldNode.DataType = dataType;
-        }, nameof(ValueWarning), nameof(DataTypeNote));
+        }, nameof(ValueWarning), nameof(DataTypeWarning), nameof(DataTypeNote));
     }
 
     public string NodeDef
@@ -239,15 +244,26 @@ internal sealed partial class NodeFacets : ObservableObject
     /// Informational only: the value is still written.
     /// </summary>
     public string? ValueWarning => _node is EditField
-        ? DataTypeValueValidator.Validate(_document?.Schema, DataType, Value)
+        ? DataTypeValueValidator.Validate(Scope, DataType, Value)
         : null;
 
     /// <summary>
-    /// A note when the data type of a field is custom (not registered and not defined in the document); otherwise null.
+    /// A warning when the data type of a field is a data type def of a loaded schema the document does not include
+    /// (see <see cref="DataTypeValueValidator.ValidateInclude"/>); otherwise null.
     /// </summary>
-    public string? DataTypeNote => _node is EditField && DataTypeValueValidator.IsCustom(_document?.Schema, DataType)
+    public string? DataTypeWarning => _node is EditField
+        ? DataTypeValueValidator.ValidateInclude(Scope, DataType)
+        : null;
+
+    /// <summary>
+    /// A note when the data type of a field is custom (not registered and not defined in the document or the schemas it includes); otherwise null.
+    /// </summary>
+    public string? DataTypeNote => _node is EditField && DataTypeValueValidator.IsCustom(Scope, DataType)
         ? "Custom data type: its values are not validated."
         : null;
+
+    // the document and the schemas it includes, as loaded now
+    private SchemaScope? Scope => _document is null ? null : SchemaScope.Of(_document.Schema, _schemas);
 
     /// <summary>
     /// Writes <paramref name="value"/> to the node through <paramref name="assign"/> (which validates it) and marks the document changed.

@@ -35,14 +35,17 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
     private readonly ProcessorCatalog? _catalog;
     // the loaded schema with a name: resolves the definitions of other schemas; null to resolve within the document only
     private readonly Func<string, EditDocument?>? _findSchema;
+    // the loaded schemas: the data type defs of the included schemas are known to the property check; null for the document only
+    private readonly SchemaSetWorkspace? _schemas;
     // the pipeline stage the processors must have (Semantic for value processors); null for any stage
     private readonly PipelineStage? _processorStage;
 
     private ItemDetailsViewModel(SchemaWorkspaceDocument document, INotifyPropertyChanged item,
         IList<EditProperty> properties, IList<EditProcessorRef>? processors, Func<EffectiveItem> resolve,
         ProcessorCatalog? catalog, Func<string, EditDocument?>? findSchema, EditProcessorDef? definition = null, bool isDocument = false,
-        PipelineStage? processorStage = null)
+        PipelineStage? processorStage = null, SchemaSetWorkspace? schemas = null)
     {
+        _schemas = schemas;
         _isDocument = isDocument;
         _catalog = catalog;
         _findSchema = findSchema;
@@ -72,13 +75,13 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
         return item switch
         {
             EditNode node => new(document, node, node.Properties, EffectiveNodeResolver.GetProcessors(node),
-                () => EffectiveNodeResolver.Resolve(schema, node, isProcessorKey, findSchema), catalog, findSchema, isDocument: node is EditDocument),
+                () => EffectiveNodeResolver.Resolve(schema, node, isProcessorKey, findSchema), catalog, findSchema, isDocument: node is EditDocument, schemas: schemas),
             EditDataTypeDef definition => new(document, definition, definition.Properties, definition.Processors,
-                () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, definition.Processors, isProcessorKey, findSchema), catalog, findSchema),
+                () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, definition.Processors, isProcessorKey, findSchema), catalog, findSchema, schemas: schemas),
             EditProcessorDef definition => new(document, definition, definition.Properties, null,
-                () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, null, findSchema: findSchema), catalog, findSchema, definition),
+                () => EffectiveNodeResolver.ResolveOwn(schema, definition.Properties, null, findSchema: findSchema), catalog, findSchema, definition, schemas: schemas),
             EditProcessorRef processor => new(document, processor, processor.Properties, null,
-                () => EffectiveNodeResolver.ResolveProcessorRef(schema, processor, isProcessorKey, findSchema), catalog, findSchema),
+                () => EffectiveNodeResolver.ResolveProcessorRef(schema, processor, isProcessorKey, findSchema), catalog, findSchema, schemas: schemas),
             _ => null
         };
     }
@@ -103,7 +106,7 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
         // value processors convert the count or index value: only semantic processors can
         return new(document, node, new List<EditProperty>(), valueProcessors,
             () => EffectiveNodeResolver.ResolveValueProcessors(schema, node, isProcessorKey, findSchema), catalog, findSchema,
-            processorStage: PipelineStage.Semantic);
+            processorStage: PipelineStage.Semantic, schemas: schemas);
     }
 
     // the schema that answers to a name in the loaded schemas
@@ -288,7 +291,7 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
             return CreateProcessorCheck(GetProcessorKey(processor));
         }
 
-        var schema = _document.Schema;
+        var scope = SchemaScope.Of(_document.Schema, _schemas);
         var options = effective.Processors
             .Select(resolved => GetProcessorKey(resolved.Processor))
             .OfType<string>()
@@ -310,7 +313,7 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
             (name, value) => _item is EditNode && MidiProperties.IsTag(name)
                 ? MidiProperties.Validate(name, value)
                 : ProcessorPropertyValidator.TrySplitPrefixed(name, out var key, out _) && GetDescribedProperties(key) is { } descriptors
-                    ? ProcessorPropertyValidator.Validate(key, descriptors, name, value, schema, catalog.DataTypes)
+                    ? ProcessorPropertyValidator.Validate(key, descriptors, name, value, scope, catalog.DataTypes)
                     : null);
     }
 
@@ -330,10 +333,10 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
         {
             return null;
         }
-        var schema = _document.Schema;
+        var scope = SchemaScope.Of(_document.Schema, _schemas);
         return new PropertyCheck(descriptors.Select(descriptor => new PropertyOption(descriptor.Name, descriptor)).ToList(),
             name => ProcessorPropertyValidator.Find(key!, descriptors, name),
-            (name, value) => ProcessorPropertyValidator.Validate(key!, descriptors, name, value, schema, catalog.DataTypes));
+            (name, value) => ProcessorPropertyValidator.Validate(key!, descriptors, name, value, scope, catalog.DataTypes));
     }
 
     /// <summary>

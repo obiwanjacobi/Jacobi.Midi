@@ -135,11 +135,11 @@ public class ProcessorPropertyTests
 
         var editor = Assert.IsType<DataTypeDefEditor>(ItemEditor.Create(document, second));
 
-        Assert.Contains("sys.uint8", editor.BasedOnOptions);
-        Assert.Contains("Test.first", editor.BasedOnOptions);
-        Assert.DoesNotContain("Test.second", editor.BasedOnOptions);
+        Assert.Contains("sys.uint8", editor.BasedOnOptions.Select(option => option.Name));
+        Assert.Contains("Test.first", editor.BasedOnOptions.Select(option => option.Name));
+        Assert.DoesNotContain("Test.second", editor.BasedOnOptions.Select(option => option.Name));
         first.Name = "renamed";
-        Assert.Contains("Test.renamed", editor.BasedOnOptions);
+        Assert.Contains("Test.renamed", editor.BasedOnOptions.Select(option => option.Name));
     }
 
     [Fact]
