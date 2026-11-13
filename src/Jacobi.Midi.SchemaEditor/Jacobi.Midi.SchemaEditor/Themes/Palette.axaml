@@ -31,6 +31,15 @@
             <!-- Status indicators -->
             <SolidColorBrush x:Key="AppIndicatorOffBrush" Color="#3A4A62" />
             <SolidColorBrush x:Key="AppIndicatorOnBrush" Color="#3DDC84" />
+
+            <!-- Syntax coloring of the schema source viewer (see Views/SourceSyntax.cs) -->
+            <SolidColorBrush x:Key="AppSyntaxTagBrush" Color="#6FAEF2" />
+            <SolidColorBrush x:Key="AppSyntaxNameBrush" Color="#8CCFC0" />
+            <SolidColorBrush x:Key="AppSyntaxStringBrush" Color="#E3A97A" />
+            <SolidColorBrush x:Key="AppSyntaxNumberBrush" Color="#B5CEA8" />
+            <SolidColorBrush x:Key="AppSyntaxKeywordBrush" Color="#C79BEA" />
+            <SolidColorBrush x:Key="AppSyntaxCommentBrush" Color="#7A9A6A" />
+            <SolidColorBrush x:Key="AppSyntaxPunctuationBrush" Color="#7588A2" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 </ResourceDictionary>

@@ -23,6 +23,7 @@ namespace Jacobi.Midi.SchemaEditor.SchemaTree;
 /// The arrange commands (<see cref="MoveUpCommand"/>, <see cref="MoveDownCommand"/>, <see cref="IndentCommand"/> and
 /// <see cref="OutdentCommand"/>, executed without parameter on the selected node) are in the context menu of a node and on Alt+arrow keys;
 /// <see cref="ChangeKindCommand"/> (with the node kind as parameter) is in the context menu of a group.
+/// The context menu of a document root executes <see cref="ViewSourceCommand"/> with the document as parameter.
 /// A right click selects the node before its context menu opens.
 /// </summary>
 internal partial class SchemaTreeControl : UserControl
@@ -57,6 +58,9 @@ internal partial class SchemaTreeControl : UserControl
 
     public static readonly StyledProperty<ICommand?> ChangeKindCommandProperty =
         AvaloniaProperty.Register<SchemaTreeControl, ICommand?>(nameof(ChangeKindCommand));
+
+    public static readonly StyledProperty<ICommand?> ViewSourceCommandProperty =
+        AvaloniaProperty.Register<SchemaTreeControl, ICommand?>(nameof(ViewSourceCommand));
 
     private readonly SchemaTreeViewModel _viewModel = new();
     // set while the selection is synchronized between the control and its view model
@@ -116,6 +120,15 @@ internal partial class SchemaTreeControl : UserControl
     {
         get => GetValue(ChangeKindCommandProperty);
         set => SetValue(ChangeKindCommandProperty, value);
+    }
+
+    /// <summary>
+    /// The command that shows the serialized schema of a document; executed with the <see cref="Models.EditDocument"/> as parameter.
+    /// </summary>
+    public ICommand? ViewSourceCommand
+    {
+        get => GetValue(ViewSourceCommandProperty);
+        set => SetValue(ViewSourceCommandProperty, value);
     }
 
     private void OnTreeKeyDown(object? sender, KeyEventArgs e)

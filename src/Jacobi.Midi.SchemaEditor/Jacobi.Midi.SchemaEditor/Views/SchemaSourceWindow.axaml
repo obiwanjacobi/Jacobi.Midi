@@ -1,0 +1,17 @@
+<!--
+    A window with a schema source viewer (Desktop): it can be moved apart from the main window, e.g. to another screen.
+    See SchemaSourceWindow.axaml.cs.
+-->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Jacobi.Midi.SchemaEditor.ViewModels"
+        xmlns:views="using:Jacobi.Midi.SchemaEditor.Views"
+        x:Class="Jacobi.Midi.SchemaEditor.Views.SchemaSourceWindow"
+        x:DataType="vm:SchemaSourceViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="{Binding Title, StringFormat='{}{0} - Schema source'}"
+        Width="960" Height="800" MinWidth="480" MinHeight="320"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBackgroundPanelBrush}">
+    <views:SchemaSourceView Margin="20" />
+</Window>

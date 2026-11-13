@@ -20,6 +20,16 @@
     </Style>
 
     <!--
+        A compact switch between views or modes (e.g. Schema | Workbench, XML | JSON): a TabStrip with class "switch".
+        The Fluent default tab strip items are large (header size text and padding).
+    -->
+    <Style Selector="TabStrip.switch TabStripItem">
+        <Setter Property="Padding" Value="12,4" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="FontSize" Value="14" />
+    </Style>
+
+    <!--
         All scrollbars stay expanded. Fluent collapses them to a thin line that only expands on hover (auto-hide).
         The scroll viewer inside a control template (tree, list, text box, drop-down) gets AllowAutoHide by a template binding
         to the attached ScrollViewer.AllowAutoHide of its control, which overrides a ScrollViewer style:

@@ -34,6 +34,17 @@ internal static class SchemaFileService
         _ => throw new ArgumentOutOfRangeException(nameof(format))
     };
 
+    /// <summary>
+    /// The name of the format to show to the user, e.g. "XML".
+    /// </summary>
+    public static string DisplayName(SchemaFormat format) => format switch
+    {
+        SchemaFormat.Json => "JSON",
+        SchemaFormat.Xml => "XML",
+        SchemaFormat.Yaml => "YAML",
+        _ => throw new ArgumentOutOfRangeException(nameof(format))
+    };
+
     public static EditDocument CreateDocument(string name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -79,13 +90,23 @@ internal static class SchemaFileService
 
     public static string Serialize(EditDocument document, SchemaFormat format)
     {
+        var canonical = SerializeCanonical(document, format);
+        return format == SchemaFormat.Xml && XmlSources.TryGetValue(document, out var source)
+            ? source.Serialize(document, canonical)
+            : canonical;
+    }
+
+    /// <summary>
+    /// Serializes the schema of the document as the serializer writes it (<see cref="EditNodeMapper.ToSchemaDocument"/>),
+    /// without the formatting or comments of the source it was loaded from.
+    /// </summary>
+    public static string SerializeCanonical(EditDocument document, SchemaFormat format)
+    {
         var snapshot = EditNodeMapper.ToSchemaDocument(document);
         return format switch
         {
             SchemaFormat.Json => JsonSchemaSerializer.Serialize(snapshot),
-            SchemaFormat.Xml => XmlSources.TryGetValue(document, out var source)
-                ? source.Serialize(document, XmlSchemaSerializer.Serialize(snapshot))
-                : XmlSchemaSerializer.Serialize(snapshot),
+            SchemaFormat.Xml => XmlSchemaSerializer.Serialize(snapshot),
             SchemaFormat.Yaml => YamlSerializer.Serialize(snapshot),
             _ => throw new ArgumentOutOfRangeException(nameof(format))
         };

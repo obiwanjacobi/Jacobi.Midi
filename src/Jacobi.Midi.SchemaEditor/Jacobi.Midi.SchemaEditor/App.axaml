@@ -27,5 +27,7 @@
 
     <Application.Styles>
         <StyleInclude Source="avares://Jacobi.Midi.SchemaEditor/Themes/FluentTheme.axaml" />
+        <!-- the styles of the AvaloniaEdit TextEditor (schema source viewer) -->
+        <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
     </Application.Styles>
 </Application>

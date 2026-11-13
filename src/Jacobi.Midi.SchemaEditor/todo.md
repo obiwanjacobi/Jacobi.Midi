@@ -26,7 +26,11 @@ Known gaps and loose ends, collected while building the editor.
 - [x] *Delete* has no confirmation. Fixed: *Delete* asks for confirmation (`ConfirmViewModel`).
 - [ ] There is no undo.
 - [ ] The Add menu has no keyboard shortcuts (e.g. Ctrl+S for Save in the ☰ menu).
-- [ ] Add a schema file view(er) (nice layout in xml or json)
+- [x] Add a schema file view(er) (nice layout in xml or json)
+- [ ] Schema source viewer: the text is a snapshot; an open viewer window does not follow the edits of its document (refresh on `Revision`).
+- [ ] Schema source viewer: closing a document leaves its viewer window open.
+- [ ] Schema source viewer: no YAML tab yet (needs a highlighting definition and a folding strategy; AvaloniaEdit has neither for YAML).
+- [ ] The Browser host does not build: the native WebAssembly link fails (`undefined symbol: saveSetjmp / testSetjmp` in `libHarfBuzzSharp.a`); seen after adding AvaloniaEdit, probably not caused by it (it is managed only).
 - [ ] Moving a node (Arrange: up/down, into/out of a group) or changing its type does not update the `ref:` paths that point at it or at its members (count, byte length/size, selected index, field values); they may no longer resolve.
 - [ ] A node that is moved to another parent or whose type is changed is written as a new element in an XML source (`XmlSchemaSource` matches nodes by identity within their parent): the comments inside and before it are lost. Reordering within the same parent keeps them.
 - [ ] Change type only covers group, repeat and choice; a field cannot be changed into a group-like node (or back).

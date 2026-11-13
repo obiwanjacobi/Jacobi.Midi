@@ -347,6 +347,47 @@ internal sealed partial class MainViewModel : ViewModelBase
     public partial ValueRefFinderViewModel? ValueRefDialog { get; private set; }
 
     /// <summary>
+    /// The open schema source viewers (see <see cref="ViewSchemaSource"/>), at most one per document.
+    /// The view decides how they are shown: as windows (Desktop) or as an overlay (<see cref="SchemaSourceDialog"/>).
+    /// </summary>
+    public ObservableCollection<SchemaSourceViewModel> SchemaSources { get; } = [];
+
+    /// <summary>
+    /// The schema source viewer to show as an overlay: the last opened of the <see cref="SchemaSources"/>; null when there is none.
+    /// </summary>
+    public SchemaSourceViewModel? SchemaSourceDialog => SchemaSources.Count > 0 ? SchemaSources[^1] : null;
+
+    /// <summary>
+    /// Shows the serialized schema of a document (open or embedded in an assembly) in a schema source viewer.
+    /// A document that already has a viewer gets that one back to the front (<see cref="SchemaSourceViewModel.Activate"/>).
+    /// </summary>
+    [RelayCommand]
+    private void ViewSchemaSource(EditDocument? document)
+    {
+        if (document is null)
+        {
+            return;
+        }
+
+        if (SchemaSources.FirstOrDefault(source => source.Document == document) is { } open)
+        {
+            open.Activate();
+            return;
+        }
+
+        SchemaSources.Add(new SchemaSourceViewModel(document, CloseSchemaSource));
+        OnPropertyChanged(nameof(SchemaSourceDialog));
+    }
+
+    private void CloseSchemaSource(SchemaSourceViewModel source)
+    {
+        if (SchemaSources.Remove(source))
+        {
+            OnPropertyChanged(nameof(SchemaSourceDialog));
+        }
+    }
+
+    /// <summary>
     /// The item selected in the schema tree: an <see cref="EditNode"/> (a member or a node def; the <see cref="EditDocument"/> for the root),
     /// the <see cref="NodeDefsItem"/> of a document or null.
     /// </summary>

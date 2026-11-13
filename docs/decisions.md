@@ -3,6 +3,33 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## Schema source viewer in the Schema Editor (2026-11-13)
+
+Issue: there was no way to see a schema as it is serialized (XML, JSON) without saving it and opening the file elsewhere.
+
+1. ***View source…* in the context menu of a schema root**, of an open document (schema tree) and of an embedded
+   schema (assembly tree) alike. *Why:* the source belongs to the whole document; where it was loaded from does not matter.
+2. **The text is serialized from the schema itself** (`SchemaFileService.SerializeCanonical`: `EditNodeMapper.ToSchemaDocument`
+   and the serializer of the format), not taken from the file or resource, and without the source formatting that *Save*
+   keeps for XML. *Save* uses the same path (`Serialize` adds the source formatting on top). *Why:* shows what the schema
+   model holds; one serialize path.
+3. **AvaloniaEdit (`Avalonia.AvaloniaEdit`) for the text**, read-only, with its built-in XML and JSON highlighting and
+   its `XmlFoldingStrategy`; JSON folding is our own small strategy (AvaloniaEdit has none). Not AvaloniaEdit.TextMate.
+   *Why:* the official Avalonia editor control; coloring and folding out of the box. TextMate needs a native regex
+   library that probably does not run in the Browser (WebAssembly) host.
+4. **The syntax colors come from the theme palette** (`AppSyntax…Brush` in Themes/Palette.axaml), mapped onto the named
+   colors of the built-in highlighting definitions (`SourceSyntax`). *Why:* the built-in colors are made for a light
+   background; one place for the colors per theme variant.
+5. **XML and JSON as tabs in the header row** (a `TabStrip` with the shared `switch` style, also used by the
+   Schema | Workbench switch); format names for the user from `SchemaFileService.DisplayName`. YAML can be added later.
+   *Why:* switching formats is a view choice; one style for all such switches.
+6. **On Desktop the viewer is a window of its own, in the Browser a modal overlay.** One window per document (opening it
+   again brings it to the front), owned by the main window (stays in front of it, closes with it, can be moved to another
+   screen). The view decides (`MainView`); the view model only keeps the open viewers (`MainViewModel.SchemaSources`).
+   *Why:* a window can sit next to the editor or on another screen; the Browser host has no windows.
+7. **The text is a snapshot**, taken when a format is first shown; it does not follow edits yet (see the Schema Editor
+   todo). *Why:* start simple; a modal overlay did not need it.
+
 ## Data type defs of included schemas in the Schema Editor (2026-11-13)
 
 Issue: the data type drop-downs and the field Value validation only knew the registered types and the data type defs
