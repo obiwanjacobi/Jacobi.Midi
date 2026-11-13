@@ -737,7 +737,8 @@ internal sealed partial class MainViewModel : ViewModelBase
         void Report(string message) => StatusMessage = message;
         return new DocumentTabsViewModel(
             new CollectionTabViewModel(document, schema.Includes, "include",
-                () => document.AddInclude(GetUniqueName(schema.Includes.Select(include => include.Schema), "schema")), Report),
+                () => document.AddInclude(GetUniqueName(schema.Includes.Select(include => include.Schema), "schema")), Report,
+                schemas: LoadedSchemas),
             new CollectionTabViewModel(document, schema.DataTypeDefs, "data type def",
                 () => document.AddDataTypeDef(GetUniqueName(schema.DataTypeDefs.Select(definition => definition.Name), "NewDataType"), "sys.uint8"), Report, ProcessorCatalog, LoadedSchemas),
             new CollectionTabViewModel(document, schema.ProcessorDefs, "processor def",

@@ -435,7 +435,8 @@
                         <TextBlock Text="Includes another schema so its definitions can be referenced as 'schema.name'." Classes="kind" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Schema" Classes="label" />
-                            <TextBox Text="{Binding Schema}" />
+                            <ComboBox Classes="options" IsEditable="True" Text="{Binding Schema}" PlaceholderText="the name of a loaded schema"
+                                      ItemsSource="{Binding SchemaOptions}" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Path" Classes="label" />

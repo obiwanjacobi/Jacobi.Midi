@@ -81,6 +81,18 @@ internal sealed class SchemaSetWorkspace
     public SchemaSetEntry? Find(string name, EditDocument? requester = null)
         => requester is not null && SameName(requester.Name, name) ? null : Find(Entries, name);
 
+    /// <summary>
+    /// The names of the loaded schemas <paramref name="document"/> can include: one per name, in the order of <see cref="Entries"/>,
+    /// without its own name (a schema does not include itself).
+    /// </summary>
+    public IReadOnlyList<string> GetIncludeNames(EditDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return [.. Entries.Select(entry => entry.Name)
+            .Where(name => !SameName(name, document.Name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)];
+    }
+
     /// <summary>The entry of <paramref name="schema"/>; null when it is not a loaded schema (e.g. a copy).</summary>
     public SchemaSetEntry? FindEntry(EditDocument schema)
         => Entries.FirstOrDefault(entry => ReferenceEquals(entry.Schema, schema));

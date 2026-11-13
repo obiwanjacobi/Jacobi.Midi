@@ -1,6 +1,7 @@
 using System.Reflection;
 using Jacobi.Midi.SchemaEditor.Assemblies;
 using Jacobi.Midi.SchemaEditor.Models;
+using Jacobi.Midi.SchemaEditor.NodeEditor;
 using Jacobi.Midi.SchemaEditor.ViewModels;
 using Jacobi.Midi.Tests.Schema;
 using Xunit;
@@ -59,6 +60,29 @@ public class AssemblyWorkspaceTests
 
         Assert.True(roland.IsLoaded);
         Assert.False(unknown.IsLoaded);
+    }
+
+    [Fact]
+    public void IncludeSchemaOptions_AreTheLoadedSchemasExceptItselfAndTheOtherIncludes()
+    {
+        var viewModel = new MainViewModel();
+        viewModel.NewDocumentCommand.Execute(null);
+        var other = viewModel.SelectedDocument!.Schema.Name;
+        viewModel.NewDocumentCommand.Execute(null);
+        var document = viewModel.SelectedDocument!;
+        viewModel.OpenedAssemblies.Load(Assembly.LoadFrom(TestHelpers.AssemblyPathOf("Jacobi.Midi.Roland")), "Jacobi.Midi.Roland.dll");
+        var midi = document.AddInclude("Midi");
+        var added = document.AddInclude("schema");
+
+        var editor = Assert.IsType<DocumentRefEditor>(ItemEditor.Create(document, added, schemas: viewModel.LoadedSchemas));
+
+        Assert.Contains(other, editor.SchemaOptions);
+        Assert.Contains("Roland", editor.SchemaOptions);
+        Assert.DoesNotContain(document.Schema.Name, editor.SchemaOptions);
+        Assert.DoesNotContain("Midi", editor.SchemaOptions);
+        // the include's own schema is offered
+        var own = Assert.IsType<DocumentRefEditor>(ItemEditor.Create(document, midi, schemas: viewModel.LoadedSchemas));
+        Assert.Contains("Midi", own.SchemaOptions);
     }
 
     [Fact]

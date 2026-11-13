@@ -6,7 +6,7 @@ Known gaps and loose ends, collected while building the editor.
 
 - [x] Editing `description` or `sample` on the Properties tab does not refresh the staged values on the General tab; pressing *Apply* there writes the old values back. Fixed: the description and sample value fields are removed from the General tab; both are edited as properties only.
 - [x] Top bar / Midi bar: size to window width. Currently stuff drops off when window width is too small.
-- [ ] Show loaded schemas (also from assemblies) for adding includes.
+- [x] Show loaded schemas (also from assemblies) for adding includes. Done: the Schema box of an include is an editable list of the loaded schemas (`DocumentRefEditor.SchemaOptions`, from `SchemaSetWorkspace.GetIncludeNames`), without the document itself and the schemas it already includes.
 - [ ] Node (def) references: allow easy navigation through schema tree by making node refs clickable.
   - [x] Node def names (NodeDef, MemberNodeDef) and `ref:` paths (Count, ByteSize, ByteLength, SelectedIndex, Value): a button next to the property selects the node it refers to. Done: the → button (`GoToReferenceCommand`) looks the node up in all loaded schemas (`SchemaSetWorkspace.FindNodeDef`/`FindNodeRef`) and selects it in the schema tree or, for an embedded schema, the assembly tree; why a reference cannot be followed is shown in the status.
   - [ ] Data type def names (DataType): go to the data type def.

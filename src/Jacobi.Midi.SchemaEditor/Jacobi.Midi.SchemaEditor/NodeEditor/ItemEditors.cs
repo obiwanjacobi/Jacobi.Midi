@@ -31,7 +31,7 @@ internal abstract class ItemEditor(SchemaWorkspaceDocument document) : Observabl
     {
         ItemEditor? editor = item switch
         {
-            EditDocumentRef include => new DocumentRefEditor(document, include),
+            EditDocumentRef include => new DocumentRefEditor(document, include, schemas),
             EditDataTypeDef definition => new DataTypeDefEditor(document, definition),
             EditProcessorDef definition => new ProcessorDefEditor(document, definition),
             EditProcessorRef processor => new ProcessorRefEditor(document, processor),
@@ -75,13 +75,27 @@ internal abstract class ItemEditor(SchemaWorkspaceDocument document) : Observabl
 /// <summary>
 /// Edits an include: the name of the included schema and its (optional) path.
 /// </summary>
-internal sealed class DocumentRefEditor(SchemaWorkspaceDocument document, EditDocumentRef include) : ItemEditor(document)
+/// <param name="schemas">The loaded schemas offered as <see cref="SchemaOptions"/>; null to offer none.</param>
+internal sealed class DocumentRefEditor(SchemaWorkspaceDocument document, EditDocumentRef include, SchemaSetWorkspace? schemas = null)
+    : ItemEditor(document)
 {
+    private readonly EditDocument _schema = document.Schema;
+
     public string Schema
     {
         get => include.Schema;
         set => Edit(include.Schema, Required(value, "The schema name"), v => include.Schema = v);
     }
+
+    /// <summary>
+    /// The schemas to include: the loaded schemas (open documents and embedded schemas of the opened assemblies)
+    /// except the document itself and the schemas it already includes with another include.
+    /// Taken from the loaded schemas each time the editor is created (when an include is selected or added).
+    /// </summary>
+    public IReadOnlyList<string> SchemaOptions => schemas is null ? []
+        : [.. schemas.GetIncludeNames(_schema)
+            .Where(name => !_schema.Includes.Any(other => !ReferenceEquals(other, include)
+                && String.Equals(other.Schema, name, StringComparison.OrdinalIgnoreCase)))];
 
     public string? Path
     {
