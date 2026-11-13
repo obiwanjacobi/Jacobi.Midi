@@ -22,128 +22,145 @@
     midi.address       absolute start address (wire form, as in the manual)
     midi.stride        number of addresses of a node; on a repeat the size of one item (the distance between items)
     midi.repeat        number of items of a repeat in the address space (a dump may hold fewer)
-    midi.transfer      atomic: the group is always transferred as a whole
-    midi.device.*      device values fixed for the GP-8 (used by the message envelope)
+    midi.transfer      atomic: the group is always transferred as ae    midi.device.*      device values fixed for the GP-8 (used by the message envelope)
 -->
 <schema name="Gp8">
-  <includes>
+  <incs>
     <include schema="midi"/>
     <include schema="roland"/>
   </includes>
-  <nodeDefs>
+<!-- 0x00: effect on/off (MSB) -->
+    <group name="effectSwiches1" byteLength="1">
+      <processors>
+        <processor name="sys.bitpacker"/>
+      </processors>
+      <members>
+        <field name="PhaserOn" datatype="roland.switch" bits="1"/>
+        <field name="EqualizerOn" datatype="roland.switch" bits="1"/>
+        <field name="DelayOn" datatype="roland.switch" bits="1"/>
+        <field name="ChorusOn" datatype="roland.switch" bits="1"/>
+      </members>
+    </group>
+    
+    <!-- 0x01: effect on/off (LSB) -->
+    <group name="effectSwiches2" byteLength="1">
+      <processors>
+        <processor name="sys.bitpacker"/>
+      </processors>
+      <members>
+        <field name="DynamicFilterOn" datatype="roland.switch" bits="1"/>
+        <field name="CompressorOn" datatype="roland.switch" bits="1"/>
+        <field name="TurboOverdriveOn" datatype="roland.switch" bits="1"/>
+        <field name="DistortionOn" datatype="roland.switch" bits="1"/>
+      </members>
+    </group>
+    
+    <group name="dynamicFilter">
+      <members>
+        <!-- 0x02: 0-100 -->
+        <field name="Sens" datatype="roland.level"/>
+        <!-- 0x03: 0-100 -->
+        <field name="CutoffFreq" datatype="roland.level"/>
+        <!-- 0x04: 0-100 -->
+        <field name="Q" datatype="roland.level"/>
+        <!-- 0x05: 0 = down, 100 = up -->
+        <field name="UpDown" datatype="upDown"/>
+      </members>
+    </group>
+    
+    <group name="compressor">
+      <members>
+        <!-- 0x06: 0-100 -->
+        <field name="Attack" datatype="roland.level"/>
+        <!-- 0x07: 0-100 -->
+        <field name="Sustain" datatype="roland.level"/>
+      </members>
+    </group>
+    
+    <group name="turboOverdrive">
+      <members>
+        <!-- 0x08: 0-100 -->
+        <field name="Tone" datatype="roland.level"/>
+        <!-- 0x09: 0-100 -->
+        <field name="Drive" datatype="roland.level"/>
+        <!-- 0x0A: 0 = off, 100 = on -->
+        <field name="Turbo" datatype="switch100"/>
+      </members>
+    </group>
+    
+    <group name="distortion">
+      <members>
+        <!-- 0x0B: 0-100 -->
+        <field name="Tone" datatype="roland.level"/>
+        <!-- 0x0C: 0-100 -->
+        <field name="Dist" datatype="roland.level"/>
+      </members>
+    </group>
+    
+    <group name="phaser">
+      <members>
+        <!-- 0x0D: 0-100 -->
+        <field name="Rate" datatype="roland.level"/>
+        <!-- 0x0E: 0-100 -->
+        <field name="Depth" datatype="roland.level"/>
+        <!-- 0x0F: 0-100 -->
+        <field name="Resonance" datatype="roland.level"/>
+      </members>
+    </group>
+    
+    <group name="equalizer">
+      <members>
+        <!-- 0x10: 0-100 -->
+        <field name="HiLevel" datatype="int50"/>
+        <!-- 0x11: 0-100 -->
+        <field name="MidLevel" datatype="int50"/>
+        <!-- 0x12: 0-100 -->
+        <field name="LoLevel" datatype="int50"/>
+        <!-- 0x13: 0-100 -->
+        <field name="OutLevel" datatype="roland.level"/>
+      </members>
+    </group>
+    
+    <group name="digitalDelay">
+      <members>
+        <!-- 0x14: 0-100 -->
+        <field name="ELevel" datatype="roland.level"/>
+        <!-- 0x15 (MSB), 0x16 (LSB): 0-1000 -->
+        <field name="DTime" datatype="delayTime" byteLength="2"/>
+        <!-- 0x17: 0-100 -->
+        <field name="Feedback" datatype="roland.level"/>
+      </members>
+    </group>
+    
+    <group name="digitalChorus">
+      <members>
+        <!-- 0x18: 0-100 -->
+        <field name="Rate" datatype="roland.level"/>
+        <!-- 0x19: 0-100 -->
+        <field name="Depth" datatype="roland.level"/>
+        <!-- 0x1A: 0-100 -->
+        <field name="ELevel" datatype="roland.level"/>
+        <!-- 0x1B: 0-100 -->
+        <field name="PreDelay" datatype="roland.level"/>
+        <!-- 0x1C: 0-100 -->
+        <field name="Feedback" datatype="roland.level"/>
+      </members>
+    </group>
+
     <!-- One patch: the parameters in address order 0x00 - 0x31. Each is one 7-bit byte unless noted. -->
     <group name="patch">
       <members>
-        <!-- 0x00: effect on/off (MSB) -->
-        <group name="EffectSwiches1" byteLength="1">
-          <processors>
-            <processor name="sys.bitpacker"/>
-          </processors>
-          <members>
-            <field name="PhaserOn" datatype="roland.switch" bits="1"/>
-            <field name="EqualizerOn" datatype="roland.switch" bits="1"/>
-            <field name="DelayOn" datatype="roland.switch" bits="1"/>
-            <field name="ChorusOn" datatype="roland.switch" bits="1"/>
-          </members>
-        </group>
+        <group name="EffectSwiches1" nodeDef="effectSwiches1" />
+        <group name="EffectSwiches2" nodeDef="effectSwiches2" />
+        <group name="DynamicFilter" nodeDef="dynamicFilter" />
+        <group name="Compressor" nodeDef="compressor" />
+        <group name="TurboOverdrive" nodeDef="turboOverdrive" />
+        <group name="Distortion" nodeDef="distortion" />
+        <group name="Phaser" nodeDef="phaser" />
+        <group name="Equalizer" nodeDef="equalizer" />
+        <group name="DigitalDelay" nodeDef="digitalDelay" />
+        <group name="DigitalChorus" nodeDef="digitalChorus" />
 
-        <!-- 0x01: effect on/off (LSB) -->
-        <group name="EffectSwiches2" byteLength="1">
-          <processors>
-            <processor name="sys.bitpacker"/>
-          </processors>
-          <members>
-            <field name="DynamicFilterOn" datatype="roland.switch" bits="1"/>
-            <field name="CompressorOn" datatype="roland.switch" bits="1"/>
-            <field name="TurboOverdriveOn" datatype="roland.switch" bits="1"/>
-            <field name="DistortionOn" datatype="roland.switch" bits="1"/>
-          </members>
-        </group>
-
-        <group name="DynamicFilter">
-          <members>
-            <!-- 0x02: 0-100 -->
-            <field name="Sens" datatype="roland.level"/>
-            <!-- 0x03: 0-100 -->
-            <field name="CutoffFreq" datatype="roland.level"/>
-            <!-- 0x04: 0-100 -->
-            <field name="Q" datatype="roland.level"/>
-            <!-- 0x05: 0 = down, 100 = up -->
-            <field name="UpDown" datatype="upDown"/>
-          </members>
-        </group>
-        <group name="Compressor">
-          <members>
-            <!-- 0x06: 0-100 -->
-            <field name="Attack" datatype="roland.level"/>
-            <!-- 0x07: 0-100 -->
-            <field name="Sustain" datatype="roland.level"/>
-          </members>
-        </group>
-        <group name="TurboOverdrive">
-          <members>
-            <!-- 0x08: 0-100 -->
-            <field name="Tone" datatype="roland.level"/>
-            <!-- 0x09: 0-100 -->
-            <field name="Drive" datatype="roland.level"/>
-            <!-- 0x0A: 0 = off, 100 = on -->
-            <field name="Turbo" datatype="switch100"/>
-          </members>
-        </group>
-        <group name="Distortion">
-          <members>
-            <!-- 0x0B: 0-100 -->
-            <field name="Tone" datatype="roland.level"/>
-            <!-- 0x0C: 0-100 -->
-            <field name="Dist" datatype="roland.level"/>
-          </members>
-        </group>
-        <group name="Phaser">
-          <members>
-            <!-- 0x0D: 0-100 -->
-            <field name="Rate" datatype="roland.level"/>
-            <!-- 0x0E: 0-100 -->
-            <field name="Depth" datatype="roland.level"/>
-            <!-- 0x0F: 0-100 -->
-            <field name="Resonance" datatype="roland.level"/>
-          </members>
-        </group>
-        <group name="Equalizer">
-          <members>
-            <!-- 0x10: 0-100 -->
-            <field name="HiLevel" datatype="int50"/>
-            <!-- 0x11: 0-100 -->
-            <field name="MidLevel" datatype="int50"/>
-            <!-- 0x12: 0-100 -->
-            <field name="LoLevel" datatype="int50"/>
-            <!-- 0x13: 0-100 -->
-            <field name="OutLevel" datatype="roland.level"/>
-          </members>
-        </group>
-        <group name="DigitalDelay">
-          <members>
-            <!-- 0x14: 0-100 -->
-            <field name="ELevel" datatype="roland.level"/>
-            <!-- 0x15 (MSB), 0x16 (LSB): 0-1000 -->
-            <field name="DTime" datatype="delayTime" byteLength="2"/>
-            <!-- 0x17: 0-100 -->
-            <field name="Feedback" datatype="roland.level"/>
-          </members>
-        </group>
-        <group name="DigitalChorus">
-          <members>
-            <!-- 0x18: 0-100 -->
-            <field name="Rate" datatype="roland.level"/>
-            <!-- 0x19: 0-100 -->
-            <field name="Depth" datatype="roland.level"/>
-            <!-- 0x1A: 0-100 -->
-            <field name="ELevel" datatype="roland.level"/>
-            <!-- 0x1B: 0-100 -->
-            <field name="PreDelay" datatype="roland.level"/>
-            <!-- 0x1C: 0-100 -->
-            <field name="Feedback" datatype="roland.level"/>
-          </members>
-        </group>
         <!-- 0x1D: 0-100 -->
         <field name="MasterVolume" datatype="roland.level"/>
         <!-- 0x1E: 0 = off, 1-27 (parameter of turned-on effect)-->
@@ -181,7 +198,7 @@
         <option value="100" name="True"/>
       </options>
     </dataTypeDef>
-    <dataTypeDef name="effectParam" basedOn="sys.uint8">
+    <dataTypeDef name="effectParam" basedOn="sys.uint8" optionsDefault="Off">
       <options>
         <option value="0" name="Off"/>
         <!-- [TODO] Name the paramters -->

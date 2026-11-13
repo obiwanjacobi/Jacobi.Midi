@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Reflection;
+using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.SchemaEditor.Assemblies;
 using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.SchemaEditor.Services;
@@ -91,6 +92,137 @@ public class SchemaSetWorkspaceTests
         Assert.Contains(copy, compilation.Documents);
         Assert.DoesNotContain(original.Schema, compilation.Documents);
         Assert.Empty(compilation.Warnings);
+    }
+
+    private const string Library = """
+        { "name": "Lib", "nodeDefs": [{ "name": "Header", "kind": "group", "members": [{ "name": "Length", "kind": "field", "datatype": "sys.uint8" }] }], "members": [] }
+        """;
+
+    private const string Device = """
+        {
+          "name": "Dev",
+          "includes": [{ "schema": "Lib" }],
+          "nodeDefs": [{ "name": "Body", "kind": "group", "members": [
+              { "name": "Size", "kind": "field", "datatype": "sys.uint8" },
+              { "name": "Data", "kind": "repeat", "count": { "ref": "^.Size" }, "members": [{ "name": "D", "kind": "field", "datatype": "sys.uint8" }] }] }],
+          "members": [{ "name": "Root", "kind": "group", "members": [
+              { "name": "Head", "kind": "group", "nodeDef": "Lib.Header" },
+              { "name": "Items", "kind": "repeat", "count": { "ref": "Root.Head.Length" }, "members": [{ "name": "X", "kind": "field", "datatype": "sys.uint8" }] }] }]
+        }
+        """;
+
+    [Fact]
+    public void FindNodeDef_FindsAQualifiedNameInTheSchemaOfItsNamespace()
+    {
+        var (schemas, device, library) = CreateReferences();
+
+        var found = schemas.FindNodeDef(Member(device, "Root", "Head"), new SchemaName("Lib.Header"), out var problem);
+
+        Assert.Same(library.Schema.NodeDefs.Single(), found);
+        Assert.Null(problem);
+    }
+
+    [Fact]
+    public void FindNodeDef_FindsANameWithoutNamespaceInTheSchemaOfTheReferrer()
+    {
+        var (schemas, device, _) = CreateReferences();
+
+        var found = schemas.FindNodeDef(Member(device, "Root"), new SchemaName("Body"), out _);
+
+        Assert.Same(device.Schema.NodeDefs.Single(), found);
+    }
+
+    [Fact]
+    public void FindNodeDef_ReportsASchemaThatIsNotLoaded()
+    {
+        var (schemas, device, _) = CreateReferences();
+
+        var found = schemas.FindNodeDef(Member(device, "Root"), new SchemaName("Other.Header"), out var problem);
+
+        Assert.Null(found);
+        Assert.Contains("the schema 'Other' is not loaded", problem);
+    }
+
+    [Fact]
+    public void FindNodeRef_FollowsAnAbsolutePathIntoTheNodeDefOfAnotherSchema()
+    {
+        var (schemas, device, library) = CreateReferences();
+        Assert.True(SchemaNodeRef.TryParse("ref:Root.Head.Length", out var reference));
+
+        var found = schemas.FindNodeRef(Member(device, "Root", "Items"), reference, out var problem);
+
+        Assert.Same(((EditGroup)library.Schema.NodeDefs.Single()).Members.Single(), found);
+        Assert.Null(problem);
+    }
+
+    [Fact]
+    public void FindNodeRef_ResolvesARelativePathAgainstTheReferrer()
+    {
+        var (schemas, device, _) = CreateReferences();
+        var body = (EditGroup)device.Schema.NodeDefs.Single();
+        Assert.True(SchemaNodeRef.TryParse("ref:^.Size", out var reference));
+
+        var found = schemas.FindNodeRef(body.Members[1], reference, out _);
+
+        Assert.Same(body.Members[0], found);
+    }
+
+    [Fact]
+    public void FindNodeRef_ReportsAnAbsolutePathThatDoesNotStartAtTheOutermostNode()
+    {
+        var (schemas, device, _) = CreateReferences();
+        var body = (EditGroup)device.Schema.NodeDefs.Single();
+        Assert.True(SchemaNodeRef.TryParse("ref:Root.Head.Length", out var reference));
+
+        var found = schemas.FindNodeRef(body.Members[1], reference, out var problem);
+
+        Assert.Null(found);
+        Assert.Contains("does not start at 'Body'", problem);
+    }
+
+    [Fact]
+    public void FindNodeRef_ReportsAPathThatGoesUpBeyondTheOutermostNode()
+    {
+        var (schemas, device, _) = CreateReferences();
+        Assert.True(SchemaNodeRef.TryParse("ref:^.^.^.X", out var reference));
+
+        var found = schemas.FindNodeRef(Member(device, "Root", "Items"), reference, out var problem);
+
+        Assert.Null(found);
+        Assert.Contains("goes up beyond 'Root'", problem);
+    }
+
+    [Fact]
+    public void FindOwner_FindsTheEmbeddedSchemaOfANodeInIt()
+    {
+        var (documents, assemblies, _) = CreateWorkspace();
+        var roland = assemblies.Load(Assembly.LoadFrom(TestHelpers.AssemblyPathOf("Jacobi.Midi.Roland")), "Jacobi.Midi.Roland.dll");
+        var schemas = new SchemaSetWorkspace(documents, assemblies);
+        var embedded = roland.Schemas.First(schema => schema.Document.Schema.Members.Count > 0);
+
+        var owner = schemas.FindOwner(embedded.Document.Schema.Members[0]);
+
+        Assert.Same(embedded, owner?.Embedded);
+    }
+
+    private static (SchemaSetWorkspace Schemas, SchemaWorkspaceDocument Device, SchemaWorkspaceDocument Library) CreateReferences()
+    {
+        var (documents, assemblies, _) = CreateWorkspace();
+        var schemas = new SchemaSetWorkspace(documents, assemblies);
+        var device = Open(documents, Device);
+        var library = Open(documents, Library);
+        return (schemas, device, library);
+    }
+
+    // a member of the document by its names from a root down
+    private static EditNode Member(SchemaWorkspaceDocument document, params string[] names)
+    {
+        EditNode node = document.Schema;
+        foreach (var name in names)
+        {
+            node = ((EditGroup)node).Members.Single(member => member.Name == name);
+        }
+        return node;
     }
 
     // the Device assembly embeds the base 'Midi' schema

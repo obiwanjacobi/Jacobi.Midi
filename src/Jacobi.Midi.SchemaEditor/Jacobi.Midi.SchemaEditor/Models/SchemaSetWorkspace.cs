@@ -86,6 +86,89 @@ internal sealed class SchemaSetWorkspace
         => Entries.FirstOrDefault(entry => ReferenceEquals(entry.Schema, schema));
 
     /// <summary>
+    /// The entry of the loaded schema that <paramref name="node"/> (a member or a node def of it, or a node in one) belongs to;
+    /// null when it is not in a loaded schema.
+    /// </summary>
+    public SchemaSetEntry? FindOwner(EditNode node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        var top = node;
+        while (top.Parent is not null)
+        {
+            top = top.Parent;
+        }
+        // a node def has no parent: it belongs to the schema that has it
+        return Entries.FirstOrDefault(entry => ReferenceEquals(entry.Schema, top) || entry.Schema.NodeDefs.Contains(top));
+    }
+
+    /// <summary>
+    /// The node def <paramref name="name"/> refers to from <paramref name="referrer"/>: a name without namespace is a node def
+    /// of the schema of the referrer, otherwise of the loaded schema that answers to the namespace (see <see cref="Find"/>).
+    /// </summary>
+    /// <param name="problem">Why the node def is not found; null when it is.</param>
+    public EditNode? FindNodeDef(EditNode referrer, SchemaName name, out string? problem)
+    {
+        ArgumentNullException.ThrowIfNull(referrer);
+        if (FindOwner(referrer) is not { } owner)
+        {
+            problem = $"'{referrer.Name}' is not in a loaded schema.";
+            return null;
+        }
+        var (nodeDef, _) = CompiledNodeLocator.FindNodeDef(GetDocuments(owner.Schema), owner.Schema, name);
+        problem = nodeDef is not null ? null
+            : !String.IsNullOrEmpty(name.Namespace) && Find(name.Namespace) is null && !SameName(name.Namespace, owner.Name)
+                ? $"The node def '{name}' is not found: the schema '{name.Namespace}' is not loaded."
+                : $"The node def '{name}' is not found.";
+        return nodeDef;
+    }
+
+    /// <summary>
+    /// The node a 'ref:' of <paramref name="referrer"/> refers to. A relative path is resolved against the referrer
+    /// (<see cref="SchemaNodeRef.Resolve"/>); the path starts at the outermost node of the referrer (a root or a node def)
+    /// and goes into the node defs on its way, also those of other loaded schemas.
+    /// </summary>
+    /// <param name="problem">Why the node is not found; null when it is.</param>
+    public EditNode? FindNodeRef(EditNode referrer, SchemaNodeRef reference, out string? problem)
+    {
+        ArgumentNullException.ThrowIfNull(referrer);
+        ArgumentNullException.ThrowIfNull(reference);
+        if (FindOwner(referrer) is not { } owner)
+        {
+            problem = $"'{referrer.Name}' is not in a loaded schema.";
+            return null;
+        }
+        var (names, top) = CompiledNodeLocator.GetNames(referrer);
+        if (reference.Resolve(new SchemaPath(String.Join(SchemaPath.Separator, names))) is not { } resolved)
+        {
+            problem = $"'{reference}' goes up beyond '{top.Name}'.";
+            return null;
+        }
+        var segments = new SchemaPath(resolved.Path).Segments.ToList();
+        if (segments.Count == 0 || !SameName(segments[0], top.Name))
+        {
+            // an absolute path in a node def starts where the node def is used: that is not known here
+            problem = $"'{reference}' does not start at '{top.Name}', the outermost node of '{referrer.Name}'.";
+            return null;
+        }
+        var node = CompiledNodeLocator.FindDescendant(GetDocuments(owner.Schema), owner.Schema, top, segments.Skip(1));
+        problem = node is null ? $"'{reference}' is not found: there is no node '{resolved.Path}'." : null;
+        return node;
+    }
+
+    /// <summary>
+    /// The loaded schemas, one per name, as <paramref name="document"/> sees them: it answers to its own name
+    /// (also an embedded schema that an open document replaces), every other name as <see cref="Find"/> tells.
+    /// </summary>
+    private List<EditDocument> GetDocuments(EditDocument document)
+    {
+        var entries = Entries;
+        return [document, .. entries.Select(entry => entry.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(name => !SameName(name, document.Name))
+            .Select(name => Find(entries, name)!.Schema)];
+    }
+
+    /// <summary>
     /// Compiles <paramref name="document"/> with all loaded schemas: for every other name the schema that answers to it (see <see cref="Find"/>).
     /// The document itself answers to its own name, so an embedded schema, or a copy of an open document, can be compiled.
     /// A schema that is not used because of that, or that is left out, is reported in the <see cref="SchemaSetCompilation.Warnings"/>.
@@ -99,11 +182,7 @@ internal sealed class SchemaSetWorkspace
     {
         ArgumentNullException.ThrowIfNull(document);
         var entries = Entries;
-        var others = entries.Select(entry => entry.Name)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Where(name => !SameName(name, document.Name))
-            .Select(name => Find(entries, name)!.Schema);
-        var compilation = Compile(document, others);
+        var compilation = Compile(document, GetDocuments(document).Skip(1));
 
         var warnings = new List<string>();
         var self = entries.FirstOrDefault(entry => ReferenceEquals(entry.Schema, document));

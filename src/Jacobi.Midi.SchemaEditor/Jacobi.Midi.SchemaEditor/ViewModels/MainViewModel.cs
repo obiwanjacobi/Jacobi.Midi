@@ -1096,6 +1096,103 @@ internal sealed partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Selects the node that the property <paramref name="facet"/> of the edited node refers to: the node def of
+    /// <see cref="NodeFacets.NodeDef"/> or <see cref="NodeFacets.MemberNodeDef"/>, or the field of a 'ref:' in a value-or-reference
+    /// property (see <see cref="NodeFacets.GetValueOrRefLabel"/>). The node is looked up in all loaded schemas
+    /// (<see cref="SchemaSetWorkspace.FindNodeDef"/>, <see cref="SchemaSetWorkspace.FindNodeRef"/>) and selected in the tree that
+    /// shows it (<see cref="NavigateTo"/>). Also in a read-only (embedded) schema. Why a reference is not followed is shown in the status.
+    /// </summary>
+    [RelayCommand]
+    private void GoToReference(string? facet)
+    {
+        if (facet is null || EditedNode is not { } node)
+        {
+            return;
+        }
+        var isNodeDef = facet is nameof(NodeFacets.NodeDef) or nameof(NodeFacets.MemberNodeDef);
+        var label = facet switch
+        {
+            nameof(NodeFacets.NodeDef) => "node def",
+            nameof(NodeFacets.MemberNodeDef) => "member node def",
+            _ => NodeFacets.GetValueOrRefLabel(facet)
+        };
+        var text = (facet switch
+        {
+            nameof(NodeFacets.NodeDef) => NodeFacets.NodeDef,
+            nameof(NodeFacets.MemberNodeDef) => NodeFacets.MemberNodeDef,
+            _ => NodeFacets.GetValueOrRef(facet)
+        }).Trim();
+
+        EditNode? target;
+        string? problem;
+        if (text.Length == 0)
+        {
+            StatusMessage = $"The {label} of {node.Name} is not set.";
+            return;
+        }
+        if (isNodeDef)
+        {
+            target = LoadedSchemas.FindNodeDef(node, new SchemaName(text), out problem);
+        }
+        else if (SchemaNodeRef.TryParse(text, out var reference))
+        {
+            target = LoadedSchemas.FindNodeRef(node, reference, out problem);
+        }
+        else
+        {
+            StatusMessage = $"The {label} of {node.Name} is not a reference to a field (ref:).";
+            return;
+        }
+
+        if (target is null)
+        {
+            StatusMessage = $"The {label} of {node.Name} cannot be followed: {problem}";
+            return;
+        }
+        NavigateTo(target);
+    }
+
+    /// <summary>
+    /// Selects <paramref name="node"/> in the tree that shows it: a node of an open document in the schema tree
+    /// (that document is selected), a node of an embedded schema in the assembly tree.
+    /// </summary>
+    private void NavigateTo(EditNode node)
+    {
+        switch (LoadedSchemas.FindOwner(node))
+        {
+            case { Embedded: not null }:
+                SelectedLeftTab = AssembliesLeftTab;
+                SelectedAssemblyItem = node;
+                break;
+            case { } entry:
+                _keepSelectedItem = true;
+                try
+                {
+                    SelectedDocument = entry.Document;
+                }
+                finally
+                {
+                    _keepSelectedItem = false;
+                }
+                // the document may have been selected already while the assemblies tab is shown
+                _selectingDocument = true;
+                try
+                {
+                    SelectedLeftTab = SchemaLeftTab;
+                }
+                finally
+                {
+                    _selectingDocument = false;
+                }
+                SelectedItem = node;
+                break;
+            default:
+                StatusMessage = $"'{node.Name}' is not in a loaded schema.";
+                break;
+        }
+    }
+
+    /// <summary>
     /// Renames the selected document to the staged <see cref="DocumentName"/> after the user confirmed it in the rename dialog.
     /// The dialog offers to rename the includes of the old name in the other open documents as well,
     /// or warns that includes may become invalid when no open document includes it.

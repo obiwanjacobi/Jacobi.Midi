@@ -18,6 +18,7 @@ What is planned for the console, and what was done. What the console does now is
   - [ ] Side (top/bottom) panel slide-in
   - [ ] Float (in main window) / New Window
 - [ ] Analyze option to make a dashboard design on a NodeDef and let the user select the actual base (incl exchange send/recv). Example: Patch-dashboard can be used on user-memory, preset (read-only) and temporary areas - because they all use the Patch definition.
+- [ ] Add an option to select the schema files and assemblies to load on startup. Saved in (user) settings file.
 - [ ] Dashboard user-controls: A reusable layout that can be dropped in to compose new dashboards.
 - [x] Dashoboard name in top-bar droplist is not changed after name change in props-pane or file save.
 - [x] Make the Selector's presentation Droplist or radio-buttons an explicit option.

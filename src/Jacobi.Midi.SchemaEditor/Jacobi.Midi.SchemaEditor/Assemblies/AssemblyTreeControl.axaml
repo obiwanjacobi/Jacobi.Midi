@@ -12,7 +12,7 @@
              x:DataType="vm:MainViewModel">
 
     <Panel>
-        <TreeView ItemsSource="{Binding OpenedAssemblies.Assemblies}"
+        <TreeView x:Name="Tree" ItemsSource="{Binding OpenedAssemblies.Assemblies}"
                   SelectedItem="{Binding SelectedAssemblyItem, Mode=TwoWay}">
             <TreeView.DataTemplates>
                 <TreeDataTemplate x:DataType="asm:LoadedAssembly" ItemsSource="{Binding Children}">

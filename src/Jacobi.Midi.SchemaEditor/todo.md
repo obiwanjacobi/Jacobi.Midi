@@ -6,12 +6,19 @@ Known gaps and loose ends, collected while building the editor.
 
 - [x] Editing `description` or `sample` on the Properties tab does not refresh the staged values on the General tab; pressing *Apply* there writes the old values back. Fixed: the description and sample value fields are removed from the General tab; both are edited as properties only.
 - [x] Top bar / Midi bar: size to window width. Currently stuff drops off when window width is too small.
+- [ ] Show loaded schemas (also from assemblies) for adding includes.
 - [ ] Node (def) references: allow easy navigation through schema tree by making node refs clickable.
-- [ ] The node def, count, selected index, member node def, byte size/length/offset and value fields are plain text boxes; offer the document's node defs (and the reachable `ref:` paths) as suggestions.
+  - [x] Node def names (NodeDef, MemberNodeDef) and `ref:` paths (Count, ByteSize, ByteLength, SelectedIndex, Value): a button next to the property selects the node it refers to. Done: the → button (`GoToReferenceCommand`) looks the node up in all loaded schemas (`SchemaSetWorkspace.FindNodeDef`/`FindNodeRef`) and selects it in the schema tree or, for an embedded schema, the assembly tree; why a reference cannot be followed is shown in the status.
+  - [ ] Data type def names (DataType): go to the data type def.
+  - [ ] Processor def names (Processor): go to the processor def.
+  - [ ] `pub:` references: go to the node whose processor publishes the value.
+  - [ ] *Back*: return to the node a reference was followed from (navigation history).
+- [ ] The node def, count, selected index, member node def, byte size/length/offset and value fields are plain text boxes; offer the document's node defs (and the reachable/loaded `ref:` paths) as suggestions.
+- [ ] Remove the warnings about 'no group conforms to the contract 'open-choice name'. Instead show a count or list of possible impls at open-choice element.
 - [x] `SchemaWorkspaceDocument.ApplyNodeEdits` takes the type-specific properties as an optional trailing `NodeFacets` parameter; fold name, data type, description and sample into the staged model so there is one apply path. Fixed: there is no apply step any more; `NodeFacets` edits the name, data type and type-specific values of the node live.
 - [x] Remove contiguous match selection. send separate messages for gaps. Fixed: `KeepContiguous` is removed; every included node is split by the address map, so a gap starts a new message (adjacent nodes are not joined).
 - [ ] Value processors (repeat/choice) are not shown or editable; to be redesigned.
-- [ ] The data type options and the field Value validation (`DataTypeValueValidator`) only know the registered types and the data type defs of the edited document; data type defs of included schemas are not listed and their types count as custom (not validated). Resolve the includes' documents to fix this.
+- [ ] The data type options and the field Value validation (`DataTypeValueValidator`) only knows the registered types and the data type defs of the edited document; data type defs of included schemas are not listed and their types count as custom (not validated). Resolve the includes' documents to fix this.
 - [x] The built-in data type descriptors have no `Min`/`Max`, so the Value range warning only applies to data type defs that define them. Fixed: the validation falls back to the range of the descriptor's `ClrType`.
 - [x] The Value validation compares the typed value to the `Options` keys (physical values) and to `Min`/`Max` (logical values) without applying `Scale` and `Shift`; decide whether options should be matched on the physical value after scaling.
 - [x] *Delete* has no confirmation. Fixed: *Delete* asks for confirmation (`ConfirmViewModel`).
@@ -20,8 +27,9 @@ Known gaps and loose ends, collected while building the editor.
 - [ ] Moving a node (Arrange: up/down, into/out of a group) or changing its type does not update the `ref:` paths that point at it or at its members (count, byte length/size, selected index, field values); they may no longer resolve.
 - [ ] A node that is moved to another parent or whose type is changed is written as a new element in an XML source (`XmlSchemaSource` matches nodes by identity within their parent): the comments inside and before it are lost. Reordering within the same parent keeps them.
 - [ ] Change type only covers group, repeat and choice; a field cannot be changed into a group-like node (or back).
-- [ ] A node cannot be moved between the document members and the node defs (e.g. turn a member into a node def), nor to another document.
+- [ ] A node cannot be moved between the document members and the node defs (e.g. turn a member into a node def), nor to another document. (copy-paste)
 - [ ] Add an option to select the schema files and assemblies to load on startup. Saved in (user) settings file.
+- [ ] Keep scrollbars expanded.
 
 ## Effective processors and properties
 
@@ -71,7 +79,7 @@ Known gaps and loose ends, collected while building the editor.
 
 - [ ] `dotnet test` fails on the .NET 11 SDK: the test project uses Microsoft.Testing.Platform and needs the opt-in in a `global.json`. Run `Jacobi.Midi.Tests.exe` directly until then.
 
-## Instantiate dialog
+## Instantiate/Match dialog
 
 - [x] **Dump messages, like address maps.** Move `SchemaInstantiator` from `AddressMapAdapter` to the generic API of Midi.Device (`MessageMaps`, `MessageMapInfo.Kind`/`ItemCount`, `Load`/`Save` with the instantiated data message, `MessageMapException.Kind`), as the console did (see [docs/decisions.md](../../docs/decisions.md), *The data of a root for a client*): a carried dump body gets the role fields its root fixes, *Send* uses the message interval of its exchange file, *Describe transfer* shows the dump message, Match selects the body from the data, and the check panel shows the problems of every kind of map.
   - [x] Detection: `InstanceBody.MapKind` from `MessageMaps.Info` (`DetectMessageMap` replaces `DetectAddressMap` and `AddressMapAdapter.IsMap`); the note for an invalid map from `MessageMapException.Kind` (an address map or a carried dump); a body that is no MIDI data stays a plain group without a note; the item counts of an address map from `MessageMapInfo.ItemCount`.
@@ -81,8 +89,10 @@ Known gaps and loose ends, collected while building the editor.
   - [x] The check panel: `MessageMapCheck` with `MessageMapValidator` (was `AddressMapCheck`/`AddressMapValidator`), also the dumps that are a message themselves; *Message map* in the schema panel.
   - [x] The role fields of a root that is a dump message itself (`MessageDump`): its device values are still typed. *Done:* the instance of such a root marks its role fields (`MarkMessageDump`) and is written by `MessageMaps.Save`; an instance of a nested node of it is written plainly, with the values given.
 
-- [ ] Field values are free text. They get a (non-blocking) warning from `DataTypeValueValidator`, but data type def `options` are not offered as a list.
-- [ ] Field value validation (`DataTypeValueValidator`) does not take the processors of the field into account: a value processor such as `sys.map` makes the logical value another type than the data type (e.g. `Gp8.upDown`: `Up`/`Down` on a `sys.uint8`), so a valid value gets a warning. *Save As*/*Send* hand such a value to the processors (`InstanceValueSource`); the validation should do the same, or validate against the logical values (the map's results).
+- [x] Field values are free text. They get a (non-blocking) warning from `DataTypeValueValidator`, but data type def `options` are not offered as a list.
+- [x] Field value validation (`DataTypeValueValidator`) does not take the processors of the field into account: a value processor such as `sys.map` makes the logical value another type than the data type (e.g. `Gp8.upDown`: `Up`/`Down` on a `sys.uint8`), so a valid value gets a warning. Fixed: a field that declares value processors has no value type in the compiled plan (`FieldInfo.ConvertsToValueType` is false); `InstanceValueSource.ToLogical` then skips the data type facets and hands a text that does not parse to the processors as is, without a warning.
+- [ ] A field with value processors (e.g. `sys.map`) gets no options list and its value is not validated: the logical values of the processors (the map's results) are not known to the dialog.
+- [x] A fixed-value field is prefilled and disabled.
 - [x] The confirmed instance (`MainViewModel.LastInstance`) is not used yet; it should implement `IValueSource`/`IOpenChoiceSource` so it can be written by the serializer. Fixed: `LastInstance` is removed; `InstanceValueSource` writes the instance for *Save As* and *Send*.
 - [ ] Processors are not checked: only includes (open documents) and schema compilation are verified before the dialog opens.
 - [x] Match (deserialize): the body of an open choice must be selected by the user before matching; it is not detected from the data (e.g. by trying each conforming body). *Done for data open choices* (`midi.role="data"`): `MessageMaps.FindCarriedRoot` selects the body (a dump's body by its device values, the address map of the model); an open choice that is not MIDI data still needs a selection.
@@ -94,3 +104,4 @@ Known gaps and loose ends, collected while building the editor.
 - [ ] Address map, *Send*: the messages are sent over the connection of the MIDI bar with a fixed pause between them (`SchemaInstantiator.MessageInterval`, 500 ms); replies of an acknowledged device (ack/nak) are not handled. The editor does not use `MessageExchange` (see docs/decisions.md).
 - [ ] Open choice bodies mismatch (also applies to Match: `InstanceValueSink` reads the selected body the same way): `SchemaInstantiator` offers groups at any depth that declare the member node def as bodies of an open choice, but the serializer (`ExecutionPlan.BuildOpenChoiceBodies`) only accepts roots. *Save As*/*Send* with a nested body fails with "is not a known group that conforms to the nodeDef". Either offer only roots, or let the serializer accept nested groups (possibly through the `FromTarget` of `OpenChoiceSourceResult`).
 - [ ] `SchemaInstantiator.FindConforming` searches the authored documents (`EditDocument`) for the bodies of an open choice and then looks each one up in the compiled schema (`FindCompiled`). Compiled nodes now keep their (qualified) `NodeDef` (`SchemaNode.IsNodeDefInstance` marks the nodes merged with their node def), so the bodies can be found in the compiled `SchemaSet` directly, as `ExecutionPlan.BuildOpenChoiceBodies` does for roots. Decide together with the item above which groups (roots only, or nested groups) are bodies.
+- [ ] Limit the editbox of string fields with a fixed length.

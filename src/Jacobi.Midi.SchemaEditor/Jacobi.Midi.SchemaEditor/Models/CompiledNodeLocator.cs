@@ -63,23 +63,51 @@ internal static class CompiledNodeLocator
         ArgumentNullException.ThrowIfNull(documents);
         var names = path.Segments.ToList();
         var owner = FindDocument(documents, documentName);
-        EditNode? current = owner?.Members.FirstOrDefault(member => SameName(member.Name, names.FirstOrDefault()));
-        foreach (var name in names.Skip(1))
+        var root = owner?.Members.FirstOrDefault(member => SameName(member.Name, names.FirstOrDefault()));
+        return owner is null || root is null ? null : FindDescendant(documents, owner, root, names.Skip(1));
+    }
+
+    /// <summary>
+    /// The authored node at <paramref name="names"/> below <paramref name="start"/> (of <paramref name="owner"/>), one member
+    /// name per level. A member that comes from a node def is found in the node def (which may be in another of the
+    /// <paramref name="documents"/>). Null when the names do not lead to an authored node.
+    /// </summary>
+    public static EditNode? FindDescendant(IReadOnlyList<EditDocument> documents, EditDocument owner, EditNode start, IEnumerable<string> names)
+    {
+        ArgumentNullException.ThrowIfNull(documents);
+        ArgumentNullException.ThrowIfNull(names);
+        var current = start;
+        var currentOwner = owner;
+        foreach (var name in names)
         {
-            if (current is null || owner is null)
+            var (member, memberOwner) = FindMember(documents, current, currentOwner, name);
+            if (member is null || memberOwner is null)
             {
                 return null;
             }
-            (current, owner) = FindMember(documents, current, owner, name);
+            (current, currentOwner) = (member, memberOwner);
         }
         return current;
+    }
+
+    /// <summary>
+    /// The node def <paramref name="name"/> refers to from <paramref name="owner"/> (a name without namespace is a node def of
+    /// <paramref name="owner"/>), with the document that holds it. Null when it is not in the <paramref name="documents"/>.
+    /// </summary>
+    public static (EditNode? NodeDef, EditDocument? Owner) FindNodeDef(IReadOnlyList<EditDocument> documents, EditDocument owner, SchemaName name)
+    {
+        ArgumentNullException.ThrowIfNull(documents);
+        ArgumentNullException.ThrowIfNull(owner);
+        var document = String.IsNullOrEmpty(name.Namespace) ? owner : FindDocument(documents, name.Namespace);
+        var nodeDef = document?.NodeDefs.FirstOrDefault(def => SameName(def.Name, name.Name));
+        return nodeDef is null ? (null, null) : (nodeDef, document);
     }
 
     // a member by name: an authored member, or one of the node def the group conforms to (and of the node defs it conforms to)
     private static (EditNode? Member, EditDocument? Owner) FindMember(IReadOnlyList<EditDocument> documents, EditNode node, EditDocument owner, string name)
     {
         var visited = new HashSet<EditNode>();
-        for (var current = node; current is not null && visited.Add(current);)
+        for (EditNode? current = node; current is not null && visited.Add(current);)
         {
             if (current is EditGroup group && group.Members.FirstOrDefault(member => SameName(member.Name, name)) is { } member)
             {
@@ -89,8 +117,8 @@ internal static class CompiledNodeLocator
             {
                 break;
             }
-            owner = String.IsNullOrEmpty(nodeDef.Namespace) ? owner : FindDocument(documents, nodeDef.Namespace) ?? owner;
-            current = owner.NodeDefs.FirstOrDefault(def => SameName(def.Name, nodeDef.Name));
+            (current, var defOwner) = FindNodeDef(documents, owner, nodeDef);
+            owner = defOwner ?? owner;
         }
         return (null, null);
     }

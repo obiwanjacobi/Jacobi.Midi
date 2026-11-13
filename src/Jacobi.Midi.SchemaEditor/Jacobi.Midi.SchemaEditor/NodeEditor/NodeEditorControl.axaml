@@ -10,7 +10,8 @@
 
     <UserControl.Styles>
         <!-- an embedded schema of an assembly is shown read-only: text can be selected but not edited, drop-downs cannot be changed
-             and buttons are not shown (an empty template; a style cannot hide a button whose visibility is bound) -->
+             and buttons are not shown (an empty template; a style cannot hide a button whose visibility is bound),
+             except the → button that follows a reference (it does not edit) -->
         <Style Selector="Grid.readonly TextBox">
             <Setter Property="IsReadOnly" Value="True" />
         </Style>
@@ -18,7 +19,7 @@
             <Setter Property="IsHitTestVisible" Value="False" />
             <Setter Property="Focusable" Value="False" />
         </Style>
-        <Style Selector="Grid.readonly Button">
+        <Style Selector="Grid.readonly Button:not(.goto)">
             <Setter Property="IsHitTestVisible" Value="False" />
             <Setter Property="Focusable" Value="False" />
             <Setter Property="Template">
@@ -50,6 +51,13 @@
             <Setter Property="MinWidth" Value="32" />
             <Setter Property="VerticalAlignment" Value="Stretch" />
             <Setter Property="ToolTip.Tip" Value="Find a field before this node (ref:) or a published value (pub:)" />
+        </Style>
+        <!-- the → button behind a node def or value-or-reference property: selects the node it refers to (GoToReferenceCommand) -->
+        <Style Selector="Button.goto">
+            <Setter Property="Content" Value="→" />
+            <Setter Property="MinWidth" Value="32" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="ToolTip.Tip" Value="Go to the node this refers to (a node def or a ref: field)" />
         </Style>
         <Style Selector="TextBlock.warning">
             <Setter Property="FontSize" Value="11" />
@@ -259,13 +267,17 @@
                         <ContentControl Content="{Binding}" ContentTemplate="{StaticResource DocumentationTemplate}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Node def" Classes="label" />
-                            <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef, UpdateSourceTrigger=LostFocus}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef, UpdateSourceTrigger=LostFocus}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
+                                <Button Grid.Column="1" Classes="goto" Command="{Binding GoToReferenceCommand}" CommandParameter="NodeDef" />
+                            </Grid>
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Count" Classes="label" />
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
                                 <TextBox Text="{Binding NodeFacets.Count, UpdateSourceTrigger=LostFocus}" PlaceholderText="number, ref:path or pub:ns.name" />
                                 <Button Grid.Column="1" Classes="findref" Command="{Binding FindValueRefCommand}" CommandParameter="Count" />
+                                <Button Grid.Column="2" Classes="goto" Command="{Binding GoToReferenceCommand}" CommandParameter="Count" />
                             </Grid>
                             <TextBlock Text="{Binding ValueProcessorDetails.ConversionNote}" Classes="kind" TextWrapping="Wrap"
                                        IsVisible="{Binding ValueProcessorDetails.ConversionNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}" />
@@ -274,9 +286,10 @@
                                         IsVisible="{Binding ValueProcessorDetails, Converter={x:Static ObjectConverters.IsNotNull}}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Byte size" Classes="label" />
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
                                 <TextBox Text="{Binding NodeFacets.ByteSize, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
                                 <Button Grid.Column="1" Classes="findref" Command="{Binding FindValueRefCommand}" CommandParameter="ByteSize" />
+                                <Button Grid.Column="2" Classes="goto" Command="{Binding GoToReferenceCommand}" CommandParameter="ByteSize" />
                             </Grid>
                         </StackPanel>
                     </StackPanel>
@@ -290,13 +303,17 @@
                         <ContentControl Content="{Binding}" ContentTemplate="{StaticResource DocumentationTemplate}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Node def" Classes="label" />
-                            <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef, UpdateSourceTrigger=LostFocus}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef, UpdateSourceTrigger=LostFocus}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
+                                <Button Grid.Column="1" Classes="goto" Command="{Binding GoToReferenceCommand}" CommandParameter="NodeDef" />
+                            </Grid>
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Selected index" Classes="label" />
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
                                 <TextBox Text="{Binding NodeFacets.SelectedIndex, UpdateSourceTrigger=LostFocus}" PlaceholderText="number, ref:path or pub:ns.name" />
                                 <Button Grid.Column="1" Classes="findref" Command="{Binding FindValueRefCommand}" CommandParameter="SelectedIndex" />
+                                <Button Grid.Column="2" Classes="goto" Command="{Binding GoToReferenceCommand}" CommandParameter="SelectedIndex" />
                             </Grid>
                             <TextBlock Text="{Binding ValueProcessorDetails.ConversionNote}" Classes="kind" TextWrapping="Wrap"
                                        IsVisible="{Binding ValueProcessorDetails.ConversionNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}" />
@@ -305,7 +322,10 @@
                                         IsVisible="{Binding ValueProcessorDetails, Converter={x:Static ObjectConverters.IsNotNull}}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Member node def" Classes="label" />
-                            <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.MemberNodeDef, UpdateSourceTrigger=LostFocus}" ItemsSource="{Binding MemberNodeDefOptions}" PlaceholderText="optional: makes the choice open" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.MemberNodeDef, UpdateSourceTrigger=LostFocus}" ItemsSource="{Binding MemberNodeDefOptions}" PlaceholderText="optional: makes the choice open" />
+                                <Button Grid.Column="1" Classes="goto" Command="{Binding GoToReferenceCommand}" CommandParameter="MemberNodeDef" />
+                            </Grid>
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Pipeline" Classes="label" />
@@ -313,9 +333,10 @@
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Byte size" Classes="label" />
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
                                 <TextBox Text="{Binding NodeFacets.ByteSize, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
                                 <Button Grid.Column="1" Classes="findref" Command="{Binding FindValueRefCommand}" CommandParameter="ByteSize" />
+                                <Button Grid.Column="2" Classes="goto" Command="{Binding GoToReferenceCommand}" CommandParameter="ByteSize" />
                             </Grid>
                         </StackPanel>
                     </StackPanel>
@@ -329,13 +350,17 @@
                         <ContentControl Content="{Binding}" ContentTemplate="{StaticResource DocumentationTemplate}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Node def" Classes="label" />
-                            <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef, UpdateSourceTrigger=LostFocus}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef, UpdateSourceTrigger=LostFocus}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
+                                <Button Grid.Column="1" Classes="goto" Command="{Binding GoToReferenceCommand}" CommandParameter="NodeDef" />
+                            </Grid>
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Byte size" Classes="label" />
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
                                 <TextBox Text="{Binding NodeFacets.ByteSize, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
                                 <Button Grid.Column="1" Classes="findref" Command="{Binding FindValueRefCommand}" CommandParameter="ByteSize" />
+                                <Button Grid.Column="2" Classes="goto" Command="{Binding GoToReferenceCommand}" CommandParameter="ByteSize" />
                             </Grid>
                         </StackPanel>
                     </StackPanel>
@@ -351,22 +376,27 @@
                                    IsVisible="{Binding NodeFacets.DataTypeNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Node def" Classes="label" />
-                            <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef, UpdateSourceTrigger=LostFocus}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                <ComboBox Classes="options" IsEditable="True" Text="{Binding NodeFacets.NodeDef, UpdateSourceTrigger=LostFocus}" ItemsSource="{Binding NodeDefOptions}" PlaceholderText="optional, e.g. name or schema.name" />
+                                <Button Grid.Column="1" Classes="goto" Command="{Binding GoToReferenceCommand}" CommandParameter="NodeDef" />
+                            </Grid>
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Value" Classes="label" />
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
                                 <TextBox Text="{Binding NodeFacets.Value, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional constant, ref:path or pub:ns.name" />
                                 <Button Grid.Column="1" Classes="findref" Command="{Binding FindValueRefCommand}" CommandParameter="Value" />
+                                <Button Grid.Column="2" Classes="goto" Command="{Binding GoToReferenceCommand}" CommandParameter="Value" />
                             </Grid>
                             <TextBlock Text="{Binding NodeFacets.ValueWarning}" Foreground="Orange" FontSize="11" TextWrapping="Wrap"
                                        IsVisible="{Binding NodeFacets.ValueWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Byte length" Classes="label" />
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
                                 <TextBox Text="{Binding NodeFacets.ByteLength, UpdateSourceTrigger=LostFocus}" PlaceholderText="optional: number, ref:path or pub:ns.name" />
                                 <Button Grid.Column="1" Classes="findref" Command="{Binding FindValueRefCommand}" CommandParameter="ByteLength" />
+                                <Button Grid.Column="2" Classes="goto" Command="{Binding GoToReferenceCommand}" CommandParameter="ByteLength" />
                             </Grid>
                         </StackPanel>
                         <StackPanel Spacing="4">

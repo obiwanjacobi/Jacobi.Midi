@@ -3,6 +3,21 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## Following node references in the Schema Editor (2026-11-13)
+
+Issue: node def names and `ref:` paths in the node editor are plain text; finding the node they refer to means
+searching the schema tree by hand.
+
+1. **A button next to the property follows the reference** and selects the node it refers to. First for node def names
+   (NodeDef, MemberNodeDef) and `ref:` paths; data type defs, processor defs, `pub:` and *Back* come later (see the
+   Schema Editor todo). *Why:* a button is the most obvious for the user; start simple.
+2. **The lookup is editor-side, on `SchemaSetWorkspace`, with the serializer's rules** (`SchemaName`,
+   `SchemaNodeRef.TryParse`/`Resolve`). Not on the compiled `SchemaSet`. *Why:* the schema being edited often does not
+   compile, and the compiled nodes are merged copies that do not lead back to the `EditNode` the tree shows.
+   `SchemaSetWorkspace` already decides which loaded schema (open document or embedded schema) answers to a name.
+3. **A reference into an embedded schema is followed too**: the *Assemblies* tab is shown with the node selected.
+   *Why:* follow the breadcrumbs; *Back* will lead the way back later.
+
 ## Included nodes of an address map in the Schema Editor (2026-11-13)
 
 Issue: the editor kept the included nodes of an address map body one contiguous run (`KeepContiguous`): including a

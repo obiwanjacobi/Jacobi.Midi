@@ -8,6 +8,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Jacobi.Midi.SchemaEditor.Models;
+using Jacobi.Midi.SchemaEditor.Views;
 
 namespace Jacobi.Midi.SchemaEditor.SchemaTree;
 
@@ -233,8 +234,8 @@ internal partial class SchemaTreeControl : UserControl
                 object? treeItem = null;
                 if (SelectedItem is { } item && _viewModel.GetPath(item) is { } path)
                 {
-                    ExpandTo(path);
                     treeItem = _viewModel.ToTreeItem(item);
+                    ExpandTo(path, treeItem);
                 }
                 _viewModel.SelectedItem = treeItem;
             }
@@ -282,25 +283,12 @@ internal partial class SchemaTreeControl : UserControl
     /// <summary>
     /// Expands the tree items along <paramref name="path"/> (from a root down) so the item below it becomes visible.
     /// </summary>
-    private void ExpandTo(IReadOnlyList<object>? path)
+    /// <param name="item">The item below the path to bring into view; null to only expand.</param>
+    private void ExpandTo(IReadOnlyList<object>? path, object? item = null)
     {
-        if (path is null)
+        if (path is not null)
         {
-            return;
-        }
-        // a root item may just have been added
-        Tree.UpdateLayout();
-        ItemsControl level = Tree;
-        foreach (var ancestor in path)
-        {
-            if (level.ContainerFromItem(ancestor) is not TreeViewItem item)
-            {
-                return;
-            }
-            item.IsExpanded = true;
-            // realize the child containers so the next level can be found
-            item.UpdateLayout();
-            level = item;
+            TreeViewReveal.Reveal(Tree, path, item);
         }
     }
 }
