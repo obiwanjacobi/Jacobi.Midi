@@ -30,7 +30,7 @@ Known gaps and loose ends, collected while building the editor.
 - [ ] Change type only covers group, repeat and choice; a field cannot be changed into a group-like node (or back).
 - [ ] A node cannot be moved between the document members and the node defs (e.g. turn a member into a node def), nor to another document. (copy-paste)
 - [ ] Add an option to select the schema files and assemblies to load on startup. Saved in (user) settings file.
-- [ ] Keep scrollbars expanded.
+- [x] Keep scrollbars expanded. Fixed: a `:is(TemplatedControl)` style with `ScrollViewer.AllowAutoHide` False in `Themes/FluentTheme.axaml` (also reaches the scroll viewers in control templates, e.g. the schema tree).
 
 ## Effective processors and properties
 

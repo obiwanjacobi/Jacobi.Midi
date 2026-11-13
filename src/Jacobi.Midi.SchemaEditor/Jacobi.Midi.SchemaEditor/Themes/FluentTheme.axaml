@@ -19,6 +19,17 @@
         <Setter Property="FontSize" Value="11" />
     </Style>
 
+    <!--
+        All scrollbars stay expanded. Fluent collapses them to a thin line that only expands on hover (auto-hide).
+        The scroll viewer inside a control template (tree, list, text box, drop-down) gets AllowAutoHide by a template binding
+        to the attached ScrollViewer.AllowAutoHide of its control, which overrides a ScrollViewer style:
+        the attached property is set on all templated controls (a ScrollViewer is one too).
+        :is() matches the derived types too; a plain type selector only matches that exact type.
+    -->
+    <Style Selector=":is(TemplatedControl)">
+        <Setter Property="ScrollViewer.AllowAutoHide" Value="False" />
+    </Style>
+
     <!-- drop-down lists of choices (data types, processors, options of a data type) can be long: they scroll -->
     <Style Selector="ComboBox.options">
         <Setter Property="MaxDropDownHeight" Value="240" />

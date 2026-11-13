@@ -19,9 +19,15 @@
         <Style Selector="FlyoutPresenter">
             <Setter Property="Cursor" Value="Arrow" />
         </Style>
-        <!-- scroll bars stay expanded: no hover needed to grab them while designing -->
-        <Style Selector="ScrollViewer">
-            <Setter Property="AllowAutoHide" Value="False" />
+        <!--
+            scroll bars stay expanded: no hover needed to grab them while designing.
+            The scroll viewer inside a control template (list, tree, text box, drop-down) gets AllowAutoHide by a template binding
+            to the attached ScrollViewer.AllowAutoHide of its control, which overrides a ScrollViewer style:
+            the attached property is set on all templated controls (a ScrollViewer is one too).
+            :is() matches the derived types too; a plain type selector only matches that exact type.
+        -->
+        <Style Selector=":is(TemplatedControl)">
+            <Setter Property="ScrollViewer.AllowAutoHide" Value="False" />
         </Style>
     </Application.Styles>
 </Application>
