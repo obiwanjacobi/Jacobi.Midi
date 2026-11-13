@@ -3,6 +3,28 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## Included nodes of an address map in the Schema Editor (2026-11-13)
+
+Issue: the editor kept the included nodes of an address map body one contiguous run (`KeepContiguous`): including a
+node also included the nodes in between, leaving one out also left out everything after it. That did not work well.
+
+1. **The included nodes need not be adjacent; a left-out node stays left out.** Each included node is a range of the
+   transfer; the map splits it (`IMessageMap.Split`), so a gap is never sent and the messages conform to the schema
+   (atomic groups, cuts, maximum size). *Why:* the map already splits; the editor only says what is included.
+2. **Adjacent included nodes are not joined into one message** (for now). *Why:* a few extra messages that conform
+   to the schema are no problem; keep it simple.
+3. **The editor uses the message API (`MessageMaps`), not the message exchange.** *Why:* the editor describes and
+   writes the messages; the exchange belongs to a device session.
+4. **The editor waits a fixed 500 ms between the messages it sends** (`SchemaInstantiator.MessageInterval`), instead of
+   the `messageInterval` of the device's exchange file; the editor does not load the exchange files. *Why:* follows
+   from 3; a generous pause suits any device.
+5. **A match that is not read through a message map suggests where it is** (always, also when the read succeeds):
+   when a map recognises the bytes as one of its data messages, a warning names the data message and the root it
+   carries (e.g. a DT1 matched in the `Gx700.AddressMap` root itself). Midi.Device finds them with
+   `MessageMaps.FindDataMessage(sysEx, device)`. *Why:* matching in the address map root instead of the data message is
+   an easy mistake, and reading raw bytes can also "succeed" with nonsense values; identifying a message is useful
+   beyond the editor (e.g. the console).
+
 ## Saving a new rig and a new dashboard (2026-11-12)
 
 Issue: *Save* with a new rig and a new dashboard shows two save dialogs in a row; it is not clear which is which, nor

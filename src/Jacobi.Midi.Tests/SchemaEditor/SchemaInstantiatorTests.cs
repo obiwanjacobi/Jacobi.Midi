@@ -819,7 +819,7 @@ public class SchemaInstantiatorTests
         var message = (EditGroup)roland.Document.Schema.Members.Single(member => member.Name == "Message16");
         var dt1 = (EditGroup)message.Members.Single(member => member.Name == "DT1");
         var processors = viewModel.OpenedAssemblies.Processors;
-        var instantiator = new SchemaInstantiator(viewModel.LoadedSchemas.Compile(roland.Document.Schema), processors, viewModel.OpenedAssemblies.Exchanges);
+        var instantiator = new SchemaInstantiator(viewModel.LoadedSchemas.Compile(roland.Document.Schema), processors);
         var root = Assert.IsType<InstanceGroup>(instantiator.Create(dt1));
         var data = FindChoice(root, "Data")!;
         data.SelectedOption = data.Options.Single(option => option.Name == "Gp8.AddressMap");
@@ -909,7 +909,7 @@ public class SchemaInstantiatorTests
     }
 
     [Fact]
-    public void AddressMapBody_IncludingANodeAfterAGap_IncludesTheNodesInBetween()
+    public void AddressMapBody_IncludingNodesWithAGap_SendsSeparateMessagesWithoutTheGap()
     {
         var gp8 = InstantiateGp8DataMessage();
         var groups = TemporaryGroups(gp8);
@@ -917,18 +917,16 @@ public class SchemaInstantiatorTests
         groups[0].IsIncluded = true;
         groups[2].IsIncluded = true;
 
-        Assert.Equal([true, true, true], groups.Take(3).Select(group => group.IsIncluded));
+        // the node in between stays left out
+        Assert.Equal([true, false, true], groups.Take(3).Select(group => group.IsIncluded));
         Assert.All(groups.Skip(3), group => Assert.False(group.IsIncluded));
-
-        // the memory patch is after the temporary patch: the rest of the temporary patch is included too
-        gp8.Memory.IsIncluded = true;
-
-        Assert.All(groups, group => Assert.True(group.IsIncluded));
-        Assert.True(gp8.Body.IsIncluded);
+        Assert.Null(gp8.Temporary.IsIncluded);
+        Assert.Null(gp8.Body.IsIncluded);
+        Assert.Contains("Sends 2 Message16.DT1 message(s): 0x00-00 (1 bytes), 0x00-02 (4 bytes)", gp8.Transfer);
     }
 
     [Fact]
-    public void AddressMapBody_LeavingOutANode_LeavesOutEverythingAfterIt()
+    public void AddressMapBody_LeavingOutANode_KeepsTheNodesAfterIt()
     {
         var gp8 = InstantiateGp8DataMessage();
         var groups = TemporaryGroups(gp8);
@@ -937,9 +935,11 @@ public class SchemaInstantiatorTests
         groups[1].IsIncluded = false;
 
         Assert.True(groups[0].IsIncluded);
-        Assert.All(groups.Skip(1), group => Assert.False(group.IsIncluded));
+        Assert.False(groups[1].IsIncluded);
+        Assert.All(groups.Skip(2), group => Assert.True(group.IsIncluded));
         Assert.Null(gp8.Temporary.IsIncluded);
-        Assert.False(gp8.Memory.IsIncluded);
+        Assert.True(gp8.Memory.IsIncluded);
+        Assert.Null(gp8.Body.IsIncluded);
     }
 
     [Fact]
@@ -965,7 +965,7 @@ public class SchemaInstantiatorTests
         // the patch that was read is the one that is sent, at its own address
         Assert.Empty(warnings);
         Assert.Equal(Convert.ToHexString(original), Convert.ToHexString(message.Bytes));
-        Assert.Equal(TimeSpan.FromMilliseconds(20), message.Interval);
+        Assert.Equal(SchemaInstantiator.MessageInterval, message.Interval);
     }
 
     [Fact]

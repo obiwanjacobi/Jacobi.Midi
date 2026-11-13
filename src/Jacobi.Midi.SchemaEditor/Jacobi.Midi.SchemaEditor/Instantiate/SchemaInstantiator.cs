@@ -4,15 +4,14 @@ using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Device.Addressing;
-using Jacobi.Midi.Device.Exchange;
 using Jacobi.Midi.SchemaEditor.Models;
 using Jacobi.Midi.Device.Messages;
 
 namespace Jacobi.Midi.SchemaEditor.Instantiate;
 
 /// <summary>
-/// One SysEx message written from an instance: its bytes and the time to wait after sending it (the <c>messageInterval</c>
-/// of the <see cref="ExchangeNames.SendData"/> exchange of an address map's exchange file; zero otherwise).
+/// One SysEx message written from an instance: its bytes and the time to wait after sending it
+/// (<see cref="SchemaInstantiator.MessageInterval"/> between the messages of a message map; zero otherwise).
 /// </summary>
 internal sealed record SerializedMessage(byte[] Bytes, TimeSpan Interval);
 
@@ -26,11 +25,16 @@ internal sealed record SerializedMessage(byte[] Bytes, TimeSpan Interval);
 /// </summary>
 internal sealed class SchemaInstantiator
 {
+    /// <summary>
+    /// The time to wait between the messages of a message map that are sent, so the device can process each one.
+    /// A fixed, generous value: the editor does not use the exchange files of the devices.
+    /// </summary>
+    public static readonly TimeSpan MessageInterval = TimeSpan.FromMilliseconds(500);
+
     private readonly SchemaSet _schemas;
     private readonly IReadOnlyList<EditDocument> _edits;
     private readonly List<string> _warnings;
     private readonly Serializer _serializer;
-    private readonly ExchangeDefinitions? _exchanges;
     private MessageMaps? _maps;
 
     /// <param name="compilation">The compiled document with the schemas it was compiled with.</param>
@@ -38,8 +42,7 @@ internal sealed class SchemaInstantiator
     /// The processors the schemas use (those of the opened assemblies): the instances are created, checked, written and read
     /// with the plans of the serializer, as the device does.
     /// </param>
-    /// <param name="exchanges">The exchange files of the opened assemblies: the time between the messages sent to a device; null: none.</param>
-    public SchemaInstantiator(SchemaSetCompilation compilation, IProcessorProvider processors, ExchangeDefinitions? exchanges = null)
+    public SchemaInstantiator(SchemaSetCompilation compilation, IProcessorProvider processors)
     {
         ArgumentNullException.ThrowIfNull(compilation);
         ArgumentNullException.ThrowIfNull(processors);
@@ -49,7 +52,6 @@ internal sealed class SchemaInstantiator
             .AddProcessors(processors)
             .Build();
         _edits = compilation.Documents;
-        _exchanges = exchanges;
         _warnings = [.. compilation.Warnings];
         DocumentName = compilation.Document.Name;
     }
@@ -188,9 +190,8 @@ internal sealed class SchemaInstantiator
         {
             // written by the map from the instance (the whole message): it supplies the roles of each block and the
             // device values the root fixes
-            var interval = _exchanges?.Find(transfer.Root, ExchangeNames.SendData)?.MessageInterval ?? TimeSpan.Zero;
             return [.. Maps.SaveMessages(transfer.Ranges, source, new DeviceValues(), transfer.Message, warnings)
-                .Select(bytes => new SerializedMessage(bytes, interval))];
+                .Select(bytes => new SerializedMessage(bytes, MessageInterval))];
         }
 
         var output = new ArrayBufferWriter<byte>();
@@ -246,7 +247,8 @@ internal sealed class SchemaInstantiator
     /// must be selected beforehand. When the read fails, the values read up to the failure remain.
     /// A message whose data body has a message map is read by Midi.Device (<see cref="MessageMaps.ReadMessage"/>): the map
     /// recognises it (or the read fails with the reason) and places the data at the block it carries, e.g. one patch of
-    /// an address map; otherwise the serializer reads as is.
+    /// an address map; otherwise the serializer reads as is, with a warning when the bytes are a data message that a map
+    /// recognises (where to match it instead, see <see cref="MessageMaps.FindDataMessage"/>).
     /// In an address map body, the part that was read is included (and the rest left out), so it can be sent back.
     /// </summary>
     /// <param name="warnings">Receives the situations the user may not expect (e.g. another body selected from the data), also when the read fails.</param>
@@ -270,10 +272,15 @@ internal sealed class SchemaInstantiator
         // the engine enters the root with the sink itself; the items of a root repeat are found by its path
         var sink = new InstanceValueSink(isRoot && instance is not InstanceRepeat ? instance : null, instance);
         sink.Begin(accumulate);
+        var mapBody = FindAddressMap(instance) ?? FindMapBody(instance, MessageMapKind.CarriedDump);
+        if (mapBody is null)
+        {
+            SuggestDataMessage(bytes, warnings);
+        }
         var completed = false;
         try
         {
-            var read = (FindAddressMap(instance) ?? FindMapBody(instance, MessageMapKind.CarriedDump)) is { } body
+            var read = mapBody is { } body
                 // any device id: the editor matches what it is given
                 ? Maps.ReadMessage(body.Body.Root, MessageName(root, body.Choice), bytes, sink, new DeviceValues())
                 : isRoot
@@ -290,6 +297,27 @@ internal sealed class SchemaInstantiator
             {
                 warnings.Add($"Not read: the message addresses another item than the accumulated values, {skipped}.");
             }
+        }
+    }
+
+    // the bytes are read as they are (not through a message map): when they are a data message that a map recognises
+    // (with any device id), tell the user where it is read through the map, e.g. a DT1 message matched in an address map root
+    private void SuggestDataMessage(byte[] bytes, ICollection<string> warnings)
+    {
+        (SchemaName Message, SchemaName Root)? found;
+        try
+        {
+            found = Maps.FindDataMessage(bytes, new DeviceValues());
+        }
+        catch (Exception exception) when (exception is ExecutionPlanException or InvalidOperationException or ArgumentException)
+        {
+            warnings.Add($"Whether the data is a data message of a message map is not known: {exception.Message}");
+            return;
+        }
+        if (found is { } data)
+        {
+            warnings.Add($"The data is a '{data.Message}' message carrying '{data.Root}': it is read as it is here. " +
+                $"Match it in '{data.Message}' with '{data.Root}' selected as its data body, to read it through the message map.");
         }
     }
 
@@ -356,7 +384,7 @@ internal sealed class SchemaInstantiator
     }
 
     // in an address map body: include the part of the map that was read (the nearest node that can be included) and leave
-    // out the rest; when accumulating, the part that was read is included as well (see InstanceBody.KeepContiguous)
+    // out the rest; when accumulating, the part that was read is included as well
     private static void IncludeRead(InstanceNode instance, InstanceValueSink sink, bool accumulate)
     {
         if (FindAddressMap(instance) is not { } map)
@@ -412,7 +440,7 @@ internal sealed class SchemaInstantiator
     /// <summary>
     /// What a body with a message map, or a root that is a dump message itself, transfers: the ranges of the root (the
     /// included nodes of an address map; the whole root of a dump), the data message (the instantiated one) and the
-    /// root (whose exchange file gives the time between the messages). Null when the instance has neither.
+    /// root (of the map). Null when the instance has neither.
     /// </summary>
     private (IReadOnlyList<PlanRange> Ranges, SchemaName Message, SchemaName Root)? TransferOf(SchemaName root, InstanceNode instance, bool throwWhenEmpty)
     {

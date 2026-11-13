@@ -70,6 +70,43 @@ public sealed class MessageMaps(Serializer serializer)
     public SchemaName? FindCarriedRoot(SchemaName message, ReadOnlyMemory<byte> sysEx, DeviceValues device)
     {
         ArgumentNullException.ThrowIfNull(device);
+        foreach (var map in CarriedMaps())
+        {
+            var data = map.DataMessages.FirstOrDefault(candidate => String.Equals(candidate.FullName, message.FullName, StringComparison.OrdinalIgnoreCase));
+            if (data is not null && map.Match(data, sysEx, map.Device.With(device)).IsRecognised)
+            {
+                return map.Root;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The data message a SysEx message is, and the root it carries: the first data message of a carried root's map
+    /// that recognises it for the device values (e.g. <c>Roland.Message32.DT1</c> carrying <c>Gx700.AddressMap</c>).
+    /// Null when no map recognises it; a root whose map is not valid is not tried.
+    /// </summary>
+    /// <param name="device">The device values to match; a value that is not given matches any value in the message.</param>
+    public (SchemaName Message, SchemaName Root)? FindDataMessage(ReadOnlyMemory<byte> sysEx, DeviceValues device)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        foreach (var map in CarriedMaps())
+        {
+            var values = map.Device.With(device);
+            foreach (var data in map.DataMessages)
+            {
+                if (map.Match(data, sysEx, values).IsRecognised)
+                {
+                    return (new SchemaName(data.FullName), map.Root);
+                }
+            }
+        }
+        return null;
+    }
+
+    // the maps of the roots a data message can carry; a root whose map is not valid is left out
+    private IEnumerable<IMessageMap> CarriedMaps()
+    {
         foreach (var root in DeviceMessages.FindCarriedRoots(Serializer.Schemas))
         {
             IMessageMap map;
@@ -81,13 +118,8 @@ public sealed class MessageMaps(Serializer serializer)
             {
                 continue;
             }
-            var data = map.DataMessages.FirstOrDefault(candidate => String.Equals(candidate.FullName, message.FullName, StringComparison.OrdinalIgnoreCase));
-            if (data is not null && map.Match(data, sysEx, map.Device.With(device)).IsRecognised)
-            {
-                return map.Root;
-            }
+            yield return map;
         }
-        return null;
     }
 
     /// <summary>

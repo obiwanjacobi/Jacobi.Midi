@@ -111,6 +111,8 @@ address and size). `MessageMaps.ReadMessage` is the mirror of `SaveMessages`: it
 of the whole message, the body narrowed to the block the map recognises (or it fails with the reason).
 `MessageMaps.FindCarriedRoot` tells which root a data message
 of the device carries (e.g. to select the body of an open choice before reading a message).
+`MessageMaps.FindDataMessage` tells which data message a SysEx message is, and the root it carries, without knowing the
+message beforehand (e.g. to tell a user where a message can be read through its map).
 `Kind` (`MessageMapKind`) tells how the data of the root is carried: `Address` (in parts, by address), `CarriedDump`
 (whole, as the body of a data message's open choice) or `MessageDump` (the root is a message itself). A client decides
 with it what to offer for a root. A `MessageDump` root must be a complete SysEx message (`midi.sysex` on the root); a

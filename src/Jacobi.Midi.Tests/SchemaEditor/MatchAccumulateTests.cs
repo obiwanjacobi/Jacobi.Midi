@@ -105,6 +105,39 @@ public class MatchAccumulateTests
         Assert.Equal(values, memory.Fields().Select(field => field.Value));
     }
 
+    [Fact]
+    public void Match_ADataMessageInTheAddressMapRoot_SuggestsTheDataMessage()
+    {
+        var viewModel = new MainViewModel();
+        var loaded = viewModel.OpenedAssemblies.Load(
+            Assembly.LoadFrom(TestHelpers.AssemblyPathOf("Jacobi.Midi.Roland")), "Jacobi.Midi.Roland.dll");
+        var gx700 = loaded.Schemas.Single(schema => schema.Name == "Gx700");
+        var addressMap = (EditGroup)gx700.Document.Schema.Members.Single(member => member.Name == "AddressMap");
+        var instantiator = new SchemaInstantiator(viewModel.LoadedSchemas.Compile(gx700.Document.Schema), viewModel.OpenedAssemblies.Processors);
+        var root = instantiator.Create(addressMap);
+        var rootName = instantiator.FindRootName(addressMap)!.Value;
+        (string, byte[])? file = (Gx700PatchFile, File.ReadAllBytes(TestHelpers.PathOf(Gx700PatchFile)));
+        var match = new SysExMatchViewModel((bytes, accumulate, warnings) => instantiator.Deserialize(rootName, root, bytes, warnings, accumulate),
+            () => Task.FromResult(file), new MidiBarViewModel(null));
+
+        match.LoadFileCommand.Execute(null);
+
+        // the SysEx message is read as the data of the root: it does not match, the suggestion says where it does
+        Assert.True(match.HasError);
+        Assert.Contains("'Roland.Message32.DT1' message carrying 'Gx700.AddressMap'", match.Warning);
+    }
+
+    [Fact]
+    public void Match_InTheDataMessage_SuggestsNothing()
+    {
+        var gx700 = MatchGx700Patch();
+
+        gx700.Match.LoadFileCommand.Execute(null);
+
+        Assert.False(gx700.Match.HasError, gx700.Match.Error);
+        Assert.False(gx700.Match.HasWarning, gx700.Match.Warning);
+    }
+
     private static byte[] Gp8Patch(int index)
         => File.ReadAllBytes(TestHelpers.PathOf(Gp8BulkDumpFile)).AsSpan(index * Gp8MessageSize, Gp8MessageSize).ToArray();
 

@@ -15,8 +15,8 @@ using YamlDotNet.Core;
 namespace Jacobi.Midi.SchemaEditor.Assemblies;
 
 /// <summary>
-/// The assemblies (.dll files) that were opened in the editor, with the embedded schemas, exchange files and the
-/// processors they provide.
+/// The assemblies (.dll files) that were opened in the editor, with the embedded schemas and the processors they
+/// provide (embedded exchange files are skipped: the editor does not use them).
 /// The processors are managed by one shared <see cref="ProcessorManager"/>, so references can be looked up and validated
 /// across all opened assemblies. The embedded schemas are compiled with the open documents by the <see cref="SchemaSetWorkspace"/>.
 /// Embedded schemas are not editable and are not part of the open schema documents.
@@ -27,11 +27,6 @@ internal sealed class AssemblyWorkspace : ObservableObject
     /// The processor factories of all opened assemblies, by namespace.
     /// </summary>
     public ProcessorManager Processors { get; } = new();
-
-    /// <summary>
-    /// The exchange files of all opened assemblies (how a device exchanges its messages, e.g. the time between them).
-    /// </summary>
-    public ExchangeDefinitions Exchanges { get; } = new();
 
     public ObservableCollection<LoadedAssembly> Assemblies { get; } = [];
 
@@ -82,10 +77,6 @@ internal sealed class AssemblyWorkspace : ObservableObject
         var problems = new List<string>();
         var schemas = LoadSchemas(assembly, problems);
         var processorNamespaces = LoadProcessors(assembly, problems);
-        foreach (var problem in Exchanges.AddAssembly(assembly))
-        {
-            problems.AddRange(problem.Problems.Select(text => $"{problem.Location}: {text}"));
-        }
 
         var name = assembly.GetName();
         var loaded = new LoadedAssembly(assembly.FullName ?? name.Name ?? location, name.Name ?? location,

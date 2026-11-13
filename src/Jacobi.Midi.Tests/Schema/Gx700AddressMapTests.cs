@@ -114,6 +114,22 @@ public class Gx700AddressMapTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
+    [Fact]
+    public void FindDataMessage_APatchSection_IsADt1CarryingTheAddressMap()
+    {
+        var serializer = new SerializerBuilder()
+            .AddSchemas(TestHelpers.CreateSchemas())
+            .AddProcessors(TestHelpers.CreateProcessors())
+            .Build();
+        var maps = new MessageMaps(serializer);
+
+        var found = maps.FindDataMessage(DumpMessages("gx700-sysex-patch1.syx")[0], new DeviceValues());
+
+        Assert.Equal((new SchemaName("Roland.Message32.DT1"), new SchemaName("Gx700.AddressMap")), found);
+        // not a data message of any map
+        Assert.Null(maps.FindDataMessage(new byte[] { 0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7 }, new DeviceValues()));
+    }
+
     // the dump files hold one DT1 per section
     private static List<byte[]> DumpMessages(string fileName)
     {
