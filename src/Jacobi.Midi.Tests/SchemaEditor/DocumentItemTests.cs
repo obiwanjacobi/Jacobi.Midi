@@ -332,11 +332,17 @@ public class DocumentItemTests
         Assert.Null(definition.Max);
         Assert.True(document.IsDirty);
 
-        // invalid input is rejected and leaves the model unchanged
-        Assert.Throws<FormatException>(() => editor.Scale = "abc");
-        Assert.Throws<ArgumentException>(() => editor.Name = " ");
+        // invalid input is rejected with a warning of the field and leaves the model unchanged
+        editor.Scale = "abc";
+        editor.Name = " ";
         Assert.Null(definition.Scale);
         Assert.Equal("level", definition.Name);
+        Assert.Equal("'abc' is not a number.", editor.Warnings[nameof(DataTypeDefEditor.Scale)]);
+        Assert.Equal("The name is required.", editor.Warnings[nameof(DataTypeDefEditor.Name)]);
+
+        // valid input clears the warning
+        editor.Name = "level";
+        Assert.Null(editor.Warnings[nameof(DataTypeDefEditor.Name)]);
 
         editor.AddOptionCommand.Execute(null);
         editor.AddOptionCommand.Execute(null);

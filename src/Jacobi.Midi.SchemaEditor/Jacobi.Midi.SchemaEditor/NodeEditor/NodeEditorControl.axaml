@@ -458,8 +458,12 @@
                         <TextBlock Text="Includes another schema so its definitions can be referenced as 'schema.name'." Classes="kind" />
                         <StackPanel Spacing="4">
                             <TextBlock Text="Schema" Classes="label" />
-                            <ComboBox Classes="options" IsEditable="True" Text="{Binding Schema}" PlaceholderText="the name of a loaded schema"
+                            <!-- LostFocus (as the other editable lists): an editable ComboBox clears its Text when its ItemsSource
+                                 changes (the template is reused for the next include); that transient empty text must not reach the model -->
+                            <ComboBox Classes="options" IsEditable="True" Text="{Binding Schema, UpdateSourceTrigger=LostFocus}" PlaceholderText="the name of a loaded schema"
                                       ItemsSource="{Binding SchemaOptions}" />
+                            <TextBlock Text="{Binding Warnings[Schema]}" Classes="warning"
+                                       IsVisible="{Binding Warnings[Schema], Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Path" Classes="label" />
@@ -474,11 +478,13 @@
                         <StackPanel Spacing="4">
                             <TextBlock Text="Name" Classes="label" />
                             <TextBox Text="{Binding Name}" />
+                            <TextBlock Text="{Binding Warnings[Name]}" Classes="warning"
+                                       IsVisible="{Binding Warnings[Name], Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Based on" Classes="label" />
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
-                                <ComboBox Classes="options" IsEditable="True" Text="{Binding BasedOn}" PlaceholderText="e.g. sys.uint8"
+                                <ComboBox Classes="options" IsEditable="True" Text="{Binding BasedOn, UpdateSourceTrigger=LostFocus}" PlaceholderText="e.g. sys.uint8"
                                           ItemsSource="{Binding BasedOnOptions}" />
                                 <!-- disabled when there is no data type def to go to (e.g. a registered sys.* type); the tool tip tells why -->
                                 <Button Grid.Column="1" Classes="goto" CommandParameter="{Binding Definition}"
@@ -486,12 +492,16 @@
                                         IsEnabled="{Binding CanGoToBasedOn}" ToolTip.ShowOnDisabled="True"
                                         ToolTip.Tip="{Binding BasedOnTargetProblem, TargetNullValue='Go to the data type def it is based on'}" />
                             </Grid>
+                            <TextBlock Text="{Binding Warnings[BasedOn]}" Classes="warning"
+                                       IsVisible="{Binding Warnings[BasedOn], Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                         </StackPanel>
                         <StackPanel Spacing="4">
                             <TextBlock Text="Value type" Classes="label" />
-                            <ComboBox Classes="options" IsEditable="True" Text="{Binding ValueType}"
+                            <ComboBox Classes="options" IsEditable="True" Text="{Binding ValueType, UpdateSourceTrigger=LostFocus}"
                                       PlaceholderText="implied: sys.string with options, sys.decimal with scale/shift, else of the base"
                                       ItemsSource="{Binding BasedOnOptions}" />
+                            <TextBlock Text="{Binding Warnings[ValueType]}" Classes="warning"
+                                       IsVisible="{Binding Warnings[ValueType], Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                         </StackPanel>
                         <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="8">
                             <StackPanel Grid.Column="0" Spacing="4">
@@ -505,10 +515,14 @@
                             <StackPanel Grid.Column="2" Spacing="4">
                                 <TextBlock Text="Scale" Classes="label" />
                                 <TextBox Text="{Binding Scale}" />
+                                <TextBlock Text="{Binding Warnings[Scale]}" Classes="warning"
+                                           IsVisible="{Binding Warnings[Scale], Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                             </StackPanel>
                             <StackPanel Grid.Column="3" Spacing="4">
                                 <TextBlock Text="Shift" Classes="label" />
                                 <TextBox Text="{Binding Shift}" />
+                                <TextBlock Text="{Binding Warnings[Shift]}" Classes="warning"
+                                           IsVisible="{Binding Warnings[Shift], Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                             </StackPanel>
                         </Grid>
                         <Grid ColumnDefinitions="*,Auto">
@@ -541,6 +555,8 @@
                         <StackPanel Spacing="4">
                             <TextBlock Text="Name" Classes="label" />
                             <TextBox Text="{Binding Name}" />
+                            <TextBlock Text="{Binding Warnings[Name]}" Classes="warning"
+                                       IsVisible="{Binding Warnings[Name], Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                         </StackPanel>
                         <TextBlock Text="The processor it references, with its properties." Classes="label" />
                         <ContentControl Content="{Binding Details.Definition}">

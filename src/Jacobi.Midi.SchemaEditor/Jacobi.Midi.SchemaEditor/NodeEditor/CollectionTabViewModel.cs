@@ -61,6 +61,10 @@ internal sealed partial class CollectionTabViewModel : ObservableObject, IDispos
     partial void OnSelectedEntryChanged(object? value)
     {
         Editor?.Dispose();
+        // no editor in between: the view builds new controls for the next editor instead of reusing those of the previous one
+        // (with a new DataContext). A reused editable ComboBox keeps the selection state of the previous item and clears its Text
+        // when its ItemsSource changes, so it showed an empty box and wrote that empty text to the next editor.
+        Editor = null;
         Editor = ItemEditor.Create(_document, value, _catalog, _schemas);
     }
 

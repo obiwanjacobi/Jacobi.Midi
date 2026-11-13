@@ -19,7 +19,7 @@ Known gaps and loose ends, collected while building the editor.
 - [x] `SchemaWorkspaceDocument.ApplyNodeEdits` takes the type-specific properties as an optional trailing `NodeFacets` parameter; fold name, data type, description and sample into the staged model so there is one apply path. Fixed: there is no apply step any more; `NodeFacets` edits the name, data type and type-specific values of the node live.
 - [x] Remove contiguous match selection. send separate messages for gaps. Fixed: `KeepContiguous` is removed; every included node is split by the address map, so a gap starts a new message (adjacent nodes are not joined).
 - [ ] Value processors (repeat/choice) are not shown or editable; to be redesigned.
-- [ ] Add include while focus is still on the schema name of a previous include, will clear the field and generate an exception (falsely).
+- [ ] Add include when schema name edited (either manual or selected from list), will clear the field and generate an exception (falsely).
 - [x] The data type options and the field Value validation (`DataTypeValueValidator`) only knows the registered types and the data type defs of the edited document; data type defs of included schemas are not listed and their types count as custom (not validated). Resolve the includes' documents to fix this. Fixed: `SchemaSetWorkspace.GetScope` gives the document with the loaded schemas it includes (`SchemaScope`); the options list the defs of the own includes, the validation knows those of all (transitive) includes, and a def of a loaded schema that is not included gets a warning.
 - [x] The built-in data type descriptors have no `Min`/`Max`, so the Value range warning only applies to data type defs that define them. Fixed: the validation falls back to the range of the descriptor's `ClrType`.
 - [x] The Value validation compares the typed value to the `Options` keys (physical values) and to `Min`/`Max` (logical values) without applying `Scale` and `Shift`; decide whether options should be matched on the physical value after scaling.
@@ -30,7 +30,6 @@ Known gaps and loose ends, collected while building the editor.
 - [ ] Schema source viewer: the text is a snapshot; an open viewer window does not follow the edits of its document (refresh on `Revision`).
 - [ ] Schema source viewer: closing a document leaves its viewer window open.
 - [ ] Schema source viewer: no YAML tab yet (needs a highlighting definition and a folding strategy; AvaloniaEdit has neither for YAML).
-- [ ] The Browser host does not build: the native WebAssembly link fails (`undefined symbol: saveSetjmp / testSetjmp` in `libHarfBuzzSharp.a`); seen after adding AvaloniaEdit, probably not caused by it (it is managed only).
 - [ ] Moving a node (Arrange: up/down, into/out of a group) or changing its type does not update the `ref:` paths that point at it or at its members (count, byte length/size, selected index, field values); they may no longer resolve.
 - [ ] A node that is moved to another parent or whose type is changed is written as a new element in an XML source (`XmlSchemaSource` matches nodes by identity within their parent): the comments inside and before it are lost. Reordering within the same parent keeps them.
 - [ ] Change type only covers group, repeat and choice; a field cannot be changed into a group-like node (or back).

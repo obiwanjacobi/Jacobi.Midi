@@ -11,14 +11,25 @@ namespace Jacobi.Midi.SchemaEditor.NodeEditor;
 /// <summary>
 /// Base of the editors for the document items that are not nodes (includes, data type defs, processor defs, processors and properties).
 /// Editors change the model directly (live) and mark the document changed.
-/// Setters throw on invalid input so the bound text box shows a validation error and the model keeps its value.
+/// Invalid input (e.g. an emptied required field) is not assigned: the model keeps its value and the problem is shown
+/// as a warning of the field (<see cref="Warnings"/>).
 /// </summary>
 internal abstract class ItemEditor(SchemaWorkspaceDocument document) : ObservableObject, IDisposable
 {
+    private readonly Dictionary<string, string> _warnings = [];
+
     /// <summary>
     /// The processors and properties of the edited item; null when the item has none. Disposed with the editor.
     /// </summary>
     public ItemDetailsViewModel? Details { get; private set; }
+
+    /// <summary>
+    /// Why the last input of a field was not assigned, by property name (e.g. <c>Warnings[Schema]</c>); null when it was.
+    /// A new instance after every change, so bindings to it are refreshed.
+    /// </summary>
+    public ItemEditorWarnings Warnings => new(this);
+
+    internal string? GetWarning(string propertyName) => _warnings.GetValueOrDefault(propertyName);
 
     public void Dispose() => Details?.Dispose();
 
@@ -43,18 +54,45 @@ internal abstract class ItemEditor(SchemaWorkspaceDocument document) : Observabl
     }
 
     /// <summary>
-    /// Assigns <paramref name="value"/> through <paramref name="assign"/> when it differs from <paramref name="current"/>
-    /// and marks the document changed.
+    /// Assigns the value made by <paramref name="parse"/> through <paramref name="assign"/> when it differs from <paramref name="current"/>
+    /// and marks the document changed. When <paramref name="parse"/> rejects the input (<see cref="ArgumentException"/> or
+    /// <see cref="FormatException"/>) nothing is assigned and its message becomes the warning of the property.
     /// </summary>
-    protected void Edit<T>(T current, T value, Action<T> assign, [System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
+    /// <returns>True when the input was accepted (assigned or unchanged).</returns>
+    protected bool Edit<T>(T current, Func<T> parse, Action<T> assign, [System.Runtime.CompilerServices.CallerMemberName] string propertyName = "")
     {
+        T value;
+        try
+        {
+            value = parse();
+        }
+        catch (Exception exception) when (exception is ArgumentException or FormatException)
+        {
+            SetWarning(propertyName, exception.Message);
+            return false;
+        }
+        SetWarning(propertyName, null);
         if (EqualityComparer<T>.Default.Equals(current, value))
         {
-            return;
+            return true;
         }
         assign(value);
         OnPropertyChanged(propertyName);
         document.MarkChanged();
+        return true;
+    }
+
+    private void SetWarning(string propertyName, string? warning)
+    {
+        if (warning is null ? !_warnings.Remove(propertyName) : _warnings.GetValueOrDefault(propertyName) == warning)
+        {
+            return;
+        }
+        if (warning is not null)
+        {
+            _warnings[propertyName] = warning;
+        }
+        OnPropertyChanged(nameof(Warnings));
     }
 
     protected static string Required(string? value, string what)
@@ -73,6 +111,15 @@ internal abstract class ItemEditor(SchemaWorkspaceDocument document) : Observabl
 }
 
 /// <summary>
+/// The warnings of the fields of an <see cref="ItemEditor"/>, by property name, for bindings such as <c>Warnings[Schema]</c>.
+/// Each is looked up when it is read.
+/// </summary>
+internal sealed class ItemEditorWarnings(ItemEditor editor)
+{
+    public string? this[string propertyName] => editor.GetWarning(propertyName);
+}
+
+/// <summary>
 /// Edits an include: the name of the included schema and its (optional) path.
 /// </summary>
 /// <param name="schemas">The loaded schemas offered as <see cref="SchemaOptions"/>; null to offer none.</param>
@@ -84,7 +131,7 @@ internal sealed class DocumentRefEditor(SchemaWorkspaceDocument document, EditDo
     public string Schema
     {
         get => include.Schema;
-        set => Edit(include.Schema, Required(value, "The schema name"), v => include.Schema = v);
+        set => Edit(include.Schema, () => Required(value, "The schema name"), v => include.Schema = v);
     }
 
     /// <summary>
@@ -100,7 +147,7 @@ internal sealed class DocumentRefEditor(SchemaWorkspaceDocument document, EditDo
     public string? Path
     {
         get => include.Path;
-        set => Edit(include.Path, Optional(value), v => include.Path = v);
+        set => Edit(include.Path, () => Optional(value), v => include.Path = v);
     }
 }
 
@@ -130,7 +177,7 @@ internal sealed partial class DataTypeDefEditor : ItemEditor
     public string Name
     {
         get => _definition.Name;
-        set => Edit(_definition.Name, Required(value, "The name"), v => _definition.Name = v);
+        set => Edit(_definition.Name, () => Required(value, "The name"), v => _definition.Name = v);
     }
 
     public string BasedOn
@@ -138,7 +185,7 @@ internal sealed partial class DataTypeDefEditor : ItemEditor
         get => _definition.BasedOn.ToString();
         set
         {
-            Edit(_definition.BasedOn, new SchemaName(Required(value, "The base type")), v => _definition.BasedOn = v);
+            Edit(_definition.BasedOn, () => new SchemaName(Required(value, "The base type")), v => _definition.BasedOn = v);
             OnPropertyChanged(nameof(CanGoToBasedOn));
             OnPropertyChanged(nameof(BasedOnTargetProblem));
         }
@@ -167,33 +214,33 @@ internal sealed partial class DataTypeDefEditor : ItemEditor
     public string? ValueType
     {
         get => _definition.ValueType?.ToString();
-        set => Edit(_definition.ValueType, Optional(value) is { } name ? new SchemaName(name) : (SchemaName?)null, v => _definition.ValueType = v);
+        set => Edit(_definition.ValueType, () => Optional(value) is { } name ? new SchemaName(name) : (SchemaName?)null, v => _definition.ValueType = v);
     }
 
     /// <summary>A literal of the value type.</summary>
     public string? Min
     {
         get => _definition.Min;
-        set => Edit(_definition.Min, Optional(value), v => _definition.Min = v);
+        set => Edit(_definition.Min, () => Optional(value), v => _definition.Min = v);
     }
 
     /// <summary>A literal of the value type.</summary>
     public string? Max
     {
         get => _definition.Max;
-        set => Edit(_definition.Max, Optional(value), v => _definition.Max = v);
+        set => Edit(_definition.Max, () => Optional(value), v => _definition.Max = v);
     }
 
     public string? Scale
     {
         get => Format(_definition.Scale);
-        set => Edit(_definition.Scale, ParseDecimal(value), v => _definition.Scale = v);
+        set => Edit(_definition.Scale, () => ParseDecimal(value), v => _definition.Scale = v);
     }
 
     public string? Shift
     {
         get => Format(_definition.Shift);
-        set => Edit(_definition.Shift, ParseDecimal(value), v => _definition.Shift = v);
+        set => Edit(_definition.Shift, () => ParseDecimal(value), v => _definition.Shift = v);
     }
 
     /// <summary>
@@ -208,7 +255,7 @@ internal sealed partial class DataTypeDefEditor : ItemEditor
     public string? OptionsDefault
     {
         get => _definition.OptionsDefault;
-        set => Edit(_definition.OptionsDefault, String.IsNullOrEmpty(value) ? null : value, v => _definition.OptionsDefault = v);
+        set => Edit(_definition.OptionsDefault, () => String.IsNullOrEmpty(value) ? null : value, v => _definition.OptionsDefault = v);
     }
 
     [RelayCommand]
@@ -308,7 +355,7 @@ internal sealed class ProcessorDefEditor(SchemaWorkspaceDocument document, EditP
     public string Name
     {
         get => definition.Name;
-        set => Edit(definition.Name, Required(value, "The name"), v => definition.Name = v);
+        set => Edit(definition.Name, () => Required(value, "The name"), v => definition.Name = v);
     }
 }
 
@@ -321,13 +368,13 @@ internal sealed class ProcessorRefEditor(SchemaWorkspaceDocument document, EditP
     public string Processor
     {
         get => processor.Processor.ToString();
-        set => Edit(processor.Processor, new SchemaName(Required(value, "The processor")), v => processor.Processor = v);
+        set => Edit(processor.Processor, () => new SchemaName(Required(value, "The processor")), v => processor.Processor = v);
     }
 
     public string? PublishNamespace
     {
         get => processor.PublishNamespace;
-        set => Edit(processor.PublishNamespace, Optional(value), v => processor.PublishNamespace = v);
+        set => Edit(processor.PublishNamespace, () => Optional(value), v => processor.PublishNamespace = v);
     }
 }
 
@@ -339,12 +386,12 @@ internal sealed class PropertyEditor(SchemaWorkspaceDocument document, EditPrope
     public string Name
     {
         get => property.Name;
-        set => Edit(property.Name, Required(value, "The name"), v => property.Name = v);
+        set => Edit(property.Name, () => Required(value, "The name"), v => property.Name = v);
     }
 
     public string? Value
     {
         get => property.Value;
-        set => Edit(property.Value, value, v => property.Value = v);
+        set => Edit(property.Value, () => value, v => property.Value = v);
     }
 }
