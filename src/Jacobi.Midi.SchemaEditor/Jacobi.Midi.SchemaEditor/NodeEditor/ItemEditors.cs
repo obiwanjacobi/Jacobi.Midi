@@ -124,6 +124,9 @@ internal sealed partial class DataTypeDefEditor : ItemEditor
         Options = new(definition.Options?.Select(option => new OptionRow(this, option.Key, option.Value)) ?? []);
     }
 
+    /// <summary>The edited data type def; e.g. to follow its <see cref="BasedOn"/> to the data type def it refers to.</summary>
+    public EditDataTypeDef Definition => _definition;
+
     public string Name
     {
         get => _definition.Name;
@@ -133,8 +136,26 @@ internal sealed partial class DataTypeDefEditor : ItemEditor
     public string BasedOn
     {
         get => _definition.BasedOn.ToString();
-        set => Edit(_definition.BasedOn, new SchemaName(Required(value, "The base type")), v => _definition.BasedOn = v);
+        set
+        {
+            Edit(_definition.BasedOn, new SchemaName(Required(value, "The base type")), v => _definition.BasedOn = v);
+            OnPropertyChanged(nameof(CanGoToBasedOn));
+            OnPropertyChanged(nameof(BasedOnTargetProblem));
+        }
     }
+
+    /// <summary>
+    /// True when the base type can be followed (→) to its data type def; otherwise <see cref="BasedOnTargetProblem"/>
+    /// tells why not (e.g. a registered data type such as 'sys.uint8' has no def).
+    /// </summary>
+    public bool CanGoToBasedOn => BasedOnTargetProblem is null;
+
+    /// <summary>
+    /// Why the base type cannot be followed to a data type def (<see cref="SchemaSetWorkspace.FindDataTypeDef"/>); null when it can.
+    /// </summary>
+    public string? BasedOnTargetProblem
+        => _schemas is null ? "The loaded schemas are not known here."
+            : _schemas.FindDataTypeDef(_definition, _definition.BasedOn, out var problem) is null ? problem : null;
 
     /// <summary>
     /// The data types to base the def on: the registered types and the other data type defs of the document and the schemas it includes.

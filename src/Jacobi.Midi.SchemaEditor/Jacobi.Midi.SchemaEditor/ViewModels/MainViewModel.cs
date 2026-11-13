@@ -8,6 +8,7 @@ using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Jacobi.BinarySerializer.Descriptors;
+using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.SchemaEditor.Assemblies;
 using Jacobi.Midi.SchemaEditor.Document;
@@ -72,8 +73,8 @@ internal sealed partial class MainViewModel : ViewModelBase
     private bool _keepSelectedItem;
     // set while a newly selected document switches to the schema tab: its root is selected instead of the first in the tree
     private bool _selectingDocument;
-    // the nodes a reference was followed from (GoToReferenceCommand), the last on top: GoBackCommand returns to them
-    private readonly Stack<EditNode> _backHistory = [];
+    // the nodes and document items (data type defs, processor defs) a reference was followed from (Follow), the last on top: GoBackCommand returns to them
+    private readonly Stack<object> _backHistory = [];
 
     /// <summary>
     /// The opened assemblies with their embedded schemas (not editable, not part of <see cref="Documents"/>) and processors.
@@ -1098,11 +1099,8 @@ internal sealed partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Selects the node that the property <paramref name="facet"/> of the edited node refers to: the node def of
-    /// <see cref="NodeFacets.NodeDef"/> or <see cref="NodeFacets.MemberNodeDef"/>, or the field of a 'ref:' in a value-or-reference
-    /// property (see <see cref="NodeFacets.GetValueOrRefLabel"/>). The node is looked up in all loaded schemas
-    /// (<see cref="SchemaSetWorkspace.FindNodeDef"/>, <see cref="SchemaSetWorkspace.FindNodeRef"/>) and selected in the tree that
-    /// shows it (<see cref="NavigateTo"/>). Also in a read-only (embedded) schema. Why a reference is not followed is shown in the status.
+    /// Selects what the property <paramref name="facet"/> of the edited node refers to (<see cref="NodeFacets.FindReference"/>):
+    /// a node def, a data type def or the field of a 'ref:'; see <see cref="Follow"/>.
     /// </summary>
     [RelayCommand]
     private void GoToReference(string? facet)
@@ -1111,74 +1109,94 @@ internal sealed partial class MainViewModel : ViewModelBase
         {
             return;
         }
-        var isNodeDef = facet is nameof(NodeFacets.NodeDef) or nameof(NodeFacets.MemberNodeDef);
-        var label = facet switch
+        var reference = NodeFacets.FindReference(facet);
+        if (reference.Target is null)
         {
-            nameof(NodeFacets.NodeDef) => "node def",
-            nameof(NodeFacets.MemberNodeDef) => "member node def",
-            _ => NodeFacets.GetValueOrRefLabel(facet)
-        };
-        var text = (facet switch
-        {
-            nameof(NodeFacets.NodeDef) => NodeFacets.NodeDef,
-            nameof(NodeFacets.MemberNodeDef) => NodeFacets.MemberNodeDef,
-            _ => NodeFacets.GetValueOrRef(facet)
-        }).Trim();
-
-        EditNode? target;
-        string? problem;
-        if (text.Length == 0)
-        {
-            StatusMessage = $"The {label} of {node.Name} is not set.";
+            StatusMessage = reference.Problem ?? $"The {reference.Label} of {node.Name} cannot be followed.";
             return;
         }
-        if (isNodeDef)
+        Follow(node, reference.Label, reference.Target, null);
+    }
+
+    /// <summary>
+    /// Selects the data type def the base type (<see cref="EditDataTypeDef.BasedOn"/>) of <paramref name="definition"/> refers to
+    /// (<see cref="SchemaSetWorkspace.FindDataTypeDef"/>, <see cref="Follow"/>).
+    /// </summary>
+    [RelayCommand]
+    private void GoToBasedOn(EditDataTypeDef? definition)
+    {
+        if (definition is null)
         {
-            target = LoadedSchemas.FindNodeDef(node, new SchemaName(text), out problem);
-        }
-        else if (SchemaNodeRef.TryParse(text, out var reference))
-        {
-            target = LoadedSchemas.FindNodeRef(node, reference, out problem);
-        }
-        else
-        {
-            StatusMessage = $"The {label} of {node.Name} is not a reference to a field (ref:).";
             return;
         }
+        var target = LoadedSchemas.FindDataTypeDef(definition, definition.BasedOn, out var problem);
+        Follow(definition, "base type", target, problem);
+    }
 
+    /// <summary>
+    /// Selects what the processor <paramref name="reference"/> refers to (<see cref="ItemDetailsViewModel.FindProcessor"/>):
+    /// a processor def on the <see cref="ProcessorDefsTab"/> of its document, or the processor namespace of the assembly that
+    /// has the processor (<see cref="AssemblyWorkspace.FindProcessorNamespace"/>); see <see cref="Follow"/>.
+    /// </summary>
+    [RelayCommand]
+    private void GoToProcessor(IProcessorReference? reference)
+    {
+        if (reference is null)
+        {
+            return;
+        }
+        var problem = reference.TargetProblem;
+        var target = reference.Target;
+        if (target is ProcessorKey key)
+        {
+            target = OpenedAssemblies.FindProcessorNamespace(key);
+            problem = target is null ? $"No opened assembly has the processor '{key}'." : null;
+        }
+        Follow(reference.Details.Item, "processor", target, problem);
+    }
+
+    /// <summary>
+    /// Selects <paramref name="target"/>, the node or document item the <paramref name="label"/> of <paramref name="from"/> refers to,
+    /// where it is shown (<see cref="NavigateTo(object)"/>); also in a read-only (embedded) schema. <paramref name="from"/> is
+    /// recorded so <see cref="GoBackCommand"/> returns to it. Why a reference is not followed is shown in the status.
+    /// </summary>
+    /// <param name="from">The node or document item the reference was followed from.</param>
+    /// <param name="target">The node or document item that was found; null when it is not (see <paramref name="problem"/>).</param>
+    private void Follow(object from, string label, object? target, string? problem)
+    {
         if (target is null)
         {
-            StatusMessage = $"The {label} of {node.Name} cannot be followed: {problem}";
+            StatusMessage = $"The {label} of {GetLocationName(from)} cannot be followed: {problem}";
             return;
         }
         if (!NavigateTo(target))
         {
-            StatusMessage = $"The {label} of {node.Name} cannot be followed: '{target.Name}' is not in a loaded schema.";
+            StatusMessage = $"The {label} of {GetLocationName(from)} cannot be followed: '{GetLocationName(target)}' is not in a loaded schema.";
             return;
         }
-        _backHistory.Push(node);
+        _backHistory.Push(from);
         OnBackHistoryChanged();
     }
 
     /// <summary>
-    /// Returns to the node the last reference was followed from (<see cref="GoToReferenceCommand"/>), in the tree that shows it
-    /// (<see cref="NavigateTo"/>). A node that is no longer in a loaded schema (deleted, or its document closed) is skipped;
+    /// Returns to the node or document item the last reference was followed from (<see cref="Follow"/>), where it is shown
+    /// (<see cref="NavigateTo(object)"/>). One that is no longer in a loaded schema (deleted, or its document closed) is skipped;
     /// the status says so.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanGoBack))]
     private void GoBack()
     {
         var skipped = new List<string>();
-        EditNode? returned = null;
-        while (returned is null && _backHistory.TryPop(out var node))
+        object? returned = null;
+        while (returned is null && _backHistory.TryPop(out var location))
         {
-            if (NavigateTo(node))
+            if (NavigateTo(location))
             {
-                returned = node;
+                returned = location;
             }
             else
             {
-                skipped.Add($"'{node.Name}'");
+                skipped.Add($"'{GetLocationName(location)}'");
             }
         }
         OnBackHistoryChanged();
@@ -1187,22 +1205,55 @@ internal sealed partial class MainViewModel : ViewModelBase
             var names = String.Join(", ", skipped);
             StatusMessage = returned is null
                 ? $"Cannot go back: {names} {(skipped.Count == 1 ? "is" : "are")} no longer in a loaded schema."
-                : $"Skipped {names} (no longer in a loaded schema); back to '{returned.Name}'.";
+                : $"Skipped {names} (no longer in a loaded schema); back to '{GetLocationName(returned)}'.";
         }
     }
 
-    /// <summary>True when there is a node to go back to (<see cref="GoBackCommand"/>).</summary>
+    /// <summary>True when there is a node or document item to go back to (<see cref="GoBackCommand"/>).</summary>
     public bool CanGoBack => _backHistory.Count > 0;
 
-    /// <summary>The tool tip of the Back button: the node it returns to.</summary>
-    public string GoBackTip => _backHistory.TryPeek(out var node)
-        ? $"Back to '{node.Name}', where the last reference was followed from"
-        : "Back to the node a reference was followed from";
+    /// <summary>The tool tip of the Back button: the node or document item it returns to.</summary>
+    public string GoBackTip => _backHistory.TryPeek(out var location)
+        ? $"Back to '{GetLocationName(location)}', where the last reference was followed from"
+        : "Back to where a reference was followed from";
 
     private void OnBackHistoryChanged()
     {
         GoBackCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(GoBackTip));
+    }
+
+    // the name of a location of the navigation history: a node, a document item or a processor namespace
+    private static string GetLocationName(object location)
+        => location is ProcessorNamespaceItem processorNamespace ? processorNamespace.Namespace : SchemaSetWorkspace.GetName(location);
+
+    /// <summary>
+    /// Selects <paramref name="location"/> where it is shown: a node in its tree (<see cref="NavigateTo(EditNode)"/>),
+    /// a data type def or processor def on the <see cref="DataTypeDefsTab"/> or <see cref="ProcessorDefsTab"/> of its document
+    /// (the document root is selected), a processor namespace in the assembly tree.
+    /// </summary>
+    /// <returns>False when it is not loaded (nothing is selected).</returns>
+    private bool NavigateTo(object location)
+    {
+        switch (location)
+        {
+            case EditNode node:
+                return NavigateTo(node);
+            case EditDataTypeDef or EditProcessorDef when LoadedSchemas.FindOwner(location) is { } owner && NavigateTo(owner.Schema):
+                var isDataTypeDef = location is EditDataTypeDef;
+                SelectedEditorTab = isDataTypeDef ? DataTypeDefsTab : ProcessorDefsTab;
+                if (DocumentTabs is { } tabs)
+                {
+                    (isDataTypeDef ? tabs.DataTypeDefs : tabs.ProcessorDefs).SelectedEntry = location;
+                }
+                return true;
+            case ProcessorNamespaceItem processorNamespace when OpenedAssemblies.Assemblies.Contains(processorNamespace.Assembly):
+                SelectedLeftTab = AssembliesLeftTab;
+                SelectedAssemblyItem = processorNamespace;
+                return true;
+            default:
+                return false;
+        }
     }
 
     /// <summary>
@@ -1214,9 +1265,10 @@ internal sealed partial class MainViewModel : ViewModelBase
     {
         switch (LoadedSchemas.FindOwner(node))
         {
-            case { Embedded: not null }:
+            case { Embedded: { } embedded }:
                 SelectedLeftTab = AssembliesLeftTab;
-                SelectedAssemblyItem = node;
+                // the assembly tree shows the embedded schema itself for its root
+                SelectedAssemblyItem = node is EditDocument ? embedded : node;
                 break;
             case { } entry:
                 _keepSelectedItem = true;

@@ -41,6 +41,27 @@ searching the schema tree by hand.
    followed reference (→) is recorded, not every selection; there is no *Forward* and no keyboard shortcut (yet). A node
    that is no longer in a loaded schema (deleted, its document closed) is skipped and the status says so.
    *Why:* start with the known need; a button is the most obvious for the user.
+5. **A data type follows to its data type def on the *Data Type Defs* tab of its document** (2026-11-13). Data type
+   defs are not in the schema tree, so the document root is selected with the def selected in that tab; *Back* returns
+   to the field. Only the data type of a field gets the → button for now, not the `basedOn` of a data type def (the
+   history holds nodes only). *Why:* the def is edited there; one place shows it.
+6. **The navigation history holds document items too** (2026-11-13; extends 4 and 5). A followed reference records
+   where it was followed from: a node or a data type def (selected again on its tab by *Back*). The `basedOn` of a data
+   type def now gets the → button. Processor defs will be added the same way. *Why:* references also start at
+   document items; one history and one follow path (`MainViewModel.Follow`) for all of them.
+7. **A processor name follows to a processor def, or else to the processor of a loaded assembly** (2026-11-13). A
+   processor def (as the serializer resolves it) is selected on the *Processor Defs* tab; a `namespace.key` that a loaded
+   assembly provides selects its processor namespace in the assembly tree. A name that is neither is an invalid
+   reference: the → is disabled and its tool tip says why (a processor def also shows it as a warning). Only where the
+   reference lives (own processors, the processor of a processor def); not on inherited rows. *Why:* follow the
+   breadcrumbs to what defines the processor; the effective processors are a separate (later) topic.
+8. **A data type without a data type def disables the →** (2026-11-13): a registered type (`sys.*`) or a def that is not
+   found; the tool tip tells why. For the data type of a field and the `basedOn` of a data type def. *Why:* as for
+   processors (7): a button that cannot go anywhere should not invite a click.
+9. **Every → is disabled when its reference cannot be followed** (2026-11-13; extends 8): node defs, member node defs
+   and the value-or-reference properties too (not set, a constant or `pub:` instead of `ref:`, or not found); the tool
+   tip tells why. The lookup is one place, `NodeFacets.FindReference`, used by both the button state and the command.
+   *Why:* consistent behaviour for all references.
 
 ## Included nodes of an address map in the Schema Editor (2026-11-13)
 

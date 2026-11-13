@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
+using Jacobi.BinarySerializer.Descriptors;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.SchemaEditor.Assemblies;
 
@@ -132,12 +133,90 @@ internal sealed class SchemaSetWorkspace
             return null;
         }
         var (nodeDef, _) = CompiledNodeLocator.FindNodeDef(GetDocuments(owner.Schema), owner.Schema, name);
-        problem = nodeDef is not null ? null
-            : !String.IsNullOrEmpty(name.Namespace) && Find(name.Namespace) is null && !SameName(name.Namespace, owner.Name)
-                ? $"The node def '{name}' is not found: the schema '{name.Namespace}' is not loaded."
-                : $"The node def '{name}' is not found.";
+        problem = nodeDef is not null ? null : NotFound("node def", name, owner);
         return nodeDef;
     }
+
+    /// <summary>
+    /// The entry of the loaded schema that has <paramref name="item"/>: a node (see <see cref="FindOwner(EditNode)"/>),
+    /// a data type def or a processor def. Null when it is not in a loaded schema (also when it was removed).
+    /// </summary>
+    public SchemaSetEntry? FindOwner(object item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        return item switch
+        {
+            EditNode node => FindOwner(node),
+            EditDataTypeDef definition => Entries.FirstOrDefault(entry => entry.Schema.DataTypeDefs.Contains(definition)),
+            EditProcessorDef definition => Entries.FirstOrDefault(entry => entry.Schema.ProcessorDefs.Contains(definition)),
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// The data type def the data type <paramref name="name"/> of <paramref name="referrer"/> refers to: the data type of a field,
+    /// or the base type of a data type def. A name without namespace is a data type def of the schema of the referrer,
+    /// otherwise of the loaded schema that answers to the namespace (see <see cref="Find"/>).
+    /// A registered data type (e.g. 'sys.uint8') has no data type def.
+    /// </summary>
+    /// <param name="referrer">A node or a document item (see <see cref="FindOwner(object)"/>).</param>
+    /// <param name="problem">Why the data type def is not found; null when it is.</param>
+    public EditDataTypeDef? FindDataTypeDef(object referrer, SchemaName name, out string? problem)
+    {
+        var definition = FindDefinition(referrer, name, document => document.DataTypeDefs, def => def.Name, "data type def",
+            out var owner, out problem);
+        if (definition is null && owner is not null && RegisteredDataTypes.TryGet(name, out _))
+        {
+            problem = $"'{name}' is a registered data type: it has no data type def.";
+        }
+        return definition;
+    }
+
+    /// <summary>
+    /// The processor def the processor <paramref name="name"/> of <paramref name="referrer"/> refers to; resolved as a data type def
+    /// (see <see cref="FindDataTypeDef"/>). A name that is not found may be the key of a processor of a loaded assembly
+    /// (see <see cref="Assemblies.ProcessorCatalog.IsProcessorKey"/>).
+    /// </summary>
+    /// <param name="referrer">A node or a document item (see <see cref="FindOwner(object)"/>).</param>
+    /// <param name="problem">Why the processor def is not found; null when it is.</param>
+    public EditProcessorDef? FindProcessorDef(object referrer, SchemaName name, out string? problem)
+        => FindDefinition(referrer, name, document => document.ProcessorDefs, def => def.Name, "processor def", out _, out problem);
+
+    // a definition (data type def, processor def) by name, as seen from the schema of the referrer
+    private T? FindDefinition<T>(object referrer, SchemaName name, Func<EditDocument, IEnumerable<T>> definitions, Func<T, string> nameOf,
+        string what, out SchemaSetEntry? owner, out string? problem) where T : class
+    {
+        ArgumentNullException.ThrowIfNull(referrer);
+        owner = FindOwner(referrer);
+        if (owner is null)
+        {
+            problem = $"'{GetName(referrer)}' is not in a loaded schema.";
+            return null;
+        }
+        var document = String.IsNullOrEmpty(name.Namespace)
+            ? owner.Schema
+            : GetDocuments(owner.Schema).FirstOrDefault(candidate => SameName(candidate.Name, name.Namespace));
+        var definition = document is null ? null : definitions(document).FirstOrDefault(def => SameName(nameOf(def), name.Name));
+        problem = definition is null ? NotFound(what, name, owner) : null;
+        return definition;
+    }
+
+    /// <summary>The name of a node or document item (see <see cref="FindOwner(object)"/>), as shown in messages.</summary>
+    public static string GetName(object item) => item switch
+    {
+        EditNode node => node.Name,
+        EditDataTypeDef definition => definition.Name,
+        EditProcessorDef definition => definition.Name,
+        _ => item.ToString() ?? String.Empty
+    };
+
+    private static readonly DataTypeRegistry RegisteredDataTypes = DataTypeRegistry.CreateDefault();
+
+    // why the definition 'name' (a node def, data type def or processor def) is not found from 'owner'
+    private string NotFound(string what, SchemaName name, SchemaSetEntry owner)
+        => !String.IsNullOrEmpty(name.Namespace) && Find(name.Namespace) is null && !SameName(name.Namespace, owner.Name)
+            ? $"The {what} '{name}' is not found: the schema '{name.Namespace}' is not loaded."
+            : $"The {what} '{name}' is not found.";
 
     /// <summary>
     /// The node a 'ref:' of <paramref name="referrer"/> refers to. A relative path is resolved against the referrer

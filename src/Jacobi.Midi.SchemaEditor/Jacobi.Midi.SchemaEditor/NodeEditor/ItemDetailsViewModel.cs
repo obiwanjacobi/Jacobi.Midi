@@ -114,6 +114,47 @@ internal sealed partial class ItemDetailsViewModel : ObservableObject, IDisposab
         => schemas is null ? null : name => schemas.Find(name)?.Schema;
 
     /// <summary>
+    /// The item the details belong to: a node or a document item (data type def, processor def).
+    /// A processor reference of the item is followed from it (see <see cref="IProcessorReference"/>).
+    /// </summary>
+    public object Item => _item;
+
+    /// <summary>
+    /// What the processor <paramref name="name"/> of the <see cref="Item"/> refers to: a processor def of a loaded schema
+    /// (<see cref="SchemaSetWorkspace.FindProcessorDef"/>), otherwise the <see cref="ProcessorKey"/> of a processor of a
+    /// loaded assembly (<see cref="ProcessorCatalog.IsProcessorKey"/>). Null when it is neither; <paramref name="problem"/> tells why.
+    /// </summary>
+    internal object? FindProcessor(string name, out string? problem)
+    {
+        if (_schemas is null || _catalog is null)
+        {
+            problem = "The loaded schemas and assemblies are not known here.";
+            return null;
+        }
+        if (String.IsNullOrWhiteSpace(name))
+        {
+            problem = "The processor is not set.";
+            return null;
+        }
+        var processor = new SchemaName(name.Trim());
+        if (_schemas.FindProcessorDef(_item, processor, out problem) is { } definition)
+        {
+            return definition;
+        }
+        // a name without namespace can only be a processor def
+        if (!String.IsNullOrEmpty(processor.Namespace))
+        {
+            if (_catalog.IsProcessorKey(processor.FullName))
+            {
+                problem = null;
+                return new ProcessorKey(processor.FullName);
+            }
+            problem = $"'{processor}' is not a processor of a loaded assembly. {problem}";
+        }
+        return null;
+    }
+
+    /// <summary>
     /// The processors to choose from for an own processor: all processors and processor defs of the document,
     /// or only the semantic ones for value processors.
     /// </summary>
@@ -499,31 +540,68 @@ internal sealed class PropertyRow : ObservableObject
 }
 
 /// <summary>
+/// A processor reference in the node editor that can be followed (→) to what it refers to: a processor def or the
+/// processor of a loaded assembly (see <see cref="ItemDetailsViewModel.FindProcessor"/>).
+/// </summary>
+internal interface IProcessorReference
+{
+    /// <summary>The details the reference belongs to; it is followed from their <see cref="ItemDetailsViewModel.Item"/>.</summary>
+    ItemDetailsViewModel Details { get; }
+
+    /// <summary>The processor def (<see cref="EditProcessorDef"/>) or processor (<see cref="ProcessorKey"/>) it refers to; null when it is not found.</summary>
+    object? Target { get; }
+
+    /// <summary>Why the <see cref="Target"/> is not found; null when it is.</summary>
+    string? TargetProblem { get; }
+}
+
+/// <summary>
 /// The processor of a processor def in the node editor with the def's properties, which are part of the processor.
 /// </summary>
-internal sealed class ProcessorDefRow(EditProcessorDef definition, IReadOnlyList<PropertyRow> properties,
-    IList<EditProperty> owner, Action edited, ItemDetailsViewModel details) : ObservableObject
+internal sealed class ProcessorDefRow : ObservableObject, IProcessorReference
 {
-    public ItemDetailsViewModel Details { get; } = details;
+    private readonly EditProcessorDef _definition;
+    private readonly Action _edited;
 
-    public IReadOnlyList<PropertyRow> Properties { get; } = properties;
-    public IList<EditProperty> Owner { get; } = owner;
+    public ProcessorDefRow(EditProcessorDef definition, IReadOnlyList<PropertyRow> properties,
+        IList<EditProperty> owner, Action edited, ItemDetailsViewModel details)
+    {
+        _definition = definition;
+        _edited = edited;
+        Details = details;
+        Properties = properties;
+        Owner = owner;
+        Target = details.FindProcessor(definition.Processor, out var problem);
+        TargetProblem = problem;
+    }
+
+    public ItemDetailsViewModel Details { get; }
+
+    public object? Target { get; }
+
+    public string? TargetProblem { get; }
+
+    /// <summary>True when the processor can be followed (→); otherwise <see cref="TargetProblem"/> tells why not.</summary>
+    public bool CanGoTo => Target is not null;
+
+    public IReadOnlyList<PropertyRow> Properties { get; }
+    public IList<EditProperty> Owner { get; }
 
     /// <summary>
     /// The processor key ('namespace.id'). Empty input is ignored.
     /// </summary>
     public string Processor
     {
-        get => definition.Processor;
+        get => _definition.Processor;
         set
         {
-            if (String.IsNullOrWhiteSpace(value) || definition.Processor == value.Trim())
+            if (String.IsNullOrWhiteSpace(value) || _definition.Processor == value.Trim())
             {
                 return;
             }
-            definition.Processor = value.Trim();
+            _definition.Processor = value.Trim();
             OnPropertyChanged();
-            edited();
+            _edited();
         }
     }
 }
@@ -532,7 +610,7 @@ internal sealed class ProcessorDefRow(EditProcessorDef definition, IReadOnlyList
 /// One effective processor in the node editor with its effective properties.
 /// An own processor edits the authored <see cref="EditProcessorRef"/>; an inherited one is read-only.
 /// </summary>
-internal sealed class ProcessorRow : ObservableObject
+internal sealed class ProcessorRow : ObservableObject, IProcessorReference
 {
     private readonly ResolvedProcessor _resolved;
     private readonly Action _edited;
@@ -552,7 +630,20 @@ internal sealed class ProcessorRow : ObservableObject
         Details = details;
         Warning = warning;
         Properties = resolved.Properties.Select(property => new PropertyRow(property, IsOwn ? Ref.Properties : null, edited, details, check)).ToList();
+        // only followed where the reference lives: an inherited processor is followed from the definition it comes from
+        if (IsOwn)
+        {
+            Target = details.FindProcessor(Ref.Processor.ToString(), out var problem);
+            TargetProblem = problem;
+        }
     }
+
+    public object? Target { get; }
+
+    public string? TargetProblem { get; }
+
+    /// <summary>True when the processor can be followed (→); otherwise <see cref="TargetProblem"/> tells why not.</summary>
+    public bool CanGoTo => Target is not null;
 
     /// <summary>
     /// The warning about the processor's properties as a whole (missing required properties); null when none.

@@ -262,6 +262,70 @@ internal sealed partial class NodeFacets : ObservableObject
         ? "Custom data type: its values are not validated."
         : null;
 
+    /// <summary>
+    /// What the reference properties of the node refer to, by facet name (e.g. <c>References[Count]</c>):
+    /// see <see cref="FindReference"/>. A new instance after every edit, so bindings to it are refreshed.
+    /// </summary>
+    public NodeReferences References => new(this);
+
+    /// <summary>
+    /// What the property <paramref name="facet"/> of the node refers to, so it can be followed (→): the node def of
+    /// <see cref="NodeDef"/> or <see cref="MemberNodeDef"/> (<see cref="SchemaSetWorkspace.FindNodeDef"/>), the data type def of
+    /// <see cref="DataType"/> (<see cref="SchemaSetWorkspace.FindDataTypeDef"/>), or the field of a 'ref:' in a value-or-reference
+    /// property (<see cref="SchemaSetWorkspace.FindNodeRef"/>). Looked up in all loaded schemas.
+    /// </summary>
+    public NodeReference FindReference(string facet)
+    {
+        var label = facet switch
+        {
+            nameof(NodeDef) => "node def",
+            nameof(MemberNodeDef) => "member node def",
+            nameof(DataType) => "data type",
+            _ => GetValueOrRefLabel(facet)
+        };
+        var text = (facet switch
+        {
+            nameof(NodeDef) => NodeDef,
+            nameof(MemberNodeDef) => MemberNodeDef,
+            nameof(DataType) => DataType,
+            _ => GetValueOrRef(facet)
+        }).Trim();
+
+        NodeReference NotFollowed(string problem) => new(label, null, problem);
+        if (_node is null)
+        {
+            return NotFollowed("No node is selected.");
+        }
+        if (text.Length == 0)
+        {
+            return NotFollowed($"The {label} of {_node.Name} is not set.");
+        }
+        if (_schemas is null)
+        {
+            return NotFollowed("The loaded schemas are not known here.");
+        }
+
+        object? target;
+        string? problem;
+        switch (facet)
+        {
+            case nameof(NodeDef) or nameof(MemberNodeDef):
+                target = _schemas.FindNodeDef(_node, new SchemaName(text), out problem);
+                break;
+            case nameof(DataType):
+                target = _schemas.FindDataTypeDef(_node, new SchemaName(text), out problem);
+                break;
+            default:
+                if (!SchemaNodeRef.TryParse(text, out var reference))
+                {
+                    return NotFollowed($"The {label} of {_node.Name} is not a reference to a field (ref:).");
+                }
+                target = _schemas.FindNodeRef(_node, reference, out problem);
+                break;
+        }
+        return new(label, target, target is null ? $"The {label} of {_node.Name} cannot be followed: {problem}" : null);
+    }
+
     // the document and the schemas it includes, as loaded now
     private SchemaScope? Scope => _document is null ? null : SchemaScope.Of(_document.Schema, _schemas);
 
@@ -279,6 +343,8 @@ internal sealed partial class NodeFacets : ObservableObject
         assign(_node);
         _document.MarkChanged();
         OnPropertyChanged(propertyName);
+        // any edit may change what a reference refers to (e.g. a renamed node)
+        OnPropertyChanged(nameof(References));
         foreach (var dependent in dependents)
         {
             OnPropertyChanged(dependent);
@@ -318,4 +384,29 @@ internal sealed partial class NodeFacets : ObservableObject
         => Int32.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)
             ? number
             : throw new ArgumentException($"{what} must be a whole number, 'ref:path' or 'pub:namespace.name'.");
+}
+
+/// <summary>
+/// What a reference property of a node refers to (see <see cref="NodeFacets.FindReference"/>): the node or document item
+/// to follow (→) to, or why it cannot be followed.
+/// </summary>
+/// <param name="Label">How the property is called in messages, e.g. "byte size".</param>
+/// <param name="Target">The node or data type def it refers to; null when it cannot be followed.</param>
+/// <param name="Problem">Why it cannot be followed; null when it can.</param>
+internal sealed record NodeReference(string Label, object? Target, string? Problem)
+{
+    /// <summary>True when the reference can be followed (→).</summary>
+    public bool CanGoTo => Target is not null;
+
+    /// <summary>The tool tip of the → button: why it cannot be followed, or what it goes to.</summary>
+    public string Tip => Problem ?? $"Go to the {Label} this refers to";
+}
+
+/// <summary>
+/// The references of the node edited by <see cref="NodeFacets"/>, by facet name, for bindings such as
+/// <c>References[Count].CanGoTo</c>. Each is looked up when it is read.
+/// </summary>
+internal sealed class NodeReferences(NodeFacets facets)
+{
+    public NodeReference this[string facet] => facets.FindReference(facet);
 }

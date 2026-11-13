@@ -56,6 +56,14 @@ internal sealed class AssemblyWorkspace : ObservableObject
     }
 
     /// <summary>
+    /// Returns the processor namespace of an opened assembly that has the processor <paramref name="key"/>,
+    /// or null when no opened assembly has it.
+    /// </summary>
+    public ProcessorNamespaceItem? FindProcessorNamespace(ProcessorKey key)
+        => Assemblies.SelectMany(assembly => assembly.ProcessorNamespaces)
+            .FirstOrDefault(item => item.ProcessorKeys.Contains(key.ToString(), StringComparer.OrdinalIgnoreCase));
+
+    /// <summary>
     /// Reads the embedded schemas of <paramref name="assembly"/> and passes the same assembly
     /// to the <see cref="Processors"/>. A resource or processor that cannot be loaded is reported in
     /// <see cref="LoadedAssembly.Problems"/> and does not prevent the rest from loading.

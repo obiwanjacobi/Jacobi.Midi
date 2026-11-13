@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
 using System.Reflection;
+using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.SchemaEditor.Assemblies;
 using Jacobi.Midi.SchemaEditor.Models;
+using Jacobi.Midi.SchemaEditor.NodeEditor;
 using Jacobi.Midi.SchemaEditor.Services;
 using Jacobi.Midi.Tests.Schema;
 using Xunit;
@@ -95,7 +97,9 @@ public class SchemaSetWorkspaceTests
     }
 
     private const string Library = """
-        { "name": "Lib", "nodeDefs": [{ "name": "Header", "kind": "group", "members": [{ "name": "Length", "kind": "field", "datatype": "sys.uint8" }] }], "members": [] }
+        { "name": "Lib", "dataTypeDefs": [{ "name": "Small", "basedOn": "sys.uint8", "max": 10 }],
+          "processorDefs": [{ "name": "mapped", "processor": "sys.map" }],
+          "nodeDefs": [{ "name": "Header", "kind": "group", "members": [{ "name": "Length", "kind": "field", "datatype": "sys.uint8" }] }], "members": [] }
         """;
 
     private const string Device = """
@@ -193,6 +197,161 @@ public class SchemaSetWorkspaceTests
     }
 
     [Fact]
+    public void FindDataTypeDef_FindsAQualifiedNameInTheSchemaOfItsNamespace()
+    {
+        var (schemas, device, library) = CreateReferences();
+
+        var found = schemas.FindDataTypeDef(Member(device, "Root", "Items", "X"), new SchemaName("Lib.Small"), out var problem);
+
+        Assert.Same(library.Schema.DataTypeDefs.Single(), found);
+        Assert.Null(problem);
+    }
+
+    [Fact]
+    public void FindDataTypeDef_FindsANameWithoutNamespaceInTheSchemaOfTheReferrer()
+    {
+        var (schemas, _, library) = CreateReferences();
+
+        var found = schemas.FindDataTypeDef(library.Schema.NodeDefs.Single(), new SchemaName("Small"), out _);
+
+        Assert.Same(library.Schema.DataTypeDefs.Single(), found);
+    }
+
+    [Fact]
+    public void FindDataTypeDef_FollowsTheBaseTypeOfADataTypeDefIntoAnotherSchema()
+    {
+        var (schemas, device, library) = CreateReferences();
+        var tiny = new EditDataTypeDef { Name = "Tiny", BasedOn = new SchemaName("Lib.Small") };
+        device.Schema.DataTypeDefs.Add(tiny);
+
+        var found = schemas.FindDataTypeDef(tiny, tiny.BasedOn, out var problem);
+
+        Assert.Same(library.Schema.DataTypeDefs.Single(), found);
+        Assert.Null(problem);
+        Assert.Same(library, schemas.FindOwner(found!)?.Document);
+    }
+
+    [Fact]
+    public void FindDataTypeDef_ReportsADataTypeDefThatIsNotInALoadedSchema()
+    {
+        var (schemas, _, _) = CreateReferences();
+        var removed = new EditDataTypeDef { Name = "Removed", BasedOn = new SchemaName("Lib.Small") };
+
+        var found = schemas.FindDataTypeDef(removed, removed.BasedOn, out var problem);
+
+        Assert.Null(found);
+        Assert.Contains("'Removed' is not in a loaded schema", problem);
+    }
+
+    [Fact]
+    public void FindDataTypeDef_ReportsARegisteredDataType()
+    {
+        var (schemas, device, _) = CreateReferences();
+
+        var found = schemas.FindDataTypeDef(Member(device, "Root", "Items", "X"), new SchemaName("sys.uint8"), out var problem);
+
+        Assert.Null(found);
+        Assert.Contains("registered data type", problem);
+    }
+
+    [Fact]
+    public void FindDataTypeDef_ReportsASchemaThatIsNotLoaded()
+    {
+        var (schemas, device, _) = CreateReferences();
+
+        var found = schemas.FindDataTypeDef(Member(device, "Root", "Items", "X"), new SchemaName("Other.Small"), out var problem);
+
+        Assert.Null(found);
+        Assert.Contains("'Other' is not loaded", problem);
+    }
+
+    [Fact]
+    public void FindProcessorDef_FindsAQualifiedNameInTheSchemaOfItsNamespace()
+    {
+        var (schemas, device, library) = CreateReferences();
+
+        var found = schemas.FindProcessorDef(Member(device, "Root", "Items", "X"), new SchemaName("Lib.mapped"), out var problem);
+
+        Assert.Same(library.Schema.ProcessorDefs.Single(), found);
+        Assert.Null(problem);
+        Assert.Same(library, schemas.FindOwner(found!)?.Document);
+    }
+
+    [Fact]
+    public void FindProcessorDef_ReportsANameThatIsNotADef()
+    {
+        var (schemas, device, _) = CreateReferences();
+
+        var found = schemas.FindProcessorDef(Member(device, "Root", "Items", "X"), new SchemaName("midi.sysex"), out var problem);
+
+        Assert.Null(found);
+        Assert.Contains("'midi.sysex' is not found", problem);
+    }
+
+    [Theory]
+    [InlineData("Lib.mapped", typeof(EditProcessorDef))]
+    [InlineData("midi.sysex", typeof(ProcessorKey))]
+    public void FindProcessor_FindsAProcessorDefOrAProcessorOfALoadedAssembly(string name, Type expected)
+    {
+        var (schemas, assemblies, device) = CreateProcessorReferences(name);
+        using var details = ItemDetailsViewModel.Create(device, Member(device, "Root", "Items", "X"),
+            new ProcessorCatalog(assemblies.Processors), schemas)!;
+
+        var row = Assert.Single(details.Processors);
+
+        Assert.IsType(expected, row.Target);
+        Assert.True(row.CanGoTo);
+        Assert.Null(row.TargetProblem);
+        if (row.Target is ProcessorKey key)
+        {
+            Assert.Equal("midi", assemblies.FindProcessorNamespace(key)?.Namespace);
+        }
+    }
+
+    [Fact]
+    public void FindProcessor_ReportsANameThatIsNeitherAProcessorDefNorAProcessor()
+    {
+        var (schemas, assemblies, device) = CreateProcessorReferences("midi.unknown");
+        using var details = ItemDetailsViewModel.Create(device, Member(device, "Root", "Items", "X"),
+            new ProcessorCatalog(assemblies.Processors), schemas)!;
+
+        var row = Assert.Single(details.Processors);
+
+        Assert.Null(row.Target);
+        Assert.False(row.CanGoTo);
+        Assert.Contains("'midi.unknown' is not a processor of a loaded assembly", row.TargetProblem);
+    }
+
+    [Fact]
+    public void FindReference_FollowsARefPathAndReportsARegisteredDataType()
+    {
+        var (schemas, device, library) = CreateReferences();
+        var items = Member(device, "Root", "Items");
+        var facets = new NodeFacets(device, items, schemas);
+        var x = new NodeFacets(device, ((EditGroup)items).Members.Single(), schemas);
+
+        var count = facets.References[nameof(NodeFacets.Count)];
+        var dataType = x.References[nameof(NodeFacets.DataType)];
+
+        Assert.True(count.CanGoTo);
+        Assert.Same(((EditGroup)library.Schema.NodeDefs.Single()).Members.Single(), count.Target);
+        Assert.False(dataType.CanGoTo);
+        Assert.Contains("registered data type", dataType.Tip);
+    }
+
+    [Fact]
+    public void FindReference_ReportsAPropertyThatIsNotSet()
+    {
+        var (schemas, device, _) = CreateReferences();
+        var facets = new NodeFacets(device, Member(device, "Root", "Items"), schemas);
+
+        var nodeDef = facets.FindReference(nameof(NodeFacets.NodeDef));
+
+        Assert.False(nodeDef.CanGoTo);
+        Assert.Contains("node def of Items is not set", nodeDef.Problem);
+    }
+
+    [Fact]
     public void FindOwner_FindsTheEmbeddedSchemaOfANodeInIt()
     {
         var (documents, assemblies, _) = CreateWorkspace();
@@ -219,6 +378,17 @@ public class SchemaSetWorkspaceTests
         Assert.Null(schemas.FindOwner(items));
         Assert.Null(schemas.FindOwner(x));
         Assert.NotNull(schemas.FindOwner(root));
+    }
+
+    // the field Root.Items.X of the device schema has the processor 'name'
+    private static (SchemaSetWorkspace Schemas, AssemblyWorkspace Assemblies, SchemaWorkspaceDocument Device) CreateProcessorReferences(string name)
+    {
+        var (documents, assemblies, _) = CreateWorkspace();
+        var schemas = new SchemaSetWorkspace(documents, assemblies);
+        var device = Open(documents, Device);
+        Open(documents, Library);
+        ((EditField)Member(device, "Root", "Items", "X")).Processors.Add(new EditProcessorRef { Processor = new SchemaName(name) });
+        return (schemas, assemblies, device);
     }
 
     private static (SchemaSetWorkspace Schemas, SchemaWorkspaceDocument Device, SchemaWorkspaceDocument Library) CreateReferences()
