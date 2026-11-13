@@ -12,7 +12,7 @@ Known gaps and loose ends, collected while building the editor.
   - [ ] Data type def names (DataType): go to the data type def.
   - [ ] Processor def names (Processor): go to the processor def.
   - [ ] `pub:` references: go to the node whose processor publishes the value.
-  - [ ] *Back*: return to the node a reference was followed from (navigation history).
+  - [x] *Back*: return to the node a reference was followed from (navigation history). Done: the ← Back button in the node editor header (`GoBackCommand`) returns to the node the last → was followed from; a node that is no longer in a loaded schema is skipped (status).
 - [ ] The node def, count, selected index, member node def, byte size/length/offset and value fields are plain text boxes; offer the document's node defs (and the reachable/loaded `ref:` paths) as suggestions.
 - [ ] Remove the warnings about 'no group conforms to the contract 'open-choice name'. Instead show a count or list of possible impls at open-choice element.
 - [x] `SchemaWorkspaceDocument.ApplyNodeEdits` takes the type-specific properties as an optional trailing `NodeFacets` parameter; fold name, data type, description and sample into the staged model so there is one apply path. Fixed: there is no apply step any more; `NodeFacets` edits the name, data type and type-specific values of the node live.

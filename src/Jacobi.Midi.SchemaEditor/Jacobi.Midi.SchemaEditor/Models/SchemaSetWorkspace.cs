@@ -99,15 +99,20 @@ internal sealed class SchemaSetWorkspace
 
     /// <summary>
     /// The entry of the loaded schema that <paramref name="node"/> (a member or a node def of it, or a node in one) belongs to;
-    /// null when it is not in a loaded schema.
+    /// null when it is not in a loaded schema, also when it (or a node above it) was removed from its parent.
     /// </summary>
     public SchemaSetEntry? FindOwner(EditNode node)
     {
         ArgumentNullException.ThrowIfNull(node);
         var top = node;
-        while (top.Parent is not null)
+        while (top.Parent is { } parent)
         {
-            top = top.Parent;
+            // a removed node keeps its parent
+            if (!parent.Members.Contains(top))
+            {
+                return null;
+            }
+            top = parent;
         }
         // a node def has no parent: it belongs to the schema that has it
         return Entries.FirstOrDefault(entry => ReferenceEquals(entry.Schema, top) || entry.Schema.NodeDefs.Contains(top));

@@ -72,6 +72,8 @@ internal sealed partial class MainViewModel : ViewModelBase
     private bool _keepSelectedItem;
     // set while a newly selected document switches to the schema tab: its root is selected instead of the first in the tree
     private bool _selectingDocument;
+    // the nodes a reference was followed from (GoToReferenceCommand), the last on top: GoBackCommand returns to them
+    private readonly Stack<EditNode> _backHistory = [];
 
     /// <summary>
     /// The opened assemblies with their embedded schemas (not editable, not part of <see cref="Documents"/>) and processors.
@@ -1150,14 +1152,66 @@ internal sealed partial class MainViewModel : ViewModelBase
             StatusMessage = $"The {label} of {node.Name} cannot be followed: {problem}";
             return;
         }
-        NavigateTo(target);
+        if (!NavigateTo(target))
+        {
+            StatusMessage = $"The {label} of {node.Name} cannot be followed: '{target.Name}' is not in a loaded schema.";
+            return;
+        }
+        _backHistory.Push(node);
+        OnBackHistoryChanged();
+    }
+
+    /// <summary>
+    /// Returns to the node the last reference was followed from (<see cref="GoToReferenceCommand"/>), in the tree that shows it
+    /// (<see cref="NavigateTo"/>). A node that is no longer in a loaded schema (deleted, or its document closed) is skipped;
+    /// the status says so.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanGoBack))]
+    private void GoBack()
+    {
+        var skipped = new List<string>();
+        EditNode? returned = null;
+        while (returned is null && _backHistory.TryPop(out var node))
+        {
+            if (NavigateTo(node))
+            {
+                returned = node;
+            }
+            else
+            {
+                skipped.Add($"'{node.Name}'");
+            }
+        }
+        OnBackHistoryChanged();
+        if (skipped.Count > 0)
+        {
+            var names = String.Join(", ", skipped);
+            StatusMessage = returned is null
+                ? $"Cannot go back: {names} {(skipped.Count == 1 ? "is" : "are")} no longer in a loaded schema."
+                : $"Skipped {names} (no longer in a loaded schema); back to '{returned.Name}'.";
+        }
+    }
+
+    /// <summary>True when there is a node to go back to (<see cref="GoBackCommand"/>).</summary>
+    public bool CanGoBack => _backHistory.Count > 0;
+
+    /// <summary>The tool tip of the Back button: the node it returns to.</summary>
+    public string GoBackTip => _backHistory.TryPeek(out var node)
+        ? $"Back to '{node.Name}', where the last reference was followed from"
+        : "Back to the node a reference was followed from";
+
+    private void OnBackHistoryChanged()
+    {
+        GoBackCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(GoBackTip));
     }
 
     /// <summary>
     /// Selects <paramref name="node"/> in the tree that shows it: a node of an open document in the schema tree
     /// (that document is selected), a node of an embedded schema in the assembly tree.
     /// </summary>
-    private void NavigateTo(EditNode node)
+    /// <returns>False when the node is not in a loaded schema (nothing is selected).</returns>
+    private bool NavigateTo(EditNode node)
     {
         switch (LoadedSchemas.FindOwner(node))
         {
@@ -1188,9 +1242,9 @@ internal sealed partial class MainViewModel : ViewModelBase
                 SelectedItem = node;
                 break;
             default:
-                StatusMessage = $"'{node.Name}' is not in a loaded schema.";
-                break;
+                return false;
         }
+        return true;
     }
 
     /// <summary>

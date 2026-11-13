@@ -205,6 +205,22 @@ public class SchemaSetWorkspaceTests
         Assert.Same(embedded, owner?.Embedded);
     }
 
+    [Fact]
+    public void FindOwner_DoesNotFindANodeThatWasRemoved()
+    {
+        var (schemas, device, _) = CreateReferences();
+        var root = (EditGroup)Member(device, "Root");
+        var items = Member(device, "Root", "Items");
+        var x = ((EditGroup)items).Members.Single();
+
+        root.Members.Remove(items);
+
+        // the removed node keeps its parent: neither it nor a node in it is found
+        Assert.Null(schemas.FindOwner(items));
+        Assert.Null(schemas.FindOwner(x));
+        Assert.NotNull(schemas.FindOwner(root));
+    }
+
     private static (SchemaSetWorkspace Schemas, SchemaWorkspaceDocument Device, SchemaWorkspaceDocument Library) CreateReferences()
     {
         var (documents, assemblies, _) = CreateWorkspace();

@@ -17,6 +17,10 @@ searching the schema tree by hand.
    `SchemaSetWorkspace` already decides which loaded schema (open document or embedded schema) answers to a name.
 3. **A reference into an embedded schema is followed too**: the *Assemblies* tab is shown with the node selected.
    *Why:* follow the breadcrumbs; *Back* will lead the way back later.
+4. **A *Back* button returns to the node a reference was followed from** (navigation history, 2026-11-13). Only a
+   followed reference (→) is recorded, not every selection; there is no *Forward* and no keyboard shortcut (yet). A node
+   that is no longer in a loaded schema (deleted, its document closed) is skipped and the status says so.
+   *Why:* start with the known need; a button is the most obvious for the user.
 
 ## Included nodes of an address map in the Schema Editor (2026-11-13)
 
