@@ -3,6 +3,23 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## Invalid input in the item editors of the Schema Editor (2026-11-13)
+
+Issue: the item editors (includes, data type defs, processor defs) threw on invalid input, so the box showed a validation
+error. An empty required field is a normal state while typing, and an editable drop-down cleared its text when the next
+item was selected or added, which wrote that empty text to the model and threw where the user did nothing wrong.
+
+1. **Invalid input is rejected with a warning of the field, not an exception.** `ItemEditor.Edit` parses the input; an
+   `ArgumentException` or `FormatException` leaves the model unchanged and becomes the warning of that property
+   (`Warnings[Name]`, orange below the field); the next valid input clears it. *Why:* emptying a field and clicking
+   elsewhere happens naturally; show it like the other warnings. One place for all item editors.
+2. **Editable drop-downs bind their text with `UpdateSourceTrigger=LostFocus`**, like the other editable lists of the
+   node editor. *Why:* an editable `ComboBox` changes its text by itself (e.g. when its items change); only the text
+   the user leaves in the box is an edit.
+3. **Each selected item gets new editor controls** (`CollectionTabViewModel` clears the editor before it creates the
+   next one), instead of the view reusing the controls with a new data context. *Why:* a reused editable `ComboBox`
+   kept the selection state of the previous item and showed an empty box.
+
 ## Schema source viewer in the Schema Editor (2026-11-13)
 
 Issue: there was no way to see a schema as it is serialized (XML, JSON) without saving it and opening the file elsewhere.
