@@ -21,15 +21,17 @@
   The midi.* properties describe the address map (see src/Jacobi.Midi.Device/Addressing/readme.md):
     midi.address       absolute start address (wire form, as in the manual)
     midi.stride        number of addresses of a node; on a repeat the size of one item (the distance between items)
-    midi.repeat        number of items of a repeat in the address space (a dump may hold fewer)
+    midi.repeat        number of items of a repeat in the addressspace (a dump may hold fewer)
     midi.transfer      atomic: the group is always transferred as ae    midi.device.*      device values fixed for the GP-8 (used by the message envelope)
 -->
 <schema name="Gp8">
-  <incs>
+  <includes>
     <include schema="midi"/>
     <include schema="roland"/>
   </includes>
-<!-- 0x00: effect on/off (MSB) -->
+
+  <nodeDefs>
+    <!-- 0x00: effect on/off (MSB) -->
     <group name="effectSwiches1" byteLength="1">
       <processors>
         <processor name="sys.bitpacker"/>
