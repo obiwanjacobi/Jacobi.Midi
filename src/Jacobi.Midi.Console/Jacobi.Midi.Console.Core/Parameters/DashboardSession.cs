@@ -133,7 +133,7 @@ public sealed class DashboardSession : IDisposable
         => Resolution.Bindings.FirstOrDefault(binding => binding.Control == control && binding.Parameter is not null)?.Parameter!.Device;
 
     /// <summary>
-    /// The parameters of a device the controls are bound to: their schema paths from the map root without repeat
+    /// The parameters of a device the controls are bound to: their schema paths from their root without repeat
     /// indices (as <see cref="ParameterNode.Path"/>), so a parameter counts for every repeat item.
     /// </summary>
     public IReadOnlySet<string> UsedPaths(string alias)
@@ -266,7 +266,7 @@ public sealed class DashboardSession : IDisposable
                 continue;   // the device is not in the rig: reported by the resolver
             if (state.Find(parameter.Path) is not FieldInfo field)
             {
-                problems.Add($"{Describe(binding.Control)}.{binding.Slot}: '{parameter.Path}' is not a field of '{state.MapRoot}'.");
+                problems.Add($"{Describe(binding.Control)}.{binding.Slot}: '{parameter.Path}' is not a field of '{state.Schema}'.");
                 continue;
             }
             var info = ParameterInfo.From(field);

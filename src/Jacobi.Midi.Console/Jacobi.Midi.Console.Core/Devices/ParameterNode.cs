@@ -1,10 +1,11 @@
 using Jacobi.BinarySerializer.Execution;
+using Jacobi.Midi.Device.Messages;
 using Jacobi.Midi.Console.Core.Parameters;
 
 namespace Jacobi.Midi.Console.Core.Devices;
 
 /// <summary>
-/// A node of the parameter tree of a device: the groups, repeats and fields of its map root, with the names of the
+/// A node of the parameter tree of a device: the groups, repeats and fields of a root of its schema, with the names of the
 /// schema, as the user sees them in Edit mode to drag onto a dashboard. A field is a parameter (with its
 /// <see cref="ParameterInfo"/>), a repeat has the number of its items in the address map. Fields whose value the schema
 /// fixes (a constant, a count, a length or a size of another node) are not parameters and are left out, as are groups
@@ -21,7 +22,7 @@ public sealed class ParameterNode
 
     public string Name { get; }
 
-    /// <summary>The schema path from the map root, without repeat indices (e.g. <c>AddressMap.Memory.Patch.Level</c>).</summary>
+    /// <summary>The schema path from the root, without repeat indices (e.g. <c>AddressMap.Memory.Patch.Level</c>).</summary>
     public string Path { get; }
 
     public ParameterNodeKind Kind { get; }
@@ -35,13 +36,13 @@ public sealed class ParameterNode
     /// <summary>The documentation of the node (its <c>midi.doc</c>); null when it has none.</summary>
     public string? Doc { get; private init; }
 
-    /// <summary>The group or repeat this node is in; null for the map root.</summary>
+    /// <summary>The group or repeat this node is in; null for the root.</summary>
     public ParameterNode? Parent { get; private set; }
 
     /// <summary>The nodes in a group, or in each item of a repeat.</summary>
     public IReadOnlyList<ParameterNode> Children { get; private init; } = [];
 
-    /// <summary>This node and the nodes around it, from the map root down.</summary>
+    /// <summary>This node and the nodes around it, from the root down.</summary>
     public IReadOnlyList<ParameterNode> PathFromRoot
     {
         get
@@ -53,7 +54,7 @@ public sealed class ParameterNode
         }
     }
 
-    /// <summary>The parameter tree of a plan: its root is the map root.</summary>
+    /// <summary>The parameter tree of a plan: its root is the plan's root.</summary>
     /// <param name="itemCount">The number of items of a repeat, by its path; null when it is not known.</param>
     public static ParameterNode Of(ExecutionPlan plan, Func<string, int?> itemCount)
     {
@@ -89,9 +90,11 @@ public sealed class ParameterNode
         }
     }
 
-    // a value the schema fixes or the engine derives is not a parameter
+    // a value the schema fixes, the engine derives, or a message holds for the transfer (a role: a device value, an
+    // address) is not a parameter
     private static bool IsParameter(FieldInfo field)
-        => !field.HasExpectedValue && field.CountOf is null && field.ByteSizeOf is null && field.ByteLengthOf is null;
+        => !field.HasExpectedValue && field.CountOf is null && field.ByteSizeOf is null && field.ByteLengthOf is null
+            && MidiProperties.RoleOf(field.Field) is null;
 }
 
 /// <summary>The kinds of nodes of a parameter tree.</summary>

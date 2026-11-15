@@ -1,0 +1,268 @@
+<dashboard format="jacobi.midi.dashboard/1" name="New dashboard" cellSize="24" look="Foundry" rig="GenMidiSynth.rig.xml">
+  <device alias="generalmidisynth" schema="GeneralMIDISynth" />
+  <grid size="54,170">
+    <section label="DeviceInfo" size="42,27" at="0,0" device="generalmidisynth" base="DeviceInfo">
+      <section label="manufacturerId" size="13,10" at="0,0" base="DeviceInfo.manufacturerId[$manufacturerId]">
+        <variable name="manufacturerId" value="0" />
+        <numberBox label="manufacturerId" size="6,4" at="0,0">
+          <bind slot="value" parameter="$manufacturerId" />
+        </numberBox>
+        <knob size="5,7" at="6,0">
+          <bind slot="value" parameter="item" />
+        </knob>
+      </section>
+      <section label="familyId" size="13,10" at="13,0" base="DeviceInfo.familyId[$familyId]">
+        <variable name="familyId" value="0" />
+        <numberBox label="familyId" size="6,4" at="0,0">
+          <bind slot="value" parameter="$familyId" />
+        </numberBox>
+        <knob size="5,7" at="6,0">
+          <bind slot="value" parameter="item" />
+        </knob>
+      </section>
+      <section label="modelId" size="13,10" at="26,0" base="DeviceInfo.modelId[$modelId]">
+        <variable name="modelId" value="0" />
+        <numberBox label="modelId" size="6,4" at="0,0">
+          <bind slot="value" parameter="$modelId" />
+        </numberBox>
+        <knob size="5,7" at="6,0">
+          <bind slot="value" parameter="item" />
+        </knob>
+      </section>
+      <section label="versionId" size="13,10" at="0,10" base="DeviceInfo.versionId[$versionId]">
+        <variable name="versionId" value="0" />
+        <numberBox label="versionId" size="6,4" at="0,0">
+          <bind slot="value" parameter="$versionId" />
+        </numberBox>
+        <knob size="5,7" at="6,0">
+          <bind slot="value" parameter="item" />
+        </knob>
+      </section>
+      <text size="9,4" at="13,10">
+        <bind slot="value" parameter="manufacturer" />
+      </text>
+      <text size="9,4" at="22,10">
+        <bind slot="value" parameter="family" />
+      </text>
+      <text size="9,4" at="31,10">
+        <bind slot="value" parameter="model" />
+      </text>
+      <text size="9,4" at="0,20">
+        <bind slot="value" parameter="version" />
+      </text>
+      <text size="9,4" at="9,20">
+        <bind slot="value" parameter="serialNumber" />
+      </text>
+    </section>
+    <section label="ChannelList" size="51,37" at="0,133" device="generalmidisynth" base="ChannelList">
+      <section label="items" size="49,34" at="0,0" base="ChannelList.items[$items]">
+        <variable name="items" value="0" />
+        <numberBox label="items" size="6,4" at="0,0">
+          <bind slot="value" parameter="$items" />
+        </numberBox>
+        <text size="9,4" at="6,0">
+          <bind slot="value" parameter="title" />
+        </text>
+        <knob size="5,7" at="15,0">
+          <bind slot="value" parameter="channel" />
+        </knob>
+        <text size="9,4" at="20,0">
+          <bind slot="value" parameter="programTitle" />
+        </text>
+        <section label="bankPC" size="13,10" at="29,0" base="ChannelList.items[$items].bankPC[$bankPC]">
+          <variable name="bankPC" value="0" />
+          <numberBox label="bankPC" size="6,4" at="0,0">
+            <bind slot="value" parameter="$bankPC" />
+          </numberBox>
+          <knob size="5,7" at="6,0">
+            <bind slot="value" parameter="item" />
+          </knob>
+        </section>
+        <knob size="5,7" at="42,0">
+          <bind slot="value" parameter="clusterChannelStart" />
+        </knob>
+        <knob size="5,7" at="0,10">
+          <bind slot="value" parameter="clusterLength" />
+        </knob>
+        <knob size="5,7" at="5,10">
+          <bind slot="value" parameter="clusterMidiMode" />
+        </knob>
+        <selector size="6,4" at="10,10">
+          <bind slot="value" parameter="clusterType" />
+        </selector>
+        <section label="links" size="44,7" at="0,17" base="ChannelList.items[$items].links[$links]">
+          <variable name="links" value="0" />
+          <numberBox label="links" size="6,4" at="0,0">
+            <bind slot="value" parameter="$links" />
+          </numberBox>
+          <text size="9,4" at="6,0">
+            <bind slot="value" parameter="resource" />
+          </text>
+          <text size="9,4" at="15,0">
+            <bind slot="value" parameter="resId" />
+          </text>
+          <text size="9,4" at="24,0">
+            <bind slot="value" parameter="title" />
+          </text>
+          <text size="9,4" at="33,0">
+            <bind slot="value" parameter="role" />
+          </text>
+        </section>
+        <numberBox size="6,4" at="0,24">
+          <bind slot="value" parameter="channelClusterId" />
+        </numberBox>
+        <switch size="4,7" at="6,24">
+          <bind slot="value" parameter="clusterBasicChannel" />
+        </switch>
+        <switch size="4,7" at="10,24">
+          <bind slot="value" parameter="deviceBasicChannel" />
+        </switch>
+        <selector size="6,4" at="14,24">
+          <bind slot="value" parameter="mpeZone" />
+        </selector>
+      </section>
+    </section>
+    <section label="ProgramList" size="54,70" at="0,63" device="generalmidisynth" base="ProgramList">
+      <section label="items" size="47,27" at="0,0" base="ProgramList.items[$items]">
+        <variable name="items" value="0" />
+        <numberBox label="items" size="6,4" at="0,0">
+          <bind slot="value" parameter="$items" />
+        </numberBox>
+        <text size="9,4" at="6,0">
+          <bind slot="value" parameter="title" />
+        </text>
+        <section label="bankPC" size="13,10" at="15,0" base="ProgramList.items[$items].bankPC[$bankPC]">
+          <variable name="bankPC" value="0" />
+          <numberBox label="bankPC" size="6,4" at="0,0">
+            <bind slot="value" parameter="$bankPC" />
+          </numberBox>
+          <knob size="5,7" at="6,0">
+            <bind slot="value" parameter="item" />
+          </knob>
+        </section>
+        <section label="category" size="17,7" at="28,0" base="ProgramList.items[$items].category[$category]">
+          <variable name="category" value="0" />
+          <numberBox label="category" size="6,4" at="0,0">
+            <bind slot="value" parameter="$category" />
+          </numberBox>
+          <text size="9,4" at="6,0">
+            <bind slot="value" parameter="item" />
+          </text>
+        </section>
+        <section label="tags" size="17,7" at="0,10" base="ProgramList.items[$items].tags[$tags]">
+          <variable name="tags" value="0" />
+          <numberBox label="tags" size="6,4" at="0,0">
+            <bind slot="value" parameter="$tags" />
+          </numberBox>
+          <text size="9,4" at="6,0">
+            <bind slot="value" parameter="item" />
+          </text>
+        </section>
+        <section label="links" size="44,7" at="0,17" base="ProgramList.items[$items].links[$links]">
+          <variable name="links" value="0" />
+          <numberBox label="links" size="6,4" at="0,0">
+            <bind slot="value" parameter="$links" />
+          </numberBox>
+          <text size="9,4" at="6,0">
+            <bind slot="value" parameter="resource" />
+          </text>
+          <text size="9,4" at="15,0">
+            <bind slot="value" parameter="resId" />
+          </text>
+          <text size="9,4" at="24,0">
+            <bind slot="value" parameter="title" />
+          </text>
+          <text size="9,4" at="33,0">
+            <bind slot="value" parameter="role" />
+          </text>
+        </section>
+      </section>
+      <section label="ChCtrlList" size="52,40" at="0,27" device="generalmidisynth" base="ChCtrlList">
+        <section label="items" size="50,37" at="0,0" base="ChCtrlList.items[$items]">
+          <variable name="items" value="0" />
+          <numberBox label="items" size="6,4" at="0,0">
+            <bind slot="value" parameter="$items" />
+          </numberBox>
+          <text size="9,4" at="6,0">
+            <bind slot="value" parameter="title" />
+          </text>
+          <text size="9,4" at="15,0">
+            <bind slot="value" parameter="description" />
+          </text>
+          <selector size="6,4" at="24,0">
+            <bind slot="value" parameter="ctrlType" />
+          </selector>
+          <section label="ctrlIndex" size="13,10" at="30,0" base="ChCtrlList.items[$items].ctrlIndex[$ctrlIndex]">
+            <variable name="ctrlIndex" value="0" />
+            <numberBox label="ctrlIndex" size="6,4" at="0,0">
+              <bind slot="value" parameter="$ctrlIndex" />
+            </numberBox>
+            <knob size="5,7" at="6,0">
+              <bind slot="value" parameter="item" />
+            </knob>
+          </section>
+          <knob size="5,7" at="43,0">
+            <bind slot="value" parameter="channel" />
+          </knob>
+          <knob size="5,7" at="0,10">
+            <bind slot="value" parameter="priority" />
+          </knob>
+          <numberBox size="6,4" at="5,10">
+            <bind slot="value" parameter="default" />
+          </numberBox>
+          <selector size="6,4" at="11,10">
+            <bind slot="value" parameter="transmit" />
+          </selector>
+          <selector size="6,4" at="17,10">
+            <bind slot="value" parameter="recognize" />
+          </selector>
+          <knob size="5,7" at="23,10">
+            <bind slot="value" parameter="numSigBits" />
+          </knob>
+          <text size="9,4" at="28,10">
+            <bind slot="value" parameter="paramPath" />
+          </text>
+          <selector size="6,4" at="37,10">
+            <bind slot="value" parameter="typeHint" />
+          </selector>
+          <text size="9,4" at="0,17">
+            <bind slot="value" parameter="ctrlMapId" />
+          </text>
+          <numberBox size="6,4" at="9,17">
+            <bind slot="value" parameter="stepCount" />
+          </numberBox>
+          <section label="minMax" size="13,10" at="15,17" base="ChCtrlList.items[$items].minMax[$minMax]">
+            <variable name="minMax" value="0" />
+            <numberBox label="minMax" size="6,4" at="0,0">
+              <bind slot="value" parameter="$minMax" />
+            </numberBox>
+            <knob size="5,7" at="6,0">
+              <bind slot="value" parameter="item" />
+            </knob>
+          </section>
+          <switch size="4,7" at="28,17">
+            <bind slot="value" parameter="defaultCCMap" />
+          </switch>
+          <section label="links" size="44,7" at="0,27" base="ChCtrlList.items[$items].links[$links]">
+            <variable name="links" value="0" />
+            <numberBox label="links" size="6,4" at="0,0">
+              <bind slot="value" parameter="$links" />
+            </numberBox>
+            <text size="9,4" at="6,0">
+              <bind slot="value" parameter="resource" />
+            </text>
+            <text size="9,4" at="15,0">
+              <bind slot="value" parameter="resId" />
+            </text>
+            <text size="9,4" at="24,0">
+              <bind slot="value" parameter="title" />
+            </text>
+            <text size="9,4" at="33,0">
+              <bind slot="value" parameter="role" />
+            </text>
+          </section>
+        </section>
+      </section>
+    </section>
+  </grid>
+</dashboard>

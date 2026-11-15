@@ -97,11 +97,12 @@ internal sealed class AssemblyWorkspace : ObservableObject
     }
 
     // SchemaSetBuilder reads each embedded schema (into a builder of its own: the set is not compiled); the exchange
-    // files are not schemas. A resource it cannot read (e.g. YAML) is reported as a problem.
+    // files and the JSON Schemas of Property Exchange are not schemas. A resource it cannot read (e.g. YAML) is reported as a problem.
     private static List<LoadedSchema> LoadSchemas(Assembly assembly, List<string> problems)
     {
         var schemas = new List<LoadedSchema>();
-        foreach (var resource in assembly.GetManifestResourceNames().Where(resource => !ExchangeDefinitions.IsDefinitionResource(resource)))
+        foreach (var resource in assembly.GetManifestResourceNames()
+            .Where(resource => !ExchangeDefinitions.IsDefinitionResource(resource) && !Jacobi.Midi.Device.PropertyExchange.StandardSchemas.IsResource(resource)))
         {
             try
             {

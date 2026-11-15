@@ -26,11 +26,11 @@ internal sealed class RigTreeItem : ViewModelBase
 
     public string Name { get; }
 
-    /// <summary>What it is: the device's name and map root, a repeat's number of items, a field's range or options.</summary>
+    /// <summary>What it is: the device's name and schema, a repeat's number of items, a field's range or options.</summary>
     public string Detail { get; }
 
     /// <summary>
-    /// The documentation of the node in the schema (its <c>midi.doc</c>; for a device that of its map root), shown in the
+    /// The documentation of the node in the schema (its <c>midi.doc</c>; for a device with one root, that of the root), shown in the
     /// item's tip; null when it has none.
     /// </summary>
     public string? Doc => Node?.Doc;
@@ -38,7 +38,7 @@ internal sealed class RigTreeItem : ViewModelBase
     /// <summary>The device of the rig; null for a node of its parameter tree.</summary>
     public DeviceInstance? Instance { get; private init; }
 
-    /// <summary>The node of the parameter tree (a device's map root); null for a device without state.</summary>
+    /// <summary>The node of the parameter tree (a device with one root: that root); null for a device without state or with more roots.</summary>
     public ParameterNode? Node { get; private init; }
 
     /// <summary>What a drag of the item drops; null when the device has no parameter tree (see the problems).</summary>
@@ -118,17 +118,19 @@ internal sealed class RigTreeItem : ViewModelBase
     public static RigTreeItem Of(DeviceInstance device, DeviceState? state, DeviceConnection? connection)
     {
         ArgumentNullException.ThrowIfNull(device);
-        var detail = state is null ? $"{device.MapRoot}: not available, see the problems" : device.Name is { } name ? $"{name} · {device.MapRoot}" : device.MapRoot;
-        var source = state is null ? null : new DropSource(device.Alias, device.MapRoot, state.Parameters);
+        var detail = state is null ? $"{device.Schema}: not available, see the problems" : device.Name is { } name ? $"{name} · {device.Schema}" : device.Schema;
+        // a device with one root (with parameters) shows that root's nodes, as the device; with more, a node per root
+        var roots = state?.Parameters ?? [];
+        var single = roots.Count == 1 ? new DropSource(device.Alias, device.Schema, roots[0]) : null;
         return new RigTreeItem(device.Alias, detail)
         {
             Instance = device,
-            Node = state?.Parameters,
-            Source = source,
+            Node = single?.Node,
+            Source = single,
             ColorBrush = RgbColor.TryParse(device.Colors[ColorArea.Accent], out var color) ? new SolidColorBrush(PaletteBrushes.ToColor(color.Value)) : null,
-            // the map root's nodes, then the command roots of the device (parameters set with channel messages)
-            Children = source is null ? [] : [.. source.Node.Children.Select(child => Of(source, child)),
-                .. state!.CommandParameters.Select(root => Of(source, root))],
+            Children = single is not null
+                ? [.. single.Node.Children.Select(child => Of(single, child))]
+                : [.. roots.Select(root => Of(new DropSource(device.Alias, device.Schema, root), root))],
             Connection = connection,
         };
     }

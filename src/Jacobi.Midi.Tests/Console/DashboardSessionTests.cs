@@ -20,7 +20,7 @@ public class DashboardSessionTests
 {
     private const string Rig = """
         <rig format="jacobi.midi.rig/1">
-          <device alias="gp8" mapRoot="Gp8.AddressMap" color="#D4A838">
+          <device alias="gp8" schema="Gp8" color="#D4A838">
             <deviceValue name="deviceId" value="0" />
           </device>
         </rig>
@@ -28,7 +28,7 @@ public class DashboardSessionTests
 
     private const string Dashboard = """
         <dashboard format="jacobi.midi.dashboard/1" name="Test">
-          <device alias="gp8" mapRoot="Gp8.AddressMap" />
+          <device alias="gp8" schema="Gp8" />
           <column device="gp8" base="AddressMap.Memory[$patch].Patch">
             <variable name="patch" value="0" />
             <knob label="Sens"><bind slot="value" parameter="DynamicFilter.Sens" /></knob>
@@ -169,12 +169,12 @@ public class DashboardSessionTests
             """;
         const string rig = """
             <rig format="jacobi.midi.rig/1">
-              <device alias="doc" mapRoot="Documented.Settings" />
+              <device alias="doc" schema="Documented" />
             </rig>
             """;
         const string dashboard = """
             <dashboard format="jacobi.midi.dashboard/1" name="Docs">
-              <device alias="doc" mapRoot="Documented.Settings" />
+              <device alias="doc" schema="Documented" />
               <column device="doc" base="Settings">
                 <variable name="slot" value="0" />
                 <section label="Left" base="Settings.Left"><knob><bind slot="value" parameter="Level" /></knob></section>
@@ -210,7 +210,7 @@ public class DashboardSessionTests
             Assert.Null(session.DocOf(tabs.Children[2]));
 
             // the parameter tree: every node with its own
-            var tree = rigSession.Devices["doc"].Parameters;
+            var tree = rigSession.Devices["doc"].Parameters.Single();
             Assert.Equal("All settings.", tree.Doc);
             Assert.Equal(["A channel.", "The right channel.", "The slots."], tree.Children.Select(node => node.Doc));
             Assert.Equal("The level.", tree.Children[0].Children[0].Doc);
@@ -227,12 +227,12 @@ public class DashboardSessionTests
     {
         const string rig = """
             <rig format="jacobi.midi.rig/1">
-              <device alias="gx" mapRoot="Gx700.AddressMap"><deviceValue name="channel" value="0" /></device>
+              <device alias="gx" schema="Gx700"><deviceValue name="channel" value="0" /></device>
             </rig>
             """;
         const string dashboard = """
             <dashboard format="jacobi.midi.dashboard/1" name="Program">
-              <device alias="gx" mapRoot="Gx700.AddressMap" />
+              <device alias="gx" schema="Gx700" />
               <column device="gx">
                 <knob><bind slot="value" parameter="Commands.Program" /></knob>
               </column>
@@ -252,12 +252,12 @@ public class DashboardSessionTests
     {
         const string rig = """
             <rig format="jacobi.midi.rig/1">
-              <device alias="gx" mapRoot="Gx700.AddressMap"><deviceValue name="deviceId" value="0" /></device>
+              <device alias="gx" schema="Gx700"><deviceValue name="deviceId" value="0" /></device>
             </rig>
             """;
         const string dashboard = """
             <dashboard format="jacobi.midi.dashboard/1" name="Docs">
-              <device alias="gx" mapRoot="Gx700.AddressMap" />
+              <device alias="gx" schema="Gx700" />
               <column device="gx" base="AddressMap.Temporary.Compressor">
                 <knob><bind slot="value" parameter="Tone" /></knob>
                 <xyPad><bind slot="x" parameter="Sustain" /><bind slot="y" parameter="Tone" /></xyPad>
@@ -395,8 +395,8 @@ public class DashboardSessionTests
     [Fact]
     public void ColorsOf_ADevice_AreTheDashboardsOverTheRigs()
     {
-        var dashboard = Dashboard.Replace("""<device alias="gp8" mapRoot="Gp8.AddressMap" />""",
-            """<device alias="gp8" mapRoot="Gp8.AddressMap" panelColor="#263B30" />""");
+        var dashboard = Dashboard.Replace("""<device alias="gp8" schema="Gp8" />""",
+            """<device alias="gp8" schema="Gp8" panelColor="#263B30" />""");
 
         using var session = Open(dashboard);
 
@@ -427,8 +427,8 @@ public class DashboardSessionTests
     [Fact]
     public void ADeviceThatIsNotInTheRig_IsAProblem()
     {
-        var dashboard = Dashboard.Replace("""<device alias="gp8" mapRoot="Gp8.AddressMap" />""",
-            """<device alias="gp8" mapRoot="Gp8.AddressMap" /><device alias="other" mapRoot="Gp8.AddressMap" />""");
+        var dashboard = Dashboard.Replace("""<device alias="gp8" schema="Gp8" />""",
+            """<device alias="gp8" schema="Gp8" /><device alias="other" schema="Gp8" />""");
 
         using var session = Open(dashboard);
 
@@ -443,7 +443,7 @@ public class DashboardSessionTests
 
         using var session = Open(dashboard);
 
-        Assert.Contains(session.Problems, problem => problem.StartsWith("Patch.value:") && problem.Contains("its number of items is not known"));
+        Assert.Contains(session.Problems, problem => problem.StartsWith("Patch.value:") && problem.Contains("indexes no repeat in a binding path"));
     }
 
     // selector tabs on the UpDown choice (options Down and Up) before the patch number box, with the pages given

@@ -124,26 +124,17 @@ internal partial class MainView : UserControl
         ColorChooser.Create(_viewModel, null, device.Alias, area, current, device.Alias).ShowAt(button);
     }
 
-    // the + of the rig: a device for an address map of the schemas (the other root groups in a submenu); the schemas of
-    // a schema file or an assembly for the rig (their root groups are offered here then); or a new rig in place of the
-    // open one
+    // the + of the rig: a device for a schema with device data (all its roots are the device's); the schemas of a
+    // schema file or an assembly for the rig (their schemas are offered here then); a device detected on an endpoint; or
+    // a new rig in place of the open one
     private void OnAddDeviceClicked(object? sender, RoutedEventArgs e)
     {
         if (sender is not Button button || _viewModel is not { } viewModel)
             return;
         var menu = new MenuFlyout();
-        var others = new MenuItem { Header = "Other root groups" };
-        foreach (var root in viewModel.MapRoots)
-        {
-            var item = new MenuItem { Header = root, Command = viewModel.AddDeviceCommand, CommandParameter = root };
-            if (viewModel.IsDeviceData(root))
-                menu.Items.Add(item);
-            else
-                others.Items.Add(item);
-        }
-        if (others.Items.Count > 0)
-            menu.Items.Add(others);
-        if (viewModel.MapRoots.Count > 0)
+        foreach (var schema in viewModel.DeviceSchemas)
+            menu.Items.Add(new MenuItem { Header = schema, Command = viewModel.AddDeviceCommand, CommandParameter = schema });
+        if (viewModel.DeviceSchemas.Count > 0)
             menu.Items.Add(new Separator());
         var fromSchema = new MenuItem { Header = "Schemas from a schema file…" };
         fromSchema.Click += async (_, _) => await viewModel.AddRigSource(SchemaSourceKind.Schema);
@@ -151,6 +142,15 @@ internal partial class MainView : UserControl
         fromAssembly.Click += async (_, _) => await viewModel.AddRigSource(SchemaSourceKind.Assembly);
         menu.Items.Add(fromSchema);
         menu.Items.Add(fromAssembly);
+        // a device that describes itself (MIDI-CI Property Exchange), on an endpoint of the open MIDI connection
+        var detect = new MenuItem { Header = "Detect a device on", IsEnabled = viewModel.Midi.IsConnected && viewModel.Midi.Endpoints.Count > 0 };
+        foreach (var endpoint in viewModel.Midi.Endpoints)
+        {
+            var item = new MenuItem { Header = endpoint.Name };
+            item.Click += async (_, _) => await viewModel.DetectDevice(endpoint);
+            detect.Items.Add(item);
+        }
+        menu.Items.Add(detect);
         menu.Items.Add(new Separator());
         menu.Items.Add(new MenuItem { Header = "New rig", Command = viewModel.NewRigCommand });
         menu.ShowAt(button);

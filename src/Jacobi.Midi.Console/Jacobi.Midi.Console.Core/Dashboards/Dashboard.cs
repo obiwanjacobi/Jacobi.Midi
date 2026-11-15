@@ -41,7 +41,7 @@ public sealed class Dashboard
     /// </summary>
     public string? RigPath { get; set; }
 
-    /// <summary>The device aliases the dashboard needs, with the map root each must have.</summary>
+    /// <summary>The device aliases the dashboard needs, with the schema each must be.</summary>
     public IReadOnlyList<DashboardDevice> Devices { get; set; } = [];
 
     /// <summary>Assemblies and schema files for this dashboard: customisations on top of those of the rig and its devices.</summary>
@@ -51,7 +51,7 @@ public sealed class Dashboard
     public required LayoutControl Layout { get; init; }
 
     /// <summary>
-    /// What the rig lacks for this dashboard: a device alias it does not have, or a device with another map root.
+    /// What the rig lacks for this dashboard: a device alias it does not have, or a device with another schema.
     /// Empty when the rig has all the dashboard's devices.
     /// </summary>
     public IReadOnlyList<string> DeviceProblems(Rig rig)
@@ -62,8 +62,8 @@ public sealed class Dashboard
         {
             if (rig.Find(device.Alias) is not { } instance)
                 problems.Add($"The device '{device.Alias}' is not in the rig.");
-            else if (!new SchemaName(instance.MapRoot).Equals(new SchemaName(device.MapRoot)))
-                problems.Add($"The device '{device.Alias}' of the rig is a '{instance.MapRoot}', the dashboard needs a '{device.MapRoot}'.");
+            else if (!String.Equals(instance.Schema, device.Schema, StringComparison.OrdinalIgnoreCase))
+                problems.Add($"The device '{device.Alias}' of the rig is a '{instance.Schema}', the dashboard needs a '{device.Schema}'.");
         }
         return problems;
     }
@@ -74,22 +74,24 @@ public sealed class Dashboard
 }
 
 /// <summary>
-/// A device a dashboard needs: the alias its bindings use and the map root the rig's device must have.
+/// A device a dashboard needs: the alias its bindings use and the schema document the rig's device must be.
 /// </summary>
-public sealed record DashboardDevice(string Alias, string MapRoot)
+public sealed record DashboardDevice(string Alias, string Schema)
 {
     /// <summary>Overrides the rig's colors of the device on this dashboard.</summary>
     public AreaColors Colors { get; init; } = AreaColors.None;
 
     /// <summary>
     /// The name of the exchange the dashboard receives the device's values with (e.g. <c>requestData</c>): an exchange of
-    /// the exchange file of the device's map root. Null when the dashboard does not receive values from the device.
+    /// the exchange files of the device's roots with a message map. Null when the dashboard does not receive values from
+    /// the device (its command and Property Exchange roots, which have only the standard exchanges, still are).
     /// </summary>
     public string? Receive { get; init; }
 
     /// <summary>
     /// The name of the exchange the dashboard sends the changes of the device's values with (e.g. <c>sendData</c>): an
-    /// exchange of the exchange file of the device's map root. Null when the dashboard does not send to the device.
+    /// exchange of the exchange files of the device's roots with a message map. Null when the dashboard does not send to
+    /// the device (its command roots, which have only the standard exchanges, still are).
     /// </summary>
     public string? Send { get; init; }
 }

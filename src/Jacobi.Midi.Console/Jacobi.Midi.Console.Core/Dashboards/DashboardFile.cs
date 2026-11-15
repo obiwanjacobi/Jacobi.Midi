@@ -40,7 +40,7 @@ public static class DashboardFile
         {
             root.Add(ConsoleFile.SetColors(new FileElement(DeviceName, FileRoles.Devices)
                 .Set("alias", device.Alias)
-                .Set("mapRoot", device.MapRoot)
+                .Set("schema", device.Schema)
                 .Set("receive", device.Receive)
                 .Set("send", device.Send), device.Colors));
         }
@@ -170,7 +170,7 @@ public static class DashboardFile
 
     private static DashboardDevice ReadDevice(FileElement element)
     {
-        var device = new DashboardDevice(element.GetRequired("alias"), element.GetRequired("mapRoot"))
+        var device = new DashboardDevice(element.GetRequired("alias"), element.GetRequired("schema"))
         {
             Colors = ConsoleFile.GetColors(element),
             Receive = element.Get("receive"),

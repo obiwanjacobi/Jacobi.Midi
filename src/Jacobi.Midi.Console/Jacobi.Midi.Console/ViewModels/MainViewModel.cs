@@ -266,34 +266,37 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     public IReadOnlyList<PaletteItem> LayoutPalette { get; }
         = [.. ControlCatalog.LayoutKinds.Select(kind => new PaletteItem(kind, IsAvailable: true))];
 
-    /// <summary>The root groups of the schema library (device data first), for the root of a device.</summary>
-    public IReadOnlyList<string> MapRoots => Rig?.Library.Roots.Select(name => name.ToString()).ToList() ?? [];
+    /// <summary>The schemas of the library a device can be (with device data, see <see cref="SchemaLibrary.DeviceSchemas"/>).</summary>
+    public IReadOnlyList<string> DeviceSchemas => Rig?.Library.DeviceSchemas ?? [];
 
     /// <summary>
-    /// True when a root of the schema library is device data: it has a message map of any kind (address map or dump,
-    /// see <see cref="SchemaLibrary.KindOf"/>).
+    /// The device values a device of the schema needs: those the message maps of its roots (address maps or dumps)
+    /// need, and those the roots fix. Null when they are not known, with the reason in <paramref name="problem"/>.
     /// </summary>
-    public bool IsDeviceData(string root) => Rig?.Library.KindOf(new BinarySerializer.Schema.SchemaName(root)) is not null;
-
-    /// <summary>
-    /// The message map of a root of the schema library, any kind (address map or dump): what a device of the root
-    /// needs, e.g. the device values to supply. Null when there is none, with the reason in <paramref name="problem"/>.
-    /// </summary>
-    public MessageMapInfo? MessageMapOf(string root, out string? problem)
+    public DeviceValueNeeds? DeviceValuesOf(string schema, out string? problem)
     {
-        var name = new BinarySerializer.Schema.SchemaName(root);
         problem = null;
         if (Rig?.Library is not { } library)
             problem = "No rig is open.";
         else if (library.MessageMaps is not { } maps)
             problem = "The schemas do not compile; see the notifications.";
-        else if (!library.HasRoot(name))
-            problem = $"'{root}' is not a root group of the schemas.";
+        else if (!library.HasSchema(schema))
+            problem = $"'{schema}' is not a schema with root groups.";
         else
         {
+            var required = new List<string>();
+            var fixedValues = new DeviceValues();
             try
             {
-                return maps.Info(name);
+                // a command or Property Exchange root has no message map, and nothing wrong with that
+                foreach (var root in library.RootsOf(schema).Where(root => library.KindOf(root) is not null))
+                {
+                    var info = maps.Info(root);
+                    required.AddRange(info.RequiredDeviceValues.Where(name => !required.Contains(name, StringComparer.OrdinalIgnoreCase)));
+                    foreach (var (name, value) in info.Device)
+                        fixedValues[name] = value;
+                }
+                return new DeviceValueNeeds(required, fixedValues);
             }
             catch (Exception exception) when (exception is MessageMapException or InvalidOperationException)
             {
@@ -988,13 +991,16 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     public DeviceInstance? FindDevice(string alias) => _rig.Find(alias);
 
     /// <summary>
-    /// The names of the exchanges in the exchange file of the map root of the rig's device with the alias, to receive
-    /// and send with (<see cref="DashboardDevice.Receive"/>, <see cref="DashboardDevice.Send"/>); empty when the rig has
-    /// no such device or there is no exchange file for its map root.
+    /// The names of the exchanges in the exchange files of the roots of the rig's device with the alias, to receive and
+    /// send with (<see cref="DashboardDevice.Receive"/>, <see cref="DashboardDevice.Send"/>); empty when the rig has no
+    /// such device or there is no exchange file for its roots.
     /// </summary>
     public IReadOnlyList<string> ExchangeNamesOf(string alias)
-        => _rig.Find(alias) is { } device && Rig?.Library.Exchanges.Find(new BinarySerializer.Schema.SchemaName(device.MapRoot)) is { } set
-            ? [.. set.Exchanges.Select(exchange => exchange.Name)]
+        => _rig.Find(alias) is { } device && Rig?.Library is { } library
+            ? [.. library.RootsOf(device.Schema)
+                .Select(root => library.Exchanges.Find(root)).OfType<ExchangeDefinitionSet>()
+                .SelectMany(set => set.Exchanges.Select(exchange => exchange.Name))
+                .Distinct(StringComparer.Ordinal)]
             : [];
 
     /// <summary>
@@ -1042,7 +1048,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
 
     /// <summary>
     /// Sets the exchange the dashboard receives the values of a device with (<see cref="DashboardDevice.Receive"/>), as an
-    /// edit of the dashboard; null or empty: none. A device the dashboard does not list yet is added, with the map root of
+    /// edit of the dashboard; null or empty: none. A device the dashboard does not list yet is added, with the schema of
     /// the rig's device.
     /// </summary>
     /// <exception cref="ArgumentException">The dashboard does not list the device and the rig has no device with the alias.</exception>
@@ -1058,7 +1064,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
 
     /// <summary>
     /// Sets the exchange the dashboard sends the changes of a device's values with (<see cref="DashboardDevice.Send"/>), as
-    /// an edit of the dashboard; null or empty: none. A device the dashboard does not list yet is added, with the map root
+    /// an edit of the dashboard; null or empty: none. A device the dashboard does not list yet is added, with the schema
     /// of the rig's device.
     /// </summary>
     /// <exception cref="ArgumentException">The dashboard does not list the device and the rig has no device with the alias.</exception>
@@ -1072,7 +1078,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         }
     }
 
-    // changes a device of the dashboard as one edit; one the dashboard does not list yet is added with the rig's map root;
+    // changes a device of the dashboard as one edit; one the dashboard does not list yet is added with the rig's schema;
     // false when nothing changed (or the edit failed)
     private bool EditDashboardDevice(Dashboard dashboard, string alias, string what, Func<DashboardDevice, DashboardDevice> change)
     {
@@ -1080,7 +1086,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             return false;
         var listed = dashboard.FindDevice(alias);
         var device = listed
-            ?? (_rig.Find(alias) is { } instance ? new DashboardDevice(instance.Alias, instance.MapRoot) : null)
+            ?? (_rig.Find(alias) is { } instance ? new DashboardDevice(instance.Alias, instance.Schema) : null)
             ?? throw new ArgumentException($"The dashboard does not list '{alias}' and the rig has no device with this alias.", nameof(alias));
         var changed = change(device);
         if (listed is not null && changed == listed)
@@ -1092,18 +1098,18 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     }
 
     /// <summary>
-    /// Adds a device for an address map of the schema library to the rig, named after the map (<c>Gp8.AddressMap</c>:
-    /// <c>gp8</c>); it is selected.
+    /// Adds a device for a schema of the library to the rig (all its roots are the device's), named after the schema
+    /// (<c>Gp8</c>: <c>gp8</c>); it is selected.
     /// </summary>
     [RelayCommand]
-    private void AddDevice(string mapRoot)
+    private void AddDevice(string schema)
     {
         var rig = _rig;
-        var device = new DeviceInstance { Alias = AliasFor(mapRoot), MapRoot = mapRoot };
+        var device = new DeviceInstance { Alias = AliasFor(schema), Schema = schema };
         if (!DoRigEdit(new ValueEdit<IReadOnlyList<DeviceInstance>>($"add device '{device.Alias}'", () => rig.Devices, value => rig.Devices = value, [.. rig.Devices, device])))
             return;
         SelectedRigItem = RigTree.FirstOrDefault(item => item.Instance == device);
-        Status = $"Device '{device.Alias}' ({device.MapRoot}) added. Save to keep it in the rig.";
+        Status = $"Device '{device.Alias}' ({device.Schema}) added. Save to keep it in the rig.";
     }
 
     /// <summary>
@@ -1140,6 +1146,86 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         Status = $"'{name}' added to the rig: its {brought.Count} root group(s) can be added as a device with the + of the rig; the schemas were built again, so the values of the devices were reset. Save to keep it in the rig.";
     }
 
+    /// <summary>
+    /// Detects a device that describes itself with MIDI-CI Property Exchange on an endpoint of the open MIDI
+    /// connection: the schema generated from its resources is saved right away to a file the user picks, added to the
+    /// schemas of the rig, and a device for it is added to the rig (marked detected, on the endpoint); it is selected.
+    /// What the schema leaves out is told in the notifications.
+    /// </summary>
+    public async Task DetectDevice(MidiEndpointInfo endpoint)
+    {
+        ArgumentNullException.ThrowIfNull(endpoint);
+        Status = $"Detecting a device on '{endpoint.Name}'…";
+        if (await Midi.DetectPropertyExchange(endpoint) is not { } schema)
+        {
+            Status = $"No device detected on '{endpoint.Name}'.";
+            return;
+        }
+        if (schema.Document.Roots.Count == 0)
+        {
+            Report($"Detect '{endpoint.Name}'", $"no resource of the device could be generated: {String.Join(" ", schema.Notes)}");
+            return;
+        }
+        if (schema.Notes.Count > 0)
+            Inform($"Schema '{schema.Document.Name}'", String.Join(" ", schema.Notes));
+
+        // the generated schema is a file of the rig, like an authored one
+        if (await SaveSchema(schema.Document) is not { } path)
+        {
+            Status = $"The schema of '{endpoint.Name}' is not saved: no device is added.";
+            return;
+        }
+        var rig = _rig;
+        var sources = rig.Sources.Schemas.Contains(path, StringComparer.OrdinalIgnoreCase) ? rig.Sources : SourcesWith(rig.Sources, SchemaSourceKind.Schema, path);
+        var roots = BuildLibrary(sources).RootsFromFile(path);
+        if (roots.Count == 0)
+        {
+            Report($"'{Path.GetFileName(path)}'", "the saved schema brings no root group: no device is added.");
+            return;
+        }
+        if (sources != rig.Sources
+            && !DoRigEdit(new ValueEdit<SchemaSources>("schemas of the rig", () => rig.Sources, value => rig.Sources = value, sources), rebuildsLibrary: true))
+            return;
+
+        var device = new DeviceInstance
+        {
+            Alias = AliasFor(schema.Document.Name),
+            Name = schema.Document.Name,
+            Schema = schema.Document.Name,
+            IsDetected = true,
+            Endpoint = new EndpointReference(endpoint.Name),
+        };
+        if (!DoRigEdit(new ValueEdit<IReadOnlyList<DeviceInstance>>($"add device '{device.Alias}'", () => rig.Devices, value => rig.Devices = value, [.. rig.Devices, device])))
+            return;
+        SelectedRigItem = RigTree.FirstOrDefault(item => item.Instance == device);
+        Status = $"Device '{device.Alias}' detected on '{endpoint.Name}': {roots.Count} resource(s) in '{Path.GetFileName(path)}'. Save the rig to keep it.";
+    }
+
+    // writes a generated schema document to a file the user picks (XML or JSON by its extension); its path, or null
+    private async Task<string?> SaveSchema(Jacobi.BinarySerializer.Schema.SchemaDocument document)
+    {
+        if (await PickSaveFile("Schema", $"{document.Name}.schema.xml") is not { } file)
+            return null;
+        if (file.TryGetLocalPath() is not { } path)
+        {
+            Report($"'{file.Name}'", "schemas are loaded from a file on this computer; here the file has no path.");
+            return null;
+        }
+        try
+        {
+            var text = FileFormats.FromPath(path) == FileFormat.Json
+                ? Jacobi.BinarySerializer.Schema.Json.JsonSerializer.Serialize(document)
+                : Jacobi.BinarySerializer.Schema.Xml.XmlSerializer.Serialize(document);
+            await File.WriteAllTextAsync(path, text);
+            return path;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            Report($"'{file.Name}' cannot be saved", exception.Message);
+            return null;
+        }
+    }
+
     // the name an assembly file has (its embedded schemas are known by it); the file name when it cannot be read
     private static string AssemblyNameOf(string path)
     {
@@ -1153,10 +1239,10 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         }
     }
 
-    // the alias of a new device: the first part of its map root in lower case (Gp8.AddressMap: gp8), unique in the rig
-    private string AliasFor(string mapRoot)
+    // the alias of a new device: its schema in lower case (Gp8: gp8), unique in the rig
+    private string AliasFor(string schema)
     {
-        var name = mapRoot.Split('.')[0].ToLowerInvariant();
+        var name = schema.ToLowerInvariant();
         if (!DeviceAliases.IsValid(name))
             name = "device";
         var alias = name;
@@ -1283,7 +1369,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     private IEdit? DeviceEdit(Dashboard dashboard, string alias)
         => dashboard.FindDevice(alias) is null && _rig.Find(alias) is { } device
             ? new ValueEdit<IReadOnlyList<DashboardDevice>>("devices", () => dashboard.Devices, value => dashboard.Devices = value,
-                [.. dashboard.Devices, new DashboardDevice(device.Alias, device.MapRoot)])
+                [.. dashboard.Devices, new DashboardDevice(device.Alias, device.Schema)])
             : null;
 
     private static string Declared(DropPlan plan)
@@ -1317,7 +1403,10 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     {
         if (change.Origin != ValueOrigin.User || sender is not DeviceState state)
             return;
-        if (IsEditing || !Midi.IsMidi || SelectedSession?.Dashboard.FindDevice(state.Alias)?.Send is not { } exchange)
+        if (IsEditing || !Midi.IsMidi || SelectedSession?.Dashboard.FindDevice(state.Alias) is not { } device)
+            return;
+        // the dashboard's exchange applies to the roots with a message map; the others have only the standard one
+        if ((device.Send ?? (state.UsesExchanges(change.Path) ? null : ExchangeNames.SendData)) is not { } exchange)
             return;
         Midi.Send(state.Alias, exchange, new ParameterReference(state.Alias, change.Path, change.Instance));
     }
@@ -1406,12 +1495,18 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     private async Task Receive(DashboardSession session, DashboardDevice device, SessionData? data)
     {
         var (alias, exchange) = (device.Alias, device.Receive);
+        var parameters = session.ParametersOf(alias);
+        // the dashboard's exchange applies to the roots with a message map; the others (command, Property Exchange)
+        // have only the standard exchange, so they are received without one
         if (exchange is null)
         {
-            Inform($"Device '{alias}'", "the dashboard names no exchange to receive its values with: they are not received.");
-            return;
+            var state = session.DeviceOf(alias);
+            var withoutExchange = parameters.Where(parameter => state?.UsesExchanges(parameter.Path) == false).ToList();
+            if (withoutExchange.Count < parameters.Count)
+                Inform($"Device '{alias}'", "the dashboard names no exchange to receive its values with: those of its map are not received.");
+            parameters = withoutExchange;
+            exchange = ExchangeNames.RequestData;
         }
-        var parameters = session.ParametersOf(alias);
         if (parameters.Count == 0)
             return;
         Status = $"Receiving '{alias}'…";
@@ -1646,7 +1741,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         RigTree.Clear();
         foreach (var device in _rig.Devices)
             RigTree.Add(RigTreeItem.Of(device, Rig?.Devices.GetValueOrDefault(device.Alias), Midi.ConnectionOf(device.Alias)));
-        OnPropertyChanged(nameof(MapRoots));
+        OnPropertyChanged(nameof(DeviceSchemas));
         if (shown is not null)
             SelectedRigItem = RigTree.FirstOrDefault(item => item.Instance == shown);
         RefreshUsage();

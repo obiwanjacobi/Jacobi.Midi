@@ -52,15 +52,33 @@ public sealed class SchemaLibrary
     public bool HasRoot(SchemaName name) => Roots.Contains(name);
 
     /// <summary>
-    /// The command roots (<c>midi.role</c> <c>cmd1</c> or <c>cmd2</c>, see <see cref="MidiProperties.IsCommandRoot"/>)
-    /// that belong with a map root: those of the same schema document, the map root itself not included. A schema is
-    /// device specific, so its document says what belongs together. Empty when the schemas do not compile.
+    /// The schemas a device can be: the schema documents with device data, a root with a message map
+    /// (<see cref="KindOf"/>), a command root or a Property Exchange root, in the order of their first root. A device
+    /// is one schema document: all its roots belong to it (<see cref="RootsOf"/>). Empty when the schemas do not compile.
     /// </summary>
-    public IReadOnlyList<SchemaName> CommandRootsOf(SchemaName mapRoot)
-        => Schemas is { } schemas
-            ? [.. Roots.Where(root => root.Namespace == mapRoot.Namespace && root != mapRoot
-                && MidiProperties.IsCommandRoot(schemas.FindRoot(root)))]
+    public IReadOnlyList<string> DeviceSchemas => _deviceSchemas ??= [.. Roots.Where(IsDeviceData).Select(root => root.Namespace).Distinct(StringComparer.OrdinalIgnoreCase)];
+    private IReadOnlyList<string>? _deviceSchemas;
+
+    /// <summary>
+    /// True when the library has the schema document with at least one root: a device can be any such schema (its
+    /// values work the same), while <see cref="DeviceSchemas"/> are those with device data to transfer.
+    /// </summary>
+    public bool HasSchema(string schema) => RootsOf(schema).Count > 0;
+
+    /// <summary>The root groups of a schema document, in its order; empty for a document the library does not have.</summary>
+    public IReadOnlyList<SchemaName> RootsOf(string schema)
+        => Schemas?.Documents.FirstOrDefault(document => String.Equals(document.Name, schema, StringComparison.OrdinalIgnoreCase)) is { } found
+            ? [.. found.Roots.Select(root => new SchemaName($"{found.Name}{SchemaName.Separator}{root.Name}"))]
             : [];
+
+    /// <summary>True when a root of the schema is a Property Exchange root (<c>midi.role="pe"</c>).</summary>
+    public bool HasPropertyRoots(string schema)
+        => Schemas is { } schemas && RootsOf(schema).Any(root => MidiProperties.IsPropertyRoot(schemas.FindRoot(root)));
+
+    // device data: a root with a message map, a command root or a Property Exchange root
+    private bool IsDeviceData(SchemaName root)
+        => KindOf(root) is not null
+            || (Schemas?.FindRoot(root) is { } group && (MidiProperties.IsCommandRoot(group) || MidiProperties.IsPropertyRoot(group)));
 
     /// <summary>
     /// How the data of a root is carried in messages (the kind of its message map, see <see cref="MessageMaps"/>); null
@@ -101,7 +119,8 @@ public sealed class SchemaLibrary
     {
         ArgumentException.ThrowIfNullOrEmpty(repeat);
         var path = new SchemaPath(repeat);
-        if (MessageMaps is { } maps)
+        // a command or Property Exchange root has no message map: the schema gives the count
+        if (MessageMaps is { } maps && Schemas?.FindRoot(root) is { } group && MidiProperties.CanHaveMessageMap(group))
         {
             try
             {

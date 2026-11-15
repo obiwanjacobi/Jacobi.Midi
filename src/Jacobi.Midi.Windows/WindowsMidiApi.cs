@@ -47,6 +47,14 @@ public sealed class WindowsMidiApi : IMidiApi
         return new WindowsMidiSession(native);
     }
 
+    public IMidiCapabilityInquiry CreateCapabilityInquiry(IMidiConnection connection, MidiGroup group)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        return connection is WindowsMidiConnection windows
+            ? new WindowsCapabilityInquiry(windows.NativeConnection, group)
+            : throw new ArgumentException("The connection is not a connection of Windows MIDI Services.", nameof(connection));
+    }
+
     public async Task<IMidiEndpointObserver> WatchMidiEndpoints(EndpointChangedHandler handler, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(handler);

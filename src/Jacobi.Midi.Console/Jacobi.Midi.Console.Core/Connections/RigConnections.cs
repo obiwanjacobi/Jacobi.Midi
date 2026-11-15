@@ -11,6 +11,8 @@ using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Device.Exchange;
 using Jacobi.Midi.Messages;
 using Jacobi.Midi.Device.Messages;
+using Jacobi.Midi.Device.PropertyExchange;
+using Jacobi.BinarySerializer.Schema;
 
 namespace Jacobi.Midi.Console.Core.Connections;
 
@@ -187,15 +189,17 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
             session = _links.GetValueOrDefault(alias)?.Session ?? throw new InvalidOperationException($"'{alias}' is not online.");
             state = _rig?.Devices.GetValueOrDefault(alias) ?? throw new InvalidOperationException($"'{alias}' has no parameters: see the problems of the rig.");
         }
-        var (path, instance) = FirstParameter(state.Parameters)
-            ?? throw new InvalidOperationException($"The map of '{alias}' has no parameters.");
+        // the first parameter of a root with a message map: only such a root can be requested
+        var (path, instance) = state.Parameters.Where(root => state.UsesExchanges(root.Path))
+            .Select(root => FirstParameter(root)).FirstOrDefault(found => found is not null)
+            ?? throw new InvalidOperationException($"'{alias}' has no parameters of a root with a message map to request.");
         var range = state.CreateRange(path, instance);
         return new DataProbeResult(path, instance, await session.Probe(range, ct));
     }
 
     /// <summary>
     /// Receives the values of parameters from the device into its device state (origin <see cref="ValueOrigin.Device"/>)
-    /// with the exchange <paramref name="exchange"/> of the exchange file of its map root, one parameter after the
+    /// with the exchange <paramref name="exchange"/> of the exchange files of its roots, one parameter after the
     /// other. The exchange receives the atomic group of a parameter (and what else its map widens the range to); a
     /// parameter that was received with an earlier one is not requested again. With
     /// <see cref="ExchangeNames.RequestData"/> the session answers what it already holds, unless <paramref name="data"/>
@@ -243,7 +247,29 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
     /// exchange files), the standard exchange for a command root, which has no other (<see cref="DeviceSession"/>).
     /// </summary>
     internal static string ExchangeFor(PlanRange range, string exchange, string standard)
-        => MidiProperties.IsCommandRoot(range.ExecutionPlan.Root.Group) ? standard : exchange;
+        => MidiProperties.CanHaveMessageMap(range.ExecutionPlan.Root.Group) ? exchange : standard;
+
+    /// <summary>
+    /// Detects a Property Exchange device on an endpoint, over a connection of its own (MIDI-CI on the send group), and
+    /// generates the schema of its resources, named after its model. Null when no responder on the endpoint supports
+    /// Property Exchange.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">MIDI is not started.</exception>
+    /// <exception cref="NotSupportedException">The platform has no MIDI-CI.</exception>
+    /// <exception cref="MidiException">The device does not answer as it should.</exception>
+    public async Task<PropertySchema?> DetectPropertyExchange(MidiEndpointInfo endpoint, MidiGroupPair groups, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(endpoint);
+        IMidiSession session;
+        lock (_lock)
+            session = _session ?? throw new InvalidOperationException("MIDI is not started.");
+
+        await using var connection = await session.CreateConnection(endpoint.Id, new MidiConnectionOptions(), ct);
+        await using var capabilityInquiry = api.CreateCapabilityInquiry(connection, groups.Send);
+        await connection.Open(ct);
+        var device = await PropertyExchangeDevice.Discover(capabilityInquiry, ct);
+        return device is null ? null : await device.GenerateSchema(documentName: null, ct);
+    }
 
     /// <summary>
     /// The outcome of each parameter that was sent (<see cref="Send"/>), raised on a background thread. Not raised for
@@ -253,7 +279,7 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
 
     /// <summary>
     /// Queues a parameter to be sent to the device with the exchange <paramref name="exchange"/> of the exchange file of
-    /// its map root (e.g. <see cref="ExchangeNames.SendData"/>), and returns at once; the outcome is raised with
+    /// its roots (e.g. <see cref="ExchangeNames.SendData"/>), and returns at once; the outcome is raised with
     /// <see cref="Sent"/>. The value is read from the device state when it is sent, so a parameter that changes again
     /// before is sent once, with its latest value. With <see cref="ExchangeNames.SendData"/> the session completes an
     /// atomic group from what it holds (requesting what it does not hold first).
@@ -366,9 +392,19 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
             link.Session = session;
             link.Queue = new SendQueue(session, result => Sent?.Invoke(this, result));
             session.Disconnected += (_, args) => _ = OnDisconnected(link, session, args);
+            // a device with Property Exchange roots: MIDI-CI on the same connection, set up before it opens
+            if (_rig?.Library.HasPropertyRoots(link.Schema) == true)
+                link.CapabilityInquiry = api.CreateCapabilityInquiry(connection, reference.Groups.Send);
             await connection.Open(ct);
             if (session.IsConnected && connection.ConnectionState == MidiConnectionState.Open)
-                SetConnection(link, DeviceConnectionStatus.Online, endpoint);
+            {
+                // a device with Property Exchange roots is online once its Property Exchange device is discovered (it
+                // takes the discovery time of MIDI-CI), so what is received when it comes online can be read
+                if (link.CapabilityInquiry is { } capabilityInquiry)
+                    _ = DiscoverProperties(link, session, capabilityInquiry, endpoint);
+                else
+                    SetConnection(link, DeviceConnectionStatus.Online, endpoint);
+            }
             else
                 await Lose(link, endpoint, null);
         }
@@ -474,14 +510,45 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
 
     private static async Task CloseSession(Link link)
     {
-        var (session, connection) = (link.Session, link.MidiConnection);
-        (link.Session, link.MidiConnection) = (null, null);
+        var (session, capabilityInquiry, connection) = (link.Session, link.CapabilityInquiry, link.MidiConnection);
+        (link.Session, link.CapabilityInquiry, link.MidiConnection) = (null, null, null);
         link.Queue?.Close();
         link.Queue = null;
         if (session is not null)
             await session.DisposeAsync();
+        if (capabilityInquiry is not null)
+            await capabilityInquiry.DisposeAsync();
         if (connection is not null)
             await connection.DisposeAsync();
+    }
+
+    // after the connection opened: the Property Exchange device of a device with pe roots is discovered (it takes the
+    // discovery time of MIDI-CI) and given to its session; then the device is online, with what went wrong told
+    private async Task DiscoverProperties(Link link, DeviceSession session, IMidiCapabilityInquiry capabilityInquiry, MidiEndpointInfo endpoint)
+    {
+        string? problem;
+        try
+        {
+            var device = await PropertyExchangeDevice.Discover(capabilityInquiry, CancellationToken.None);
+            if (device is not null)
+                session.AttachPropertyExchange(device);
+            problem = device is null ? "no responder on the endpoint supports Property Exchange: its pe roots cannot be read." : null;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // the MIDI backend fails with its own exception types
+            problem = $"Property Exchange: {exception.Message}";
+        }
+        await _gate.WaitAsync();
+        try
+        {
+            if (link.Session == session)
+                SetConnection(link, DeviceConnectionStatus.Online, endpoint, problem);
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     private MidiEndpointInfo? FindEndpoint(string name)
@@ -537,6 +604,7 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
         public Link(DeviceInstance device, Serializer? serializer)
         {
             Alias = device.Alias;
+            Schema = device.Schema;
             Endpoint = device.Endpoint;
             DeviceValues = new DeviceValues();
             foreach (var (name, value) in device.DeviceValues)
@@ -547,11 +615,16 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
 
         public string Alias { get; }
 
+        public string Schema { get; }
+
         public EndpointReference? Endpoint { get; }
 
         public DeviceValues DeviceValues { get; }
 
         public DeviceSession? Session { get; set; }
+
+        /// <summary>MIDI-CI on <see cref="MidiConnection"/>, for a device with Property Exchange roots; null otherwise.</summary>
+        public IMidiCapabilityInquiry? CapabilityInquiry { get; set; }
 
         /// <summary>The connection of <see cref="Session"/>, which the link owns; null when not connected.</summary>
         public IMidiConnection? MidiConnection { get; set; }
@@ -566,7 +639,7 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
 
         /// <summary>True when the device is still connected the same way: same endpoint, device values and schemas.</summary>
         public bool IsFor(DeviceInstance device, Serializer? serializer)
-            => device.Endpoint == Endpoint
+            => device.Endpoint == Endpoint && device.Schema == Schema
                 && serializer == _serializer
                 && device.DeviceValues.Count == DeviceValues.Count
                 && device.DeviceValues.All(value => DeviceValues.TryGet(value.Key, out var known) && known == value.Value);

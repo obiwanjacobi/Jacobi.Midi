@@ -43,6 +43,9 @@ internal sealed class WindowsMidiConnection : IMidiConnection
     public MidiEndpointInfo EndpointInfo { get; }
     public MidiDirections Directions { get; }
 
+    /// <summary>The native connection, for the services of the SDK that work on it (e.g. MIDI-CI).</summary>
+    internal Native.MidiEndpointConnection NativeConnection => _native;
+
     public MidiConnectionState ConnectionState
     {
         get { lock (_gate) return _state; }

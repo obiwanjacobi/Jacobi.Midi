@@ -68,6 +68,11 @@ public static class MessageMapValidator
                     ValidateCommandRoot(serializer, root, problems);
                     continue;
                 }
+                // a Property Exchange root has no message map: its tags are checked above
+                if (MidiProperties.IsPropertyRoot(group))
+                {
+                    continue;
+                }
                 bool isMessageDump;
                 try
                 {
@@ -98,7 +103,7 @@ public static class MessageMapValidator
             }
         }
 
-        if (MidiProperties.RoleOf(node) is { } commandRole && MidiProperties.IsCommandRole(commandRole))
+        if (MidiProperties.RoleOf(node) is { } commandRole && MidiProperties.IsRootRole(commandRole))
         {
             // a command root is validated as a whole by its command map
             if (path.Value.Contains(SchemaPath.Separator, StringComparison.Ordinal) || node is not SchemaGroup || node is SchemaRepeat or SchemaChoice)

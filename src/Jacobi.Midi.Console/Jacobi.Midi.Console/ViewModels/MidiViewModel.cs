@@ -184,6 +184,33 @@ internal sealed class MidiViewModel : ViewModelBase, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Detects a Property Exchange device on an endpoint (MIDI-CI on group 1) and generates the schema of its
+    /// resources; null when MIDI is not started, nothing answers, or detection fails (which is reported).
+    /// </summary>
+    public async Task<Jacobi.Midi.Device.PropertyExchange.PropertySchema?> DetectPropertyExchange(MidiEndpointInfo endpoint)
+    {
+        ArgumentNullException.ThrowIfNull(endpoint);
+        if (_connections is not { IsStarted: true } connections)
+        {
+            _notify($"Detect '{endpoint.Name}'", "MIDI is not started: start MIDI first.", true);
+            return null;
+        }
+        try
+        {
+            var schema = await connections.DetectPropertyExchange(endpoint, default, CancellationToken.None);
+            if (schema is null)
+                _notify($"Detect '{endpoint.Name}'", "no responder on the endpoint supports MIDI-CI Property Exchange.", true);
+            return schema;
+        }
+        catch (Exception exception)
+        {
+            // the MIDI backend fails with its own exception types
+            _notify($"Detect '{endpoint.Name}'", exception.Message, true);
+            return null;
+        }
+    }
+
     /// <summary>Checks that the device answers a request of the first parameter of its map; the outcome in words. Changes nothing.</summary>
     public async Task<string> ProbeData(string alias)
     {

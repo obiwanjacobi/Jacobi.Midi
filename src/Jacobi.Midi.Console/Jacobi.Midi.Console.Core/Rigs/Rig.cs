@@ -22,7 +22,7 @@ public sealed class Rig
 }
 
 /// <summary>
-/// One device of the rig: what it is (the map root of its schema and the device values the map root does not fix),
+/// One device of the rig: what it is (its schema and the device values its roots do not fix),
 /// how to reach it and its color. Its schema and exchange file come from the schema library (the built-in assemblies
 /// and the sources of the rig); a device has no sources of its own.
 /// </summary>
@@ -34,10 +34,19 @@ public sealed class DeviceInstance
     /// <summary>The name shown to the user (e.g. the product name).</summary>
     public string? Name { get; set; }
 
-    /// <summary>The map root of the device's schema (e.g. <c>Gx700.AddressMap</c>).</summary>
-    public required string MapRoot { get; set; }
+    /// <summary>
+    /// The schema document of the device (e.g. <c>Gx700</c>): all its roots are the device's (its address map, command
+    /// roots, Property Exchange roots).
+    /// </summary>
+    public required string Schema { get; set; }
 
-    /// <summary>The device values the map root does not fix (e.g. <c>deviceId</c>), by name (case-insensitive).</summary>
+    /// <summary>
+    /// True when the device was detected (MIDI-CI Property Exchange) and its schema generated, not authored: its schema
+    /// can be generated again from the device.
+    /// </summary>
+    public bool IsDetected { get; set; }
+
+    /// <summary>The device values the roots of its schema do not fix (e.g. <c>deviceId</c>), by name (case-insensitive).</summary>
     public IReadOnlyDictionary<string, long> DeviceValues { get; set; } = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>How to reach the device; null when it is not connected.</summary>

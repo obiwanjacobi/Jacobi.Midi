@@ -14,15 +14,14 @@ namespace Jacobi.Midi.Console.Core.Devices;
 
 /// <summary>
 /// The console's value model of one device instance: the last known value of each parameter, by the path and
-/// instance of the device's map plan (the identity of a <see cref="ParameterReference"/>). The single place of truth
-/// for the controls: they read and write it, and it is synchronised with the device (the exchange receives into
+/// instance in the plan of its root (the identity of a <see cref="ParameterReference"/>). The single place of truth
+/// for the controls: they read and write it, and it is synchronised with the device (the session receives into
 /// <see cref="CreateSink"/> and sends from <see cref="Source"/>) or loaded from and saved to a dump offline.
 /// A parameter without a value is unknown. Thread-safe; <see cref="ValueChanged"/> is raised on the thread that
-/// changed the value, after the change. The root (<see cref="MapRoot"/>) is any root group of the schemas: its values
-/// work the same; a root with a message map (address map or dump) has data messages to load, save and exchange them (the Device project decides).
-/// The command roots of the map root's schema document (<see cref="CommandRoots"/>) belong to the device too: their
-/// fields are parameters set with channel messages. A path starts with the name of its root, so the paths of all roots
-/// are apart; <see cref="PlanOf"/> gives the plan of a path.
+/// changed the value, after the change. The device is a schema document (<see cref="Schema"/>): all its roots
+/// (<see cref="Roots"/>) belong to it, whatever they are (a root with a message map: SysEx data; a command root:
+/// channel messages; a Property Exchange root: MIDI-CI; the Device project decides). A path starts with the name of
+/// its root, so the paths of all roots are apart; <see cref="PlanOf"/> gives the plan of a path.
 /// </summary>
 public sealed class DeviceState
 {
@@ -30,32 +29,38 @@ public sealed class DeviceState
     private readonly FieldValueStore _values = new();
     private readonly MessageMaps _maps;
     private readonly SchemaLibrary _library;
-    // the plans of the map root and the command roots, by root name
+    // the plans of the roots, by root name
     private readonly Dictionary<string, ExecutionPlan> _plans = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <param name="device">The device instance of the rig: its alias, map root and device values.</param>
-    /// <param name="library">The compiled schemas that hold the device's map.</param>
-    /// <exception cref="ArgumentException">The library does not compile, or the map root is not an address map in it.</exception>
+    /// <param name="device">The device instance of the rig: its alias, schema and device values.</param>
+    /// <param name="library">The compiled schemas that hold the device's schema.</param>
+    /// <exception cref="ArgumentException">The library does not compile, or does not have the device's schema.</exception>
     public DeviceState(DeviceInstance device, SchemaLibrary library)
     {
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(library);
         if (library.Serializer is null || library.MessageMaps is null)
             throw new ArgumentException("The schemas do not compile; see the problems of the library.", nameof(library));
-
-        MapRoot = new SchemaName(device.MapRoot);
-        if (!library.HasRoot(MapRoot))
-            throw new ArgumentException($"'{device.MapRoot}' of device '{device.Alias}' is not a root group of the schemas.", nameof(device));
+        if (!library.HasSchema(device.Schema))
+            throw new ArgumentException($"'{device.Schema}' of device '{device.Alias}' is not a schema with root groups.", nameof(device));
 
         Device = device;
+        Schema = device.Schema;
         DeviceValues = new DeviceValues();
         foreach (var (name, value) in device.DeviceValues)
             DeviceValues[name] = value;
-        Plan = library.Serializer.GetPlan(MapRoot);
-        _plans[MapRoot.Name] = Plan;
-        CommandRoots = library.CommandRootsOf(MapRoot);
-        foreach (var root in CommandRoots)
-            _plans.TryAdd(root.Name, library.Serializer.GetPlan(root));
+        Roots = library.RootsOf(device.Schema);
+        foreach (var root in Roots)
+        {
+            try
+            {
+                _plans[root.Name] = library.Serializer.GetPlan(root);
+            }
+            catch (ExecutionPlanException exception)
+            {
+                throw new ArgumentException($"The root '{root}' of device '{device.Alias}' has no plan: {String.Join(" ", exception.Errors)}", nameof(device), exception);
+            }
+        }
         Source = new StateSource(this);
         _maps = library.MessageMaps;
         _library = library;
@@ -67,24 +72,29 @@ public sealed class DeviceState
     /// <summary>The alias of the device: follows the device when it gets another one.</summary>
     public string Alias => Device.Alias;
 
-    public SchemaName MapRoot { get; }
+    /// <summary>The schema document of the device: its roots are the device's.</summary>
+    public string Schema { get; }
 
-    /// <summary>The device values the map root does not fix (e.g. <c>deviceId</c>).</summary>
+    /// <summary>The device values the roots do not fix (e.g. <c>deviceId</c>).</summary>
     public DeviceValues DeviceValues { get; }
 
-    /// <summary>The plan of the map root: its paths are the paths of the values; ranges of it are synchronised.</summary>
-    public ExecutionPlan Plan { get; }
+    /// <summary>The roots of the device's schema, in their order (see <see cref="SchemaLibrary.RootsOf"/>).</summary>
+    public IReadOnlyList<SchemaName> Roots { get; }
 
-    /// <summary>The command roots of the device (see <see cref="SchemaLibrary.CommandRootsOf"/>).</summary>
-    public IReadOnlyList<SchemaName> CommandRoots { get; }
-
-    /// <summary>The plan of the root a path starts with: the map root or a command root; null for any other path.</summary>
+    /// <summary>The plan of the root a path starts with; null for a path of no root of the device.</summary>
     public ExecutionPlan? PlanOf(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
         var separator = path.IndexOf(SchemaPath.Separator);
         return _plans.GetValueOrDefault(separator < 0 ? path : path[..separator]);
     }
+
+    /// <summary>
+    /// True when the parameter's root has a message map (SysEx data), so the exchanges a dashboard names apply to it;
+    /// false for a command or Property Exchange root, which has only the standard exchanges, and for a path of no root.
+    /// </summary>
+    public bool UsesExchanges(string path)
+        => PlanOf(path) is { } plan && MidiProperties.CanHaveMessageMap(plan.Root.Group);
 
     /// <summary>The node of a path (without repeat indices) of the device's roots; null when there is none.</summary>
     public NodeInfo? Find(string path) => PlanOf(path)?.Find(path);
@@ -105,21 +115,20 @@ public sealed class DeviceState
         }
     }
 
-    /// <summary>The parameter tree of the map root: the groups, repeats and fields to bind controls to.</summary>
-    public ParameterNode Parameters => _parameters ??= ParameterNode.Of(Plan, ItemCount);
-    private ParameterNode? _parameters;
+    /// <summary>
+    /// The parameter trees of the roots, in the order of <see cref="Roots"/>: the groups, repeats and fields to bind
+    /// controls to. A root without parameters (e.g. a message whose values the schema fixes) has none.
+    /// </summary>
+    public IReadOnlyList<ParameterNode> Parameters
+        => _parameters ??= [.. Roots.Select(root => ParameterNode.Of(_plans[root.Name], repeat => ItemCount(root, repeat))).Where(node => node.Children.Count > 0)];
+    private IReadOnlyList<ParameterNode>? _parameters;
 
-    /// <summary>The parameter trees of the command roots, in the order of <see cref="CommandRoots"/>.</summary>
-    public IReadOnlyList<ParameterNode> CommandParameters
-        => _commandParameters ??= [.. CommandRoots.Select(root => ParameterNode.Of(_plans[root.Name], _ => null))];
-    private IReadOnlyList<ParameterNode>? _commandParameters;
-
-    // the item count of a repeat of the map; an invalid map has none (it is reported when the bindings are resolved)
-    private int? ItemCount(string repeat)
+    // the item count of a repeat of a root; an invalid map has none (it is reported when the bindings are resolved)
+    private int? ItemCount(SchemaName root, string repeat)
     {
         try
         {
-            return _library.ItemCount(MapRoot, repeat);
+            return _library.ItemCount(root, repeat);
         }
         catch (MessageMapException)
         {
@@ -175,22 +184,30 @@ public sealed class DeviceState
     public IValueSink CreateSink(ValueOrigin origin) => new StateSink(this, origin);
 
     /// <summary>
-    /// Loads the values of a dump (e.g. the contents of a .syx file): the data messages of the device's map, for this
-    /// device, are decoded; other messages are skipped and reported.
+    /// Loads the values of a dump (e.g. the contents of a .syx file): the data messages of the device's roots with a
+    /// message map, for this device, are decoded; other messages are skipped and reported.
     /// </summary>
     /// <exception cref="InvalidOperationException">A device value the messages need is not known.</exception>
-    /// <exception cref="MessageMapException">The map is not valid.</exception>
+    /// <exception cref="MessageMapException">A map is not valid.</exception>
     public DumpLoadResult LoadDump(byte[] dump)
     {
         ArgumentNullException.ThrowIfNull(dump);
         var messages = SysExSplitter.Split(dump);
         // only a root with a message map has data messages (the Device project decides); another root takes none of them
-        if (_library.KindOf(MapRoot) is null)
-            return new DumpLoadResult(messages.Count, 0, [$"'{MapRoot}' has no message map: no data message carries its values."]);
-        var warnings = new List<string>();
-        var decoded = _maps.Load(MapRoot, messages.Select(message => (ReadOnlyMemory<byte>)message), DeviceValues,
-            CreateSink(ValueOrigin.Dump), warnings);
-        return new DumpLoadResult(messages.Count, decoded, warnings);
+        var mapped = Roots.Where(root => _library.KindOf(root) is not null).ToList();
+        if (mapped.Count == 0)
+            return new DumpLoadResult(messages.Count, 0, [$"'{Schema}' has no root with a message map: no data message carries its values."]);
+        var decoded = 0;
+        List<string>? warnings = null;
+        foreach (var root in mapped)
+        {
+            var rootWarnings = new List<string>();
+            decoded += _maps.Load(root, messages.Select(message => (ReadOnlyMemory<byte>)message), DeviceValues,
+                CreateSink(ValueOrigin.Dump), rootWarnings);
+            // a message one root skips can be one another root decodes: only what every root skips is reported
+            warnings = warnings is null ? rootWarnings : [.. warnings.Intersect(rootWarnings)];
+        }
+        return new DumpLoadResult(messages.Count, decoded, warnings ?? []);
     }
 
     /// <summary>
@@ -202,10 +219,10 @@ public sealed class DeviceState
     public byte[] SaveDump(PlanRange range)
     {
         ArgumentNullException.ThrowIfNull(range);
-        if (!ReferenceEquals(range.ExecutionPlan, Plan))
-            throw new ArgumentException($"The range is not of the plan of '{MapRoot}'.", nameof(range));
-        if (_library.KindOf(MapRoot) is null)
-            throw new InvalidOperationException($"'{MapRoot}' has no message map: no data message carries its values.");
+        if (range.ExecutionPlan.Name is not { } root || !_plans.TryGetValue(root.Name, out var plan) || !ReferenceEquals(range.ExecutionPlan, plan))
+            throw new ArgumentException($"The range is not of a root of '{Schema}'.", nameof(range));
+        if (_library.KindOf(root) is null)
+            throw new InvalidOperationException($"'{root}' has no message map: no data message carries its values.");
         return [.. _maps.Save([range], Source, DeviceValues).SelectMany(message => message)];
     }
 

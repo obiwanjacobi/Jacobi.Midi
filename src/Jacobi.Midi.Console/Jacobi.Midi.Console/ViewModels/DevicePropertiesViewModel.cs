@@ -16,7 +16,7 @@ using Jacobi.Midi.Device.Messages;
 namespace Jacobi.Midi.Console.ViewModels;
 
 /// <summary>
-/// The properties of the device selected in the rig tree, for the panel of Edit mode: its alias, name, map root (one of
+/// The properties of the device selected in the rig tree, for the panel of Edit mode: its alias, name, schema (one of
 /// the address maps of the schema library), device values, endpoint and colors. The user changes them, each change an
 /// edit of the rig (see <see cref="MainViewModel.EditDevice"/>). A value that cannot be taken is a validation error of
 /// the field. It shows the device's connection (Edit mode is always connected), and tests it with an Identity Request or
@@ -24,8 +24,8 @@ namespace Jacobi.Midi.Console.ViewModels;
 /// </summary>
 internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, DeviceInstance device) : ViewModelBase
 {
-    // the message map of the map root (see MapInfo)
-    private MessageMapInfo? _mapInfo;
+    // the device values the device's schema needs (see MapInfo)
+    private DeviceValueNeeds? _mapInfo;
     private bool _mapInfoKnown;
     private string? _mapProblem;
 
@@ -52,17 +52,18 @@ internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, Dev
         set => owner.EditDevice(device, "name", () => device.Name, name => device.Name = name, String.IsNullOrWhiteSpace(value) ? null : value.Trim());
     }
 
-    /// <summary>The address maps of the schemas, to choose the map root from.</summary>
-    public IReadOnlyList<string> MapRoots
-        => owner.MapRoots.Contains(device.MapRoot, StringComparer.OrdinalIgnoreCase) ? owner.MapRoots : [device.MapRoot, .. owner.MapRoots];
+    /// <summary>The schemas a device can be, to choose the device's schema from.</summary>
+    public IReadOnlyList<string> Schemas
+        => owner.DeviceSchemas.Contains(device.Schema, StringComparer.OrdinalIgnoreCase) ? owner.DeviceSchemas : [device.Schema, .. owner.DeviceSchemas];
 
-    public string MapRoot
+    /// <summary>The schema document of the device: all its roots are the device's.</summary>
+    public string Schema
     {
-        get => device.MapRoot;
+        get => device.Schema;
         set
         {
             if (!String.IsNullOrEmpty(value))
-                owner.EditDevice(device, "map root", () => device.MapRoot, mapRoot => device.MapRoot = mapRoot, value);
+                owner.EditDevice(device, "schema", () => device.Schema, schema => device.Schema = schema, value);
         }
     }
 
@@ -76,11 +77,11 @@ internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, Dev
         private set => SetProperty(ref field, value);
     }
 
-    /// <summary>The names of the device values the map root needs from the device instance (e.g. <c>deviceId</c>), for the droplist.</summary>
-    public IReadOnlyList<string> RequiredDeviceValues => MapInfo?.RequiredDeviceValues ?? [];
+    /// <summary>The names of the device values the schema needs from the device instance (e.g. <c>deviceId</c>), for the droplist.</summary>
+    public IReadOnlyList<string> RequiredDeviceValues => MapInfo?.Required ?? [];
 
     /// <summary>
-    /// The required device values the device has no value for yet, or why the map root's device values are not known
+    /// The required device values the device has no value for yet, or why the schema's device values are not known
     /// (its message map is not valid); null when nothing is missing.
     /// </summary>
     public string? DeviceValuesProblem
@@ -89,13 +90,13 @@ internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, Dev
         {
             var info = MapInfo;
             if (info is null)
-                return $"The device values of the map root are not known: {_mapProblem}";
-            var missing = info.RequiredDeviceValues.Where(name => !device.DeviceValues.ContainsKey(name)).ToList();
-            return missing.Count == 0 ? null : $"The map root needs a value for {String.Join(", ", missing)}.";
+                return $"The device values of the schema are not known: {_mapProblem}";
+            var missing = info.Required.Where(name => !device.DeviceValues.ContainsKey(name)).ToList();
+            return missing.Count == 0 ? null : $"The schema needs a value for {String.Join(", ", missing)}.";
         }
     }
 
-    /// <summary>Adds a row for a device value: the first one the map root needs that the device has no row for.</summary>
+    /// <summary>Adds a row for a device value: the first one the schema needs that the device has no row for.</summary>
     [RelayCommand]
     private void AddDeviceValue()
     {
@@ -103,14 +104,14 @@ internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, Dev
         DeviceValues = [.. DeviceValues, new DeviceValueViewModel(this, name, null)];
     }
 
-    /// <summary>How the map root uses a device value name: nothing to mark when it needs it; null without a known map.</summary>
+    /// <summary>How the schema uses a device value name: nothing to mark when it needs it; null without a known map.</summary>
     internal string? MarkOf(string name)
     {
-        if (MapInfo is not { } info || info.RequiredDeviceValues.Contains(name, StringComparer.OrdinalIgnoreCase))
+        if (MapInfo is not { } info || info.Required.Contains(name, StringComparer.OrdinalIgnoreCase))
             return null;
-        return info.Device.TryGet(name, out var fixedValue)
-            ? $"overrides the map root's {FormatValue(fixedValue)}"
-            : "not used by the map root";
+        return info.Fixed.TryGet(name, out var fixedValue)
+            ? $"overrides the schema's {FormatValue(fixedValue)}"
+            : "not used by the message maps of the schema";
     }
 
     /// <summary>True when another row has the name already.</summary>
@@ -136,21 +137,21 @@ internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, Dev
             CommitDeviceValues();
     }
 
-    // the message map of the map root, asked once per refresh (the map root or the schemas may have changed)
-    private MessageMapInfo? MapInfo
+    // the device values of the schema, asked once per refresh (the schema or the library may have changed)
+    private DeviceValueNeeds? MapInfo
     {
         get
         {
             if (!_mapInfoKnown)
             {
-                _mapInfo = owner.MessageMapOf(device.MapRoot, out _mapProblem);
+                _mapInfo = owner.DeviceValuesOf(device.Schema, out _mapProblem);
                 _mapInfoKnown = true;
             }
             return _mapInfo;
         }
     }
 
-    // the device values were edited, undone or the map root changed: the rows show the device again, the rows still
+    // the device values were edited, undone or the schema changed: the rows show the device again, the rows still
     // without a name or value stay
     private void RefreshDeviceValues()
     {
@@ -335,8 +336,8 @@ internal sealed partial class DevicePropertiesViewModel(MainViewModel owner, Dev
 }
 
 /// <summary>
-/// One device value of the selected device, in the device panel: its name (one of the map root's required names, or
-/// any other) and its value (decimal, <c>0x..</c> or <c>..H</c>), marked when the map root does not need it. A row
+/// One device value of the selected device, in the device panel: its name (one of the schema's required names, or
+/// any other) and its value (decimal, <c>0x..</c> or <c>..H</c>), marked when the schema does not need it. A row
 /// with a name and a value is part of the device's values; a value that cannot be taken is a validation error.
 /// </summary>
 internal sealed partial class DeviceValueViewModel(DevicePropertiesViewModel owner, string? name, string? text) : ViewModelBase
@@ -387,10 +388,10 @@ internal sealed partial class DeviceValueViewModel(DevicePropertiesViewModel own
     /// <summary>True when the row has a name and a value: it is one of the device's values.</summary>
     public bool IsComplete => _name is not null && Number is not null;
 
-    /// <summary>The names the map root needs, to choose from; any other name can be typed.</summary>
+    /// <summary>The names the schema needs, to choose from; any other name can be typed.</summary>
     public IReadOnlyList<string> Names => owner.RequiredDeviceValues;
 
-    /// <summary>How the map root uses the name when it does not need it (e.g. "not used by the map root"); null otherwise.</summary>
+    /// <summary>How the schema uses the name when it does not need it (e.g. "not used by the schema"); null otherwise.</summary>
     public string? Mark => _name is null ? null : owner.MarkOf(_name);
 
     public bool HasMark => Mark is not null;

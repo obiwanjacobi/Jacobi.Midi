@@ -43,6 +43,9 @@ internal sealed class FakeMidiApi : IMidiApi
         return Task.FromResult<IMidiSession>(session);
     }
 
+    public IMidiCapabilityInquiry CreateCapabilityInquiry(IMidiConnection connection, MidiGroup group)
+        => throw new NotSupportedException("The fake MIDI API has no MIDI Capability Inquiry.");
+
     public Task<IMidiEndpointObserver> WatchMidiEndpoints(EndpointChangedHandler handler, CancellationToken ct)
     {
         _handler = handler;

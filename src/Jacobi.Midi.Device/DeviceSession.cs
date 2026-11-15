@@ -5,6 +5,7 @@ using Jacobi.Midi.Core;
 using Jacobi.Midi.Device.Commands;
 using Jacobi.Midi.Device.Exchange;
 using Jacobi.Midi.Device.Messages;
+using Jacobi.Midi.Device.PropertyExchange;
 
 namespace Jacobi.Midi.Device;
 
@@ -61,8 +62,9 @@ public sealed class DeviceStateChangedEventArgs(PlanRange nodes, DeviceStateChan
 /// <see cref="SessionData"/>); it runs the standard exchanges (<see cref="ExchangeNames"/>) of the device and, with
 /// <see cref="Execute"/>, any other exchange of its exchange files. A command root (<c>midi.role</c> <c>cmd1</c> or
 /// <c>cmd2</c>) goes through <see cref="CommandMessages"/>: its values are sent as channel messages and cannot be
-/// requested; the session answers from what it holds. The first use of a root starts listening to all of it, so the
-/// state follows the device.
+/// requested; the session answers from what it holds. A Property Exchange root (<c>midi.role</c> <c>pe</c>) goes
+/// through MIDI-CI (<see cref="PropertyExchangeDevice"/>): it is read whole with a Get of its resource (for now: Get
+/// only). The first use of a root starts listening to all of it, so the state follows the device.
 /// The session works on a connection the client created and owns; create the session before the connection is
 /// opened, so nothing is missed. When the connection is lost the session is disconnected for good: every call throws,
 /// and the client disposes it and creates a new session.
@@ -71,6 +73,7 @@ public sealed class DeviceSession : IAsyncDisposable
 {
     private readonly MessageExchange? _exchange;
     private readonly CommandMessages? _commands;
+    private PropertyExchangeDevice? _properties;
     private readonly IMidiConnection? _connection;
     private readonly DeviceSessionOptions _options;
     private readonly Lock _lock = new();
@@ -91,14 +94,17 @@ public sealed class DeviceSession : IAsyncDisposable
     /// <param name="groups">The UMP groups the device is on: the group to send on and the group to receive on.</param>
     /// <param name="exchanges">The exchange files of the roots with a message map; null when the session only
     /// transfers command roots (a message-map root then has no exchange to run).</param>
+    /// <param name="properties">The Property Exchange device on the connection, for the <c>pe</c> roots; null when the
+    /// device has none.</param>
     public DeviceSession(Serializer serializer, IMidiConnection connection, DeviceValues device, MidiGroupPair groups,
-        ExchangeDefinitions? exchanges = null, DeviceSessionOptions? options = null)
+        ExchangeDefinitions? exchanges = null, DeviceSessionOptions? options = null, PropertyExchangeDevice? properties = null)
     {
         ArgumentNullException.ThrowIfNull(serializer);
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentNullException.ThrowIfNull(device);
         _options = options ?? new DeviceSessionOptions();
         _connection = connection;
+        _properties = properties;
         _commands = new CommandMessages(serializer, connection, device, groups);
         if (exchanges is not null)
         {
@@ -119,6 +125,19 @@ public sealed class DeviceSession : IAsyncDisposable
         _options = options;
         _exchange.ConnectionStateChanged += OnConnectionStateChanged;
         _connected = exchange.ConnectionState == MidiConnectionState.Open;
+    }
+
+    /// <summary>
+    /// Gives the session the Property Exchange device on its connection, for the <c>pe</c> roots: discovery needs an
+    /// open connection, so it is found after the session is created (it may replace one given before).
+    /// </summary>
+    public void AttachPropertyExchange(PropertyExchangeDevice properties)
+    {
+        ArgumentNullException.ThrowIfNull(properties);
+        lock (_lock)
+        {
+            _properties = properties;
+        }
     }
 
     /// <summary>False once the connection to the device is lost (or the session is disposed); the session cannot be used anymore.</summary>
@@ -160,8 +179,8 @@ public sealed class DeviceSession : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(range);
         ArgumentNullException.ThrowIfNull(sink);
         ThrowIfNotConnected();
-        return IsCommand(range)
-            ? Task.FromResult(ReceiveCommands(range, sink, progress))
+        return IsProperty(range) ? ReceiveProperties(range, sink, progress, ct)
+            : IsCommand(range) ? Task.FromResult(ReceiveCommands(range, sink, progress))
             : Receive(ExchangeNames.RequestData, range, sink, (data ?? _options.Data) == SessionData.Device, progress, ct);
     }
 
@@ -177,9 +196,9 @@ public sealed class DeviceSession : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(range);
         ThrowIfNotConnected();
-        if (IsCommand(range))
+        if (IsCommand(range) || IsProperty(range))
         {
-            throw Missing(ExchangeNames.RequestData, range, "does not apply to a command root: its values cannot be requested");
+            throw Missing(ExchangeNames.RequestData, range, "does not apply to a command or Property Exchange root");
         }
         return ExchangeOf(ExchangeNames.RequestData, range).Execute(ExchangeNames.RequestData, range, new ExchangeData { Sink = NullSink.Instance }, ct);
     }
@@ -204,6 +223,10 @@ public sealed class DeviceSession : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(range);
         ArgumentNullException.ThrowIfNull(source);
         ThrowIfNotConnected();
+        if (IsProperty(range))
+        {
+            throw new NotSupportedException($"Sending a Property Exchange resource ('{range.ExecutionPlan.Name}') is not supported yet.");
+        }
         return IsCommand(range)
             ? SendCommands(range, source, progress, ct)
             : Send(ExchangeNames.SendData, range, source, (data ?? _options.Data) == SessionData.Device, progress, ct);
@@ -228,6 +251,12 @@ public sealed class DeviceSession : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(data);
         ThrowIfNotConnected();
 
+        if (IsProperty(range))
+        {
+            return name == ExchangeNames.RequestData
+                ? ReceiveProperties(range, data.Sink ?? throw Missing(name, range, "receives data: it needs a sink"), progress, ct)
+                : throw Missing(name, range, $"does not apply to a Property Exchange root: it only has {ExchangeNames.RequestData} for now");
+        }
         if (IsCommand(range))
         {
             return name switch
@@ -357,8 +386,52 @@ public sealed class DeviceSession : IAsyncDisposable
         _listening.Dispose();
     }
 
-    // the routing: a command root goes through the command messages, any other root through the message exchange
+    // the routing: a command root goes through the command messages, a Property Exchange root through MIDI-CI, any
+    // other root through the message exchange
     private static bool IsCommand(PlanRange range) => MidiProperties.IsCommandRoot(range.ExecutionPlan.Root.Group);
+
+    private static bool IsProperty(PlanRange range) => MidiProperties.IsPropertyRoot(range.ExecutionPlan.Root.Group);
+
+    // a Property Exchange root: the resource is read whole (one block: the root), the sink gets all of it
+    private async Task<TransferResult> ReceiveProperties(PlanRange range, IValueSink sink, IProgress<BlockResult>? progress, CancellationToken ct)
+    {
+        var plan = range.ExecutionPlan;
+        var whole = plan.CreateRange(plan.Root.Path);
+        var resource = MidiProperties.Find(plan.Root, MidiProperties.Resource)
+            ?? throw Missing(ExchangeNames.RequestData, range, $"has no resource: the root has no {MidiProperties.Resource}");
+        PropertyExchangeDevice? attached;
+        lock (_lock)
+        {
+            attached = _properties;
+        }
+        var device = attached ?? throw Missing(ExchangeNames.RequestData, range, "cannot run: the session has no Property Exchange device (not found, or not yet)");
+
+        BlockResult result;
+        if (device.Find(resource) is not { CanGet: true } entry)
+        {
+            result = new BlockResult(whole, BlockStatus.Unavailable) { Reason = $"the device has no resource '{resource}' to get." };
+        }
+        else if (entry.RequireResId)
+        {
+            result = new BlockResult(whole, BlockStatus.Unavailable) { Reason = $"'{resource}' needs a resource id, which is not supported yet." };
+        }
+        else
+        {
+            try
+            {
+                var data = await device.Get(new System.Text.Json.Nodes.JsonObject { ["resource"] = resource }, ct);
+                PropertyData.CopyTo(plan.Root, data, sink);
+                result = new BlockResult(whole, BlockStatus.Completed);
+                Raise(whole, DeviceStateChange.Received);
+            }
+            catch (Exception exception) when (exception is MidiException or FormatException or System.Text.Json.JsonException)
+            {
+                result = new BlockResult(whole, BlockStatus.Failed, exception) { Reason = exception.Message };
+            }
+        }
+        progress?.Report(result);
+        return new TransferResult([result]);
+    }
 
     private CommandMessages Commands
         => _commands ?? throw new InvalidOperationException("This session has no command messages: create it on a connection.");

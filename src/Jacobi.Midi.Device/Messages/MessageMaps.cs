@@ -400,11 +400,16 @@ public sealed class MessageMaps(Serializer serializer)
 
     private IMessageMap Create(ExecutionPlan plan)
     {
-        // a command root is not transferred with SysEx: no provider may claim it
+        // a command root or a Property Exchange root is not transferred with SysEx data messages: no provider may claim it
         if (MidiProperties.CommandProtocolOf(plan.Root.Group) is { } protocol)
         {
             throw new InvalidOperationException(
                 $"'{plan.Name?.FullName ?? plan.Root.Path.Value}' is a command root ({MidiProperties.Role}=\"cmd{protocol}\"): it has no message map; use {nameof(Commands.CommandMessages)}.");
+        }
+        if (MidiProperties.IsPropertyRoot(plan.Root.Group))
+        {
+            throw new InvalidOperationException(
+                $"'{plan.Name?.FullName ?? plan.Root.Path.Value}' is a Property Exchange root ({MidiProperties.Role}=\"{MidiProperties.RolePropertyExchange}\"): it has no message map.");
         }
         foreach (var provider in Providers)
         {

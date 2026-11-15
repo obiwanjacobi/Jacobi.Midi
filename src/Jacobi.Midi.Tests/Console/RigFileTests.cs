@@ -17,12 +17,12 @@ public class RigFileTests
         <rig format="jacobi.midi.rig/1">
           <assembly path="Acme.Midi.dll" />
           <schema path="C:/Schemas/Acme.xml" />
-          <device alias="synth" name="Acme S-1" mapRoot="Acme.AddressMap" color="#3D8BFD">
+          <device alias="synth" name="Acme S-1" schema="Acme" color="#3D8BFD">
             <deviceValue name="deviceId" value="0x10" />
             <deviceValue name="groupId" value="7F1CH" />
             <endpoint name="USB MIDI Interface" sendGroup="2" receiveGroup="3" />
           </device>
-          <device alias="pedalboard" mapRoot="Gx700.AddressMap" />
+          <device alias="pedalboard" schema="Gx700" />
         </rig>
         """;
 
@@ -33,11 +33,11 @@ public class RigFileTests
           "schemas": [ "C:/Schemas/Acme.xml" ],
           "devices": [
             {
-              "alias": "synth", "name": "Acme S-1", "mapRoot": "Acme.AddressMap", "color": "#3D8BFD",
+              "alias": "synth", "name": "Acme S-1", "schema": "Acme", "color": "#3D8BFD",
               "deviceValues": { "deviceId": "0x10", "groupId": 32540 },
               "endpoint": { "name": "USB MIDI Interface", "sendGroup": 2, "receiveGroup": 3 }
             },
-            { "alias": "pedalboard", "mapRoot": "Gx700.AddressMap" }
+            { "alias": "pedalboard", "schema": "Gx700" }
           ]
         }
         """;
@@ -52,7 +52,7 @@ public class RigFileTests
         Assert.Equal(2, rig.Devices.Count);
 
         var synth = rig.Find("SYNTH")!;
-        Assert.Equal(("Acme S-1", "Acme.AddressMap", "#3D8BFD"), (synth.Name, synth.MapRoot, synth.Colors.Accent));
+        Assert.Equal(("Acme S-1", "Acme", "#3D8BFD"), (synth.Name, synth.Schema, synth.Colors.Accent));
         Assert.Equal(0x10, synth.DeviceValues["deviceId"]);
         Assert.Equal(0x7F1C, synth.DeviceValues["GROUPID"]);
         Assert.Equal(new EndpointReference("USB MIDI Interface", new MidiGroupPair(new MidiGroup(2), new MidiGroup(3))), synth.Endpoint);
@@ -100,7 +100,7 @@ public class RigFileTests
     [InlineData("""<endpoint name="Port" />""", 0)]
     public void Read_EndpointWithoutReceiveGroup_ReceivesOnTheSendGroup(string content, byte group)
     {
-        var xml = $"""<rig format="jacobi.midi.rig/1"><device alias="synth" mapRoot="Acme.AddressMap">{content}</device></rig>""";
+        var xml = $"""<rig format="jacobi.midi.rig/1"><device alias="synth" schema="Acme">{content}</device></rig>""";
 
         var rig = RigFile.Read(xml, FileFormat.Xml);
 
@@ -141,7 +141,7 @@ public class RigFileTests
     [InlineData("""<assembly path="Acme.dll" />""", "a device cannot contain 'assembly'")]
     public void Read_ReportsWhatDoesNotFit(string content, string message)
     {
-        var xml = $"""<rig format="jacobi.midi.rig/1"><device alias="synth" mapRoot="Acme.AddressMap">{content}</device></rig>""";
+        var xml = $"""<rig format="jacobi.midi.rig/1"><device alias="synth" schema="Acme">{content}</device></rig>""";
 
         var exception = Assert.Throws<FileFormatException>(() => RigFile.Read(xml, FileFormat.Xml));
 
@@ -151,8 +151,8 @@ public class RigFileTests
 
     [Theory]
     [InlineData("""<rig format="jacobi.midi.dashboard/1" />""", "is not supported")]
-    [InlineData("""<rig format="jacobi.midi.rig/1"><device alias="a" /></rig>""", "'mapRoot' is required")]
-    [InlineData("""<rig format="jacobi.midi.rig/1"><device alias="a" mapRoot="X" /><device alias="a" mapRoot="Y" /></rig>""", "used more than once")]
+    [InlineData("""<rig format="jacobi.midi.rig/1"><device alias="a" /></rig>""", "'schema' is required")]
+    [InlineData("""<rig format="jacobi.midi.rig/1"><device alias="a" schema="X" /><device alias="a" schema="Y" /></rig>""", "used more than once")]
     [InlineData("""<rig format="jacobi.midi.rig/1"><dashboard /></rig>""", "a rig cannot contain 'dashboard'")]
     public void Read_ReportsAnInvalidRig(string xml, string message)
     {

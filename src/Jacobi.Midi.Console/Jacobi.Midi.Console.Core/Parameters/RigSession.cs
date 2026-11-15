@@ -9,10 +9,10 @@ namespace Jacobi.Midi.Console.Core.Parameters;
 
 /// <summary>
 /// An open rig: its schema library and a device state per device. The open dashboards share it, so a parameter has
-/// one value, whichever dashboard shows it. Devices whose state cannot be created (a map root that is not an address
-/// map, schemas that do not compile) are reported in <see cref="Problems"/>. After an edit of the rig it is opened
+/// one value, whichever dashboard shows it. Devices whose state cannot be created (a schema without root
+/// groups, schemas that do not compile) are reported in <see cref="Problems"/>. After an edit of the rig it is opened
 /// again on the previous session: the devices that are still the same (the same device instance, also by another
-/// alias, with the same map root and device values) keep their state, and with it their values.
+/// alias, with the same schema and device values) keep their state, and with it their values.
 /// </summary>
 public sealed class RigSession
 {
@@ -46,7 +46,7 @@ public sealed class RigSession
         {
             foreach (var device in rig.Devices)
             {
-                // the same device (also by another alias) with the same map root and device values keeps its state
+                // the same device (also by another alias) with the same schema and device values keeps its state
                 if (previous is not null && previous.Library == library
                     && previous.Devices.Values.FirstOrDefault(state => state.Device == device) is { } kept && IsSame(kept, device))
                 {
@@ -67,7 +67,7 @@ public sealed class RigSession
     }
 
     private static bool IsSame(DeviceState state, DeviceInstance device)
-        => state.MapRoot.Equals(new SchemaName(device.MapRoot))
+        => String.Equals(state.Schema, device.Schema, StringComparison.OrdinalIgnoreCase)
             && state.DeviceValues.Count == device.DeviceValues.Count
             && device.DeviceValues.All(value => state.DeviceValues.TryGet(value.Key, out var known) && known == value.Value);
 

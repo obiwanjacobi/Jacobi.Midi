@@ -28,7 +28,7 @@ public class RigConnectionsTests
         => new()
         {
             Alias = alias,
-            MapRoot = "Gp8.AddressMap",
+            Schema = "Gp8",
             DeviceValues = new Dictionary<string, long> { ["deviceId"] = 0 },
             Endpoint = endpoint,
         };

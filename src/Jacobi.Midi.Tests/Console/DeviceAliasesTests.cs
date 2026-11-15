@@ -24,7 +24,7 @@ public class DeviceAliasesTests
         var dashboard = new Dashboard
         {
             Name = "test",
-            Devices = [new DashboardDevice("synth", "Synth.AddressMap")],
+            Devices = [new DashboardDevice("synth", "Synth")],
             Layout = new LayoutControl { Kind = LayoutControlKind.Grid, Children = [section, other] },
         };
         return (dashboard, section, knob, other);

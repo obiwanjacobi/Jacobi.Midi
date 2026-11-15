@@ -24,14 +24,14 @@ public class DeviceStateTests
         => new(new DeviceInstance
         {
             Alias = "gp8",
-            MapRoot = "Gp8.AddressMap",
+            Schema = "Gp8",
             DeviceValues = new Dictionary<string, long> { ["deviceId"] = deviceId },
         }, ConsoleLibrary.BuiltInLibrary);
 
     private static InstancePath Item(int index) => new([index]);
 
     private static PlanRange Patches(DeviceState state, int first, int last)
-        => state.Plan.CreateRange(Patch, Item(first), Patch, Item(last));
+        => state.PlanOf(Patch)!.CreateRange(Patch, Item(first), Patch, Item(last));
 
     [Fact]
     public void LoadDump_DecodesEveryPatch()
@@ -162,18 +162,18 @@ public class DeviceStateTests
     }
 
     [Fact]
-    public void DeviceState_NeedsARootGroup_NotAnAddressMap()
+    public void DeviceState_NeedsASchemaWithRootGroups_NotAnAddressMap()
     {
-        Assert.Throws<ArgumentException>(() => new DeviceState(new DeviceInstance { Alias = "x", MapRoot = "Roland.Nothing" }, ConsoleLibrary.BuiltInLibrary));
+        Assert.Throws<ArgumentException>(() => new DeviceState(new DeviceInstance { Alias = "x", Schema = "Nothing" }, ConsoleLibrary.BuiltInLibrary));
 
-        var state = new DeviceState(new DeviceInstance { Alias = "x", MapRoot = "Roland.Message16" }, ConsoleLibrary.BuiltInLibrary);
-        Assert.Equal("Roland.Message16", state.MapRoot.FullName);
+        var state = new DeviceState(new DeviceInstance { Alias = "x", Schema = "Roland" }, ConsoleLibrary.BuiltInLibrary);
+        Assert.Contains("Roland.Message16", state.Roots.Select(root => root.FullName));
     }
 
     [Fact]
     public void LoadDump_WithoutTheRequiredDeviceValues_IsRejected()
     {
-        var state = new DeviceState(new DeviceInstance { Alias = "gp8", MapRoot = "Gp8.AddressMap" }, ConsoleLibrary.BuiltInLibrary);
+        var state = new DeviceState(new DeviceInstance { Alias = "gp8", Schema = "Gp8" }, ConsoleLibrary.BuiltInLibrary);
 
         var exception = Assert.Throws<InvalidOperationException>(() => state.LoadDump(Dump));
 
@@ -181,15 +181,18 @@ public class DeviceStateTests
     }
 
     [Fact]
-    public void CommandRoots_OfTheMapRootsDocument_BelongToTheDevice()
+    public void TheRootsOfTheSchema_AreTheDevicesRoots()
     {
-        var state = new DeviceState(new DeviceInstance { Alias = "gx700", MapRoot = "Gx700.AddressMap" }, ConsoleLibrary.BuiltInLibrary);
+        var state = new DeviceState(new DeviceInstance { Alias = "gx700", Schema = "Gx700" }, ConsoleLibrary.BuiltInLibrary);
 
-        Assert.Equal(["Gx700.Commands"], state.CommandRoots.Select(root => root.FullName));
-        var commands = Assert.Single(state.CommandParameters);
-        Assert.Equal("Commands.Program", Assert.Single(commands.Children).Path);
-        Assert.Same(state.Plan, state.PlanOf("AddressMap.System.Common.MidiChannel"));
+        Assert.Equal(["Gx700.AddressMap", "Gx700.SoundChangeRequest", "Gx700.Commands"], state.Roots.Select(root => root.FullName));
+        // a root without parameters (the fixed message) has no tree
+        Assert.Equal(["AddressMap", "Commands"], state.Parameters.Select(root => root.Name));
+        Assert.Equal("Commands.Program", Assert.Single(state.Parameters[1].Children).Path);
+        Assert.Equal("AddressMap", state.PlanOf("AddressMap.System.Common.MidiChannel")!.Root.Name);
         Assert.IsType<FieldInfo>(state.Find("Commands.Program"));
         Assert.Null(state.PlanOf("Other.Program"));
+        Assert.True(state.UsesExchanges("AddressMap.System.Common.MidiChannel"));
+        Assert.False(state.UsesExchanges("Commands.Program"));
     }
 }

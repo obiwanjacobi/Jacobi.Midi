@@ -62,6 +62,16 @@ public static class MidiProperties
     /// </summary>
     public const string Cmd = "midi.cmd";
     /// <summary>
+    /// The name of the Property Exchange resource a <c>pe</c> root stands for (e.g. <c>X-ProgramEdit</c>): resource
+    /// names are not always valid schema names.
+    /// </summary>
+    public const string Resource = "midi.resource";
+    /// <summary>
+    /// The JSON key a node of a <c>pe</c> root stands for, when it differs from the node's name (a key that is not a
+    /// valid schema name).
+    /// </summary>
+    public const string Key = "midi.key";
+    /// <summary>
     /// The bits per address byte of the <c>address</c> field (envelope); default 7.
     /// </summary>
     public const string AddressBits = "midi.addressBits";
@@ -96,6 +106,11 @@ public static class MidiProperties
     /// The role of a root whose fields are MIDI 2.0 channel messages (<see cref="Cmd"/>).
     /// </summary>
     public const string RoleCommand2 = "cmd2";
+    /// <summary>
+    /// The role of a root that stands for a Property Exchange resource (<see cref="Resource"/>), generated from what
+    /// the device describes.
+    /// </summary>
+    public const string RolePropertyExchange = "pe";
 
     /// <summary>
     /// The tags with a fixed name (a device value, <see cref="DevicePrefix"/>, has a name of its own).
@@ -111,6 +126,8 @@ public static class MidiProperties
         Describe(MaxDataSize, "Message or map root: the largest number of data bytes in one message."),
         Describe(Role, "Envelope: the value the node holds: address, size, data or device.<name>. Root: cmd1 or cmd2, a command root."),
         Describe(Cmd, "Command root: the channel message of the field: cc#<number>, rpn#<number>, nrpn#<number> (or <msb>/<lsb>) or pc."),
+        Describe(Resource, "Property Exchange root: the name of the resource (e.g. X-ProgramEdit)."),
+        Describe(Key, "Property Exchange root: the JSON key of the node, when it is not the node's name."),
         Describe(AddressBits, "Envelope: the bits per address byte of the address field (default 7)."),
         Describe(Doc, "Any node: the documentation of the node, plain text (multi-line); not inherited."),
     ];
@@ -157,8 +174,8 @@ public static class MidiProperties
             Unit
                 => Enum.TryParse<AddressUnit>(value, ignoreCase: true, out _) ? null : $"'{name}' must be range, field or atomic, not '{value}'.",
             Role
-                => IsRole(value) || IsCommandRole(value) ? null
-                    : $"'{name}' must be {RoleAddress}, {RoleSize}, {RoleData}, {RoleDevicePrefix}<name>, {RoleCommand1} or {RoleCommand2}, not '{value}'.",
+                => IsRole(value) || IsRootRole(value) ? null
+                    : $"'{name}' must be {RoleAddress}, {RoleSize}, {RoleData}, {RoleDevicePrefix}<name>, {RoleCommand1}, {RoleCommand2} or {RolePropertyExchange}, not '{value}'.",
             Cmd
                 => Commands.Command.TryParse(value, out _, out var error) ? null : $"'{name}': {error}",
             _ => null,
@@ -200,6 +217,19 @@ public static class MidiProperties
     public static bool IsCommandRoot(SchemaNode node) => CommandProtocolOf(node) is not null;
 
     /// <summary>
+    /// True when the node is a Property Exchange root (<c>midi.role</c> <c>pe</c>): it stands for a resource of the
+    /// device (<see cref="Resource"/>), not for SysEx data, so it has no message map.
+    /// </summary>
+    public static bool IsPropertyRoot(SchemaNode node)
+        => String.Equals(RoleOf(node), RolePropertyExchange, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// False for a root that never has a message map: a command root (<see cref="IsCommandRoot"/>) or a Property
+    /// Exchange root (<see cref="IsPropertyRoot"/>); true for any other root (whether its map is valid or not).
+    /// </summary>
+    public static bool CanHaveMessageMap(SchemaNode root) => !IsCommandRoot(root) && !IsPropertyRoot(root);
+
+    /// <summary>
     /// The documentation of a node (<c>midi.doc</c>); null when it has none. Only the node's own: not inherited.
     /// </summary>
     public static string? DocOf(SchemaNode node)
@@ -235,6 +265,12 @@ public static class MidiProperties
     internal static bool IsCommandRole(string? role)
         => String.Equals(role, RoleCommand1, StringComparison.OrdinalIgnoreCase)
         || String.Equals(role, RoleCommand2, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True for a role that only applies to a root: <c>cmd1</c>, <c>cmd2</c> or <c>pe</c>.
+    /// </summary>
+    internal static bool IsRootRole(string? role)
+        => IsCommandRole(role) || String.Equals(role, RolePropertyExchange, StringComparison.OrdinalIgnoreCase);
 
     private static bool IsNumber(string? value) => TryParseNumber(value, out _);
 

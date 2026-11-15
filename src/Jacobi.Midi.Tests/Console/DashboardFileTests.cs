@@ -13,8 +13,8 @@ public class DashboardFileTests
 {
     private const string Xml = """
         <dashboard format="jacobi.midi.dashboard/1" name="Lead sound" cellSize="40" look="Anodized" rig="../Rigs/Studio.rig.xml">
-          <device alias="synth" mapRoot="Acme.AddressMap" receive="requestData" send="sendData" color="#3D8BFD" />
-          <device alias="pedalboard" mapRoot="Gx.AddressMap" />
+          <device alias="synth" schema="Acme" receive="requestData" send="sendData" color="#3D8BFD" />
+          <device alias="pedalboard" schema="Gx" />
           <assembly path="Custom.dll" />
           <row gap="1" wrap="true">
             <variable name="patch" value="5" />
@@ -53,8 +53,8 @@ public class DashboardFileTests
           "look": "Anodized",
           "rig": "../Rigs/Studio.rig.xml",
           "devices": [
-            { "alias": "synth", "mapRoot": "Acme.AddressMap", "receive": "requestData", "send": "sendData", "color": "#3D8BFD" },
-            { "alias": "pedalboard", "mapRoot": "Gx.AddressMap" },
+            { "alias": "synth", "schema": "Acme", "receive": "requestData", "send": "sendData", "color": "#3D8BFD" },
+            { "alias": "pedalboard", "schema": "Gx" },
           ],
           "assemblies": [ "Custom.dll" ],
           "layout": {
@@ -93,7 +93,7 @@ public class DashboardFileTests
         Assert.Equal(40, dashboard.CellSize);
         Assert.Equal("Anodized", dashboard.Look);
         Assert.Equal("../Rigs/Studio.rig.xml", dashboard.RigPath);
-        Assert.Equal([new DashboardDevice("synth", "Acme.AddressMap") { Colors = new("#3D8BFD"), Receive = "requestData", Send = "sendData" }, new DashboardDevice("pedalboard", "Gx.AddressMap")], dashboard.Devices);
+        Assert.Equal([new DashboardDevice("synth", "Acme") { Colors = new("#3D8BFD"), Receive = "requestData", Send = "sendData" }, new DashboardDevice("pedalboard", "Gx")], dashboard.Devices);
         Assert.Equal(["Custom.dll"], dashboard.Sources.Assemblies);
 
         var row = dashboard.Layout;
@@ -253,7 +253,7 @@ public class DashboardFileTests
     [InlineData("""<dashboard format="jacobi.midi.dashboard/1" name="Test" />""", "has no layout control")]
     [InlineData("""<dashboard format="jacobi.midi.dashboard/1" name="Test"><knob /></dashboard>""", "must be a layout control")]
     [InlineData("""<dashboard format="jacobi.midi.dashboard/1" name="Test"><row /><row /></dashboard>""", "one layout control")]
-    [InlineData("""<dashboard format="jacobi.midi.dashboard/1" name="Test"><device alias="a" mapRoot="X" /><device alias="A" mapRoot="Y" /><row /></dashboard>""", "used more than once")]
+    [InlineData("""<dashboard format="jacobi.midi.dashboard/1" name="Test"><device alias="a" schema="X" /><device alias="A" schema="Y" /><row /></dashboard>""", "used more than once")]
     [InlineData("""<rig format="jacobi.midi.rig/1" />""", "root element is 'rig'")]
     [InlineData("""<dashboard""", "Invalid XML")]
     public void Read_ReportsAnInvalidDashboard(string xml, string message)
@@ -267,7 +267,7 @@ public class DashboardFileTests
     [InlineData("""{ "format": "jacobi.midi.dashboard/1", "name": "Test", "layout": { "gap": 1 } }""", "every element needs a 'type'")]
     [InlineData("""{ "format": "jacobi.midi.dashboard/1", "name": "Test", "layout": [] }""", "'layout' must be a JSON object")]
     [InlineData("""{ "format": "jacobi.midi.dashboard/1", "name": "Test", "layout": { "type": "row", "gap": { } } }""", "'gap': a Object is not a valid value")]
-    [InlineData("""{ "format": "jacobi.midi.dashboard/1", "name": "Test", "devices": [ { "type": "x", "alias": "a", "mapRoot": "X" } ], "layout": { "type": "row" } }""", "unknown attribute 'type'")]
+    [InlineData("""{ "format": "jacobi.midi.dashboard/1", "name": "Test", "devices": [ { "type": "x", "alias": "a", "schema": "X" } ], "layout": { "type": "row" } }""", "unknown attribute 'type'")]
     [InlineData("""[]""", "must hold a JSON object")]
     [InlineData("""{ "format": """, "Invalid JSON")]
     public void Read_Json_ReportsWhatDoesNotFit(string json, string message)

@@ -1,0 +1,6 @@
+<rig format="jacobi.midi.rig/1">
+  <schema path="C:\My\MyProjects\public\Jacobi\Public\GitHub\Jacobi.Midi\docs\examples\console\GeneralMIDISynth.schema.xml" />
+  <device alias="generalmidisynth" schema="GeneralMIDISynth" detected="true">
+    <endpoint name="General MIDI Synth" sendGroup="0" receiveGroup="0" />
+  </device>
+</rig>

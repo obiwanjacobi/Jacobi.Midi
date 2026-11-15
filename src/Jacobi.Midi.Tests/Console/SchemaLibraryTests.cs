@@ -12,7 +12,7 @@ namespace Jacobi.Midi.Tests.Console;
 /// </summary>
 public sealed class SchemaLibraryTests : IDisposable
 {
-    private const string Gp8 = "Gp8.AddressMap";
+    private const string Gp8 = "Gp8";
 
     private readonly string _directory = Directory.CreateTempSubdirectory("console-schemas-").FullName;
 
@@ -27,7 +27,9 @@ public sealed class SchemaLibraryTests : IDisposable
     {
         Assert.True(Library.IsCompiled, String.Join(Environment.NewLine, Library.Problems));
         Assert.DoesNotContain(Library.Problems, problem => problem.IsError);
-        Assert.Equal(Jacobi.Midi.Device.Messages.MessageMapKind.Address, Library.KindOf(new(Gp8)));
+        Assert.Equal(Jacobi.Midi.Device.Messages.MessageMapKind.Address, Library.KindOf(new("Gp8.AddressMap")));
+        Assert.Contains(Gp8, Library.DeviceSchemas);
+        Assert.DoesNotContain("Roland", Library.DeviceSchemas);
     }
 
     [Fact]
@@ -46,9 +48,9 @@ public sealed class SchemaLibraryTests : IDisposable
     }
 
     [Theory]
-    [InlineData("AddressMap.Temporary.DynamicFilter", "is not a field of 'Gp8.AddressMap'")]
-    [InlineData("AddressMap.Temporary.Missing", "is not a field of 'Gp8.AddressMap'")]
-    [InlineData("Temporary.DynamicFilter.Sens", "must start at the map root 'AddressMap'")]
+    [InlineData("AddressMap.Temporary.DynamicFilter", "is not a field of 'Gp8'")]
+    [InlineData("AddressMap.Temporary.Missing", "is not a field of 'Gp8'")]
+    [InlineData("Temporary.DynamicFilter.Sens", "must start at a root of the schema 'Gp8'")]
     [InlineData("AddressMap.Temporary[$patch].DynamicFilter.Sens", "indexes 'AddressMap.Temporary', which is not a repeat")]
     public void Binding_ThatDoesNotFitTheMap_IsAProblem(string path, string message)
     {
@@ -70,7 +72,7 @@ public sealed class SchemaLibraryTests : IDisposable
     }
 
     [Fact]
-    public void DeviceWhoseRootIsNoRootGroup_IsAProblem_AnyRootGroupIsNot()
+    public void DeviceWhoseSchemaHasNoRootGroups_IsAProblem_AnySchemaWithRootsIsNot()
     {
         Dashboard With(string root) => new()
         {
@@ -79,10 +81,10 @@ public sealed class SchemaLibraryTests : IDisposable
             Layout = new LayoutControl { Kind = LayoutControlKind.Row },
         };
 
-        var problem = Assert.Single(BindingResolver.Resolve(With("Gp8.Nothing"), new BindingContext { Library = Library }).Problems);
-        Assert.Contains("'Gp8.Nothing' (device 'gp8') is not a root group", problem.Message);
-        // no message map, but a root group of the schemas
-        Assert.Empty(BindingResolver.Resolve(With("Roland.Message16"), new BindingContext { Library = Library }).Problems);
+        var problem = Assert.Single(BindingResolver.Resolve(With("Nothing"), new BindingContext { Library = Library }).Problems);
+        Assert.Contains("'Nothing' (device 'gp8') is not a schema with root groups", problem.Message);
+        // no message maps, but root groups
+        Assert.Empty(BindingResolver.Resolve(With("Roland"), new BindingContext { Library = Library }).Problems);
     }
 
     [Fact]
@@ -107,12 +109,12 @@ public sealed class SchemaLibraryTests : IDisposable
             """;
         const string rig = """
             <rig format="jacobi.midi.rig/1">
-              <device alias="plain" mapRoot="Plain.Settings" />
+              <device alias="plain" schema="Plain" />
             </rig>
             """;
         const string dashboard = """
             <dashboard format="jacobi.midi.dashboard/1" name="Test">
-              <device alias="plain" mapRoot="Plain.Settings" />
+              <device alias="plain" schema="Plain" />
               <grid device="plain" base="Settings" size="20,10">
                 <variable name="slot" value="2" />
                 <numberBox at="0,0" size="6,4"><bind slot="value" parameter="Level" /></numberBox>
@@ -136,7 +138,7 @@ public sealed class SchemaLibraryTests : IDisposable
 
         Assert.Empty(rigSession.Problems);
         Assert.Empty(session.Problems);
-        Assert.Equal(["Level", "Slot"], rigSession.Devices["plain"].Parameters.Children.Select(node => node.Name));
+        Assert.Equal(["Level", "Slot"], rigSession.Devices["plain"].Parameters.Single().Children.Select(node => node.Name));
         var level = session.ValueOf((ParameterControl)session.Dashboard.Layout.Children[0], SlotNames.Value)!;
         level.Set(42m);
         Assert.Equal(42m, level.Number);
@@ -144,7 +146,7 @@ public sealed class SchemaLibraryTests : IDisposable
 
         var load = rigSession.Devices["plain"].LoadDump([0xF0, 0x41, 0x00, 0x13, 0x12, 0x00, 0x00, 0x00, 0x00, 0xF7]);
         Assert.Equal(0, load.Decoded);
-        Assert.Contains("has no message map", Assert.Single(load.Warnings));
+        Assert.Contains("has no root with a message map", Assert.Single(load.Warnings));
     }
 
     [Fact]

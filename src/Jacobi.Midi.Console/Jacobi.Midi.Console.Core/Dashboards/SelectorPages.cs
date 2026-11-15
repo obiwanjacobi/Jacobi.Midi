@@ -160,7 +160,7 @@ public sealed record PageChoice(string Name, bool HasPage, bool IsOfNoOption)
 }
 
 /// <summary>
-/// The field a binding refers to: the device, its schema path from the map root without repeat indices (as
+/// The field a binding refers to: the device, its schema path from its root without repeat indices (as
 /// <see cref="ParameterReference.Path"/>) and what the field is.
 /// </summary>
 public sealed record BoundField(string Device, string Path, ParameterInfo Info)

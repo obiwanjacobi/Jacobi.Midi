@@ -15,7 +15,7 @@ the devices) is in the [todo list](todo.md).
 | Term | Meaning |
 |------|---------|
 | **Rig** | The devices of the user: a list of device instances, and the assemblies and schema files they need. Saved in its own file, so the same rig serves all dashboards. |
-| **Device instance** | One device of the rig: an **alias** (`synth`, `pedalboard`), a display name, the **map root**: the root group of its schema (any root group; usually an address map, e.g. `Gx700.AddressMap`), the `DeviceValues` the map root does not fix (e.g. `deviceId`), how to reach it (the endpoint by name and the UMP groups to send and receive on; usually the same group), its color, and its own assemblies and schema files. |
+| **Device instance** | One device of the rig: an **alias** (`synth`, `pedalboard`), a display name, the **schema**: a schema document (e.g. `Gx700`), all of whose root groups are the device's (its address map, command roots, Property Exchange roots), the `DeviceValues` its roots do not fix (e.g. `deviceId`), how to reach it (the endpoint by name and the UMP groups to send and receive on; usually the same group), its color, and its own assemblies and schema files. |
 | **Schema library** | The schemas and processors the console works with, compiled into one `SchemaSet` and `Serializer`: the built-in assemblies plus the assemblies and schema files of the rig and the dashboard (see [Schemas](#schemas)). |
 | **Index variable** | A repeat index the user changes in the UI, e.g. the patch number: declared on a layout control and used in binding paths as `Programs[$patch]`. Changed by a control bound to `$patch`. |
 | **Parameter** | One field of the root group of a device (usually its address map), identified by its schema path and `InstancePath` (e.g. the `Rate` of the phaser in the temporary patch). The display name, value range, steps and option names come from the schema's data type (`min`, `max`, `scale`, `shift`, `options`). |
@@ -126,7 +126,7 @@ smaller. The label never sizes the control: a long label is cut off ("…") and 
 - the title of a section and the header of a page of tabs: the node (group, repeat or field) the control's own `base`
   refers to; a control that only inherits its base shows none;
 - the header of a page of selector tabs: the page's, then the selector's field (which documents the options);
-- the rig tree in Edit mode: every node (a device: its map root).
+- the rig tree in Edit mode: every node (a device: its roots).
 
 A new control
 gets a default size per kind in which it fits at face size 1 (a knob is 5×7). A section's frame and title take a fixed number of cells around its grid
@@ -153,7 +153,7 @@ itself. A file whose pages do not fit their tabs gets that when it is opened, an
 
 A layout control can set what its children inherit:
 
-- `device` and `base`: the device alias and the schema path that the bindings inside it are relative to. A section "Filter" with the base `AddressMap.Edit.Filter` holds knobs bound to `Cutoff` and `Resonance`. This is the same `base` a multi-slot control (the envelope) uses for its slots: one mechanism. A `base` is always a full path from the map root; bases do not stack.
+- `device` and `base`: the device alias and the schema path that the bindings inside it are relative to. A section "Filter" with the base `AddressMap.Edit.Filter` holds knobs bound to `Cutoff` and `Resonance`. This is the same `base` a multi-slot control (the envelope) uses for its slots: one mechanism. A `base` is always a full path from a root of the device; bases do not stack.
 - index variables: see below.
 - the palette: by default the palette of its `device` (see [Color](#color)).
 
@@ -352,8 +352,9 @@ In *Edit* mode:
 - a label or separator has only an accent: it is drawn in the look's text or outline color until it is given a color (right-click, or the panel);
 - the left and right panels are sized with the splitters between them and the dashboard (at least 180 pixels; kept while Play mode closes them).
 
-**The rig and the palettes** (left panel). Per device of the rig its parameter tree (`ParameterNode`, from the plan of
-its map root; fields whose value the schema fixes are left out), with the number of items of a repeat and the range or
+**The rig and the palettes** (left panel). Per device of the rig its parameter trees (`ParameterNode`, one per root of
+its schema, from the plan of the root; a device with one root shows that root's nodes; fields whose value the schema fixes
+or a message holds for the transfer, e.g. a device id, are left out, and so are roots without parameters), with the number of items of a repeat and the range or
 options of a field, and the device's MIDI connection (a dot, see [MIDI](#midi)); below it the palettes of parameter
 controls and layout controls (`ControlCatalog`). The dot before a device is its accent color (empty without one). A
 usage mark (◆) shows what the controls of the selected dashboard are bound to (`DashboardSession.UsedPaths`): a field
@@ -383,13 +384,13 @@ renames a device: dashboard files that are not open would need the same change a
 selection, and a press on the dashboard first takes the text being typed in it, so that nothing of one control is
 taken for the next.
 
-**The device panel** (right panel, when a device is selected in the rig): alias, name, map root (one of the root groups
-of the library, `SchemaLibrary.Roots`, address maps first), device values (a list: a name per row, chosen from the
-device values the map root needs (`MessageMapInfo.RequiredDeviceValues`, e.g. `deviceId`) or typed, and a value; a name
-the map root does not need is marked, and so are the required ones still without a value, or why the map root's are
-not known), the MIDI endpoint and UMP groups with the
+**The device panel** (right panel, when a device is selected in the rig): alias, name, schema (one of the schemas
+of the library with device data, `SchemaLibrary.DeviceSchemas`), device values (a list: a name per row, chosen from the
+device values the message maps of its roots need (`MessageMapInfo.RequiredDeviceValues`, e.g. `deviceId`) or typed, and
+a value; a name they do not need is marked, and so are the required ones still without a value, or why they are not
+known), the MIDI endpoint and UMP groups with the
 device's connection and its tests (see [MIDI](#midi)) and colors; *Remove* takes it out. A device has no schema files
-or assemblies of its own: it is made from a root group of the library. The *+* of the rig adds a device for an address map of the library (the
+or assemblies of its own: it is made from a schema of the library. The *+* of the rig adds a device for a schema of the library with device data (the
 other root groups in a submenu; named after it: `Gp8.AddressMap` is `gp8`). It also brings in the schemas (and
 exchange files) of a schema file or an assembly the user picks: the file becomes a schema source of the rig
 (`Rig.Sources`), and the root groups of the documents it brings (`SchemaLibrary.RootsFromFile`) are offered by the *+*
@@ -404,7 +405,7 @@ Ctrl+Y); the history is cleared when a dashboard is closed or another rig is ope
 edits since it was read or saved, so undoing all of them makes it unchanged again. An edit (or undo, redo) is all or
 nothing: one that fails is not done (what it did is taken back), it is reported, and the console goes on. After an edit the dashboard is
 resolved again (`DashboardSession.Refresh`: the variables keep their current item); after an edit of the rig the rig is
-opened again on the same library, and the devices that stay the same (the same device, also by another alias; map root, device values) keep their state
+opened again on the same library, and the devices that stay the same (the same device, also by another alias; schema, device values) keep their state
 and values (`RigSession.Open` with the previous session).
 
 **Notifications** (below the status) list what the console tells: problems (files, schemas, devices, bindings, dumps,
@@ -423,7 +424,7 @@ amber: some, red: none) with a summary; a click opens the list of the devices wi
 **Receiving the values.** In Play mode with MIDI, the values of the parameters the dashboard shown is bound to are
 received from each of its devices: when the dashboard is shown and when a device comes (back) online. The dashboard
 names, per device, the exchange to receive with (`receive` on its `device`, e.g. `requestData`): an exchange of the
-exchange file of the device's map root (see the [message exchange](../Jacobi.Midi.Device/Exchange/readme.md)). A
+exchange files of the device's roots with a message map (see the [message exchange](../Jacobi.Midi.Device/Exchange/readme.md)). A
 device without one is not received from, which the notifications say. `RigConnections.Receive` requests the
 parameters one after the other into the device state (origin `Device`); a parameter that came with an earlier one
 (the same address, an atomic group) is not requested again. The first parameter that does not complete ends the
@@ -445,9 +446,16 @@ Both exchanges can be set per device in the dashboard properties of Edit mode (*
 **Connections** (`RigConnections` in Console.Core). One MIDI session and the endpoints it reaches (watched, so the list
 follows the endpoints that come and go), and a `DeviceSession` of the [message exchange](../Jacobi.Midi.Device/Exchange/readme.md)
 per device of the rig with an endpoint (created on a connection `RigConnections` opens and owns, with the device's
-`DeviceValues` and UMP groups). A device has its map root and the command roots of the same schema document
-(`SchemaLibrary.CommandRootsOf`): their parameters are in the tree next to the map root's, and are sent with channel
-messages; they cannot be requested (they stay unknown until sent), and the dashboard's exchanges do not apply to them. The endpoint is found by its name (see [Rig](#rig)). The status of a device (`DeviceConnection`):
+`DeviceValues` and UMP groups). A device is a schema document: its roots with a message map are transferred with the
+dashboard's exchanges; to its command and Property Exchange roots the dashboard's exchanges do not apply (they have only
+the standard ones, and are received and sent also when the dashboard names none). Command parameters are sent with channel messages and cannot be requested
+(they stay unknown until sent). Property Exchange parameters are read with MIDI-CI (Get only, for now): a device with
+`pe` roots gets MIDI-CI on its connection, and is online once its Property Exchange device is discovered.
+
+**Detect a device** (the + of the rig, *Detect a device on*, with MIDI started). A device that describes itself with
+MIDI-CI Property Exchange is detected on an endpoint: the schema generated from its resources is saved right away to a
+file the user picks and added to the schemas of the rig, and a device on that endpoint is added, marked as detected
+(`detected="true"`). What the schema leaves out is told in the notifications. The endpoint is found by its name (see [Rig](#rig)). The status of a device (`DeviceConnection`):
 
 | Status | Meaning |
 |--------|---------|
@@ -487,11 +495,12 @@ the replacement is shown as information in the notifications. A source that cann
 assembly that does not load, an invalid schema) is reported and the others are still used; schemas that do not compile
 are reported and the library then has no serializer.
 
-With the library, `BindingResolver` checks a dashboard against the schemas: every device's map root must be a root
-group of the schemas (an address map or not: a plain schema of groups and fields works the same; whether its values can
-be sent and received is up to the Device project, not the console), every binding a field of its device's root (the
-path starts at the root, e.g. `AddressMap.…`), every index variable must index a repeat of it and stay below its item
-count. With the rig it also checks that the rig has the dashboard's devices with the same map roots. All problems are
+With the library, `BindingResolver` checks a dashboard against the schemas: every device's schema must be a schema with
+root groups (with an address map or not: a plain schema of groups and fields works the same; whether its values can
+be sent and received is up to the Device project, not the console), every binding a field of a root of its device's schema
+(the path starts at the root, e.g. `AddressMap.…`), every index variable must index a repeat of that root and stay below
+its item count (a repeat whose count only the data gives, e.g. a Property Exchange list, has none yet). With the rig it
+also checks that the rig has the dashboard's devices with the same schemas. All problems are
 reported together.
 
 ## Device state
@@ -522,7 +531,7 @@ one.
     {
       "alias": "synth",
       "name": "Acme S-1",
-      "mapRoot": "Acme.AddressMap",
+      "schema": "Acme",
       "deviceValues": { "deviceId": "0x10" },
       "endpoint": { "name": "USB MIDI Interface", "sendGroup": 0, "receiveGroup": 0 },
       "color": "#3D8BFD"
@@ -537,7 +546,7 @@ The same rig in XML:
 <rig format="jacobi.midi.rig/1">
   <assembly path="Acme.Midi.dll" />
   <schema path="C:/Schemas/Acme.xml" />
-  <device alias="synth" name="Acme S-1" mapRoot="Acme.AddressMap" color="#3D8BFD">
+  <device alias="synth" name="Acme S-1" schema="Acme" color="#3D8BFD">
     <deviceValue name="deviceId" value="0x10" />
     <endpoint name="USB MIDI Interface" group="0" />
   </device>
@@ -558,7 +567,7 @@ The same rig in XML:
   "cellSize": 24,
   "look": "Foundry",
   "rig": "Studio.rig.json",
-  "devices": [ { "alias": "synth", "mapRoot": "Acme.AddressMap", "receive": "requestData" } ],
+  "devices": [ { "alias": "synth", "schema": "Acme", "receive": "requestData" } ],
   "layout": {
     "type": "grid", "size": [37, 10],
     "children": [
@@ -591,7 +600,7 @@ The same dashboard in XML:
 
 ```xml
 <dashboard format="jacobi.midi.dashboard/1" name="Lead sound" cellSize="24" look="Foundry" rig="Studio.rig.xml">
-  <device alias="synth" mapRoot="Acme.AddressMap" receive="requestData" />
+  <device alias="synth" schema="Acme" receive="requestData" />
   <grid size="37,10">
     <section label="Filter" at="0,0" size="12,10" device="synth" base="AddressMap.Edit.Filter">
       <knob label="Cutoff" at="0,0" size="5,7">
@@ -619,8 +628,8 @@ The same dashboard in XML:
 </dashboard>
 ```
 
-- `rig`: the rig file the dashboard was made with, relative to the dashboard file (absolute on another drive); written on save, from the open rig (`Dashboard.RigPath`). When a dashboard is opened and the open rig does not have its devices with their map roots (`Dashboard.DeviceProblems`), or no rig is open, the console opens this rig: replacing an open rig is confirmed first (and its unsaved changes), a rig that is not found is located by the user, after which the dashboard refers to it there (a change of the dashboard, kept when it is saved). Without its rig the dashboard opens as it is and the problems are reported. When the open rig has the devices but is another file, the notifications say so.
-- `devices` lists the aliases the dashboard needs with the map root they must have, and optionally colors (`color`, `plateColor`, `panelColor`) that override the rig's on this dashboard. An alias that is not in the rig, or has another map root there, is reported.
+- `rig`: the rig file the dashboard was made with, relative to the dashboard file (absolute on another drive); written on save, from the open rig (`Dashboard.RigPath`). When a dashboard is opened and the open rig does not have its devices with their schemas (`Dashboard.DeviceProblems`), or no rig is open, the console opens this rig: replacing an open rig is confirmed first (and its unsaved changes), a rig that is not found is located by the user, after which the dashboard refers to it there (a change of the dashboard, kept when it is saved). Without its rig the dashboard opens as it is and the problems are reported. When the open rig has the devices but is another file, the notifications say so.
+- `devices` lists the aliases the dashboard needs with the schema they must be, and optionally colors (`color`, `plateColor`, `panelColor`) that override the rig's on this dashboard. An alias that is not in the rig, or is another schema there, is reported.
 - A binding is written as `[device:]path`. The path is a schema path in the notation of the serializer's node references: a repeat item is given by its index (`Programs[5].Program.Level`) or by an index variable (`Programs[$patch].Program.Level`), so the instance is part of the path. The device and the start of the path may come from the `device` and `base` of the control or of a layout control around it; a binding with its own device (`pedalboard:AddressMap.Temporary.Compressor.Attack`) has a full path.
 - `variables` of a layout control: the index variables with their starting value (zero based); see [Index variables](#index-variables).
 - Selector tabs (`selectorTabs`) have their `value` binding and their pages: grids, each labelled with the name of its option (in JSON in `children`).

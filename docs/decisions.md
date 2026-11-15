@@ -134,9 +134,75 @@ value model is being examined.
 31. **The UMP group of the channel messages is the group of the session** (the send group to send, the receive group
     to listen), not a device value; `channel` is the only device value of a command root. *Why:* one place for the
     groups of a device, as the endpoint gives them.
-32. **In the console a device has its map root and the command roots of the same schema document**, found
+32. ~~**In the console a device has its map root and the command roots of the same schema document**, found~~ Revised by 45.
     automatically; the parameter tree shows the command roots next to the map root's nodes. *Why:* the schema is
-    device specific (decision 9): the document already says what belongs together; nothing to configure. We can even take multiple connections ourselves.
+    device specific (decision 9): the document already says what belongs together; nothing to configure.
+33. **MIDI-CI comes from the platform, behind a Core abstraction.** Windows MIDI Services has a MIDI-CI layer
+    (`Windows.Devices.Midi2.CapabilityInquiry`: discovery, Property Exchange get/set/subscribe, the foundational
+    resources, profiles, and a responder for virtual devices); Jacobi.Midi.Windows implements the Core abstraction
+    with it. *Why:* little code of our own, maintained by the platform; another platform implements the abstraction
+    (or has none). Considered: our own MIDI-CI layer on `IMidiConnection` (cross-platform, as decision 17), more work.
+34. **Property Exchange is tested against the in-box General MIDI synthesizer of Windows MIDI Services** (Get,
+    Subscribe, paging; it answers Set with a NAK). A test device for Set (a virtual device with a capability inquiry
+    responder) is made when Set is built. The Windows MIDI Services SDK and runtime are upgraded to the latest
+    version. *Why:* a real responder that is always there, nothing to build first.
+35. **The Core abstraction of MIDI-CI stays raw: a resource request is a JSON header and a body;** no typed resources
+    and no profiles in Core. The resources the Device API needs (e.g. `ResourceList`) are parsed in Midi.Device.
+    *Why:* no dependency on the platform's types; Core only carries what the specification puts on the wire.
+36. **The members of the Core abstraction (`IMidiCapabilityInquiry`):** `Discover` (the responders: MUID, function
+    block, Property Exchange support, maximum SysEx size), `GetProperty`, `SetProperty`, `Subscribe`, `Unsubscribe`
+    and a `SubscriptionUpdated` event. A header is a `JsonObject` (`System.Text.Json.Nodes`), so every header field of
+    the specification passes through; a body is bytes (JSON text, or binary for a resource with a `mediaType`); a
+    response has the status, the reply header and the body. *Why:* the minimal set for Property Exchange.
+37. ~~**MIDI-CI is created on the connection** (`IMidiConnection.CreateCapabilityInquiry()`).~~ **MIDI-CI is created
+    on the API, for a connection** (`IMidiApi.CreateCapabilityInquiry(IMidiConnection)`); a platform without MIDI-CI
+    throws `NotSupportedException`. *Why:* the connection stays a plain packet channel; MIDI-CI is an optional
+    platform service next to it, as the API already creates sessions and endpoint watchers.
+38. **Property Exchange resources work in the existing value model through a generated schema:** the Device API
+    generates a schema document from what the device describes (its `ResourceList` and JSON Schemas), one root per
+    resource, so a resource is used with plan ranges like the other roots. The API accepts a saved or external
+    schema for such a dynamic device, and (re)generates one when none is given or cached. Saving it (for editing in
+    the Schema Editor, for offline use) is up to the client: the console can discover dynamic devices on an open
+    connection and offer to save the schema. *Why:* one value model for every kind of parameter; a saved schema
+    gives the offline bindings and the domains a device leaves out.
+39. **First make a generated schema work end to end; `resId` and arrays (repeats of unknown length) come after.**
+    A first check compiled a hand-written generated-style document (strings without a length, repeats without a
+    count, a string enum, bool and decimal fields) and built its plan without errors.
+40. **The rules of the generated schema (`PropertySchemaGenerator`):** a root per JSON resource with a schema,
+    `midi.role="pe"` and `midi.resource` (the resource name); `object` → group, `array` → repeat (a count when
+    `minItems` = `maxItems`), an array of values has the field `item`, a resource that is an array the repeat
+    `items`, a resource that is a value the field `value`; `integer` → `sys.int64`, `number` → `sys.decimal`,
+    `string` → `sys.string`, `boolean` → `sys.bool`; `minimum`/`maximum` and `enum` → a data type def; a name is made
+    a valid schema name and the JSON key kept in `midi.key`; `description` (else `title`) → `midi.doc`. What cannot be
+    generated (no schema, non-JSON data, an unresolved `$ref`, no single `type`) is reported as a note, not skipped
+    silently. A `pe` root has no message map. *Why:* a JSON Pointer maps to a path by these rules, and back.
+41. **The published JSON Schemas of the standard resources are embedded in Midi.Device** (`StandardSchemas`:
+    `DeviceInfo`, `ChannelList`, `ProgramList`, `ChCtrlList`, copied from the MIT licensed MIDI 2.0 Workbench of
+    MIDI2.dev) and used when the `ResourceList` gives no schema; embedded as `*.jsonschema`, so nothing that loads the
+    schema documents of an assembly takes them. *Why:* a device does not repeat the schemas of the specifications;
+    without them its standard resources cannot be generated.
+42. **`DeviceSession` reads a `pe` root with a Get of its resource, whole** (one block, the root; the sink gets all
+    of it), through a `PropertyExchangeDevice` (the responder and its `ResourceList`, found with
+    `PropertyExchangeDevice.Discover`) given to the session. For now Get only: Set and Subscribe come next; a resource
+    that needs a `resId` is reported as not available. *Why:* a working end-to-end example first (decision 39).
+43. **In the console a Property Exchange device is detected on an open MIDI connection** (an endpoint the user
+    selects): discovery, a generated schema, and a device in the rig with its roots (decision 32, for `pe` roots as for
+    `cmd` roots). The generated schema is kept in the library, marked as changed in the UI; the user chooses to save
+    it (or not). On connect, `RigConnections` discovers the `PropertyExchangeDevice` and gives it to the session. The
+    rig has one entry per device, and (for now) one schema file per device, authored or generated. *Why:* a device
+    can only be added with a schema; a dynamic device has none until it is detected. We can even take multiple connections ourselves.
+44. **The console saves a generated schema right away** (to a file the user picks, added to the schemas of the rig;
+    the schema library stays as it is: this revises the saving of 43), **marks the device as detected**
+    (`detected="true"` in the rig file, so its schema can be generated again), and **discovers the Property Exchange
+    device asynchronously on the open connection** (`DeviceSession.AttachPropertyExchange`); the device is online once
+    that is done. *Why:* the simplest change; the session's other streams subscribe before the connection opens, and
+    a receive when the device comes online can read the `pe` roots.
+45. **In the console a device is a schema document: all its roots belong to the device** (message-map roots, command
+    roots, Property Exchange roots); the rig names the document instead of a map root, and the + of the rig offers
+    documents (those with device data), not roots. A root without parameters (e.g. a fixed message) does not show in
+    the parameter tree. *Why:* one device entry per device (one schema file per device, decision 43); several
+    message-map roots in one device; nothing to choose or keep in step. Considered: an explicit list of roots per
+    device.
 
 ## Invalid input in the item editors of the Schema Editor (2026-11-13)
 

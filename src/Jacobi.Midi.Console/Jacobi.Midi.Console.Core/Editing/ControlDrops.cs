@@ -144,7 +144,7 @@ public static class ControlDrops
     }
 
     private static DashboardDevice? DeviceToAdd(Dashboard dashboard, DropSource source)
-        => dashboard.FindDevice(source.Device) is null ? new DashboardDevice(source.Device, source.MapRoot) : null;
+        => dashboard.FindDevice(source.Device) is null ? new DashboardDevice(source.Device, source.Schema) : null;
 
     /// <summary>
     /// Writes the full path of a node with an index for each repeat in it (see <see cref="ControlDrops"/>); a new
@@ -211,8 +211,8 @@ public static class ControlDrops
     }
 }
 
-/// <summary>What is dropped: a node of the parameter tree of a device of the rig (its alias and map root).</summary>
-public sealed record DropSource(string Device, string MapRoot, ParameterNode Node);
+/// <summary>What is dropped: a node of the parameter tree of a device of the rig (its alias and schema).</summary>
+public sealed record DropSource(string Device, string Schema, ParameterNode Node);
 
 /// <summary>
 /// What a drop changes: a new control (<see cref="Control"/>, with its bindings, not placed yet) or the binding of a

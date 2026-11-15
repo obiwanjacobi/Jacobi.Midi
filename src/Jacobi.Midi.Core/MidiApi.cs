@@ -20,6 +20,15 @@ public interface IMidiApi
     /// The handler may run before this method returns. Cancellation only cancels startup.
     /// </summary>
     Task<IMidiEndpointObserver> WatchMidiEndpoints(EndpointChangedHandler handler, CancellationToken ct);
+
+    /// <summary>
+    /// Starts MIDI Capability Inquiry as an initiator on a connection of this API (open or not yet opened), on a UMP
+    /// group of the endpoint; the connection stays the caller's.
+    /// </summary>
+    /// <param name="group">The group the MIDI-CI messages are sent and received on (e.g. the group of a DIN port).</param>
+    /// <exception cref="NotSupportedException">The platform has no MIDI-CI.</exception>
+    /// <exception cref="ArgumentException">The connection is not of this API.</exception>
+    IMidiCapabilityInquiry CreateCapabilityInquiry(IMidiConnection connection, MidiGroup group);
 }
 
 public sealed class MidiSessionOptions

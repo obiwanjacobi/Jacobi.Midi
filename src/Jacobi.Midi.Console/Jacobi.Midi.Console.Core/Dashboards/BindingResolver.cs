@@ -1,3 +1,4 @@
+using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Console.Core.Rigs;
 using Jacobi.Midi.Console.Core.Schemas;
@@ -62,8 +63,8 @@ public static class BindingResolver
             }
             foreach (var device in dashboard.Devices)
             {
-                if (!candidate.HasRoot(new SchemaName(device.MapRoot)))
-                    problems.Add(new(null, null, $"'{device.MapRoot}' (device '{device.Alias}') is not a root group of the schemas."));
+                if (!candidate.HasSchema(device.Schema))
+                    problems.Add(new(null, null, $"'{device.Schema}' (device '{device.Alias}') is not a schema with root groups."));
             }
             return candidate;
         }
@@ -126,21 +127,19 @@ public static class BindingResolver
             bindings.Add(new(control, slot, new ParameterReference(device, parsed.Path, parsed.Instance), null, variables));
         }
 
-        // the path must be a field of the device's map (or of one of its command roots); each variable must index a
-        // repeat of the map
+        // the path must be a field of one of the device's roots (the roots of its schema); each variable must index a
+        // repeat of that root
         bool Check(ParameterControl control, string slot, DashboardDevice device, ParsedPath parsed, BindingScope scope)
         {
-            var mapRoot = new SchemaName(device.MapRoot);
-            var root = parsed.Path.Split(SchemaPath.Separator)[0];
-            if (!String.Equals(root, mapRoot.Name, StringComparison.OrdinalIgnoreCase)
-                && !library!.CommandRootsOf(mapRoot).Any(command => String.Equals(root, command.Name, StringComparison.OrdinalIgnoreCase)))
+            var name = parsed.Path.Split(SchemaPath.Separator)[0];
+            if (library!.RootsOf(device.Schema).Cast<SchemaName?>().FirstOrDefault(root => String.Equals(name, root!.Value.Name, StringComparison.OrdinalIgnoreCase)) is not { } root)
             {
-                problems.Add(new(control, slot, $"'{parsed.Path}' must start at the map root '{mapRoot.Name}' of device '{device.Alias}', or at one of its command roots."));
+                problems.Add(new(control, slot, $"'{parsed.Path}' must start at a root of the schema '{device.Schema}' of device '{device.Alias}'."));
                 return false;
             }
-            if (!library!.Schemas!.TryFindByPath(new SchemaPath($"{mapRoot.Namespace}.{parsed.Path}"), out var node) || node is not SchemaField)
+            if (!library.Schemas!.TryFindByPath(new SchemaPath($"{root.Namespace}.{parsed.Path}"), out var node) || node is not SchemaField)
             {
-                problems.Add(new(control, slot, $"'{parsed.Path}' is not a field of '{device.MapRoot}'."));
+                problems.Add(new(control, slot, $"'{parsed.Path}' is not a field of '{device.Schema}'."));
                 return false;
             }
 
@@ -150,16 +149,19 @@ public static class BindingResolver
                 int? count;
                 try
                 {
-                    count = library.ItemCount(mapRoot, use.Repeat);
+                    count = library.ItemCount(root, use.Repeat);
                 }
                 catch (MessageMapException exception)
                 {
-                    problems.Add(new(control, slot, $"The address map '{device.MapRoot}' is not valid: {exception.Message}"));
+                    problems.Add(new(control, slot, $"The address map '{root}' is not valid: {exception.Message}"));
                     return false;
                 }
                 if (count is null)
                 {
-                    problems.Add(new(control, slot, $"'{SchemaPaths.VariablePrefix}{use.Variable}' indexes '{use.Repeat}', which is not a repeat of '{device.MapRoot}'."));
+                    // a repeat whose count only the data gives (e.g. a list resource): the variable has no range yet
+                    if (library.Serializer?.GetPlan(root).Find(new SchemaPath(use.Repeat)) is RepeatInfo)
+                        continue;
+                    problems.Add(new(control, slot, $"'{SchemaPaths.VariablePrefix}{use.Variable}' indexes '{use.Repeat}', which is not a repeat of '{root}'."));
                     return false;
                 }
                 if (itemCounts.TryGetValue(reference, out var known) && known != count)
@@ -181,11 +183,12 @@ public static class BindingResolver
                     problems.Add(new(reference.Owner, null, $"'{SchemaPaths.VariablePrefix}{reference.Name}' is {value}, but there are only {count} items (0-{count - 1})."));
             }
 
-            // a control that changes a variable needs its range: the item count of the repeat it indexes in a path
+            // a control that changes a variable needs a repeat it indexes in a path; its range is the item count of the
+            // repeat, or none yet when only the data gives the count
             if (library is null)
                 return;
-            foreach (var binding in bindings.Where(binding => binding.Variable is { } variable && !itemCounts.ContainsKey(variable)))
-                problems.Add(new(binding.Control, binding.Slot, $"'{SchemaPaths.VariablePrefix}{binding.Variable!.Name}' indexes no repeat in a binding path: its number of items is not known."));
+            foreach (var binding in bindings.Where(binding => binding.Variable is { } variable && !itemCounts.ContainsKey(variable) && !repeats.ContainsKey(variable)))
+                problems.Add(new(binding.Control, binding.Slot, $"'{SchemaPaths.VariablePrefix}{binding.Variable!.Name}' indexes no repeat in a binding path."));
         }
 
         // the first repeat a declared variable is seen to index
@@ -216,7 +219,7 @@ public sealed class BindingContext
     /// <summary>The current values of index variables, as set in the UI; a variable without one has its starting value.</summary>
     public IReadOnlyDictionary<VariableReference, int>? Values { get; init; }
 
-    /// <summary>The rig the dashboard is opened with: its devices are matched by alias and map root.</summary>
+    /// <summary>The rig the dashboard is opened with: its devices are matched by alias and schema.</summary>
     public Rig? Rig { get; init; }
 
     /// <summary>The compiled schemas: the bindings are checked against them and the item counts taken from the address maps.</summary>

@@ -41,7 +41,8 @@ public static class RigFile
             var element = root.Add(ConsoleFile.SetColors(new FileElement(DeviceName, FileRoles.Devices)
                 .Set("alias", device.Alias)
                 .Set("name", device.Name)
-                .Set("mapRoot", device.MapRoot), device.Colors));
+                .Set("schema", device.Schema)
+                .SetFlag("detected", device.IsDetected), device.Colors));
             foreach (var (name, value) in device.DeviceValues)
             {
                 element.Add(new FileElement(FileRoles.DeviceValues.ElementName!, FileRoles.DeviceValues)
@@ -131,7 +132,8 @@ public static class RigFile
         {
             Alias = element.GetRequired("alias"),
             Name = element.Get("name"),
-            MapRoot = element.GetRequired("mapRoot"),
+            Schema = element.GetRequired("schema"),
+            IsDetected = element.GetFlag("detected"),
             Colors = ConsoleFile.GetColors(element),
             DeviceValues = values,
             Endpoint = endpoint,

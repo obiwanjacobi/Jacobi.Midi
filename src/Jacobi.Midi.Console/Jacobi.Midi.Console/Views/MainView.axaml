@@ -356,8 +356,8 @@
                                     <TextBox Text="{Binding Alias, UpdateSourceTrigger=LostFocus}" />
                                     <TextBlock Text="Name" Classes="caption" />
                                     <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" PlaceholderText="e.g. the product name" />
-                                    <TextBlock Text="Map root (the address map of the device)" Classes="caption" />
-                                    <ComboBox ItemsSource="{Binding MapRoots}" SelectedItem="{Binding MapRoot}" HorizontalAlignment="Stretch" />
+                                    <TextBlock Text="Schema (all its roots are the device's)" Classes="caption" />
+                                    <ComboBox ItemsSource="{Binding Schemas}" SelectedItem="{Binding Schema}" HorizontalAlignment="Stretch" />
                                     <!-- the device values: a name (the map root's required names, or any other) and a value per row -->
                                     <Grid ColumnDefinitions="*,Auto">
                                         <TextBlock Text="Device values" Classes="caption" VerticalAlignment="Center" />

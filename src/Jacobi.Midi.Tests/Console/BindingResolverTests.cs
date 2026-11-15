@@ -11,8 +11,8 @@ namespace Jacobi.Midi.Tests.Console;
 /// </summary>
 public class BindingResolverTests
 {
-    private static readonly DashboardDevice Synth = new("synth", "Acme.AddressMap");
-    private static readonly DashboardDevice Pedalboard = new("pedalboard", "Gx.AddressMap");
+    private static readonly DashboardDevice Synth = new("synth", "Acme");
+    private static readonly DashboardDevice Pedalboard = new("pedalboard", "Gx");
 
     [Fact]
     public void Binding_IsRelativeToTheBaseOfTheSection()
@@ -271,22 +271,22 @@ public class BindingResolverTests
     {
         var rig = new Rig
         {
-            Devices = [new DeviceInstance { Alias = "synth", MapRoot = "Other.AddressMap" }],
+            Devices = [new DeviceInstance { Alias = "synth", Schema = "Other" }],
         };
 
         var problems = BindingResolver.Resolve(Dashboard(), new BindingContext { Rig = rig }).Problems;
 
         Assert.Equal(2, problems.Count);
-        Assert.Contains(problems, problem => problem.Message.Contains("rig is a 'Other.AddressMap', the dashboard needs a 'Acme.AddressMap'"));
+        Assert.Contains(problems, problem => problem.Message.Contains("rig is a 'Other', the dashboard needs a 'Acme'"));
         Assert.Contains(problems, problem => problem.Message.Contains("'pedalboard' is not in the rig"));
     }
 
     [Fact]
-    public void DeviceProblems_ARigWithTheDevicesAndMapRoots_HasNone()
+    public void DeviceProblems_ARigWithTheDevicesAndSchemas_HasNone()
     {
         var rig = new Rig
         {
-            Devices = [new DeviceInstance { Alias = "SYNTH", MapRoot = "Acme.AddressMap" }, new DeviceInstance { Alias = "pedalboard", MapRoot = "Gx.AddressMap" }, new DeviceInstance { Alias = "extra", MapRoot = "Other.AddressMap" }],
+            Devices = [new DeviceInstance { Alias = "SYNTH", Schema = "Acme" }, new DeviceInstance { Alias = "pedalboard", Schema = "Gx" }, new DeviceInstance { Alias = "extra", Schema = "Other" }],
         };
 
         Assert.Empty(Dashboard().DeviceProblems(rig));

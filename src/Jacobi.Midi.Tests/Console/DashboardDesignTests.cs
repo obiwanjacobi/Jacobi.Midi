@@ -20,7 +20,7 @@ public class DashboardDesignTests
 {
     private const string Rig = """
         <rig format="jacobi.midi.rig/1">
-          <device alias="gp8" mapRoot="Gp8.AddressMap">
+          <device alias="gp8" schema="Gp8">
             <deviceValue name="deviceId" value="0" />
           </device>
         </rig>
@@ -29,7 +29,7 @@ public class DashboardDesignTests
     // a grid on the stored patches with a section in it, and an empty section without base
     private const string Dashboard = """
         <dashboard format="jacobi.midi.dashboard/1" name="Test">
-          <device alias="gp8" mapRoot="Gp8.AddressMap" />
+          <device alias="gp8" schema="Gp8" />
           <grid device="gp8" base="AddressMap.Memory[$patch].Patch" size="40,30">
             <variable name="patch" value="3" />
             <section label="Filter" at="0,0" size="12,10">
@@ -52,12 +52,12 @@ public class DashboardDesignTests
         => DashboardSession.Open(OpenRig(), DashboardFile.Read(dashboard, FileFormat.Xml));
 
     private static ParameterNode Node(DashboardSession session, string path)
-        => Find(session.Rig.Devices["gp8"].Parameters, path) ?? throw new InvalidOperationException($"'{path}' is not in the tree.");
+        => Find(session.Rig.Devices["gp8"].Parameters.Single(), path) ?? throw new InvalidOperationException($"'{path}' is not in the tree.");
 
     private static ParameterNode? Find(ParameterNode node, string path)
         => node.Path == path ? node : node.Children.Select(child => Find(child, path)).FirstOrDefault(found => found is not null);
 
-    private static DropSource Source(DashboardSession session, string path) => new("gp8", "Gp8.AddressMap", Node(session, path));
+    private static DropSource Source(DashboardSession session, string path) => new("gp8", "Gp8", Node(session, path));
 
     private static LayoutControl Filter(DashboardSession session) => (LayoutControl)session.Dashboard.Layout.Children[0];
 
@@ -67,7 +67,7 @@ public class DashboardDesignTests
     public void ParameterTree_HasTheGroupsRepeatsAndFieldsOfTheMap_WithoutFixedValues()
     {
         using var session = Open();
-        var tree = session.Rig.Devices["gp8"].Parameters;
+        var tree = session.Rig.Devices["gp8"].Parameters.Single();
 
         Assert.Equal(("AddressMap", ParameterNodeKind.Group), (tree.Path, tree.Kind));
         var memory = Node(session, "AddressMap.Memory");
@@ -136,7 +136,7 @@ public class DashboardDesignTests
 
         Assert.Equal("gp8:AddressMap.Memory[$memory].Patch.MasterVolume", ((ValueControl)plan.Control!).Bindings[SlotNames.Value].ToString());
         Assert.Equal([new DeclaredVariable(root, new IndexVariable("memory"))], plan.Variables);
-        Assert.Equal(new DashboardDevice("gp8", "Gp8.AddressMap"), plan.Device);
+        Assert.Equal(new DashboardDevice("gp8", "Gp8"), plan.Device);
     }
 
     [Fact]
@@ -145,7 +145,7 @@ public class DashboardDesignTests
         // the variable is used in a binding, not in a base
         const string dashboard = """
             <dashboard format="jacobi.midi.dashboard/1" name="Test">
-              <device alias="gp8" mapRoot="Gp8.AddressMap" />
+              <device alias="gp8" schema="Gp8" />
               <grid device="gp8" size="40,30">
                 <variable name="p" value="0" />
                 <knob at="0,0" size="5,7"><bind slot="value" parameter="AddressMap.Memory[$p].Patch.MasterVolume" /></knob>
@@ -311,7 +311,7 @@ public class DashboardDesignTests
     {
         const string dashboard = """
             <dashboard format="jacobi.midi.dashboard/1" name="Test">
-              <device alias="gp8" mapRoot="Gp8.AddressMap" />
+              <device alias="gp8" schema="Gp8" />
               <grid device="gp8" base="AddressMap.Temporary" size="20,10">
                 <switch label="Sens" at="0,0" size="4,7"><bind slot="value" parameter="DynamicFilter.Sens" /></switch>
                 <switch label="On" at="4,0" size="4,7"><bind slot="value" parameter="EffectSwiches1.DelayOn" /></switch>
@@ -331,7 +331,7 @@ public class DashboardDesignTests
     {
         const string dashboard = """
             <dashboard format="jacobi.midi.dashboard/1" name="Test">
-              <device alias="gp8" mapRoot="Gp8.AddressMap" />
+              <device alias="gp8" schema="Gp8" />
               <grid device="gp8" base="AddressMap.Temporary" size="20,10">
                 <knob label="On" at="0,0" size="5,7"><bind slot="value" parameter="EffectSwiches1.DelayOn" /></knob>
               </grid>
@@ -513,7 +513,7 @@ public class DashboardDesignTests
     public void ReopenedRig_KeepsTheStatesOfTheDevicesThatAreTheSame()
     {
         var first = OpenRig();
-        first.Rig.Devices = [.. first.Rig.Devices, new DeviceInstance { Alias = "second", MapRoot = "Gp8.AddressMap" }];
+        first.Rig.Devices = [.. first.Rig.Devices, new DeviceInstance { Alias = "second", Schema = "Gp8" }];
 
         var second = RigSession.Open(first.Rig, first.Library, first);
         Assert.Same(first.Devices["gp8"], second.Devices["gp8"]);

@@ -9,6 +9,8 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Schemas\*.xml" />
+    <!-- the JSON Schemas of the standard Property Exchange resources: not schema documents (see StandardSchemas) -->
+    <EmbeddedResource Include="PropertyExchange\Schemas\*.json" LogicalName="PropertyExchange/%(Filename).jsonschema" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\Jacobi.BinarySerializer\src\Jacobi.BinarySerializer\Jacobi.BinarySerializer.csproj" />

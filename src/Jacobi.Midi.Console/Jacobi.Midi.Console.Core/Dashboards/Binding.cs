@@ -12,7 +12,7 @@ namespace Jacobi.Midi.Console.Core.Dashboards;
 /// and the device is the nearest one of the control or the layout controls around it; a variable is the nearest
 /// declaration (see <see cref="BindingResolver"/>).
 /// </summary>
-/// <param name="Path">The schema path with repeat indices: relative to the nearest base, or from the map root when
+/// <param name="Path">The schema path with repeat indices: relative to the nearest base, or from a root of the device when
 /// there is none; or <c>$name</c> for an index variable.</param>
 public sealed record Binding(string Path)
 {
@@ -20,7 +20,7 @@ public sealed record Binding(string Path)
     public const char DeviceSeparator = ':';
 
     /// <summary>
-    /// The device alias of this binding. With it, <see cref="Path"/> is a full path from the map root: a base belongs
+    /// The device alias of this binding. With it, <see cref="Path"/> is a full path from a root of the device: a base belongs
     /// to the device it was given with.
     /// </summary>
     public string? Device { get; init; }
@@ -82,7 +82,7 @@ public sealed record Binding(string Path)
 }
 
 /// <summary>
-/// The identity of a device parameter: the device alias, the full schema path from the map root (without indices)
+/// The identity of a device parameter: the device alias, the full schema path from its root (without indices)
 /// and the instance. Device state and synchronisation work with this identity.
 /// </summary>
 public sealed record ParameterReference(string Device, string Path, InstancePath Instance);

@@ -34,7 +34,7 @@ public closed class DashboardControl
     public string? Device { get; set; }
 
     /// <summary>
-    /// The full schema path (from the map root, with repeat indices) that the binding paths in and below this control
+    /// The full schema path (from a root of the device, with repeat indices) that the binding paths in and below this control
     /// are relative to; inherited by the controls inside it. Bases do not stack: the nearest one is used.
     /// </summary>
     public string? Base { get; set; }

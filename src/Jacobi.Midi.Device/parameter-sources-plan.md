@@ -83,8 +83,10 @@ Each question is answered with the user in its own step; the answer goes into do
      - [x] a single helper for "is a command root", used by both sides (decision 29);
      - [x] the members of `CommandMap` (internal; settled while building). Built: namespace `Commands`, see
        [Commands/readme.md](Commands/readme.md).
-5. **A MIDI-CI base.** Discovery, MUIDs, request ids, chunking, NAK/ACK and timeouts (M2-101). Needed before PE; to
-   check what Windows MIDI Services already offers.
+5. **A MIDI-CI base.** Discovery, MUIDs, request ids, chunking, NAK/ACK and timeouts (M2-101). Needed before PE.
+   Decided: the platform's MIDI-CI behind a Core abstraction (decision 33). Test partners: the in-box General MIDI
+   synthesizer of Windows MIDI Services (a PE responder: get, subscribe, paging; no set) and a virtual device with a
+   capability inquiry responder (sample `capability-inquiry-virtual-device` of the Windows MIDI repo).
 6. **The PE API.** Resources and `resId` as roots, JSON Pointer as path, Get/Set (full, partial)/Subscribe,
    JSON Schema as value domain, non-JSON resources (`mediaTypes`) possibly decoded by a schema.
 7. **The console.** How `DeviceState`, bindings and the parameter tree use the result.
@@ -99,7 +101,11 @@ Each question is answered with the user in its own step; the answer goes into do
   the message maps; the client chooses (decision 10).
 - [x] Question 4: channel-message API (first stream to build: smallest, needed by PE anyway). *Done:* `Commands`
   (`CommandMessages`); `MessageExchange` on an existing connection is in the [Device todo](todo.md).
-- [ ] Question 5: MIDI-CI base.
+- [x] Question 5: MIDI-CI base. *Done:* `IMidiCapabilityInquiry` in Core (`IMidiApi.CreateCapabilityInquiry`), on the
+  Windows SDK's capability inquiry session (decisions 33-37). Checked against the General MIDI synthesizer: Discover,
+  Get (`ResourceList`, `DeviceInfo`, `ProgramList` with paging, `ChCtrlList`, an unknown resource: status 404) and a
+  subscription to `ChannelList` (a program change gives a `notify`). Found: a Set to the synthesizer gives no
+  response after the timeout (its chart says NAK); the SDK subscribes by resource and resource id only.
 - [ ] Question 6: PE API.
 - [ ] Question 7: console integration.
 
@@ -109,3 +115,4 @@ Each question is answered with the user in its own step; the answer goes into do
   Protocol, M2-115 Bit Scaling and Resolution.
 - Still needed for PE: M2-105 Foundational Resources (`DeviceInfo`, `ChannelList`, `JSONSchema`) and the resource
   specs for `ProgramList` and the controller resources (`CMList`).
+- Windows MIDI2 driver source and examples: "C:\Users\Marc\source\repos\_microsoft MIDI"
