@@ -35,7 +35,9 @@ public static class DeviceIdentity
                 }
             }
         };
-        port.Connection = await session.Connect(endpointId, new MidiConnectionOptions(), port.OnPacketsReceived, ct);
+        // the port subscribes before the connection opens; disposing the port disposes the connection
+        port.Connection = await session.CreateConnection(endpointId, new MidiConnectionOptions(), ct);
+        await port.Connection.Open(ct);
 
         await port.Send(IdentityRequestMessage.Encode(deviceId), ct);
         await Task.Delay(wait, ct);

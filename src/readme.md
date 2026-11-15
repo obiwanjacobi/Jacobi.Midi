@@ -106,9 +106,10 @@ await using var session = await api.CreateSession(
     new MidiSessionOptions { Name = "My MIDI application" }, ct);
 
 // Select an endpoint from observer.Endpoints, then:
-await using var connection = await session.Connect(endpointId,
-    new MidiConnectionOptions { Directions = MidiDirections.Duplex },
-    packets => { /* Process or copy the received StampedPacket values here. */ }, ct);
+await using var connection = await session.CreateConnection(endpointId,
+    new MidiConnectionOptions { Directions = MidiDirections.Duplex }, ct);
+connection.PacketsReceived += packets => { /* Process or copy the received StampedPacket values here. */ };
+await connection.Open(ct);
 ```
 
 ### Windows backend contracts
@@ -133,14 +134,16 @@ await using var connection = await session.Connect(endpointId,
   rather than being reported as unsupported. Function-block directions are converted to the
   application's perspective; group terminal blocks provide a direction fallback.
   Connection `EndpointInfo` is the snapshot captured when opening; discovery reports later updates.
-- Connections default to duplex; receive-only and send-only are supported. A receive handler
-  is required when receiving. Known unsupported directions are rejected. Unknown direction
-  metadata cannot verify a return path or DIN cabling. Windows native connections remain
+- Connections default to duplex; receive-only and send-only are supported. Received packets
+  are raised by the connection's `PacketsReceived` event; every subscriber gets the same
+  packets. Known unsupported directions are rejected. Unknown direction metadata cannot verify a return path or DIN cabling. Windows native connections remain
   duplex internally; the wrapper enforces the requested directions. Normally open only one
   connection per endpoint in a session: each native connection owns buffers and a processing
-  thread. Connections are not automatically shared because handlers and ownership differ.
-- Receive callbacks begin only after native opening succeeds, though they may precede the
-  return from Connect. Packets arriving during opening are buffered; failed opening discards them.
+  thread. Connections are not automatically shared because ownership differs.
+- `CreateConnection` creates a connection that is not open yet: subscribe to its events, then call
+  `Open` (once). `Connect` (an extension method) creates and opens in one call. Receive callbacks
+  begin only after native opening succeeds. Packets that arrive while there is no subscriber are
+  not kept. Failed opening faults the connection (`Error`) and discards them; dispose it.
   Receive callbacks are serialized per connection on a background worker, with batches up to
   64 packets. Copy values that must outlive a callback. Do not use `async void` callbacks or
   synchronously wait for connection/session/observer disposal inside their own callbacks.

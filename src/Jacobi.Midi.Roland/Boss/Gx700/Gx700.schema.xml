@@ -643,8 +643,11 @@
     <dataTypeDef name="patchNumber" basedOn="sys.uint8" min="1" max="200" />
     <!-- System.Common.TunerPitch: 435 - 445 Hz. -->
     <dataTypeDef name="tunerPitch" basedOn="sys.uint8" min="435" max="445" shift="435" />
+
     <!-- System.Common.MidiChannel: 1 - 16. -->
     <dataTypeDef name="midiChannel" basedOn="sys.uint8" min="1" max="16" shift="1" />
+    <!-- 0-127 (= program 1-128) -->
+    <dataTypeDef name="programNumber" basedOn="sys.uint8" min="1" max="128" shift="1" />
 
     <!-- Common.Chain.EffectType (Table-1.1). -->
     <dataTypeDef name="effectType" basedOn="sys.uint8" optionsDefault="Compressor">
@@ -1610,6 +1613,17 @@
             <field name="Request" datatype="sys.uint8" value="0x00" />
           </members>
         </group>
+      </members>
+    </group>
+
+    <!--
+      The parameters set with channel messages (MIDI 1.0), on the MIDI channel of the system (MidiChannel): the client
+      supplies the channel and group (device values).
+    -->
+    <group name="Commands" midi.role="cmd1">
+      <members>
+        <!-- program change 0-127 (= 1-128): selects the patch the Program Change Map (system) gives for it -->
+        <field name="Program" datatype="programNumber" midi.cmd="pc" midi.doc="The program change that selects the current patch: the patch (1-200) is the one the MIDI Program Change Map of the system gives for the program (1-128)." />
       </members>
     </group>
   </members>

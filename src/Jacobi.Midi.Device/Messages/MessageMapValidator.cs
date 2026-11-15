@@ -57,12 +57,17 @@ public static class MessageMapValidator
             }
         }
 
-        // the dumps that are a message themselves (no data message carries them)
+        // the dumps that are a message themselves (no data message carries them), and the command roots
         foreach (var document in serializer.Schemas.Documents)
         {
             foreach (var group in document.Roots)
             {
                 var root = new SchemaName($"{document.Name}{SchemaName.Separator}{group.Name}");
+                if (MidiProperties.IsCommandRoot(group))
+                {
+                    ValidateCommandRoot(serializer, root, problems);
+                    continue;
+                }
                 bool isMessageDump;
                 try
                 {
@@ -93,7 +98,15 @@ public static class MessageMapValidator
             }
         }
 
-        if (MidiProperties.RoleOf(node) is { } role && MidiProperties.IsRole(role))
+        if (MidiProperties.RoleOf(node) is { } commandRole && MidiProperties.IsCommandRole(commandRole))
+        {
+            // a command root is validated as a whole by its command map
+            if (path.Value.Contains(SchemaPath.Separator, StringComparison.Ordinal) || node is not SchemaGroup || node is SchemaRepeat or SchemaChoice)
+            {
+                problems.Error(document, path, $"the role '{commandRole}' only applies to a root group.");
+            }
+        }
+        else if (MidiProperties.RoleOf(node) is { } role && MidiProperties.IsRole(role))
         {
             var isData = String.Equals(role, MidiProperties.RoleData, StringComparison.OrdinalIgnoreCase);
             if (isData && node is SchemaChoice { MemberNodeDef: { } contract })
@@ -162,6 +175,22 @@ public static class MessageMapValidator
                     ? $"'{MidiProperties.DevicePrefix}{name}' is not used: no message of the contract '{carriers}' has the role '{MidiProperties.RoleDevicePrefix}{name}'."
                     : $"'{MidiProperties.DevicePrefix}{name}' is not used: the message has no role '{MidiProperties.RoleDevicePrefix}{name}'.");
         }
+    }
+
+    // a command root: the rules of its command map (fields, midi.cmd, data types, device values)
+    private static void ValidateCommandRoot(Serializer serializer, SchemaName root, MessageMapProblems problems)
+    {
+        ExecutionPlan plan;
+        try
+        {
+            plan = serializer.GetPlan(root);
+        }
+        catch (Exception exception) when (exception is ExecutionPlanException or InvalidOperationException or ArgumentException)
+        {
+            // the plan's problems are not command map problems
+            return;
+        }
+        Commands.CommandMap.TryCreate(serializer, plan, problems);
     }
 
     private static bool ConformsTo(SchemaSet schemas, SchemaName root, SchemaName contract)

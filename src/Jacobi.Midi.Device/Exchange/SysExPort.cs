@@ -25,8 +25,8 @@ internal interface ISysExPort : IAsyncDisposable
 
 /// <summary>
 /// A SysEx port over a MIDI 2.0 connection: splits outgoing messages into SysEx7 packets on the send group of
-/// <paramref name="groups"/> and assembles the incoming packets of its receive group into complete messages. <see cref="OnPacketsReceived"/> is the
-/// receive handler of the connection; the connection is attached once it is open.
+/// <paramref name="groups"/> and assembles the incoming packets of its receive group into complete messages. It
+/// subscribes to the packets of the connection once the connection is attached (after it is opened).
 /// </summary>
 internal sealed class MidiConnectionSysExPort(MidiGroupPair groups) : ISysExPort
 {
@@ -42,11 +42,13 @@ internal sealed class MidiConnectionSysExPort(MidiGroupPair groups) : ISysExPort
             if (_connection is not null)
             {
                 _connection.ConnectionStateChanged -= OnConnectionStateChanged;
+                _connection.PacketsReceived -= OnPacketsReceived;
             }
             _connection = value;
             if (_connection is not null)
             {
                 _connection.ConnectionStateChanged += OnConnectionStateChanged;
+                _connection.PacketsReceived += OnPacketsReceived;
             }
         }
     }
@@ -70,7 +72,7 @@ internal sealed class MidiConnectionSysExPort(MidiGroupPair groups) : ISysExPort
     }
 
     // called by the connection, serialized per connection, on a background thread
-    public void OnPacketsReceived(ReadOnlySpan<StampedPacket> packets)
+    private void OnPacketsReceived(ReadOnlySpan<StampedPacket> packets)
     {
         var messages = new List<byte[]>();
         lock (_lock)

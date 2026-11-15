@@ -97,11 +97,11 @@ internal sealed class FakeMidiSession(FakeMidiApi api) : IMidiSession
 
     public IReadOnlyList<IMidiConnection> OpenConnections => [.. Connections.Where(connection => !connection.IsDisposed)];
 
-    public Task<IMidiConnection> Connect(string endpointId, MidiConnectionOptions options, MidiPacketReceivedHandler? reciever, CancellationToken ct)
+    public Task<IMidiConnection> CreateConnection(string endpointId, MidiConnectionOptions options, CancellationToken ct)
     {
         var endpoint = api.Endpoints.FirstOrDefault(endpoint => endpoint.Id == endpointId)
             ?? throw new InvalidOperationException($"No endpoint '{endpointId}'.");
-        var connection = new FakeMidiConnection(api, endpoint, reciever);
+        var connection = new FakeMidiConnection(api, endpoint);
         lock (Connections)
             Connections.Add(connection);
         return Task.FromResult<IMidiConnection>(connection);
@@ -118,7 +118,7 @@ internal sealed class FakeMidiSession(FakeMidiApi api) : IMidiSession
 /// A connection of the <see cref="FakeMidiApi"/>: assembles the SysEx messages sent per group, records them, and
 /// sends the responder's answer back on the <see cref="FakeMidiApi.ReplyGroup"/>.
 /// </summary>
-internal sealed class FakeMidiConnection(FakeMidiApi api, MidiEndpointInfo endpoint, MidiPacketReceivedHandler? receiver) : IMidiConnection
+internal sealed class FakeMidiConnection(FakeMidiApi api, MidiEndpointInfo endpoint) : IMidiConnection
 {
     private readonly Dictionary<byte, SysEx7Assembler> _assemblers = [];
 
@@ -131,11 +131,21 @@ internal sealed class FakeMidiConnection(FakeMidiApi api, MidiEndpointInfo endpo
 
     public MidiDirections Directions => MidiDirections.Duplex;
 
-    public MidiConnectionState ConnectionState { get; private set; } = MidiConnectionState.Open;
+    public MidiConnectionState ConnectionState { get; private set; } = MidiConnectionState.Closed;
 
     public Exception? Error { get; private set; }
 
     public event EventHandler<MidiConnectionStateChangedArgs>? ConnectionStateChanged;
+
+    public event MidiPacketReceivedHandler? PacketsReceived;
+
+    public Task Open(CancellationToken ct)
+    {
+        if (ConnectionState != MidiConnectionState.Closed)
+            throw new InvalidOperationException("The connection was opened before.");
+        ConnectionState = MidiConnectionState.Open;
+        return Task.CompletedTask;
+    }
 
     /// <summary>The connection faults, as when the cable is pulled.</summary>
     public void Fault(string message)
@@ -170,7 +180,7 @@ internal sealed class FakeMidiConnection(FakeMidiApi api, MidiEndpointInfo endpo
         var packets = SysEx7Message.FromSystemExclusive(group, sysEx)
             .Select(packet => new StampedPacket(new UniversalPacket([packet[0], packet[1]]), 0))
             .ToArray();
-        receiver?.Invoke(packets);
+        PacketsReceived?.Invoke(packets);
     }
 
     public ValueTask DisposeAsync()

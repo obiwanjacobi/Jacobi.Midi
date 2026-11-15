@@ -29,6 +29,9 @@ A provider claims a root by the tags it owns and then reports the problems of th
 map gets address-map errors, it is not passed on to the dump map. The chain is fixed in Midi.Device; it becomes
 configurable when a provider of another assembly is needed.
 
+A command root (`midi.role="cmd1"` or `"cmd2"`) is not offered to the chain: it is set with channel messages, not
+SysEx, and has no message map (see [Commands](../Commands/readme.md); `MidiProperties.IsCommandRoot` decides).
+
 ## Messages
 
 A **message** (`DeviceMessage`) is a group of the schemas with the nodes that have a role (`midi.role`): the facts

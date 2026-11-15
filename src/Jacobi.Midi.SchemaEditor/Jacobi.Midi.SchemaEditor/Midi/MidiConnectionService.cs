@@ -42,10 +42,10 @@ internal sealed class MidiConnectionService(IMidiApi api, string sessionName) : 
         => _observer?.WaitForCompletion(ct) ?? Task.CompletedTask;
 
     /// <summary>
-    /// Opens a connection to the endpoint in all directions it supports (Duplex when unknown).
-    /// The receiver is only used when the connection can receive.
+    /// Creates a connection to the endpoint in all directions it supports (Duplex when unknown); it becomes the active
+    /// <see cref="Connection"/>. It is not open yet: subscribe to its events, then call <see cref="IMidiConnection.Open"/>.
     /// </summary>
-    public async Task<IMidiConnection> Connect(MidiEndpointInfo endpoint, MidiPacketReceivedHandler receiver, CancellationToken ct)
+    public async Task<IMidiConnection> CreateConnection(MidiEndpointInfo endpoint, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
         if (Connection is not null)
@@ -53,10 +53,8 @@ internal sealed class MidiConnectionService(IMidiApi api, string sessionName) : 
 
         _session ??= await api.CreateSession(new MidiSessionOptions { Name = sessionName }, ct).ConfigureAwait(false);
 
-        var directions = GetConnectDirections(endpoint);
-        var options = new MidiConnectionOptions { Directions = directions };
-        var connectionReceiver = directions.HasFlag(MidiDirections.Receive) ? receiver : null;
-        Connection = await _session.Connect(endpoint.Id, options, connectionReceiver, ct).ConfigureAwait(false);
+        var options = new MidiConnectionOptions { Directions = GetConnectDirections(endpoint) };
+        Connection = await _session.CreateConnection(endpoint.Id, options, ct).ConfigureAwait(false);
         return Connection;
     }
 

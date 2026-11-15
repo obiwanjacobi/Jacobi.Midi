@@ -15,7 +15,6 @@ internal sealed class WindowsMidiConnection : IMidiConnection
     private readonly SemaphoreSlim _sending = new(1, 1);
     private readonly Native.MidiEndpointConnection _native;
     private readonly Guid _id;
-    private readonly MidiPacketReceivedHandler? _receiver;
     private readonly Action<WindowsMidiConnection, Guid> _remove;
     private readonly Channel<StampedPacket> _received = Channel.CreateBounded<StampedPacket>(
         new BoundedChannelOptions(4096) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
@@ -24,15 +23,15 @@ internal sealed class WindowsMidiConnection : IMidiConnection
     private Task? _disposeTask;
     private MidiConnectionState _state = MidiConnectionState.Closed;
     private Exception? _error;
+    private bool _openCalled;
 
     internal WindowsMidiConnection(Native.MidiEndpointConnection native, MidiEndpointInfo endpoint,
-        MidiDirections directions, MidiPacketReceivedHandler? receiver, Action<WindowsMidiConnection, Guid> remove)
+        MidiDirections directions, Action<WindowsMidiConnection, Guid> remove)
     {
         _native = native;
         _id = native.ConnectionId;
         EndpointInfo = endpoint;
         Directions = directions;
-        _receiver = receiver;
         _remove = remove;
         if ((directions & MidiDirections.Receive) != 0)
             _native.MessageReceived += MessageReceived;
@@ -56,20 +55,46 @@ internal sealed class WindowsMidiConnection : IMidiConnection
 
     public event EventHandler<MidiConnectionStateChangedArgs>? ConnectionStateChanged;
 
-    internal void Open(CancellationToken ct)
+    public event MidiPacketReceivedHandler? PacketsReceived;
+
+    public Task Open(CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposeTask is not null, this);
+            if (_openCalled)
+                throw new InvalidOperationException($"The connection to MIDI endpoint '{EndpointInfo.Name}' was opened before.");
+            _openCalled = true;
+            // open before the native call: packets received while it opens are accepted (see MessageReceived)
             _state = MidiConnectionState.Open;
-        if (!_native.Open())
-            throw new MidiException($"Could not open MIDI endpoint '{EndpointInfo.Name}'.");
-        ct.ThrowIfCancellationRequested();
+        }
+
+        bool opened;
+        try
+        {
+            opened = _native.Open();
+        }
+        catch (Exception error)
+        {
+            var failure = new MidiException($"Could not open MIDI endpoint '{EndpointInfo.Name}'.", error);
+            Fault(failure);
+            throw failure;
+        }
+        if (!opened)
+        {
+            var failure = new MidiException($"Could not open MIDI endpoint '{EndpointInfo.Name}'.");
+            Fault(failure);
+            throw failure;
+        }
+
         lock (_gate)
         {
             if (_state != MidiConnectionState.Open)
                 throw new MidiException($"MIDI endpoint '{EndpointInfo.Name}' failed while opening.", _error!);
             _opened.TrySetResult(true);
         }
+        return Task.CompletedTask;
     }
 
     public async ValueTask Send(ReadOnlyMemory<UniversalPacket> packets, CancellationToken ct)
@@ -214,7 +239,7 @@ internal sealed class WindowsMidiConnection : IMidiConnection
                     if (_disposeTask is not null || _state != MidiConnectionState.Open)
                         return;
                 }
-                _receiver!(batch.AsSpan(0, count));
+                PacketsReceived?.Invoke(batch.AsSpan(0, count));
                 Array.Clear(batch, 0, count);
             }
         }

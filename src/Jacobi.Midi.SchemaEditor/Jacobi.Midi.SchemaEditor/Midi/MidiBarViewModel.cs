@@ -212,14 +212,20 @@ internal sealed partial class MidiBarViewModel : ObservableObject, IAsyncDisposa
     {
         try
         {
-            var connection = await _service!.Connect(endpoint, OnPacketsReceived, CancellationToken.None);
+            var connection = await _service!.CreateConnection(endpoint, CancellationToken.None);
             connection.ConnectionStateChanged += OnConnectionStateChanged;
+            connection.PacketsReceived += OnPacketsReceived;
+            try
+            {
+                await connection.Open(CancellationToken.None);
+            }
+            catch (Exception error)
+            {
+                await Disconnect($"Could not connect to {endpoint.Name}: {error.Message}");
+                return;
+            }
             IsConnected = true;
             StatusText = $"Connected to {endpoint.Name} ({connection.Directions}).";
-
-            // the connection may have faulted before we subscribed
-            if (connection.ConnectionState == MidiConnectionState.Faulted)
-                await Disconnect($"Connection to {endpoint.Name} lost: {connection.Error?.Message}");
         }
         catch (Exception error)
         {
@@ -230,7 +236,10 @@ internal sealed partial class MidiBarViewModel : ObservableObject, IAsyncDisposa
     private async Task Disconnect(string status)
     {
         if (_service?.Connection is { } connection)
+        {
             connection.ConnectionStateChanged -= OnConnectionStateChanged;
+            connection.PacketsReceived -= OnPacketsReceived;
+        }
 
         try
         {
@@ -330,7 +339,10 @@ internal sealed partial class MidiBarViewModel : ObservableObject, IAsyncDisposa
             return;
 
         if (_service.Connection is { } connection)
+        {
             connection.ConnectionStateChanged -= OnConnectionStateChanged;
+            connection.PacketsReceived -= OnPacketsReceived;
+        }
 
         await _service.DisposeAsync();
         _initializeTask = null;

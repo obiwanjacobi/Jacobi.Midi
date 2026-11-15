@@ -186,7 +186,7 @@ public sealed class MidiConnectionOptions
 
 /// <summary>
 /// Packet spans are valid only during the synchronous callback. Copy packets to retain them.
-/// Callbacks are serialized per connection and may start before Connect returns.
+/// Callbacks are serialized per connection.
 /// </summary>
 public delegate void MidiPacketReceivedHandler(ReadOnlySpan<StampedPacket> packets);
 
@@ -195,12 +195,15 @@ public delegate void MidiPacketReceivedHandler(ReadOnlySpan<StampedPacket> packe
 /// </summary>
 public interface IMidiSession : IAsyncDisposable
 {
-    Task<IMidiConnection> Connect(
-        string endpointId, MidiConnectionOptions options,
-        MidiPacketReceivedHandler? reciever, CancellationToken ct);
+    /// <summary>
+    /// Creates a connection to the endpoint; it is not open yet. Subscribe to its events, then call
+    /// <see cref="IMidiConnection.Open"/>. <see cref="MidiSessionExtensions.Connect"/> creates and opens in one call.
+    /// </summary>
+    Task<IMidiConnection> CreateConnection(string endpointId, MidiConnectionOptions options, CancellationToken ct);
 
     /// <summary>
-    /// Stable snapshot. Faulted connections remain until explicitly disposed.
+    /// Stable snapshot of the connections of the session, also those not opened yet. Faulted connections remain until
+    /// explicitly disposed.
     /// </summary>
     IReadOnlyList<IMidiConnection> OpenConnections { get; }
 }
@@ -229,6 +232,21 @@ public interface IMidiConnection : IAsyncDisposable
     event EventHandler<MidiConnectionStateChangedArgs>? ConnectionStateChanged;
 
     /// <summary>
+    /// The packets received from the endpoint (a connection that receives), raised on a background thread; the calls
+    /// are serialized per connection and every subscriber gets the same packets. Packets received while there is no
+    /// subscriber are not kept: subscribe before sending what the device answers. An exception of a subscriber faults
+    /// the connection.
+    /// </summary>
+    event MidiPacketReceivedHandler? PacketsReceived;
+
+    /// <summary>
+    /// Opens the connection, once; packets are received and sending is possible from then on. Subscribe to the events
+    /// before, so nothing is missed. When opening fails the connection is faulted (see <see cref="Error"/>); dispose it.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The connection was opened before.</exception>
+    Task Open(CancellationToken ct);
+
+    /// <summary>
     /// Sends immediately. Completion means acceptance, not device acknowledgement.
     /// Cancellation or failure can leave a partially submitted batch; do not blindly retry.
     /// </summary>
@@ -241,3 +259,29 @@ public interface IMidiConnection : IAsyncDisposable
     ValueTask SendScheduled(ReadOnlyMemory<StampedPacket> packets, CancellationToken ct);
 }
 
+/// <summary>
+/// Conveniences on <see cref="IMidiSession"/>.
+/// </summary>
+public static class MidiSessionExtensions
+{
+    /// <summary>
+    /// Creates and opens a connection to the endpoint. Packets received before the caller subscribes to
+    /// <see cref="IMidiConnection.PacketsReceived"/> are not kept; use <see cref="IMidiSession.CreateConnection"/> and
+    /// <see cref="IMidiConnection.Open"/> to subscribe first. A connection that fails to open is disposed.
+    /// </summary>
+    public static async Task<IMidiConnection> Connect(this IMidiSession session, string endpointId, MidiConnectionOptions options, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        var connection = await session.CreateConnection(endpointId, options, ct).ConfigureAwait(false);
+        try
+        {
+            await connection.Open(ct).ConfigureAwait(false);
+            return connection;
+        }
+        catch
+        {
+            await connection.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
+    }
+}

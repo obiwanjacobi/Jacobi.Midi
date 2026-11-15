@@ -4,6 +4,7 @@ Known gaps and loose ends of the address map and the message exchange (see [Addr
 
 ## General
 
+- [ ] **`MessageExchange` on an existing `IMidiConnection`.** Opening the connection is not the job of the message exchange: add a create that takes an existing connection (the one that opens it may stay as a convenience); the caller owns that connection (see [docs/decisions.md](../../docs/decisions.md), *Parameter sources other than message maps*, decision 22). The SysEx port subscribes to `IMidiConnection.PacketsReceived`; a connection given before it is opened (`IMidiSession.CreateConnection`, then `Open`) misses nothing (decisions 23, 24). `CommandMessages` already works this way.
 - [ ] Add universal sysex definitions to midi.schema.xml
 - [ ] Add documentation to schema fields (and groups?) `midi.doc`. Copy text from the manual to show in editor and/or console.
 - [x] consolidate midi.atomic and midi.unit? Add an opposite of atomic: individual (per field)? Allow midi.unit on groups? *Done:* `midi.transfer="atomic|individual"` replaces `midi.atomic` (see [docs/decisions.md](../../docs/decisions.md), *How a group is cut into blocks*); `midi.unit` stays a message setting.

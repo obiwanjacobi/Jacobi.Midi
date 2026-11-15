@@ -33,7 +33,17 @@ public sealed class MessageExchangeFactory(IMidiSession session, Serializer seri
         options ??= new MessageExchangeOptions();
 
         var port = new MidiConnectionSysExPort(options.Groups);
-        port.Connection = await session.Connect(endpointId, new MidiConnectionOptions(), port.OnPacketsReceived, ct);
+        // the port subscribes before the connection opens, so no packet is missed
+        port.Connection = await session.CreateConnection(endpointId, new MidiConnectionOptions(), ct);
+        try
+        {
+            await port.Connection.Open(ct);
+        }
+        catch
+        {
+            await port.DisposeAsync();
+            throw;
+        }
         return new MessageExchange(_maps, exchanges, port, device);
     }
 

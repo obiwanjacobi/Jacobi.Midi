@@ -205,8 +205,7 @@ Namespace `Jacobi.Midi.Device.Exchange`.
 
 The exchange sends and receives complete SysEx messages (F0 … F7) through an internal `ISysExPort`. The
 connection-based port splits outgoing messages into SysEx7 packets on the options' UMP group and assembles incoming
-packets with a `SysEx7Assembler`; its packet handler is the `MidiPacketReceivedHandler` the factory passes to
-`IMidiSession.Connect`. Tests use a fake port that plays the device.
+packets with a `SysEx7Assembler`; it subscribes to `IMidiConnection.PacketsReceived` of the connection. Tests use a fake port that plays the device.
 
 The Schema Editor's *Send* does not go through the runner yet: it keeps the `messageInterval` of the root's
 `sendData` exchange between its messages.

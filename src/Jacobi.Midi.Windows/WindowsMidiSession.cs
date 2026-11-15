@@ -21,15 +21,13 @@ internal sealed class WindowsMidiSession(Native.MidiSession native) : IMidiSessi
         }
     }
 
-    public async Task<IMidiConnection> Connect(
-        string endpointId, MidiConnectionOptions options, MidiPacketReceivedHandler? reciever, CancellationToken ct)
+    public async Task<IMidiConnection> CreateConnection(
+        string endpointId, MidiConnectionOptions options, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(endpointId);
         ArgumentNullException.ThrowIfNull(options);
         if (options.Directions == MidiDirections.None || (options.Directions & ~MidiDirections.Duplex) != 0)
             throw new ArgumentOutOfRangeException(nameof(options), "Specify Receive, Send, or Duplex.");
-        if ((options.Directions & MidiDirections.Receive) != 0)
-            ArgumentNullException.ThrowIfNull(reciever);
 
         await _opening.WaitAsync(ct).ConfigureAwait(false);
         WindowsMidiConnection? connection = null;
@@ -49,8 +47,7 @@ internal sealed class WindowsMidiSession(Native.MidiSession native) : IMidiSessi
             lock (_nativeGate)
                 nativeConnection = native.CreateEndpointConnection(endpointId, new Native.MidiEndpointConnectionSettings(false, false))
                     ?? throw new MidiException($"Could not create a connection to MIDI endpoint '{info.Name}'.");
-            connection = new WindowsMidiConnection(nativeConnection, info, options.Directions, reciever, Remove);
-            connection.Open(ct);
+            connection = new WindowsMidiConnection(nativeConnection, info, options.Directions, Remove);
             lock (_gate)
             {
                 ObjectDisposedException.ThrowIf(_disposeTask is not null, this);

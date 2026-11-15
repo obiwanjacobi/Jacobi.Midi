@@ -3,6 +3,128 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## Parameter sources other than message maps (2026-11-14)
+
+Issue: the console only supports parameters of a message map (SysEx through the message exchange). Devices also
+expose parameters as channel messages (CC, NRPN, Program Change, MIDI 2.0 controllers) and through MIDI-CI Property
+Exchange. See the console todo, *Parameter sources and targets*. In progress: the fit of Property Exchange with the
+value model is being examined.
+
+1. **Channel messages are not part of the message maps.** Midi.Device gets a separate API for sending and receiving
+   ordinary MIDI messages; `IMessageMap` stays for schema-described device messages. *Why:* different concerns; the
+   message maps are about SysEx data described by schemas.
+2. **Ordinary MIDI goes through the MIDI 2.0 (UMP) interface,** and works for MIDI 1.0 and MIDI 2.0 messages; ~~the
+   MIDI 2.0 drivers do the conversion for legacy devices~~ (revised by 19: the form is chosen by the schema, not
+   translated by the driver). *Why:* one path; no MIDI 1.0 byte stream code of our own.
+3. ~~**The schemas do not describe ordinary MIDI support** (no CC numbers etc. as schema tags). *Why:* the schemas rest
+   on Jacobi.BinarySerializer, which is generic and knows nothing of MIDI; it would become awkward.~~ Revised by 7.
+4. **The console's `DeviceState` is the candidate place where the parameter streams come together**, only if it stays
+   clean. *Why:* the controls already see only logical values through it.
+5. **Property Exchange is one source next to the others, not an umbrella over them:** at worst three streams
+   (channel messages, schema-described messages, Property Exchange) that the client merges. The design of the
+   Midi.Device API comes first; how the console merges them comes later. *Why:* the PE Common Rules (M2-103 §3.1
+   "Use MIDI Messages Whenever Possible", §11) require a CC or Program Change to be used where it can, also for a
+   subscribed property; PE does not hide channel messages.
+6. **A distinct Midi.Device API per stream; no shared parameter model in Midi.Device (for now).** Message maps,
+   channel messages and Property Exchange each get their own API. The client abstracts them in the way that works
+   for it; for the console that is the console's value model. Combining the schema-based and PE streams in
+   Midi.Device may come later, when the details and problems are better understood. *Why:* a client that knows what
+   it wants uses only that part; it keeps clear what each part does.
+7. **Channel-message parameters are described in the schemas, in a root of their own** that is tagged for it (as
+   the address map root is) and is never transferred as a schema (no data messages). The fields carry `midi.*`
+   node properties for the channel message; groups structure them (decision 16); the data type gives the logical
+   value. The serializer stays unchanged: the `midi.*` properties are free-form node properties. *Why:* gives the
+   simple MIDI messages a shared meaning and structure, reuses data types, node defs and the Schema Editor; the
+   tagged root keeps the scenarios apart, prevents failing schema transfers and allows validation.
+8. **The MIDI channel and group are device values**, supplied by the client; the schema author decides (as for
+   `deviceId`). *Why:* the same device can be on any channel; it is how the device is reached, not a setting of it.
+9. **A schema is device specific:** a field describes the channel message of that device (MIDI 1.0 or MIDI 2.0);
+   no field needs a MIDI 1.0 and a MIDI 2.0 variant. Only generic concepts are shared (e.g. through includes).
+10. **The channel-message API works on plan ranges, as the message maps do.** Both are schema roots, so the client
+    uses them the same way; which stream a parameter takes is the client's choice (question 3 of the plan).
+11. **The schema describes channel messages that carry a setting: Control Change, RPN, NRPN and Program Change.**
+    Channel Pressure, Pitch Bend, per-note and relative controllers are left out; an app sends those with the
+    message types of Jacobi.Midi.Messages through Core. *Why:* only these describe a setting of the device; the
+    others are performance data or increments.
+12. **One tag on a field: the kind and its number** (the CC number; the parameter number of an RPN/NRPN; none for a
+    Program Change). **The resolution comes from the data type** of the field, whether it is a predefined or a
+    schema-local data type (no dependency on predefined resolution types). A 14-bit CC is a CC with a 14-bit type (the MSB/LSB pair on a MIDI 1.0 device), not a kind of
+    its own. *Why:* few, generic variants; the data type already says how the logical value relates to the
+    physical one.
+13. **For now the channel-message API gets the physical value of a field by serializing a one-field range** and
+    reading the number back from its bytes. A conversion API in Jacobi.BinarySerializer that runs only the value
+    pipeline of a field is on its todo list. *Why:* works without a change in the serializer; the whole value
+    pipeline of the field (not only the facets) is applied, so there is one place of truth for the conversion.
+14. **A channel root can fix the channel and group** (`midi.device.channel`, `midi.device.group`); the device values
+    the client passes override them, as for the message maps (`DeviceValues.With`: client over map root). *Why:*
+    the same mechanism as `deviceId`; the schema author decides what is fixed.
+15. **Tags: `midi.role="cmd"` on the root, `midi.cmd="<kind>#<number>"` on its fields** (e.g. `cc#74`); the role
+    value is `cmd1` or `cmd2` since decision 19.
+    `midi.role` becomes "the role of a node"; the validator accepts `cmd` on a root only, and the message roles
+    (`address`, `size`, `data`, `device.<name>`) not on a `cmd` root. *Why:* no new tag; the role says that the
+    fields of the root carry `midi.cmd`. Considered: claiming the root by the presence of `midi.cmd` on its fields
+    (as the address provider claims by its tags), but an explicit role makes the intent visible and lets the
+    validator report a field without `midi.cmd`.
+16. **A `cmd` root holds groups and fields only;** a field without `midi.cmd` is a validation error, and so are
+    repeats and choices. *Why:* the root is a lookup of controllers (name, number, data conversion) structured by
+    groups. Repeat items would have the same `midi.cmd` and cannot be told apart on the wire; a choice selects a
+    layout from a value, and there is no layout. Multitimbral parts are the same root used with other device values
+    (channel). An index-based number per repeat item can be added when a device needs it.
+17. **Receiving accepts both UMP forms of channel messages** (MIDI 1.0 type 2 and MIDI 2.0 type 4) and assembles the
+    multi-message parameters of type 2 itself (NRPN/RPN as CC 99/98 or 101/100 + 6/38, a 14-bit CC as MSB + LSB,
+    Bank Select + Program Change), with state per group and channel. *Why:* cross-platform; the drivers of other
+    platforms may translate differently or not at all.
+18. **Channel messages that match no field of the `cmd` root are ignored, not reported.** *Why:* notes, clock and
+    the traffic of other channels are normal, not an error (unlike SysEx that is received but not accepted).
+19. **The MIDI protocol of a `cmd` root is explicit in its role: `midi.role="cmd1"` (MIDI 1.0) or `"cmd2"` (MIDI
+    2.0).** `midi.cmd` stays one tag with the same kinds for both. The API sends the form the root prescribes:
+    `cmd1` as UMP type 2, building the multi-message sequences itself (the mirror of decision 17); `cmd2` as type 4.
+    The validator allows the 7- and 14-bit resolution types in a `cmd1` root and the 32-bit type in a `cmd2` root. A
+    device that supports both has two roots, which can share groups through node defs. *Why:* cross-platform (no
+    dependency on driver translation); the schema is device specific, so the author knows the protocol; one tag on
+    the root cannot be forgotten or mixed per field; the protocol is not derived from the resolution types, because
+    a MIDI 2.0 device can have a 7-bit range and still receive type 4.
+20. **The channel-message API has no offline layer** (no counterpart of `MessageMaps.Load`/`Save` for files): it
+    works on a connection, send and listen. *Why:* channel messages are real-time and fleeting; SysEx has dump
+    files, channel messages have no such use.
+21. ~~**One device uses one MIDI connection**, shared by its streams (message maps and channel messages), until proven
+    otherwise.~~ Revised by 22.
+22. **The Midi.Device APIs work on an `IMidiConnection`; how it is created and shared is decided outside them.**
+    Opening a connection is not the job of the message exchange: `MessageExchange` gets a create that takes an
+    existing `IMidiConnection` (the one that opens the connection may remain as a convenience); the channel-message
+    API takes an `IMidiConnection` too. No device-connection object in Midi.Device. Each stream may have a connection
+    of its own to the same endpoint. *Why:* Midi.Device is a generic API (our apps are test cases); an app that does
+    not use the message exchange still opens connections; sharing one connection object between streams invites
+    threading problems, and the drivers support more than one client (also for our own apps and library).
+23. **`IMidiConnection` raises the received packets with an event (`PacketsReceived`);** `IMidiSession.Connect` no
+    longer takes a receive handler. *Why:* an API that is given an existing connection must be able to receive on
+    it; every subscriber gets the same packets. Packets that arrive while there is no subscriber are not kept.
+24. **A connection is created and opened in two steps:** `IMidiSession.CreateConnection` gives a connection that is
+    not open, `IMidiConnection.Open` opens it (once); a failed open faults the connection, the caller disposes it.
+    `Connect` remains as an extension method that does both. *Why:* handlers are set up before packets arrive, so
+    nothing is missed. The advice to open one connection per endpoint in a session (Windows MIDI Services: each
+    native connection has its own buffers and thread) stays.
+25. **Names: namespace `Jacobi.Midi.Device.Commands`; an internal `CommandMap` per `cmd1`/`cmd2` root; a public
+    `CommandMessages` to send and listen.** *Why:* after the root role and `midi.cmd`.
+26. **`CommandMap` is not an `IMessageMap`.** Nearly all members of `IMessageMap` are about SysEx device messages
+    (`DataMessages`, `Message`, `Split`, `Write`, `Match`, `TryRead`, `CreateState`); a command map would have to fake
+    them. They share helpers instead (the device values a root fixes, `MidiProperties`). The message-map provider
+    chain does not claim a `cmd1`/`cmd2` root: asking its message map is an error that says what the root is.
+    *Why:* decision 1; no fake implementations.
+27. **The command map reports its problems with `MessageMapProblem`, `MessageMapProblemSeverity` and
+    `MessageMapException`, as they are.** *Why:* the same kind of problem (a tag on a node); no rename for now.
+28. **`CommandMessages`: a constructor on the serializer, an existing `IMidiConnection` and the client's device
+    values (it subscribes to `PacketsReceived` and does not own the connection; disposing it unsubscribes),
+    `Validate(root)`, `Send(range, source, ct)` and `Listen(range, sink, ct)`.** A field of the range without a
+    value in the source is an error that names the fields, and nothing is sent. *Why:* the agreed value-model
+    shape; nothing is skipped silently, a partial send is a smaller range.
+29. **One helper decides whether a root is a command root** (`midi.role` `cmd1`/`cmd2`, in `MidiProperties` next to
+    `RoleOf` and `IsData`). The message-map provider chain uses it to leave command roots alone, the command map to
+    refuse other roots; neither codes the other's logic. *Why:* a single place of truth; the message maps stay free
+    of command logic. Received packets are already apart by UMP message type, before any map sees them: the SysEx
+    port's `SysEx7Assembler` only takes type 3 packets (SysEx7) of its group, so a message map only gets SysEx; the
+    command side only takes channel voice (type 2 and 4). No map calls the other to filter received data. We can even take multiple connections ourselves.
+
 ## Invalid input in the item editors of the Schema Editor (2026-11-13)
 
 Issue: the item editors (includes, data type defs, processor defs) threw on invalid input, so the box showed a validation

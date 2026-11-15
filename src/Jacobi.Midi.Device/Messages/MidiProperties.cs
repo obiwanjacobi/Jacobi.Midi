@@ -52,9 +52,15 @@ public static class MidiProperties
     /// </summary>
     public const string MaxDataSize = "midi.maxDataSize";
     /// <summary>
-    /// Which value an envelope field or open choice holds: <c>address</c>, <c>size</c>, <c>device.&lt;name&gt;</c> or <c>data</c>.
+    /// The role of a node: which value an envelope field or open choice holds (<c>address</c>, <c>size</c>,
+    /// <c>device.&lt;name&gt;</c> or <c>data</c>), or on a root, that it is a command root (<c>cmd1</c>, <c>cmd2</c>).
     /// </summary>
     public const string Role = "midi.role";
+    /// <summary>
+    /// The channel message a field of a command root is transferred with: <c>&lt;kind&gt;#&lt;number&gt;</c>, e.g.
+    /// <c>cc#74</c>, <c>nrpn#3/12</c>, or <c>pc</c> (see <see cref="Commands.Command"/>).
+    /// </summary>
+    public const string Cmd = "midi.cmd";
     /// <summary>
     /// The bits per address byte of the <c>address</c> field (envelope); default 7.
     /// </summary>
@@ -82,6 +88,14 @@ public static class MidiProperties
     /// The prefix of the <c>device.&lt;name&gt;</c> role: a field that holds a device value (<see cref="DevicePrefix"/>).
     /// </summary>
     public const string RoleDevicePrefix = "device.";
+    /// <summary>
+    /// The role of a root whose fields are MIDI 1.0 channel messages (<see cref="Cmd"/>).
+    /// </summary>
+    public const string RoleCommand1 = "cmd1";
+    /// <summary>
+    /// The role of a root whose fields are MIDI 2.0 channel messages (<see cref="Cmd"/>).
+    /// </summary>
+    public const string RoleCommand2 = "cmd2";
 
     /// <summary>
     /// The tags with a fixed name (a device value, <see cref="DevicePrefix"/>, has a name of its own).
@@ -95,7 +109,8 @@ public static class MidiProperties
         Describe(Access, "Map: readwrite (default), read or write; inherited."),
         Describe(Unit, "Message or map root: what one message covers: range (default), field or atomic."),
         Describe(MaxDataSize, "Message or map root: the largest number of data bytes in one message."),
-        Describe(Role, "Envelope: the value the node holds: address, size, data or device.<name>."),
+        Describe(Role, "Envelope: the value the node holds: address, size, data or device.<name>. Root: cmd1 or cmd2, a command root."),
+        Describe(Cmd, "Command root: the channel message of the field: cc#<number>, rpn#<number>, nrpn#<number> (or <msb>/<lsb>) or pc."),
         Describe(AddressBits, "Envelope: the bits per address byte of the address field (default 7)."),
         Describe(Doc, "Any node: the documentation of the node, plain text (multi-line); not inherited."),
     ];
@@ -142,7 +157,10 @@ public static class MidiProperties
             Unit
                 => Enum.TryParse<AddressUnit>(value, ignoreCase: true, out _) ? null : $"'{name}' must be range, field or atomic, not '{value}'.",
             Role
-                => IsRole(value) ? null : $"'{name}' must be {RoleAddress}, {RoleSize}, {RoleData} or {RoleDevicePrefix}<name>, not '{value}'.",
+                => IsRole(value) || IsCommandRole(value) ? null
+                    : $"'{name}' must be {RoleAddress}, {RoleSize}, {RoleData}, {RoleDevicePrefix}<name>, {RoleCommand1} or {RoleCommand2}, not '{value}'.",
+            Cmd
+                => Commands.Command.TryParse(value, out _, out var error) ? null : $"'{name}': {error}",
             _ => null,
         };
     }
@@ -161,6 +179,25 @@ public static class MidiProperties
     /// </summary>
     public static bool IsData(SchemaNode node)
         => String.Equals(RoleOf(node), RoleData, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The MIDI protocol of a command root (<c>midi.role</c> <c>cmd1</c>: 1, <c>cmd2</c>: 2); null for any other node.
+    /// The single place that decides whether a root is a command root: the message maps leave it alone, the
+    /// command map refuses any other root.
+    /// </summary>
+    public static int? CommandProtocolOf(SchemaNode node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        var role = RoleOf(node);
+        return String.Equals(role, RoleCommand1, StringComparison.OrdinalIgnoreCase) ? 1
+            : String.Equals(role, RoleCommand2, StringComparison.OrdinalIgnoreCase) ? 2
+            : null;
+    }
+
+    /// <summary>
+    /// True when the node is a command root (<c>midi.role</c> <c>cmd1</c> or <c>cmd2</c>), see <see cref="CommandProtocolOf"/>.
+    /// </summary>
+    public static bool IsCommandRoot(SchemaNode node) => CommandProtocolOf(node) is not null;
 
     /// <summary>
     /// The documentation of a node (<c>midi.doc</c>); null when it has none. Only the node's own: not inherited.
@@ -191,6 +228,13 @@ public static class MidiProperties
             || String.Equals(role, RoleSize, StringComparison.OrdinalIgnoreCase)
             || String.Equals(role, RoleData, StringComparison.OrdinalIgnoreCase)
             || (role.StartsWith(RoleDevicePrefix, StringComparison.OrdinalIgnoreCase) && role.Length > RoleDevicePrefix.Length));
+
+    /// <summary>
+    /// True for a role of a command root: <c>cmd1</c> or <c>cmd2</c>.
+    /// </summary>
+    internal static bool IsCommandRole(string? role)
+        => String.Equals(role, RoleCommand1, StringComparison.OrdinalIgnoreCase)
+        || String.Equals(role, RoleCommand2, StringComparison.OrdinalIgnoreCase);
 
     private static bool IsNumber(string? value) => TryParseNumber(value, out _);
 
