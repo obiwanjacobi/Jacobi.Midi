@@ -1,4 +1,5 @@
 using Jacobi.BinarySerializer.Execution;
+using Jacobi.Midi.Device;
 using Jacobi.Midi.Console.Core.Connections;
 using Jacobi.Midi.Console.Core.Dashboards;
 using Jacobi.Midi.Console.Core.Devices;

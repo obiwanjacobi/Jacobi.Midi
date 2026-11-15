@@ -20,7 +20,7 @@ internal sealed record CommandField(FieldInfo Field, Command Command, int Bits, 
 /// <summary>
 /// The command map of a command root (<c>midi.role</c> <c>cmd1</c> or <c>cmd2</c>): its fields, each with the channel
 /// message it is transferred with, validated against the rules of a command root. It knows the protocol of the root
-/// (MIDI 1.0 or 2.0) and the device values the root fixes (<c>midi.device.channel</c>, <c>midi.device.group</c>), and
+/// (MIDI 1.0 or 2.0) and the device value the root fixes (<c>midi.device.channel</c>), and
 /// converts the value of a field between its logical value (the value model) and its physical value (the value in the
 /// channel message) with the serializer, so the field's data type and value processors apply. Not a message map: no
 /// SysEx. Immutable and thread-safe.
@@ -29,8 +29,6 @@ internal sealed class CommandMap
 {
     /// <summary>The device value of the MIDI channel (0-15).</summary>
     public const string ChannelValue = "channel";
-    /// <summary>The device value of the UMP group (0-15).</summary>
-    public const string GroupValue = "group";
 
     private readonly Serializer _serializer;
     private readonly Dictionary<Command, CommandField> _byCommand;
@@ -62,6 +60,12 @@ internal sealed class CommandMap
 
     /// <summary>The field transferred with the command; null when no field is.</summary>
     public CommandField? Find(Command command) => _byCommand.GetValueOrDefault(command);
+
+    /// <summary>The command field of a field of the root's plan; null when it is not one.</summary>
+    public CommandField? FieldOf(FieldInfo field) => Fields.FirstOrDefault(candidate => ReferenceEquals(candidate.Field, field));
+
+    /// <summary>The range of the whole root.</summary>
+    public PlanRange Whole => Plan.CreateRange(Plan.Root.Path);
 
     /// <summary>The fields of a range of the root's plan.</summary>
     /// <exception cref="ArgumentException">The range is of another plan.</exception>
@@ -178,8 +182,7 @@ internal sealed class CommandMap
     {
         foreach (var (name, value) in device)
         {
-            if (String.Equals(name, ChannelValue, StringComparison.OrdinalIgnoreCase)
-                || String.Equals(name, GroupValue, StringComparison.OrdinalIgnoreCase))
+            if (String.Equals(name, ChannelValue, StringComparison.OrdinalIgnoreCase))
             {
                 if (value is < 0 or > 15)
                 {
@@ -189,7 +192,7 @@ internal sealed class CommandMap
             else
             {
                 problems.Warning(document, path,
-                    $"'{MidiProperties.DevicePrefix}{name}' is not used: a command root only uses '{MidiProperties.DevicePrefix}{ChannelValue}' and '{MidiProperties.DevicePrefix}{GroupValue}'.");
+                    $"'{MidiProperties.DevicePrefix}{name}' is not used: a command root only uses '{MidiProperties.DevicePrefix}{ChannelValue}' (the UMP group is the session's).");
             }
         }
     }

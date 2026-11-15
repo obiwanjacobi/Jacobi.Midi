@@ -26,9 +26,10 @@ internal interface ISysExPort : IAsyncDisposable
 /// <summary>
 /// A SysEx port over a MIDI 2.0 connection: splits outgoing messages into SysEx7 packets on the send group of
 /// <paramref name="groups"/> and assembles the incoming packets of its receive group into complete messages. It
-/// subscribes to the packets of the connection once the connection is attached (after it is opened).
+/// subscribes to the packets of the connection once the connection is attached (before it is opened, so nothing is
+/// missed). Disposing it disposes the connection only when it owns it (<paramref name="ownsConnection"/>).
 /// </summary>
-internal sealed class MidiConnectionSysExPort(MidiGroupPair groups) : ISysExPort
+internal sealed class MidiConnectionSysExPort(MidiGroupPair groups, bool ownsConnection = true) : ISysExPort
 {
     private readonly SysEx7Assembler _assembler = new(groups.Receive.Value);
     private readonly Lock _lock = new();
@@ -96,7 +97,10 @@ internal sealed class MidiConnectionSysExPort(MidiGroupPair groups) : ISysExPort
         if (Connection is { } connection)
         {
             Connection = null;
-            await connection.DisposeAsync();
+            if (ownsConnection)
+            {
+                await connection.DisposeAsync();
+            }
         }
     }
 }

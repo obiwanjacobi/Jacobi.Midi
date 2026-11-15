@@ -1618,7 +1618,7 @@
 
     <!--
       The parameters set with channel messages (MIDI 1.0), on the MIDI channel of the system (MidiChannel): the client
-      supplies the channel and group (device values).
+      supplies the channel (device value 'channel', 0-15); the UMP group is the session's.
     -->
     <group name="Commands" midi.role="cmd1">
       <members>

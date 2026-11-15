@@ -126,14 +126,16 @@ public static class BindingResolver
             bindings.Add(new(control, slot, new ParameterReference(device, parsed.Path, parsed.Instance), null, variables));
         }
 
-        // the path must be a field of the device's map; each variable must index a repeat of the map
+        // the path must be a field of the device's map (or of one of its command roots); each variable must index a
+        // repeat of the map
         bool Check(ParameterControl control, string slot, DashboardDevice device, ParsedPath parsed, BindingScope scope)
         {
             var mapRoot = new SchemaName(device.MapRoot);
             var root = parsed.Path.Split(SchemaPath.Separator)[0];
-            if (!String.Equals(root, mapRoot.Name, StringComparison.OrdinalIgnoreCase))
+            if (!String.Equals(root, mapRoot.Name, StringComparison.OrdinalIgnoreCase)
+                && !library!.CommandRootsOf(mapRoot).Any(command => String.Equals(root, command.Name, StringComparison.OrdinalIgnoreCase)))
             {
-                problems.Add(new(control, slot, $"'{parsed.Path}' must start at the map root '{mapRoot.Name}' of device '{device.Alias}'."));
+                problems.Add(new(control, slot, $"'{parsed.Path}' must start at the map root '{mapRoot.Name}' of device '{device.Alias}', or at one of its command roots."));
                 return false;
             }
             if (!library!.Schemas!.TryFindByPath(new SchemaPath($"{mapRoot.Namespace}.{parsed.Path}"), out var node) || node is not SchemaField)

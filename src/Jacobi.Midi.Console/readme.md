@@ -444,8 +444,10 @@ Both exchanges can be set per device in the dashboard properties of Edit mode (*
 
 **Connections** (`RigConnections` in Console.Core). One MIDI session and the endpoints it reaches (watched, so the list
 follows the endpoints that come and go), and a `DeviceSession` of the [message exchange](../Jacobi.Midi.Device/Exchange/readme.md)
-per device of the rig with an endpoint (`MessageExchangeFactory.CreateSession`, with the device's `DeviceValues` and
-UMP groups). The endpoint is found by its name (see [Rig](#rig)). The status of a device (`DeviceConnection`):
+per device of the rig with an endpoint (created on a connection `RigConnections` opens and owns, with the device's
+`DeviceValues` and UMP groups). A device has its map root and the command roots of the same schema document
+(`SchemaLibrary.CommandRootsOf`): their parameters are in the tree next to the map root's, and are sent with channel
+messages; they cannot be requested (they stay unknown until sent), and the dashboard's exchanges do not apply to them. The endpoint is found by its name (see [Rig](#rig)). The status of a device (`DeviceConnection`):
 
 | Status | Meaning |
 |--------|---------|

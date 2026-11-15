@@ -2,6 +2,7 @@ using Jacobi.BinarySerializer.Execution;
 using Jacobi.Midi.Console.Core.Dashboards;
 using Jacobi.Midi.Console.Core.Devices;
 using Jacobi.Midi.Console.Core.Editing;
+using Jacobi.Midi.Console.Core.Faces;
 using Jacobi.Midi.Console.Core.Files;
 using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Core.Parameters;
@@ -219,6 +220,31 @@ public class DashboardSessionTests
         {
             directory.Delete(recursive: true);
         }
+    }
+
+    [Fact]
+    public void ABinding_ToACommandRootOfTheDevice_IsAParameter()
+    {
+        const string rig = """
+            <rig format="jacobi.midi.rig/1">
+              <device alias="gx" mapRoot="Gx700.AddressMap"><deviceValue name="channel" value="0" /></device>
+            </rig>
+            """;
+        const string dashboard = """
+            <dashboard format="jacobi.midi.dashboard/1" name="Program">
+              <device alias="gx" mapRoot="Gx700.AddressMap" />
+              <column device="gx">
+                <knob><bind slot="value" parameter="Commands.Program" /></knob>
+              </column>
+            </dashboard>
+            """;
+        using var session = DashboardSession.Open(
+            RigSession.Open(RigFile.Read(rig, FileFormat.Xml), ConsoleLibrary.BuiltInLibrary), DashboardFile.Read(dashboard, FileFormat.Xml));
+
+        Assert.Empty(session.Problems);
+        var value = Assert.IsType<ParameterValue>(ValueOf(session, 0));
+        Assert.Equal("Commands.Program", value.Parameter.Path);
+        Assert.Equal(new ValueRange(1, 128), value.Info.Range);
     }
 
     [Fact]

@@ -31,6 +31,10 @@ factory.PrepareAll();   // optional: create and validate all message maps up fro
 // once per connection to a device: what device (values the schema does not fix) and how to reach it
 var device = new DeviceValues { ["deviceId"] = 0x00 };
 await using var session = await factory.CreateSession(endpointId, device, options: null, sessionOptions: null, ct);
+// or on a connection the application creates and owns (also for command roots, see ../Commands/readme.md):
+//   var connection = await midiSession.CreateConnection(endpointId, new MidiConnectionOptions(), ct);
+//   var session = new DeviceSession(serializer, connection, device, groups, exchanges);
+//   await connection.Open(ct);
 session.Disconnected += (_, _) => { /* the session is done: dispose it, connect again for a new one */ };
 session.StateChanged += (_, args) => { /* args.Nodes changed: received, sent or invalidated */ };
 
@@ -189,8 +193,8 @@ Namespace `Jacobi.Midi.Device.Exchange`.
 | Type | Purpose |
 | ---- | ------- |
 | `MessageExchangeFactory` | Creates sessions (`CreateSession`) and exchanges (`Create`) on an `IMidiSession` with the serializer whose schemas describe the devices and the exchange files; each gets its own connection. `Prepare(root)` / `PrepareAll()` create and validate message maps up front. |
-| `DeviceSession` | `RequestData`, `SendData`, `Execute`, `Probe`, `Invalidate` and `Clear` for one connected device, with the state of the device kept between calls. `IsConnected`, `Disconnected` and `StateChanged`. Lives as long as its connection; disposing it closes the connection. |
-| `DeviceSessionOptions`, `SessionData`, `DeviceStateChangedEventArgs`, `DeviceStateChange` | Where a transfer takes the values the client does not give, and what changed in the state. |
+| `DeviceSession` (namespace `Jacobi.Midi.Device`) | The entry point: `RequestData`, `SendData`, `Execute`, `Probe`, `Invalidate` and `Clear` for one connected device, with the state of the device kept between calls; a command root goes to `CommandMessages` (see [Commands](../Commands/readme.md)). `IsConnected`, `Disconnected` and `StateChanged`. Created on a connection the application owns (exchange files optional), or by the factory, which opens the connection and closes it with the session. |
+| `DeviceSessionOptions`, `SessionData`, `DeviceStateChangedEventArgs`, `DeviceStateChange` (namespace `Jacobi.Midi.Device`) | Where a transfer takes the values the client does not give, and what changed in the state. |
 | `MessageExchange` | The runner: `Execute`, `Validate` and `Listen` for one device (connection and device values), without state; a device with several roots works through one exchange. `ConnectionState` and `ConnectionStateChanged`. Disposing it closes the connection. |
 | `MessageExchangeOptions` | Runtime settings that belong neither in the schema nor in the exchange file: the UMP `Groups` (a `MidiGroupPair`: the group to send on and the group to receive on). |
 | `ExchangeData` | What an exchange needs from the app: a `Source` for data that is sent, a `Sink` for data that is received. |

@@ -179,4 +179,17 @@ public class DeviceStateTests
 
         Assert.Contains("deviceId", exception.Message);
     }
+
+    [Fact]
+    public void CommandRoots_OfTheMapRootsDocument_BelongToTheDevice()
+    {
+        var state = new DeviceState(new DeviceInstance { Alias = "gx700", MapRoot = "Gx700.AddressMap" }, ConsoleLibrary.BuiltInLibrary);
+
+        Assert.Equal(["Gx700.Commands"], state.CommandRoots.Select(root => root.FullName));
+        var commands = Assert.Single(state.CommandParameters);
+        Assert.Equal("Commands.Program", Assert.Single(commands.Children).Path);
+        Assert.Same(state.Plan, state.PlanOf("AddressMap.System.Common.MidiChannel"));
+        Assert.IsType<FieldInfo>(state.Find("Commands.Program"));
+        Assert.Null(state.PlanOf("Other.Program"));
+    }
 }

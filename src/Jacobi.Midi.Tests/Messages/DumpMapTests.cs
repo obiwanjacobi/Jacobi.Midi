@@ -2,6 +2,7 @@ using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
+using Jacobi.Midi.Device;
 using Jacobi.Midi.Core;
 using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Device.Exchange;

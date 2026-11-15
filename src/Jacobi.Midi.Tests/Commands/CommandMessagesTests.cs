@@ -23,7 +23,7 @@ public class CommandMessagesTests
             <dataTypeDef name="pan" basedOn="sys.uint8" min="-64" max="63" shift="-64" />
           </dataTypeDefs>
           <members>
-            <group name="Mono" midi.role="cmd1" midi.device.group="0">
+            <group name="Mono" midi.role="cmd1">
               <members>
                 <field name="Volume" datatype="sys.uint8" midi.cmd="cc#7" />
                 <field name="Pan" datatype="pan" midi.cmd="cc#10" />
@@ -37,7 +37,7 @@ public class CommandMessagesTests
                 <field name="Program" datatype="sys.uint8" midi.cmd="pc" />
               </members>
             </group>
-            <group name="Poly" midi.role="cmd2" midi.device.group="1" midi.device.channel="2">
+            <group name="Poly" midi.role="cmd2" midi.device.channel="2">
               <members>
                 <field name="Volume" datatype="sys.uint32" midi.cmd="cc#7" />
                 <field name="Cutoff" datatype="sys.uint32" midi.cmd="nrpn#0x0101" />
@@ -47,6 +47,9 @@ public class CommandMessagesTests
           </members>
         </schema>
         """;
+
+    private static readonly MidiGroupPair Group0 = MidiGroupPair.Same(new MidiGroup(0));
+    private static readonly MidiGroupPair Group1 = MidiGroupPair.Same(new MidiGroup(1));
 
     private static readonly SchemaName Mono = new("Synth.Mono");
     private static readonly SchemaName Poly = new("Synth.Poly");
@@ -175,7 +178,7 @@ public class CommandMessagesTests
     {
         var serializer = CreateSerializer();
         var connection = new FakeCommandConnection();
-        await using var commands = new CommandMessages(serializer, connection, new DeviceValues { ["channel"] = 3 });
+        await using var commands = new CommandMessages(serializer, connection, new DeviceValues { ["channel"] = 3 }, Group0);
 
         await commands.Send(Whole(serializer, Mono), Values(
             ("Mono.Volume", (byte)100), ("Mono.Pan", -10m), ("Mono.Filter.Cutoff", (ushort)1000),
@@ -198,7 +201,7 @@ public class CommandMessagesTests
     {
         var serializer = CreateSerializer();
         var connection = new FakeCommandConnection();
-        await using var commands = new CommandMessages(serializer, connection, new DeviceValues());
+        await using var commands = new CommandMessages(serializer, connection, new DeviceValues(), Group1);
 
         await commands.Send(Whole(serializer, Poly), Values(
             ("Poly.Volume", 0x80000000u), ("Poly.Cutoff", 5u), ("Poly.Program", (byte)9)), CancellationToken.None);
@@ -216,7 +219,7 @@ public class CommandMessagesTests
     {
         var serializer = CreateSerializer();
         var connection = new FakeCommandConnection();
-        await using var commands = new CommandMessages(serializer, connection, new DeviceValues { ["channel"] = 5 });
+        await using var commands = new CommandMessages(serializer, connection, new DeviceValues { ["channel"] = 5 }, Group1);
 
         await commands.Send(Field(serializer, Poly, "Poly.Program"), Values(("Poly.Program", (byte)1)), CancellationToken.None);
 
@@ -228,7 +231,7 @@ public class CommandMessagesTests
     {
         var serializer = CreateSerializer();
         var connection = new FakeCommandConnection();
-        await using var commands = new CommandMessages(serializer, connection, new DeviceValues { ["channel"] = 0 });
+        await using var commands = new CommandMessages(serializer, connection, new DeviceValues { ["channel"] = 0 }, Group0);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => commands.Send(Whole(serializer, Mono), Values(("Mono.Volume", (byte)1)), CancellationToken.None));
@@ -242,7 +245,7 @@ public class CommandMessagesTests
     public async Task Send_WithoutAChannel_IsAnError()
     {
         var serializer = CreateSerializer();
-        await using var commands = new CommandMessages(serializer, new FakeCommandConnection(), new DeviceValues());
+        await using var commands = new CommandMessages(serializer, new FakeCommandConnection(), new DeviceValues(), Group0);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => commands.Send(Field(serializer, Mono, "Mono.Volume"), Values(("Mono.Volume", (byte)1)), CancellationToken.None));
@@ -254,7 +257,7 @@ public class CommandMessagesTests
     {
         var serializer = CreateSerializer();
         var connection = new FakeCommandConnection();
-        await using var commands = new CommandMessages(serializer, connection, new DeviceValues { ["channel"] = 3 });
+        await using var commands = new CommandMessages(serializer, connection, new DeviceValues { ["channel"] = 3 }, Group0);
 
         var values = await Listen(commands, serializer, Whole(serializer, Mono), connection, 6,
             0x20B40701,                                     // cc 7 on channel 4: ignored
@@ -278,7 +281,7 @@ public class CommandMessagesTests
     {
         var serializer = CreateSerializer();
         var connection = new FakeCommandConnection();
-        await using var commands = new CommandMessages(serializer, connection, new DeviceValues { ["channel"] = 3 });
+        await using var commands = new CommandMessages(serializer, connection, new DeviceValues { ["channel"] = 3 }, Group0);
 
         // cc 7 = 0x80000000 as MIDI 2.0: 64 in 7 bits
         var values = await Listen(commands, serializer, Field(serializer, Mono, "Mono.Volume"), connection, 1,
@@ -292,7 +295,7 @@ public class CommandMessagesTests
     {
         var serializer = CreateSerializer();
         var connection = new FakeCommandConnection();
-        await using var commands = new CommandMessages(serializer, connection, new DeviceValues());
+        await using var commands = new CommandMessages(serializer, connection, new DeviceValues(), Group1);
 
         // group 1, channel 2: cc 7 = 64 (the center: 0x80000000) and a program change outside the range
         var values = await Listen(commands, serializer, Field(serializer, Poly, "Poly.Volume"), connection, 1,
@@ -311,7 +314,7 @@ public class CommandMessagesTests
             .Build();
         var root = new SchemaName("Gx700.Commands");
         var connection = new FakeCommandConnection();
-        await using var commands = new CommandMessages(serializer, connection, new DeviceValues { ["channel"] = 0, ["group"] = 0 });
+        await using var commands = new CommandMessages(serializer, connection, new DeviceValues { ["channel"] = 0 }, Group0);
 
         Assert.Empty(commands.Validate(root));
         // program 5 (1-128) is program change 4
@@ -379,34 +382,5 @@ public class CommandMessagesTests
         public void ExitGroup(GroupContext context) { }
         public void ExitItem(RepeatContext context, int index, int count) { }
         public void ExitChoice(ChoiceContext context, int selectedIndex) { }
-    }
-
-    /// <summary>An open connection that records the packets sent and raises the packets the test receives.</summary>
-    private sealed class FakeCommandConnection : IMidiConnection
-    {
-        public List<UniversalPacket> Sent { get; } = [];
-
-        public MidiEndpointInfo EndpointInfo { get; } = FakeMidiApi.Endpoint("synth");
-        public MidiDirections Directions => MidiDirections.Duplex;
-        public MidiConnectionState ConnectionState => MidiConnectionState.Open;
-        public Exception? Error => null;
-
-        public event EventHandler<MidiConnectionStateChangedArgs>? ConnectionStateChanged { add { } remove { } }
-        public event MidiPacketReceivedHandler? PacketsReceived;
-
-        public void Receive(UniversalPacket[] packets)
-            => PacketsReceived?.Invoke([.. packets.Select(packet => new StampedPacket(packet, 0))]);
-
-        public Task Open(CancellationToken ct) => Task.CompletedTask;
-
-        public ValueTask Send(ReadOnlyMemory<UniversalPacket> packets, CancellationToken ct)
-        {
-            Sent.AddRange(packets.ToArray());
-            return ValueTask.CompletedTask;
-        }
-
-        public ValueTask SendScheduled(ReadOnlyMemory<StampedPacket> packets, CancellationToken ct) => throw new NotSupportedException();
-
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

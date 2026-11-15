@@ -14,7 +14,7 @@
           <bind slot="value" parameter="EffectType" />
         </selector>
       </section>
-      <text label="Patch" size="9,4" at="0,1">
+      <text label="Patch" size="9,4" at="0,4">
         <bind slot="value" parameter="Name" />
       </text>
       <section label="Assign" size="37,11" at="0,8" base="AddressMap.IndividualTemporary.Common.Assign[$assign]">
@@ -44,6 +44,9 @@
           <bind slot="value" parameter="ActHi" />
         </knob>
       </section>
+      <numberBox size="9,4" at="0,0">
+        <bind slot="value" parameter="gx700:Commands.Program" />
+      </numberBox>
     </section>
     <section label="Compressor" size="27,12" at="0,22" device="gx700" base="AddressMap.IndividualTemporary.Compressor" collapsible="true">
       <switch size="4,7" at="0,2">

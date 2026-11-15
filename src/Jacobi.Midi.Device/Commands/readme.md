@@ -26,8 +26,13 @@ value in the message:
 | `cmd1` | 7 bits | 14 bits (a CC as MSB + LSB on number + 32; an RPN/NRPN with data entry MSB + LSB) | - |
 | `cmd2` | 7 bits (`pc` only) | - | 32 bits |
 
-The MIDI channel and the UMP group are device values (`channel`, `group`, 0-15): the root can fix them with
-`midi.device.channel` and `midi.device.group`, the values of the client override them.
+The MIDI channel is a device value (`channel`, 0-15): the root can fix it with `midi.device.channel`, the value of the
+client overrides it. The UMP groups are those of the device (the session's): the send group to send, the receive group
+to listen.
+
+`DeviceSession` (namespace `Jacobi.Midi.Device`) is the usual entry point: it routes a range of a command root to
+`CommandMessages` and keeps the state of the root (its `RequestData` answers from that state; a value it does not hold
+is `BlockStatus.Unavailable`). `CommandMessages` can also be used on its own.
 
 The rules of a command root (checked by `CommandMap`, and shown by `MessageMapValidator` as for the message maps):
 groups and fields only (no repeats or choices); every field has a valid `midi.cmd` and a matching data type, no fixed

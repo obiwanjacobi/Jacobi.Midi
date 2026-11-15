@@ -20,6 +20,9 @@ namespace Jacobi.Midi.Console.Core.Devices;
 /// A parameter without a value is unknown. Thread-safe; <see cref="ValueChanged"/> is raised on the thread that
 /// changed the value, after the change. The root (<see cref="MapRoot"/>) is any root group of the schemas: its values
 /// work the same; a root with a message map (address map or dump) has data messages to load, save and exchange them (the Device project decides).
+/// The command roots of the map root's schema document (<see cref="CommandRoots"/>) belong to the device too: their
+/// fields are parameters set with channel messages. A path starts with the name of its root, so the paths of all roots
+/// are apart; <see cref="PlanOf"/> gives the plan of a path.
 /// </summary>
 public sealed class DeviceState
 {
@@ -27,6 +30,8 @@ public sealed class DeviceState
     private readonly FieldValueStore _values = new();
     private readonly MessageMaps _maps;
     private readonly SchemaLibrary _library;
+    // the plans of the map root and the command roots, by root name
+    private readonly Dictionary<string, ExecutionPlan> _plans = new(StringComparer.OrdinalIgnoreCase);
 
     /// <param name="device">The device instance of the rig: its alias, map root and device values.</param>
     /// <param name="library">The compiled schemas that hold the device's map.</param>
@@ -47,6 +52,10 @@ public sealed class DeviceState
         foreach (var (name, value) in device.DeviceValues)
             DeviceValues[name] = value;
         Plan = library.Serializer.GetPlan(MapRoot);
+        _plans[MapRoot.Name] = Plan;
+        CommandRoots = library.CommandRootsOf(MapRoot);
+        foreach (var root in CommandRoots)
+            _plans.TryAdd(root.Name, library.Serializer.GetPlan(root));
         Source = new StateSource(this);
         _maps = library.MessageMaps;
         _library = library;
@@ -66,6 +75,26 @@ public sealed class DeviceState
     /// <summary>The plan of the map root: its paths are the paths of the values; ranges of it are synchronised.</summary>
     public ExecutionPlan Plan { get; }
 
+    /// <summary>The command roots of the device (see <see cref="SchemaLibrary.CommandRootsOf"/>).</summary>
+    public IReadOnlyList<SchemaName> CommandRoots { get; }
+
+    /// <summary>The plan of the root a path starts with: the map root or a command root; null for any other path.</summary>
+    public ExecutionPlan? PlanOf(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        var separator = path.IndexOf(SchemaPath.Separator);
+        return _plans.GetValueOrDefault(separator < 0 ? path : path[..separator]);
+    }
+
+    /// <summary>The node of a path (without repeat indices) of the device's roots; null when there is none.</summary>
+    public NodeInfo? Find(string path) => PlanOf(path)?.Find(path);
+
+    /// <summary>The range of one parameter (a field, or a group) at an instance, in the plan of its root.</summary>
+    /// <exception cref="ArgumentException">The path is not of the device's roots.</exception>
+    public PlanRange CreateRange(string path, InstancePath instance)
+        => (PlanOf(path) ?? throw new ArgumentException($"'{path}' is not a path of the roots of device '{Alias}'.", nameof(path)))
+            .CreateRange(path, instance, path, instance);
+
     /// <summary>The number of parameters with a known value.</summary>
     public int Count
     {
@@ -79,6 +108,11 @@ public sealed class DeviceState
     /// <summary>The parameter tree of the map root: the groups, repeats and fields to bind controls to.</summary>
     public ParameterNode Parameters => _parameters ??= ParameterNode.Of(Plan, ItemCount);
     private ParameterNode? _parameters;
+
+    /// <summary>The parameter trees of the command roots, in the order of <see cref="CommandRoots"/>.</summary>
+    public IReadOnlyList<ParameterNode> CommandParameters
+        => _commandParameters ??= [.. CommandRoots.Select(root => ParameterNode.Of(_plans[root.Name], _ => null))];
+    private IReadOnlyList<ParameterNode>? _commandParameters;
 
     // the item count of a repeat of the map; an invalid map has none (it is reported when the bindings are resolved)
     private int? ItemCount(string repeat)

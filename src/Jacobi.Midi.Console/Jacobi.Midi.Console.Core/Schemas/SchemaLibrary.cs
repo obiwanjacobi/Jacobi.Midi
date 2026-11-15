@@ -52,6 +52,17 @@ public sealed class SchemaLibrary
     public bool HasRoot(SchemaName name) => Roots.Contains(name);
 
     /// <summary>
+    /// The command roots (<c>midi.role</c> <c>cmd1</c> or <c>cmd2</c>, see <see cref="MidiProperties.IsCommandRoot"/>)
+    /// that belong with a map root: those of the same schema document, the map root itself not included. A schema is
+    /// device specific, so its document says what belongs together. Empty when the schemas do not compile.
+    /// </summary>
+    public IReadOnlyList<SchemaName> CommandRootsOf(SchemaName mapRoot)
+        => Schemas is { } schemas
+            ? [.. Roots.Where(root => root.Namespace == mapRoot.Namespace && root != mapRoot
+                && MidiProperties.IsCommandRoot(schemas.FindRoot(root)))]
+            : [];
+
+    /// <summary>
     /// How the data of a root is carried in messages (the kind of its message map, see <see cref="MessageMaps"/>); null
     /// when the root has no valid message map (e.g. an envelope that carries other roots; <see cref="MessageMaps"/>
     /// tells why) or the schemas do not compile.

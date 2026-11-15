@@ -126,7 +126,9 @@ internal sealed class RigTreeItem : ViewModelBase
             Node = state?.Parameters,
             Source = source,
             ColorBrush = RgbColor.TryParse(device.Colors[ColorArea.Accent], out var color) ? new SolidColorBrush(PaletteBrushes.ToColor(color.Value)) : null,
-            Children = source is null ? [] : [.. source.Node.Children.Select(child => Of(source, child))],
+            // the map root's nodes, then the command roots of the device (parameters set with channel messages)
+            Children = source is null ? [] : [.. source.Node.Children.Select(child => Of(source, child)),
+                .. state!.CommandParameters.Select(root => Of(source, root))],
             Connection = connection,
         };
     }

@@ -49,6 +49,11 @@ public sealed class ExchangeException(string exchange, string root, IReadOnlyLis
 public enum BlockStatus
 {
     Completed,
+    /// <summary>
+    /// The values cannot be requested from the device and the session does not hold them (a command root: its values
+    /// are known once they are sent, or the device sends them).
+    /// </summary>
+    Unavailable,
     TimedOut,
     /// <summary>The device refused the message (e.g. a nak), e.g. because its memory is protected.</summary>
     Rejected,

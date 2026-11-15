@@ -68,7 +68,7 @@ public sealed class DashboardSession : IDisposable
         if (BindingScope.Of(Dashboard.Layout, control)?.FullPathOf(binding) is not (string device, string text)
             || !SchemaPaths.TryParse(text, _ => 0, out var parsed, out _)
             || DeviceOf(device) is not { } state
-            || state.Plan.Find(parsed.Path) is not FieldInfo field)
+            || state.Find(parsed.Path) is not FieldInfo field)
         {
             return null;
         }
@@ -98,7 +98,7 @@ public sealed class DashboardSession : IDisposable
         => BindingScope.Of(Dashboard.Layout, layout) is { Device: { } device, Base: { } text }
             && SchemaPaths.TryParse(text, _ => 0, out var parsed, out _)
             && DeviceOf(device) is { } state
-                ? state.Plan.Find(parsed.Path)
+                ? state.Find(parsed.Path)
                 : null;
 
     private string? DocOf(ParameterControl control)
@@ -264,7 +264,7 @@ public sealed class DashboardSession : IDisposable
             Drop(key);
             if (DeviceOf(parameter.Device) is not { } state)
                 continue;   // the device is not in the rig: reported by the resolver
-            if (state.Plan.Find(parameter.Path) is not FieldInfo field)
+            if (state.Find(parameter.Path) is not FieldInfo field)
             {
                 problems.Add($"{Describe(binding.Control)}.{binding.Slot}: '{parameter.Path}' is not a field of '{state.MapRoot}'.");
                 continue;

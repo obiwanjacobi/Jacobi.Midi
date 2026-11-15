@@ -36,8 +36,8 @@ value model is being examined.
    value. The serializer stays unchanged: the `midi.*` properties are free-form node properties. *Why:* gives the
    simple MIDI messages a shared meaning and structure, reuses data types, node defs and the Schema Editor; the
    tagged root keeps the scenarios apart, prevents failing schema transfers and allows validation.
-8. **The MIDI channel and group are device values**, supplied by the client; the schema author decides (as for
-   `deviceId`). *Why:* the same device can be on any channel; it is how the device is reached, not a setting of it.
+8. **The MIDI channel ~~and group~~ is a device value**, supplied by the client; the schema author decides (as for
+   `deviceId`). The group: revised by 31. *Why:* the same device can be on any channel; it is how the device is reached, not a setting of it.
 9. **A schema is device specific:** a field describes the channel message of that device (MIDI 1.0 or MIDI 2.0);
    no field needs a MIDI 1.0 and a MIDI 2.0 variant. Only generic concepts are shared (e.g. through includes).
 10. **The channel-message API works on plan ranges, as the message maps do.** Both are schema roots, so the client
@@ -55,7 +55,7 @@ value model is being examined.
     reading the number back from its bytes. A conversion API in Jacobi.BinarySerializer that runs only the value
     pipeline of a field is on its todo list. *Why:* works without a change in the serializer; the whole value
     pipeline of the field (not only the facets) is applied, so there is one place of truth for the conversion.
-14. **A channel root can fix the channel and group** (`midi.device.channel`, `midi.device.group`); the device values
+14. **A channel root can fix the channel** (`midi.device.channel`; ~~`midi.device.group`~~: revised by 31); the device values
     the client passes override them, as for the message maps (`DeviceValues.With`: client over map root). *Why:*
     the same mechanism as `deviceId`; the schema author decides what is fixed.
 15. **Tags: `midi.role="cmd"` on the root, `midi.cmd="<kind>#<number>"` on its fields** (e.g. `cc#74`); the role
@@ -123,7 +123,20 @@ value model is being examined.
     refuse other roots; neither codes the other's logic. *Why:* a single place of truth; the message maps stay free
     of command logic. Received packets are already apart by UMP message type, before any map sees them: the SysEx
     port's `SysEx7Assembler` only takes type 3 packets (SysEx7) of its group, so a message map only gets SysEx; the
-    command side only takes channel voice (type 2 and 4). No map calls the other to filter received data. We can even take multiple connections ourselves.
+    command side only takes channel voice (type 2 and 4). No map calls the other to filter received data.
+30. **`DeviceSession` is the entry point of the Device API, in the namespace `Jacobi.Midi.Device`.** It is created on
+    an existing `IMidiConnection` (the app owns it; the factory's convenience that opens one may own it), the
+    serializer, the device values and the UMP groups; the exchange files are optional. It keeps its API and routes
+    per root: a message-map root through the message exchange, a command root through `CommandMessages`, with the
+    state of each root. On a command root `RequestData` answers from the state only (a value the session does not hold
+    is reported as not available: it cannot be requested); `Execute` runs the standard exchanges as `SendData` and
+    `RequestData`; `Probe` does not apply. *Why:* both work with schemas on plan ranges; the rig stays device focused.
+31. **The UMP group of the channel messages is the group of the session** (the send group to send, the receive group
+    to listen), not a device value; `channel` is the only device value of a command root. *Why:* one place for the
+    groups of a device, as the endpoint gives them.
+32. **In the console a device has its map root and the command roots of the same schema document**, found
+    automatically; the parameter tree shows the command roots next to the map root's nodes. *Why:* the schema is
+    device specific (decision 9): the document already says what belongs together; nothing to configure. We can even take multiple connections ourselves.
 
 ## Invalid input in the item editors of the Schema Editor (2026-11-13)
 

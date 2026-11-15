@@ -1,3 +1,4 @@
+using Jacobi.Midi.Device;
 using Jacobi.Midi.Console.Core.Dashboards;
 using Jacobi.Midi.Console.Core.Devices;
 using Jacobi.Midi.Device.Exchange;
@@ -69,8 +70,8 @@ internal sealed class SendQueue(DeviceSession session, Action<SendResult> comple
     {
         try
         {
-            var range = state.Plan.CreateRange(parameter.Path, parameter.Instance, parameter.Path, parameter.Instance);
-            var result = exchange == ExchangeNames.SendData
+            var range = state.CreateRange(parameter.Path, parameter.Instance);
+            var result = RigConnections.ExchangeFor(range, exchange, ExchangeNames.SendData) == ExchangeNames.SendData
                 ? await session.SendData(range, state.Source, _closing.Token)
                 : await session.Execute(exchange, range, new ExchangeData { Source = state.Source }, progress: null, _closing.Token);
             return new SendResult(parameter, exchange, result);

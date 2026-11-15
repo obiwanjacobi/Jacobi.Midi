@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Jacobi.Midi.Device;
 using Jacobi.Midi.Console.Core.Dashboards;
 using Jacobi.Midi.Console.Core.Devices;
 using Jacobi.Midi.Console.Core.Editing;
@@ -1426,7 +1427,10 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         }
         else
         {
-            Status = $"Received {parameters.Count} parameter{(parameters.Count == 1 ? "" : "s")} from '{alias}'.";
+            // a parameter that cannot be requested (a command) stays unknown until it is sent or the device sends it
+            var unavailable = result.Unavailable.Count;
+            Status = $"Received {parameters.Count - unavailable} parameter{(parameters.Count - unavailable == 1 ? "" : "s")} from '{alias}'"
+                + (unavailable > 0 ? $"; {unavailable} cannot be requested and stay{(unavailable == 1 ? "s" : "")} unknown until sent." : ".");
         }
     }
 

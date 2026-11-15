@@ -1,6 +1,7 @@
 using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
 using Jacobi.BinarySerializer.Processor;
+using Jacobi.Midi.Device;
 using Jacobi.Midi.Console.Core.Dashboards;
 using Jacobi.Midi.Console.Core.Devices;
 using Jacobi.Midi.Console.Core.Parameters;
@@ -36,8 +37,6 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
     private RigSession? _rig;
     private IMidiSession? _session;
     private IMidiEndpointObserver? _observer;
-    private MessageExchangeFactory? _factory;
-    private Serializer? _factorySerializer;
     private bool _isStarted;
 
     /// <summary>True between <see cref="Start"/> and <see cref="Stop"/>.</summary>
@@ -190,7 +189,7 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
         }
         var (path, instance) = FirstParameter(state.Parameters)
             ?? throw new InvalidOperationException($"The map of '{alias}' has no parameters.");
-        var range = state.Plan.CreateRange(path, instance, path, instance);
+        var range = state.CreateRange(path, instance);
         return new DataProbeResult(path, instance, await session.Probe(range, ct));
     }
 
@@ -228,16 +227,23 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
         {
             if (sink.Received.Contains((parameter.Path, parameter.Instance)))
                 continue;
-            var range = state.Plan.CreateRange(parameter.Path, parameter.Instance, parameter.Path, parameter.Instance);
-            var result = exchange == ExchangeNames.RequestData
+            var range = state.CreateRange(parameter.Path, parameter.Instance);
+            var result = ExchangeFor(range, exchange, ExchangeNames.RequestData) == ExchangeNames.RequestData
                 ? await session.RequestData(range, sink, data, progress: null, ct)
                 : await session.Execute(exchange, range, new ExchangeData { Sink = sink }, progress: null, ct);
             results.Add((parameter, result));
-            if (!result.IsComplete)
+            if (ReceiveResult.Ends(result))
                 break;
         }
         return new ReceiveResult(alias, exchange, requested, results);
     }
+
+    /// <summary>
+    /// The exchange a parameter is transferred with: the dashboard's exchange for a root with a message map (it has
+    /// exchange files), the standard exchange for a command root, which has no other (<see cref="DeviceSession"/>).
+    /// </summary>
+    internal static string ExchangeFor(PlanRange range, string exchange, string standard)
+        => MidiProperties.IsCommandRoot(range.ExecutionPlan.Root.Group) ? standard : exchange;
 
     /// <summary>
     /// The outcome of each parameter that was sent (<see cref="Send"/>), raised on a background thread. Not raised for
@@ -352,21 +358,29 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
         SetConnection(link, DeviceConnectionStatus.Connecting, endpoint);
         try
         {
-            if (_factory is null || _factorySerializer != serializer)
-                (_factory, _factorySerializer) = (new MessageExchangeFactory(_session, serializer, _rig?.Library.Exchanges ?? new ExchangeDefinitions()), serializer);
-            var options = new MessageExchangeOptions { Groups = reference.Groups };
-            var session = await _factory.CreateSession(endpoint.Id, link.DeviceValues, options, null, ct);
+            // the session is created on the connection before it opens, so it misses nothing; the link owns both
+            var connection = await _session.CreateConnection(endpoint.Id, new MidiConnectionOptions(), ct);
+            link.MidiConnection = connection;
+            var session = new DeviceSession(serializer, connection, link.DeviceValues, reference.Groups,
+                _rig?.Library.Exchanges ?? new ExchangeDefinitions());
             link.Session = session;
             link.Queue = new SendQueue(session, result => Sent?.Invoke(this, result));
             session.Disconnected += (_, args) => _ = OnDisconnected(link, session, args);
-            if (session.IsConnected)
+            await connection.Open(ct);
+            if (session.IsConnected && connection.ConnectionState == MidiConnectionState.Open)
                 SetConnection(link, DeviceConnectionStatus.Online, endpoint);
             else
                 await Lose(link, endpoint, null);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (OperationCanceledException)
+        {
+            await CloseSession(link);
+            throw;
+        }
+        catch (Exception exception)
         {
             // the MIDI backend fails with its own exception types
+            await CloseSession(link);
             SetConnection(link, DeviceConnectionStatus.Failed, endpoint, exception.Message);
         }
     }
@@ -438,7 +452,7 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
         foreach (var link in _links.Values.ToList())
             await CloseSession(link);
         var (session, observer) = (_session, _observer);
-        (_session, _observer, _factory, _factorySerializer) = (null, null, null, null);
+        (_session, _observer) = (null, null);
         lock (_lock)
         {
             _links.Clear();
@@ -460,12 +474,14 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
 
     private static async Task CloseSession(Link link)
     {
-        var session = link.Session;
-        link.Session = null;
+        var (session, connection) = (link.Session, link.MidiConnection);
+        (link.Session, link.MidiConnection) = (null, null);
         link.Queue?.Close();
         link.Queue = null;
         if (session is not null)
             await session.DisposeAsync();
+        if (connection is not null)
+            await connection.DisposeAsync();
     }
 
     private MidiEndpointInfo? FindEndpoint(string name)
@@ -537,6 +553,9 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
 
         public DeviceSession? Session { get; set; }
 
+        /// <summary>The connection of <see cref="Session"/>, which the link owns; null when not connected.</summary>
+        public IMidiConnection? MidiConnection { get; set; }
+
         /// <summary>The changes waiting to be sent on <see cref="Session"/>; null when not connected.</summary>
         public SendQueue? Queue { get; set; }
 
@@ -572,8 +591,23 @@ public sealed record DataProbeResult(string Path, InstancePath Instance, Transfe
 public sealed record ReceiveResult(string Alias, string Exchange, IReadOnlyList<ParameterReference> Parameters,
     IReadOnlyList<(ParameterReference Parameter, TransferResult Result)> Transfers)
 {
-    /// <summary>True when every transfer completed (and so every parameter was received).</summary>
-    public bool IsComplete => Transfers.All(transfer => transfer.Result.IsComplete);
+    /// <summary>
+    /// True when every transfer completed (and so every parameter was received), apart from the parameters that cannot
+    /// be requested (<see cref="Unavailable"/>).
+    /// </summary>
+    public bool IsComplete => !Transfers.Any(transfer => Ends(transfer.Result));
+
+    /// <summary>
+    /// The parameters that cannot be requested from the device and whose value the session does not hold (a command
+    /// root: <see cref="BlockStatus.Unavailable"/>); they stay unknown until they are sent, or the device sends them.
+    /// </summary>
+    public IReadOnlyList<ParameterReference> Unavailable
+        => [.. Transfers.Where(transfer => transfer.Result.Blocks.Any(block => block.Status == BlockStatus.Unavailable)).Select(transfer => transfer.Parameter)];
+
+    /// <summary>True when the transfer ends the receive: something did not complete, other than a value that cannot be requested.</summary>
+    internal static bool Ends(TransferResult result)
+        => !result.IsComplete && !(result.Blocks.All(block => block.Status is BlockStatus.Completed or BlockStatus.Unavailable)
+            && result.Before is null or { Status: BlockStatus.Completed } && result.After is null or { Status: BlockStatus.Completed });
 
     /// <summary>The transfer that ended the receive; null when it is complete.</summary>
     public (ParameterReference Parameter, TransferResult Result)? Failed
@@ -582,7 +616,7 @@ public sealed record ReceiveResult(string Alias, string Exchange, IReadOnlyList<
         {
             foreach (var transfer in Transfers)
             {
-                if (!transfer.Result.IsComplete)
+                if (Ends(transfer.Result))
                     return transfer;
             }
             return null;
