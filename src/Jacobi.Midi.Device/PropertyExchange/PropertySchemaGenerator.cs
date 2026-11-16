@@ -16,10 +16,13 @@ public sealed record PropertySchema(SchemaDocument Document, IReadOnlyList<strin
 
 /// <summary>
 /// Generates a schema document from what a Property Exchange device describes: its <c>ResourceList</c> and the JSON
-/// Schemas of its resources. Each JSON resource with a schema becomes a root group with <c>midi.role="pe"</c> and
-/// <c>midi.resource</c>, so the resource works with plan ranges like any schema root. The document is never serialized:
+/// Schemas of its resources. Each JSON resource with a schema becomes a root group with <c>midi.role="pe"</c>, named
+/// after the resource, so the resource works with plan ranges like any schema root. The document is never serialized:
 /// it gives the structure, the paths and the value domains.
 /// <list type="bullet">
+/// <item>a resource with entries (<c>resId</c>s, found in the links of the device's data) has a choice <c>resId</c>
+/// without a selected index, with a group per <c>resId</c> that has the structure of the resource (a nodeDef
+/// <c>&lt;root&gt;_entry</c>);</item>
 /// <item>an <c>object</c> is a group of its <c>properties</c>, in their order; an <c>array</c> a repeat (with a count
 /// when <c>minItems</c> equals <c>maxItems</c>) of the properties of its <c>items</c> object, or of one field
 /// <c>item</c>; a resource that is an array is a root with the repeat <c>items</c>, a resource with a single value a root
@@ -39,14 +42,19 @@ public static class PropertySchemaGenerator
     public const string ItemsName = "items";
     /// <summary>The name of the field of a resource that is a single value.</summary>
     public const string ValueName = "value";
+    /// <summary>The name of the choice of a resource with entries: an alternative per <c>resId</c>.</summary>
+    public const string ResIdName = "resId";
 
     /// <summary>Generates the document for the resources.</summary>
     /// <param name="documentName">The name of the document (a valid schema name, e.g. after the device).</param>
     /// <param name="resources">The entries of the device's <c>ResourceList</c>.</param>
     /// <param name="referencedSchemas">The JSON Schemas the entries refer to (<see cref="PropertyResource.SchemaReference"/>),
     /// by id, as the device's <c>JSONSchema</c> resource gives them.</param>
+    /// <param name="resourceIds">The <c>resId</c>s of the resources, by resource name, as the links in the device's data
+    /// give them; a resource with <c>resId</c>s gets the choice <c>resId</c>.</param>
     public static PropertySchema Generate(string documentName, IEnumerable<PropertyResource> resources,
-        IReadOnlyDictionary<string, JsonObject>? referencedSchemas = null)
+        IReadOnlyDictionary<string, JsonObject>? referencedSchemas = null,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? resourceIds = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(documentName);
         ArgumentNullException.ThrowIfNull(resources);
@@ -68,7 +76,7 @@ public static class PropertySchemaGenerator
 
                 var root = Unique(NameOf(resource.Name), roots);
                 var generator = new Generator(builder, root, notes);
-                generator.Root(members, root, resource.Name, schema);
+                generator.Root(members, root, resource, schema, resourceIds?.GetValueOrDefault(resource.Name) ?? []);
             }
         });
         return new PropertySchema(builder.Build(), notes);
@@ -120,24 +128,54 @@ public static class PropertySchemaGenerator
     // the nodes of one resource; the data type defs are named after the root and the path
     private sealed class Generator(SchemaDocumentBuilder document, string root, List<string> notes)
     {
-        public void Root(SchemaDocumentBuilder.GroupBuilder members, string name, string resource, JsonObject schema)
+        public void Root(SchemaDocumentBuilder.GroupBuilder members, string name, PropertyResource resource, JsonObject schema, IReadOnlyList<string> resIds)
         {
+            if (TypeOf(schema, resource.Name) is not { } type)
+                return;
+
+            var note = resIds.Count == 0 && resource.RequireResId
+                ? $"'{resource.Name}' requires a resId, but no link in the data of the device refers to one: add a choice '{ResIdName}' with a group per resId that has the structure of this root."
+                : null;
             List<SchemaProperty> properties =
             [
                 new() { Name = MidiProperties.Role, Value = MidiProperties.RolePropertyExchange },
-                new() { Name = MidiProperties.Resource, Value = resource },
-                .. Doc(schema),
+                .. Tags(resource.Name, name, schema, note),
             ];
-            switch (TypeOf(schema, resource))
+            if (resIds.Count == 0)
+            {
+                members.Group(name, group => Content(group, name, schema, type), properties: properties);
+                return;
+            }
+
+            // the structure once, as a nodeDef; a group per resId that has it
+            var entry = $"{name}_entry";
+            document.NodeDefs(nodes => nodes.Group(entry, group => Content(group, name, schema, type)));
+            var doc = $"The entries of '{resource.Name}' (resId) that links in the data of the device refer to."
+                + (resource.RequireResId ? String.Empty : " The resource can also be read without a resId: remove this choice for that.");
+            members.Group(name, group => group.Choice(ResIdName, default, choice =>
+            {
+                var used = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var resId in resIds)
+                {
+                    var alternative = Unique(NameOf(resId), used);
+                    choice.Group(alternative, nodeDef: entry, properties: alternative == resId ? [] : [new() { Name = MidiProperties.Key, Value = resId }]);
+                }
+            }, properties: [new() { Name = MidiProperties.Doc, Value = doc }]), properties: properties);
+        }
+
+        // the structure of a resource: the properties of an object, the repeat of an array, or the field of a value
+        private void Content(SchemaDocumentBuilder.GroupBuilder group, string name, JsonObject schema, string type)
+        {
+            switch (type)
             {
                 case "object":
-                    members.Group(name, group => Properties(group, schema, name), properties: properties);
+                    Properties(group, schema, name);
                     break;
                 case "array":
-                    members.Group(name, group => Array(group, ItemsName, ItemsName, schema, $"{name}.{ItemsName}"), properties: properties);
+                    Array(group, ItemsName, ItemsName, schema, $"{name}.{ItemsName}");
                     break;
-                case { } type:
-                    members.Group(name, group => Value(group, ValueName, ValueName, schema, type, $"{name}.{ValueName}"), properties: properties);
+                default:
+                    Value(group, ValueName, ValueName, schema, type, $"{name}.{ValueName}");
                     break;
             }
         }
@@ -242,14 +280,15 @@ public static class PropertySchemaGenerator
             }
         }
 
-        // the JSON key when the node got another name, and the documentation
-        private static List<SchemaProperty> Tags(string key, string name, JsonObject schema)
-            => name == key ? [.. Doc(schema)] : [new() { Name = MidiProperties.Key, Value = key }, .. Doc(schema)];
+        // the JSON key when the node got another name, and the documentation (with a note of the generator)
+        private static List<SchemaProperty> Tags(string key, string name, JsonObject schema, string? note = null)
+            => name == key ? [.. Doc(schema, note)] : [new() { Name = MidiProperties.Key, Value = key }, .. Doc(schema, note)];
 
-        private static IEnumerable<SchemaProperty> Doc(JsonObject schema)
-            => (schema["description"] ?? schema["title"])?.GetValue<string>() is { Length: > 0 } doc
-                ? [new() { Name = MidiProperties.Doc, Value = doc }]
-                : [];
+        private static IEnumerable<SchemaProperty> Doc(JsonObject schema, string? note = null)
+        {
+            var doc = String.Join(" ", new[] { (schema["description"] ?? schema["title"])?.GetValue<string>(), note }.Where(text => !String.IsNullOrEmpty(text)));
+            return doc.Length > 0 ? [new() { Name = MidiProperties.Doc, Value = doc }] : [];
+        }
 
         private static long? Integer(JsonObject schema, string key)
             => schema[key] is JsonValue value && value.TryGetValue<long>(out var number) ? number : null;

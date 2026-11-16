@@ -169,7 +169,7 @@ value model is being examined.
     A first check compiled a hand-written generated-style document (strings without a length, repeats without a
     count, a string enum, bool and decimal fields) and built its plan without errors.
 40. **The rules of the generated schema (`PropertySchemaGenerator`):** a root per JSON resource with a schema,
-    `midi.role="pe"` and `midi.resource` (the resource name); `object` → group, `array` → repeat (a count when
+    `midi.role="pe"` ~~and `midi.resource` (the resource name)~~, named after the resource (revised by 52); `object` → group, `array` → repeat (a count when
     `minItems` = `maxItems`), an array of values has the field `item`, a resource that is an array the repeat
     `items`, a resource that is a value the field `value`; `integer` → `sys.int64`, `number` → `sys.decimal`,
     `string` → `sys.string`, `boolean` → `sys.bool`; `minimum`/`maximum` and `enum` → a data type def; a name is made
@@ -203,6 +203,69 @@ value model is being examined.
     the parameter tree. *Why:* one device entry per device (one schema file per device, decision 43); several
     message-map roots in one device; nothing to choose or keep in step. Considered: an explicit list of roots per
     device.
+46. **A resource with a `resId` (M2-103 §8.5) is a closed choice named `resId` directly under its `pe` root, with an
+    alternative per `resId`** (the name is the `resId`, `midi.key` when it is not a valid name; the structure of the
+    resource once, as a `nodeDef`), e.g. `ProgramList.resId.melodic.items[3].title`. A `resId` is a header property
+    that selects the whole Property Data of a resource, so it is always at the root. The choice has no
+    `selectedIndex`: the value model selects the alternative, which needs an extension of Jacobi.BinarySerializer.
+    *Why:* "one of several entries" is what a choice is; the original structure and paths of the resource stay; the
+    `resId`s are explicit in the schema and belong to the resource; no new `midi.*` tag. Considered: a root per
+    `resId` (renames the root), a repeat with a list of `resId`s in a tag or a data type with `options` (an index
+    instead of the name, a new tag) and an open choice (its bodies are roots: renamed paths, unique names, the
+    structure copied per body).
+47. **In Jacobi.BinarySerializer a choice without `selectedIndex` is open: the value model selects it**, with the
+    existing `IOpenChoiceSink`/`IOpenChoiceSource` (read and write alike). Its alternatives are its members (new) or
+    the roots that conform to its `memberNodeDef` (as before). `IValueSource.GetSelectedIndex`, which the engine
+    never calls, is removed. The result names the selected `Member` (was `Group`; a member can be a field) and gives
+    the scope ~~that holds its values, entered without a further call~~ of the choice (revised by 48); it is made with factory methods per case
+    (the whole member, one node, a range), and a target on a field is an error. A target in a member group is an
+    error when the range of the envelope already begins or ends inside the choice. `valueProcessors` without
+    `selectedIndex` is an error. Ranges are named begin/end instead of from/to throughout (`CreateRange`,
+    `PlanRange`, the open choice result). *Why:* a choice the model selects is open, whatever its alternatives are;
+    one mechanism, symmetric for read and write; one way to express a range; begin/end says range, from/to says
+    copy. Considered: `GetSelectedIndex` on write and an error on read (not symmetric); the member's index or
+    `NodeInfo` as the result (a different result type per variant).
+48. **In Jacobi.BinarySerializer every scope is entered and exited, on the sink and the source alike (the same calls
+    with the same parameters: the source also gets the index of a choice and the number of items), and an open node
+    differs from a closed one only in its enter call.** Group: `EnterGroup`/`ExitGroup`; repeat:
+    `EnterRepeat`/`ExitRepeat` with per item `EnterItem`/`ExitItem` on the repeat's scope; choice:
+    `EnterChoice`/`ExitChoice`. An open choice is entered with `EnterOpenChoice`, which returns the selected member and
+    the scope of the choice; the member is then handled through that scope with the normal calls (`EnterGroup` for a
+    group or body, `SetField`/`GetField`, `EnterRepeat`, `EnterChoice` or `EnterOpenChoice`), and the choice ends with
+    `ExitChoice`. An open repeat is entered with `EnterOpenRepeat` (decision 49). Exits are called on the scope the
+    enter returned, and all enter/exit members are required. *Why:* the navigation is the same for every node and does
+    not depend on what was selected; the selected scope always means the same thing; the sink learns the index of a
+    choice member before its fields; a source can follow the structure as a sink does. Considered: entering a member
+    directly with the scope of the result (its meaning depended on the kind of member, an open choice ended with
+    `ExitGroup`, and a choice member lost its `EnterChoice`); entering only groups directly; source exits as default
+    interface methods.
+49. **`IValueSource.GetCount` is removed; an open repeat (no count in the schema) is entered with
+    `EnterOpenRepeat`** of `IOpenRepeatSource`/`IOpenRepeatSink`, which returns the repeat's scope and the number of
+    items when the model knows it, or "item by item": the engine then asks `NextItem(context, index)` on that scope
+    before each item. On write an open repeat needs `IOpenRepeatSource` (a flat model's adapter implements it with the
+    `EndOfData` probe); on read, without `IOpenRepeatSink` the engine's own rule (end of the input or size window)
+    applies. The engine passes the count it knows to `EnterRepeat`/`EnterItem`; the item index is a method
+    parameter, not part of the context (`OpenRepeatContext.Index` goes). *Why:* `GetCount` had three uses (the count
+    of an open repeat, a check that could not be answered by every model, deriving a count field) that each get a
+    single, explicit place; read and write are symmetric; the context describes the node, the parameters the step.
+    Considered: the model returning a count from `EnterRepeat` (two ways to give the count); keeping the `-1` answer
+    of `GetCount`.
+50. **A count field the model has no value for is derived by the engine after the repeat:** the field is deferred
+    like a size field (one mechanism, `DeferredField`), the repeat is written as an open repeat, and the number of
+    items written is filled in. Deferred fields must nest; overlapping ones are an error. *Why:* models need not keep
+    a count next to their list; one place derives counts and sizes. Considered: the model always supplies the count
+    field.
+51. **The generator takes the `resId`s from the links in the data of the device, and generates what it finds:**
+    at detection it Gets the resources it can read without a `resId` and collects every `{resource, resId}` in their
+    data (links, M2-103 §13). Every resource that is linked to gets the `resId` choice (decision 46), with an
+    alternative per `resId` found (one is fine), whether it requires a `resId` or not; a resource that requires one and
+    is not linked to stays a plain root. Where it helps the schema author, the generator says so in `midi.doc` (where
+    the `resId`s came from; that a resource can also be read without a `resId`; that no `resId` was found). *Why:* no
+    inquiry lists the `resId`s; the links are how a device tells them; a generated schema is touched up by its author,
+    and a plain representation of what the device gives is clearer to them than rules in the generator.
+52. **A `pe` root is named after its resource; `midi.key` holds the resource name when it is not a valid schema name
+    (no `midi.resource`)**, and the same for a `resId` alternative. *Why:* one mechanism for every name that comes from
+    the device (properties, resources, `resId`s).
 
 ## Invalid input in the item editors of the Schema Editor (2026-11-13)
 

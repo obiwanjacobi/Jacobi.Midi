@@ -87,9 +87,25 @@ Each question is answered with the user in its own step; the answer goes into do
    Decided: the platform's MIDI-CI behind a Core abstraction (decision 33). Test partners: the in-box General MIDI
    synthesizer of Windows MIDI Services (a PE responder: get, subscribe, paging; no set) and a virtual device with a
    capability inquiry responder (sample `capability-inquiry-virtual-device` of the Windows MIDI repo).
-6. **The PE API.** Resources and `resId` as roots, JSON Pointer as path, Get/Set (full, partial)/Subscribe,
-   JSON Schema as value domain, non-JSON resources (`mediaTypes`) possibly decoded by a schema.
-7. **The console.** How `DeviceState`, bindings and the parameter tree use the result.
+6. **The PE API.** A schema generated from what the device describes, one `pe` root per resource; JSON Pointer as
+   path with instance; JSON Schema as value domain (decisions 38-42). Open points:
+   - [x] the generated schema (`PropertySchemaGenerator`, `PropertyResource`), with the published schemas of the
+     standard resources (`StandardSchemas`); it can be saved as a schema file;
+   - [x] discovery (`PropertyExchangeDevice`) and Get of a `pe` root through `DeviceSession` (whole resource);
+   - Set (full or partial); needs a test device (the General MIDI synthesizer does not answer a Set);
+   - Subscribe: following the changes of the device;
+   - [x] `resId`: a resource with several entries, a choice `resId` without `selectedIndex` (decisions 46-52): the
+     `resId`s from the links in the data, the generated choice, the Get per entry in `DeviceSession`;
+   - a structure from the data when the JSON Schema has none;
+   - non-JSON resources (`mediaTypes`), possibly decoded by a schema (now reported in the notes).
+7. **The console.** How `DeviceState`, bindings and the parameter tree use the result. Open points:
+   - [x] detecting a device on an endpoint, saving its generated schema, marking it as detected (decisions 43, 44);
+   - [x] a device is a schema document: all its roots are the device's (decision 45);
+   - [x] receiving `pe` roots (and sending command roots) without a dashboard exchange; an index variable on a repeat
+     without a count is no error;
+   - following the device (`DeviceSession.StateChanged`), see the console todo;
+   - a detected device without its schema file: generate it again, see the console todo;
+   - the item count of a repeat from the data, see the console todo.
 
 ## Steps
 
@@ -106,13 +122,17 @@ Each question is answered with the user in its own step; the answer goes into do
   Get (`ResourceList`, `DeviceInfo`, `ProgramList` with paging, `ChCtrlList`, an unknown resource: status 404) and a
   subscription to `ChannelList` (a program change gives a `notify`). Found: a Set to the synthesizer gives no
   response after the timeout (its chart says NAK); the SDK subscribes by resource and resource id only.
-- [ ] Question 6: PE API.
-- [ ] Question 7: console integration.
+- [ ] Question 6: PE API. Get works end to end against the General MIDI synthesizer, also of the entries of a
+  resource (`resId`); Set and Subscribe are open (see question 6).
+- [ ] Question 7: console integration. Detecting a device and reading its `pe` roots work; following the device
+  and the item counts from the data are open (see question 7).
 
 ## References
 
 - MIDI 2.0 specs (local download): M2-101 MIDI-CI, M2-103 Common Rules for Property Exchange, M2-104 UMP and MIDI 2.0
   Protocol, M2-115 Bit Scaling and Resolution.
-- Still needed for PE: M2-105 Foundational Resources (`DeviceInfo`, `ChannelList`, `JSONSchema`) and the resource
-  specs for `ProgramList` and the controller resources (`CMList`).
+- The published JSON Schemas of the standard resources (M2-105 `DeviceInfo`, `ChannelList`, `ProgramList`; M2-117
+  `ChCtrlList`, `AllCtrlList`, `CtrlMapList`; M2-112 `StateList`): in the MIDI 2.0 Workbench of MIDI2.dev
+  ("C:\Users\Marc\source\repos\MIDI2.0Workbench", `libs/schema`, MIT licensed); the first four are embedded in
+  Midi.Device. The specification documents of these resources are not downloaded.
 - Windows MIDI2 driver source and examples: "C:\Users\Marc\source\repos\_microsoft MIDI"

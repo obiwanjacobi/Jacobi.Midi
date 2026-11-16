@@ -234,15 +234,17 @@ public sealed class DeviceState
 
         // the state is flat: every scope is the sink itself
         public IValueSink EnterGroup(GroupContext context) => this;
+        public IValueSink EnterRepeat(RepeatContext context, int count) => this;
         public IValueSink EnterItem(RepeatContext context, int index, int count) => this;
         public IValueSink EnterChoice(ChoiceContext context, int selectedIndex) => this;
         public void ExitGroup(GroupContext context) { }
+        public void ExitRepeat(RepeatContext context, int count) { }
         public void ExitItem(RepeatContext context, int index, int count) { }
         public void ExitChoice(ChoiceContext context, int selectedIndex) { }
     }
 
     // reads the store under the lock
-    private sealed class StateSource(DeviceState state) : IValueSource
+    private sealed class StateSource(DeviceState state) : IOpenRepeatSource
     {
         public SourceResult GetField(FieldContext context)
         {
@@ -250,12 +252,18 @@ public sealed class DeviceState
                 return state._values.GetField(context);
         }
 
+        // the store is flat: every scope is the source itself; a repeat without a count is written item by item with
+        // the engine's own rule (the store holds no number of items)
         public IValueSource EnterGroup(GroupContext context) => this;
-        public int GetCount(RepeatContext context) => -1;
-        public IValueSource EnterItem(RepeatContext context, int index) => this;
-        public int GetSelectedIndex(ChoiceContext context)
-            => throw new NotSupportedException($"'{context.Path}': choices are not supported in an address map.");
-        public IValueSource EnterChoice(ChoiceContext context) => this;
+        public void ExitGroup(GroupContext context) { }
+        public IValueSource EnterRepeat(RepeatContext context, int count) => this;
+        public OpenRepeatSourceResult EnterOpenRepeat(RepeatContext context) => OpenRepeatSourceResult.ItemByItem(this);
+        public OpenRepeatAction NextItem(RepeatContext context, int index) => OpenRepeatAction.Default;
+        public void ExitRepeat(RepeatContext context, int count) { }
+        public IValueSource EnterItem(RepeatContext context, int index, int count) => this;
+        public void ExitItem(RepeatContext context, int index, int count) { }
+        public IValueSource EnterChoice(ChoiceContext context, int selectedIndex) => this;
+        public void ExitChoice(ChoiceContext context, int selectedIndex) { }
     }
 }
 

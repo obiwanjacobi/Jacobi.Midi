@@ -10,12 +10,23 @@ namespace Jacobi.Midi.Device.Messages;
 /// The body of a data message: the selected group (the device map), the nodes inside it that are written or read
 /// (a range of the map plan; null: the whole map), and the value model scope for their values.
 /// </summary>
-internal readonly record struct EnvelopeBody<TScope>(SchemaName Group, PlanRange? Target, TScope Scope)
+internal readonly record struct EnvelopeBody<TScope>(SchemaName Group, PlanRange? Target, TScope Scope);
+
+/// <summary>
+/// Makes the selection of the data open choice from an <see cref="EnvelopeBody{TScope}"/>: the whole body, or the range
+/// of its target.
+/// </summary>
+internal static class EnvelopeBodySelection
 {
-    public SchemaPath FromTarget => Target?.First.Path ?? default;
-    public InstancePath FromInstance => Target?.FromInstance ?? default;
-    public SchemaPath ToTarget => Target?.Last.Path ?? default;
-    public InstancePath ToInstance => Target?.ToInstance ?? default;
+    public static OpenChoiceSourceResult ToSelection(this EnvelopeBody<IValueSource> body)
+        => body.Target is { } target
+            ? OpenChoiceSourceResult.SelectRange(body.Scope, body.Group, target.First.Path, target.BeginInstance, target.Last.Path, target.EndInstance)
+            : OpenChoiceSourceResult.Select(body.Scope, body.Group);
+
+    public static OpenChoiceSinkResult ToSelection(this EnvelopeBody<IValueSink> body)
+        => body.Target is { } target
+            ? OpenChoiceSinkResult.SelectRange(body.Scope, body.Group, target.First.Path, target.BeginInstance, target.Last.Path, target.EndInstance)
+            : OpenChoiceSinkResult.Select(body.Scope, body.Group);
 }
 
 /// <summary>
@@ -31,7 +42,7 @@ internal readonly record struct EnvelopeBody<TScope>(SchemaName Group, PlanRange
 /// <param name="client">The client's value source at the same scope; null when the client only supplies the body values.</param>
 internal sealed class EnvelopeSource(IReadOnlyDictionary<string, long> blockRoles, DeviceValues device,
     Func<IValueSource?, EnvelopeBody<IValueSource>>? body = null, IValueSource? client = null)
-    : IOpenChoiceSource
+    : IOpenChoiceSource, IOpenRepeatSource
 {
     /// <summary>No roles that depend on a block: a message that is the same for every block.</summary>
     public static readonly IReadOnlyDictionary<string, long> NoBlockRoles = new Dictionary<string, long>();
@@ -63,26 +74,39 @@ internal sealed class EnvelopeSource(IReadOnlyDictionary<string, long> blockRole
 
     public OpenChoiceSourceResult EnterOpenChoice(OpenChoiceContext context)
     {
+        if (!MidiProperties.IsData(context.Choice.Group))
+        {
+            // another open choice of the message: the client selects its member
+            return client is null
+                ? throw new InvalidOperationException($"'{context.Path}': the open choice is not the data of the message (midi.role=\"data\"), and there is no client to select its member.")
+                : ValueModels.EnterOpenChoice(client, context, Scope);
+        }
         if (body is null)
         {
             throw new InvalidOperationException($"'{context.Path}': the message has no body to write.");
         }
         var clientBody = client is IOpenChoiceSource openChoice ? openChoice.EnterOpenChoice(context).Scope : null;
-        var selected = body(clientBody);
-        return new OpenChoiceSourceResult(selected.Scope, selected.Group, selected.FromTarget, selected.FromInstance, selected.ToTarget, selected.ToInstance);
+        return body(clientBody).ToSelection();
     }
 
     public IValueSource EnterGroup(GroupContext context) => Scope(client?.EnterGroup(context));
+    public void ExitGroup(GroupContext context) => client?.ExitGroup(context);
 
-    public int GetCount(RepeatContext context)
-        => client?.GetCount(context) ?? throw new NotSupportedException($"'{context.Path}': repeats are not supported in an envelope message.");
+    public IValueSource EnterRepeat(RepeatContext context, int count) => Scope(client?.EnterRepeat(context, count));
 
-    public IValueSource EnterItem(RepeatContext context, int index) => Scope(client?.EnterItem(context, index));
+    public OpenRepeatSourceResult EnterOpenRepeat(RepeatContext context)
+        => client is null
+            ? throw new NotSupportedException($"'{context.Path}': repeats without a count are not supported in an envelope message without a client.")
+            : ValueModels.EnterOpenRepeat(client, context, Scope);
 
-    public int GetSelectedIndex(ChoiceContext context)
-        => client?.GetSelectedIndex(context) ?? throw new NotSupportedException($"'{context.Path}': choices are not supported in an envelope message.");
+    public OpenRepeatAction NextItem(RepeatContext context, int index)
+        => client is null ? OpenRepeatAction.Default : ValueModels.NextItem(client, context, index);
 
-    public IValueSource EnterChoice(ChoiceContext context) => Scope(client?.EnterChoice(context));
+    public void ExitRepeat(RepeatContext context, int count) => client?.ExitRepeat(context, count);
+    public IValueSource EnterItem(RepeatContext context, int index, int count) => Scope(client?.EnterItem(context, index, count));
+    public void ExitItem(RepeatContext context, int index, int count) => client?.ExitItem(context, index, count);
+    public IValueSource EnterChoice(ChoiceContext context, int selectedIndex) => Scope(client?.EnterChoice(context, selectedIndex));
+    public void ExitChoice(ChoiceContext context, int selectedIndex) => client?.ExitChoice(context, selectedIndex);
 
     private EnvelopeSource Scope(IValueSource? clientScope)
         => client is null ? this : new EnvelopeSource(blockRoles, device, body, clientScope);
@@ -122,12 +146,13 @@ internal sealed class EnvelopeSink(Func<EnvelopeSink, EnvelopeBody<IValueSink>> 
     }
 
     public OpenChoiceSinkResult EnterOpenChoice(OpenChoiceContext context)
-    {
-        var body = selectBody(this);
-        return new OpenChoiceSinkResult(body.Scope, body.Group, body.FromTarget, body.FromInstance, body.ToTarget, body.ToInstance);
-    }
+        => MidiProperties.IsData(context.Choice.Group)
+            ? selectBody(this).ToSelection()
+            : throw new InvalidOperationException($"'{context.Path}': only the data open choice (midi.role=\"data\") is supported in an envelope message.");
 
     public IValueSink EnterGroup(GroupContext context) => this;
+    public IValueSink EnterRepeat(RepeatContext context, int count) => this;
+    public void ExitRepeat(RepeatContext context, int count) { }
     public IValueSink EnterItem(RepeatContext context, int index, int count) => this;
     public IValueSink EnterChoice(ChoiceContext context, int selectedIndex) => this;
     public void ExitGroup(GroupContext context) { }
@@ -144,6 +169,8 @@ internal sealed class NullSink : IValueSink
 
     public void SetField(FieldContext context, LogicalField value) { }
     public IValueSink EnterGroup(GroupContext context) => this;
+    public IValueSink EnterRepeat(RepeatContext context, int count) => this;
+    public void ExitRepeat(RepeatContext context, int count) { }
     public IValueSink EnterItem(RepeatContext context, int index, int count) => this;
     public IValueSink EnterChoice(ChoiceContext context, int selectedIndex) => this;
     public void ExitGroup(GroupContext context) { }

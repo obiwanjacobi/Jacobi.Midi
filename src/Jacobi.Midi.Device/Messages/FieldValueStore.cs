@@ -10,7 +10,7 @@ namespace Jacobi.Midi.Device.Messages;
 /// device session for its state of a device and by clients that keep the values of a device (e.g. the console's
 /// device state). Not thread-safe.
 /// </summary>
-public sealed class FieldValueStore : IValueSink, IValueSource
+public sealed class FieldValueStore : IValueSink, IOpenRepeatSource
 {
     private readonly Dictionary<(string Path, InstancePath Instance), LogicalField> _values = [];
 
@@ -43,16 +43,18 @@ public sealed class FieldValueStore : IValueSink, IValueSource
 
     // the store is flat: every scope is the store itself
     public IValueSink EnterGroup(GroupContext context) => this;
+    public IValueSink EnterRepeat(RepeatContext context, int count) => this;
     public IValueSink EnterItem(RepeatContext context, int index, int count) => this;
     public IValueSink EnterChoice(ChoiceContext context, int selectedIndex) => this;
     public void ExitGroup(GroupContext context) { }
+    public void ExitRepeat(RepeatContext context, int count) { }
     public void ExitItem(RepeatContext context, int index, int count) { }
     public void ExitChoice(ChoiceContext context, int selectedIndex) { }
-
     IValueSource IValueSource.EnterGroup(GroupContext context) => this;
-    public int GetCount(RepeatContext context) => -1;
-    public IValueSource EnterItem(RepeatContext context, int index) => this;
-    public int GetSelectedIndex(ChoiceContext context)
-        => throw new NotSupportedException($"'{context.Path}': choices are not supported in an address map.");
-    IValueSource IValueSource.EnterChoice(ChoiceContext context) => this;
+    IValueSource IValueSource.EnterRepeat(RepeatContext context, int count) => this;
+    IValueSource IValueSource.EnterItem(RepeatContext context, int index, int count) => this;
+    IValueSource IValueSource.EnterChoice(ChoiceContext context, int selectedIndex) => this;
+    // a repeat without a count is written item by item with the engine's own rule (the store holds no number of items)
+    public OpenRepeatSourceResult EnterOpenRepeat(RepeatContext context) => OpenRepeatSourceResult.ItemByItem(this);
+    public OpenRepeatAction NextItem(RepeatContext context, int index) => OpenRepeatAction.Default;
 }

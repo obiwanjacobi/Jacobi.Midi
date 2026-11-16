@@ -62,13 +62,9 @@ public static class MidiProperties
     /// </summary>
     public const string Cmd = "midi.cmd";
     /// <summary>
-    /// The name of the Property Exchange resource a <c>pe</c> root stands for (e.g. <c>X-ProgramEdit</c>): resource
-    /// names are not always valid schema names.
-    /// </summary>
-    public const string Resource = "midi.resource";
-    /// <summary>
-    /// The JSON key a node of a <c>pe</c> root stands for, when it differs from the node's name (a key that is not a
-    /// valid schema name).
+    /// The name the Property Exchange device knows a node of a <c>pe</c> root by, when it differs from the node's name
+    /// (a name that is not a valid schema name): the resource of the root (e.g. <c>X-ProgramEdit</c>), the
+    /// <c>resId</c> of an entry, the JSON key of a member.
     /// </summary>
     public const string Key = "midi.key";
     /// <summary>
@@ -126,8 +122,7 @@ public static class MidiProperties
         Describe(MaxDataSize, "Message or map root: the largest number of data bytes in one message."),
         Describe(Role, "Envelope: the value the node holds: address, size, data or device.<name>. Root: cmd1 or cmd2, a command root."),
         Describe(Cmd, "Command root: the channel message of the field: cc#<number>, rpn#<number>, nrpn#<number> (or <msb>/<lsb>) or pc."),
-        Describe(Resource, "Property Exchange root: the name of the resource (e.g. X-ProgramEdit)."),
-        Describe(Key, "Property Exchange root: the JSON key of the node, when it is not the node's name."),
+        Describe(Key, "Property Exchange root: the name the device knows the node by (the resource of the root, the resId of an entry, the JSON key of a member), when it is not the node's name."),
         Describe(AddressBits, "Envelope: the bits per address byte of the address field (default 7)."),
         Describe(Doc, "Any node: the documentation of the node, plain text (multi-line); not inherited."),
     ];

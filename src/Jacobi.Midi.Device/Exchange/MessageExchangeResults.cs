@@ -85,7 +85,7 @@ public sealed record BlockResult(PlanRange Block, BlockStatus Status, Exception?
 
     /// <summary>The nodes of a block as text, e.g. 'AddressMap.Memory.Patch.Level[3]'..'AddressMap.Memory.Patch.Name[3]'.</summary>
     internal static string Describe(PlanRange block)
-        => $"'{block.First.Path}{block.FromInstance}'..'{block.Last.Path}{block.ToInstance}'";
+        => $"'{block.First.Path}{block.BeginInstance}'..'{block.Last.Path}{block.EndInstance}'";
 }
 
 /// <summary>

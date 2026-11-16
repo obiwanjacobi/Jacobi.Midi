@@ -369,7 +369,7 @@ internal sealed class SchemaInstantiator
     // the data open choices of an instance, outside the bodies (a body holds no message)
     private static IEnumerable<InstanceChoice> DataChoices(InstanceNode node)
     {
-        if (node is InstanceChoice { IsOpen: true } choice && MidiProperties.IsData(choice.Schema))
+        if (node is InstanceChoice { HasBodies: true } choice && MidiProperties.IsData(choice.Schema))
         {
             yield return choice;
             yield break;

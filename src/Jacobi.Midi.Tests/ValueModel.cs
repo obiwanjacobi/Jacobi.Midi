@@ -22,24 +22,35 @@ internal sealed class ValueSource : IValueSource
         return this;
     }
 
-    public int GetCount(RepeatContext context)
+    public void ExitGroup(GroupContext context)
     {
-        throw new NotImplementedException();
     }
 
-    public IValueSource EnterItem(RepeatContext context, int index)
+    public IValueSource EnterRepeat(RepeatContext context, int count)
     {
         return this;
     }
 
-    public int GetSelectedIndex(ChoiceContext context)
+    public void ExitRepeat(RepeatContext context, int count)
     {
-        throw new NotImplementedException();
     }
 
-    public IValueSource EnterChoice(ChoiceContext context)
+    public IValueSource EnterItem(RepeatContext context, int index, int count)
     {
         return this;
+    }
+
+    public void ExitItem(RepeatContext context, int index, int count)
+    {
+    }
+
+    public IValueSource EnterChoice(ChoiceContext context, int selectedIndex)
+    {
+        return this;
+    }
+
+    public void ExitChoice(ChoiceContext context, int selectedIndex)
+    {
     }
 
     private bool TryGetValue(string name, out object? value)
@@ -62,6 +73,11 @@ internal sealed class ValueSink : IValueSink
         return this;
     }
 
+    public IValueSink EnterRepeat(RepeatContext context, int count)
+    {
+        return this;
+    }
+
     public IValueSink EnterItem(RepeatContext context, int index, int count)
     {
         return this;
@@ -73,6 +89,10 @@ internal sealed class ValueSink : IValueSink
     }
 
     public void ExitGroup(GroupContext context)
+    {
+    }
+
+    public void ExitRepeat(RepeatContext context, int count)
     {
     }
 

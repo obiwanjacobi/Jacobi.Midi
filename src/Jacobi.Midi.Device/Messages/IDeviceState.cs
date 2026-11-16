@@ -9,7 +9,7 @@ namespace Jacobi.Midi.Device.Messages;
 /// decides what it holds, what a send needs and what is forgotten; how depends on the map that created it
 /// (<see cref="IMessageMap.CreateState"/>). Thread-safe.
 /// </summary>
-internal interface IDeviceState : IValueSink, IValueSource
+internal interface IDeviceState : IValueSink, IOpenRepeatSource
 {
     /// <summary>The range of the whole root.</summary>
     PlanRange Whole { get; }

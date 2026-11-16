@@ -554,8 +554,8 @@ internal sealed record ChoiceOption(string Name, Func<InstanceChoice, InstanceNo
 }
 
 /// <summary>
-/// A choice. The user selects the alternative: a member of the choice or, for an open choice, the body that is looked up
-/// by the member node def of the choice (the roots that conform to it). A constant selected index preselects (and fixes) the alternative.
+/// A choice. The user selects the alternative: a member of the choice or, for a choice with a member node def, the body
+/// that is looked up by it (the roots that conform to it). A constant selected index preselects (and fixes) the alternative.
 /// </summary>
 internal sealed partial class InstanceChoice : InstanceNode
 {
@@ -572,10 +572,13 @@ internal sealed partial class InstanceChoice : InstanceNode
 
     public SchemaChoice Choice => (SchemaChoice)Schema;
 
-    /// <summary>True for an open choice: the body is a root looked up by the member node def.</summary>
-    public bool IsOpen => Choice.MemberNodeDef is not null;
+    /// <summary>True for an open choice: it has no selected index, the value model (this instance) selects the alternative.</summary>
+    public bool IsOpen => Choice.IsOpen;
 
-    /// <summary>The contract the bodies of an open choice conform to.</summary>
+    /// <summary>True for a choice with a member node def: the alternative is a body, a root looked up by the member node def.</summary>
+    public bool HasBodies => Choice.MemberNodeDef is not null;
+
+    /// <summary>The contract the bodies of a choice with a member node def conform to.</summary>
     public string MemberNodeDef => Choice.MemberNodeDef?.ToString() ?? String.Empty;
 
     public IReadOnlyList<ChoiceOption> Options { get; }
@@ -587,7 +590,7 @@ internal sealed partial class InstanceChoice : InstanceNode
 
     public bool HasNoOptions => Options.Count == 0;
 
-    public string NoOptionsText => IsOpen
+    public string NoOptionsText => HasBodies
         ? $"No group conforms to '{MemberNodeDef}'."
         : "The choice has no alternatives.";
 

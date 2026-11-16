@@ -217,16 +217,16 @@ access excludes are left out: read-only fields for a message that carries data, 
 message (the device does not transmit them).
 
 **The data is the device map, in one serializer call.** There is no opaque data buffer: the open choice of a data
-message selects the device map as its body and narrows it to the block it carries, with `FromTarget`/`FromInstance`
-and `ToTarget`/`ToInstance`: the first and last field of the block (e.g. the first and last field of
-`AddressMap.Memory.Patch`, both with `[1]`, for the DT1 at `40 40`). A block is any contiguous range of whole fields:
-one field, a few fields of a group, a group, or neighbouring groups.
+message selects the device map as its body and narrows it to the block it carries, with a target range
+(`SelectRange`: `Begin`/`BeginInstance` and `End`/`EndInstance`): the first and last field of the block (e.g. the
+first and last field of `AddressMap.Memory.Patch`, both with `[1]`, for the DT1 at `40 40`). A block is any
+contiguous range of whole fields: one field, a few fields of a group, a group, or neighbouring groups.
 
 - **Which body.** The groups that conform to the open choice's `memberNodeDef` are filtered on the `device.*` values read from the envelope (against their `midi.device.*`); exactly one must remain, otherwise the message is not for this map.
 - **Which block (reading).** The length of the data is only known from the message as a whole, not when the open choice is entered. The map tries blocks that start at the address with a sink that discards the values: a block that is too large runs out of data, one that is too small does not end at the checksum. The block whose read consumes the whole message is the one; the client's sink only gets that final read (`ReceivedData.Decode`). The blocks are tried in this order:
   1. The block whose size the overhead of the data message implies: the bytes outside the data (envelope, checksum, framing) as measured on the last message of that kind that was recognised. One address is one data byte, so the data size is the message length minus the overhead. This takes one read for messages whose envelope has a fixed size.
   2. When that fails (the first message, or an envelope whose size varies): every block that starts at the address, ends on a field boundary and fits in the message, largest first.
-- **Ending the repeats.** The repeats of a map have no `count` (a dump may hold fewer items), so the value model ends them (`IOpenRepeatSink`/`IOpenRepeatSource` of the BinarySerializer). The map wraps the client's scope for the body (`AddressMap.WrapBody`): a repeat ends after the item that holds the last node of the target (a block or a range), after its `midi.repeat` items, or at the end of the data. A client that reads or writes a map body with its own open choice model must wrap its scope the same way.
+- **Ending the repeats.** The repeats of a map have no `count` (a dump may hold fewer items), so the value model ends them (`IOpenRepeatSink`/`IOpenRepeatSource` of the BinarySerializer). The map wraps the client's scope for the body (`AddressMap.WrapBody`): a repeat ends after the item that holds the last node of the target (a block or a range), after its `midi.repeat` items, or at the end of the data. On write the client's scope enters such a repeat with that number of items (`EnterRepeat`); on read with `EnterRepeat(context, -1)`, item by item. A client that reads or writes a map body with its own open choice model must wrap its scope the same way.
 - **Tools with their own value model.** A client with a model of the whole message (e.g. the Schema Editor's instantiate and match) uses the generic `MessageMaps.Plan`, `SaveMessages` and `ReadMessage`: the address map places the data of a message by its address and ends its repeats there.
   - *Item counts:* `ItemCount` gives the number of items of a map repeat in the address space, so the client can show them all.
   - *Reading:* a read with a map root plan (a dump of the map) ends the repeats after `midi.repeat` items or at the end of the data. When the client selects a map root as the body of an open choice, the adapter narrows the body to the block the message carries, recognised as `TryReadData` does (any device id for now). When the message is not recognised, the largest group at the address is read as far as the data goes, with a warning.

@@ -94,7 +94,7 @@ public class Gp8AddressMapTests
         Assert.Equal(MemoryStart + Stride, map.GetAddressRange(data.Block).Start);
         Assert.Equal(0x13, data.Device["modelId"]);
         Assert.Equal(new AddressRange(MemoryStart + Stride, PatchSize), map.GetAddressRange(data.Block));
-        Assert.Equal(new InstancePath([1]), data.Block.FromInstance);
+        Assert.Equal(new InstancePath([1]), data.Block.BeginInstance);
     }
 
     [Fact]

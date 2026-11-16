@@ -112,16 +112,20 @@ internal sealed class DumpDeviceState(Serializer serializer, PlanRange whole, IR
 
     // the store is flat: every scope is the state itself
     public IValueSink EnterGroup(GroupContext context) => this;
+    public IValueSink EnterRepeat(RepeatContext context, int count) => this;
     public IValueSink EnterItem(RepeatContext context, int index, int count) => this;
     public IValueSink EnterChoice(ChoiceContext context, int selectedIndex) => this;
     public void ExitGroup(GroupContext context) { }
+    public void ExitRepeat(RepeatContext context, int count) { }
     public void ExitItem(RepeatContext context, int index, int count) { }
     public void ExitChoice(ChoiceContext context, int selectedIndex) { }
     IValueSource IValueSource.EnterGroup(GroupContext context) => this;
-    public int GetCount(RepeatContext context) => ((IValueSource)_store).GetCount(context);
-    public IValueSource EnterItem(RepeatContext context, int index) => this;
-    public int GetSelectedIndex(ChoiceContext context) => ((IValueSource)_store).GetSelectedIndex(context);
-    IValueSource IValueSource.EnterChoice(ChoiceContext context) => this;
+    IValueSource IValueSource.EnterRepeat(RepeatContext context, int count) => this;
+    IValueSource IValueSource.EnterItem(RepeatContext context, int index, int count) => this;
+    IValueSource IValueSource.EnterChoice(ChoiceContext context, int selectedIndex) => this;
+    // a repeat without a count is written item by item with the engine's own rule (the store holds no number of items)
+    public OpenRepeatSourceResult EnterOpenRepeat(RepeatContext context) => OpenRepeatSourceResult.ItemByItem(this);
+    public OpenRepeatAction NextItem(RepeatContext context, int index) => OpenRepeatAction.Default;
 
     // the whole root from the values; a field with a role gets a placeholder (only the values are read back)
     private byte[] Write(IValueSource source)
@@ -132,7 +136,7 @@ internal sealed class DumpDeviceState(Serializer serializer, PlanRange whole, IR
     }
 
     /// <summary>A source that gives 0 for the fields with a role the inner source has no value for.</summary>
-    private sealed class RolePlaceholders(IValueSource inner, IReadOnlySet<string> rolePaths) : IValueSource
+    private sealed class RolePlaceholders(IValueSource inner, IReadOnlySet<string> rolePaths) : IOpenRepeatSource, IOpenChoiceSource
     {
         public SourceResult GetField(FieldContext context)
         {
@@ -145,15 +149,23 @@ internal sealed class DumpDeviceState(Serializer serializer, PlanRange whole, IR
             return SourceResult.Provided(new LogicalField(context.Name, type, Convert.ChangeType(0, type, CultureInfo.InvariantCulture)));
         }
 
-        public IValueSource EnterGroup(GroupContext context) => new RolePlaceholders(inner.EnterGroup(context), rolePaths);
-        public int GetCount(RepeatContext context) => inner.GetCount(context);
-        public IValueSource EnterItem(RepeatContext context, int index) => new RolePlaceholders(inner.EnterItem(context, index), rolePaths);
-        public int GetSelectedIndex(ChoiceContext context) => inner.GetSelectedIndex(context);
-        public IValueSource EnterChoice(ChoiceContext context) => new RolePlaceholders(inner.EnterChoice(context), rolePaths);
+        public IValueSource EnterGroup(GroupContext context) => Wrap(inner.EnterGroup(context));
+        public void ExitGroup(GroupContext context) => inner.ExitGroup(context);
+        public IValueSource EnterRepeat(RepeatContext context, int count) => Wrap(inner.EnterRepeat(context, count));
+        public OpenRepeatSourceResult EnterOpenRepeat(RepeatContext context) => ValueModels.EnterOpenRepeat(inner, context, Wrap);
+        public OpenRepeatAction NextItem(RepeatContext context, int index) => ValueModels.NextItem(inner, context, index);
+        public void ExitRepeat(RepeatContext context, int count) => inner.ExitRepeat(context, count);
+        public IValueSource EnterItem(RepeatContext context, int index, int count) => Wrap(inner.EnterItem(context, index, count));
+        public void ExitItem(RepeatContext context, int index, int count) => inner.ExitItem(context, index, count);
+        public IValueSource EnterChoice(ChoiceContext context, int selectedIndex) => Wrap(inner.EnterChoice(context, selectedIndex));
+        public OpenChoiceSourceResult EnterOpenChoice(OpenChoiceContext context) => ValueModels.EnterOpenChoice(inner, context, Wrap);
+        public void ExitChoice(ChoiceContext context, int selectedIndex) => inner.ExitChoice(context, selectedIndex);
+
+        private RolePlaceholders Wrap(IValueSource scope) => new(scope, rolePaths);
     }
 
     /// <summary>A sink that leaves out the fields with a role.</summary>
-    private sealed class WithoutRoles(IValueSink inner, IReadOnlySet<string> rolePaths) : IValueSink
+    private sealed class WithoutRoles(IValueSink inner, IReadOnlySet<string> rolePaths) : IOpenRepeatSink, IOpenChoiceSink
     {
         public void SetField(FieldContext context, LogicalField value)
         {
@@ -163,11 +175,18 @@ internal sealed class DumpDeviceState(Serializer serializer, PlanRange whole, IR
             }
         }
 
-        public IValueSink EnterGroup(GroupContext context) => new WithoutRoles(inner.EnterGroup(context), rolePaths);
-        public IValueSink EnterItem(RepeatContext context, int index, int count) => new WithoutRoles(inner.EnterItem(context, index, count), rolePaths);
-        public IValueSink EnterChoice(ChoiceContext context, int selectedIndex) => new WithoutRoles(inner.EnterChoice(context, selectedIndex), rolePaths);
+        public IValueSink EnterGroup(GroupContext context) => Wrap(inner.EnterGroup(context));
         public void ExitGroup(GroupContext context) => inner.ExitGroup(context);
+        public IValueSink EnterRepeat(RepeatContext context, int count) => Wrap(inner.EnterRepeat(context, count));
+        public OpenRepeatSinkResult EnterOpenRepeat(OpenRepeatReadContext context) => ValueModels.EnterOpenRepeat(inner, context, Wrap);
+        public OpenRepeatAction NextItem(OpenRepeatReadContext context, int index) => ValueModels.NextItem(inner, context, index);
+        public void ExitRepeat(RepeatContext context, int count) => inner.ExitRepeat(context, count);
+        public IValueSink EnterItem(RepeatContext context, int index, int count) => Wrap(inner.EnterItem(context, index, count));
         public void ExitItem(RepeatContext context, int index, int count) => inner.ExitItem(context, index, count);
+        public IValueSink EnterChoice(ChoiceContext context, int selectedIndex) => Wrap(inner.EnterChoice(context, selectedIndex));
+        public OpenChoiceSinkResult EnterOpenChoice(OpenChoiceContext context) => ValueModels.EnterOpenChoice(inner, context, Wrap);
         public void ExitChoice(ChoiceContext context, int selectedIndex) => inner.ExitChoice(context, selectedIndex);
+
+        private WithoutRoles Wrap(IValueSink scope) => new(scope, rolePaths);
     }
 }

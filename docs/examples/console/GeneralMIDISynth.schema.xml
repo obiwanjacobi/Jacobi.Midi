@@ -3,7 +3,6 @@
     <group name="DeviceInfo">
       <properties>
         <property name="midi.role" value="pe" />
-        <property name="midi.resource" value="DeviceInfo" />
         <property name="midi.doc" value="MIDI-CI Property Exchange DeviceInfo." />
       </properties>
       <members>
@@ -96,7 +95,6 @@
     <group name="ChannelList">
       <properties>
         <property name="midi.role" value="pe" />
-        <property name="midi.resource" value="ChannelList" />
         <property name="midi.doc" value="MIDI-CI Property Exchange ChannelList schema." />
       </properties>
       <members>
@@ -202,9 +200,40 @@
     <group name="ProgramList">
       <properties>
         <property name="midi.role" value="pe" />
-        <property name="midi.resource" value="ProgramList" />
         <property name="midi.doc" value="MIDI CI Property Exchange Program List." />
       </properties>
+      <members>
+        <choice name="resId">
+          <properties>
+            <property name="midi.doc" value="The entries of 'ProgramList' (resId) that links in the data of the device refer to. The resource can also be read without a resId: remove this choice for that." />
+          </properties>
+          <members>
+            <group name="melodic" nodeDef="ProgramList_entry" />
+            <group name="drums" nodeDef="ProgramList_entry" />
+          </members>
+        </choice>
+      </members>
+    </group>
+    <group name="ChCtrlList">
+      <properties>
+        <property name="midi.role" value="pe" />
+        <property name="midi.doc" value="MIDI CI Property Exchange Active Controller Message List." />
+      </properties>
+      <members>
+        <choice name="resId">
+          <properties>
+            <property name="midi.doc" value="The entries of 'ChCtrlList' (resId) that links in the data of the device refer to. The resource can also be read without a resId: remove this choice for that." />
+          </properties>
+          <members>
+            <group name="channel" nodeDef="ChCtrlList_entry" />
+            <group name="drums" nodeDef="ChCtrlList_entry" />
+          </members>
+        </choice>
+      </members>
+    </group>
+  </members>
+  <nodeDefs>
+    <group name="ProgramList_entry">
       <members>
         <repeat name="items">
           <properties>
@@ -271,12 +300,7 @@
         </repeat>
       </members>
     </group>
-    <group name="ChCtrlList">
-      <properties>
-        <property name="midi.role" value="pe" />
-        <property name="midi.resource" value="ChCtrlList" />
-        <property name="midi.doc" value="MIDI CI Property Exchange Active Controller Message List." />
-      </properties>
+    <group name="ChCtrlList_entry">
       <members>
         <repeat name="items">
           <properties>
@@ -400,7 +424,7 @@
         </repeat>
       </members>
     </group>
-  </members>
+  </nodeDefs>
   <dataTypeDefs>
     <dataTypeDef name="DeviceInfo_manufacturerId_item" basedOn="sys.int64" min="0" max="127" />
     <dataTypeDef name="DeviceInfo_familyId_item" basedOn="sys.int64" min="0" max="127" />

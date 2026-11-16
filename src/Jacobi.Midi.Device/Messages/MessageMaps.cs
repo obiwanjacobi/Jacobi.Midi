@@ -214,14 +214,14 @@ public sealed class MessageMaps(Serializer serializer)
         var whole = ReferenceEquals(block.First, block.ExecutionPlan.Root) && ReferenceEquals(block.Last, block.ExecutionPlan.Root);
         OpenChoiceSinkResult Narrow(OpenChoiceSinkResult selected)
         {
-            if (selected.Group != map.Root)
+            if (selected.Member != map.Root)
             {
-                throw new InvalidOperationException($"'{dataChoice.Path}': the selected body '{selected.Group}' is not '{map.Root}'.");
+                throw new InvalidOperationException($"'{dataChoice.Path}': the selected body '{selected.Member}' is not '{map.Root}'.");
             }
             var scope = map.WrapBody(selected.Scope, block);
             return whole
-                ? selected with { Scope = scope }
-                : new OpenChoiceSinkResult(scope, selected.Group, block.First.Path, block.FromInstance, block.Last.Path, block.ToInstance);
+                ? selected.WithScope(scope)
+                : new EnvelopeBody<IValueSink>(selected.Member, block, scope).ToSelection();
         }
         return Serializer.Deserialize(data.Range, new ReadOnlySequence<byte>(sysEx), new ClientBodySink(sink, dataChoice.Path, Narrow));
     }
@@ -323,7 +323,7 @@ public sealed class MessageMaps(Serializer serializer)
             {
                 if (!range.Contains(block))
                 {
-                    warnings?.Add($"'{range.First.Path}' {range.FromInstance.ToLogString()} is part of a larger block of '{map.Root}': {map.DescribeBlock(block)} is sent.");
+                    warnings?.Add($"'{range.First.Path}' {range.BeginInstance.ToLogString()} is part of a larger block of '{map.Root}': {map.DescribeBlock(block)} is sent.");
                 }
                 if (!blocks.Any(planned => planned.Contains(block)))
                 {

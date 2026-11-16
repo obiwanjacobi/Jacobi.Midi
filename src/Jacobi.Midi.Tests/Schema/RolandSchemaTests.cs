@@ -82,6 +82,15 @@ internal class AddressMapReadModel(AddressMap map) : IValueSink, IOpenChoiceSink
     {
     }
 
+    public IValueSink EnterRepeat(RepeatContext context, int count)
+    {
+        return this;
+    }
+
+    public void ExitRepeat(RepeatContext context, int count)
+    {
+    }
+
     public IValueSink EnterItem(RepeatContext context, int index, int count)
     {
         return this;
@@ -104,6 +113,6 @@ internal class AddressMapReadModel(AddressMap map) : IValueSink, IOpenChoiceSink
     {
         // the first DT1 of the dump holds memory patch 1 (address 40 00)
         // the map ends its repeats after that patch
-        return new(map.WrapBody(this, "AddressMap.Memory.Patch", new InstancePath([0])), map.Root, "AddressMap.Memory.Patch", new InstancePath([0]));
+        return OpenChoiceSinkResult.SelectNode(map.WrapBody(this, "AddressMap.Memory.Patch", new InstancePath([0])), map.Root, "AddressMap.Memory.Patch", new InstancePath([0]));
     }
 }

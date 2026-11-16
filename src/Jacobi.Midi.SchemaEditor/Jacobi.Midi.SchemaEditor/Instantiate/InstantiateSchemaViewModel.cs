@@ -95,8 +95,8 @@ internal sealed partial class InstantiateSchemaViewModel : ViewModelBase
 
     /// <summary>The instruction below the title.</summary>
     public string Instruction => IsMatch
-        ? "Load a SysEx file or receive a message from MIDI: it is read with the schema into the values below. Select the body of an open choice before matching."
-        : "Provide a value for each field. Select the body of an open choice and add copies of an open repeat.";
+        ? "Load a SysEx file or receive a message from MIDI: it is read with the schema into the values below. Select the alternative of an open choice before matching."
+        : "Provide a value for each field. Select the alternative of an open choice and add copies of an open repeat.";
 
     /// <summary>The reason the instantiation failed; empty when the dialog shows the <see cref="Root"/>.</summary>
     public string Error { get; } = String.Empty;

@@ -197,7 +197,7 @@
                 <StackPanel Orientation="Horizontal" Spacing="10">
                     <TextBlock Text="{Binding Name}" Classes="caption" VerticalAlignment="Center" />
                     <TextBlock Text="choice" Classes="path" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding MemberNodeDef, StringFormat='open: {0}'}" Classes="path" VerticalAlignment="Center" IsVisible="{Binding IsOpen}" />
+                    <TextBlock Text="{Binding MemberNodeDef, StringFormat='open: {0}'}" Classes="path" VerticalAlignment="Center" IsVisible="{Binding HasBodies}" />
                 </StackPanel>
                 <ComboBox ItemsSource="{Binding Options}" SelectedItem="{Binding SelectedOption}"
                           IsEnabled="{Binding CanSelect}" IsVisible="{Binding HasOptions}"

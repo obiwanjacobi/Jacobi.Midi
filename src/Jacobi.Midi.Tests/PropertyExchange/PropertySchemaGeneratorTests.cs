@@ -86,12 +86,65 @@ public class PropertySchemaGeneratorTests
         // the standard resources with their published schemas
         Assert.Equal(["DeviceInfo", "ChannelList", "XTempo", "XGlobset", "XProgramEdit", "XPatchList"], schema.Document.Roots.Select(root => root.Name));
         Assert.All(schema.Document.Roots, root => Assert.True(MidiProperties.IsPropertyRoot(root)));
-        Assert.Equal("X-ProgramEdit", MidiProperties.Find(schema.Document.Roots[4], MidiProperties.Resource));
+        // the root is named after the resource; the resource name in midi.key when it is not a valid name
+        Assert.Equal("X-ProgramEdit", MidiProperties.Find(schema.Document.Roots[4], MidiProperties.Key));
+        Assert.Null(MidiProperties.Find(schema.Document.Roots[0], MidiProperties.Key));
         Assert.Contains(schema.Notes, note => note.StartsWith("'RawBuffer'", StringComparison.Ordinal));
         Assert.Contains(schema.Notes, note => note.StartsWith("'X-Missing'", StringComparison.Ordinal));
         Assert.Contains(schema.Notes, note => note.Contains("XProgramEdit.mystery", StringComparison.Ordinal));
         // every root gets a plan
         Assert.All(schema.Document.Roots, root => serializer.GetPlan(new SchemaName($"Pe.{root.Name}")));
+    }
+
+    [Fact]
+    public void Generate_AResourceWithResIds_HasTheChoiceResId_WithAnAlternativePerResId()
+    {
+        var schema = PropertySchemaGenerator.Generate("Pe", PropertyResource.FromResourceList(JsonNode.Parse(ResourceList)),
+            new Dictionary<string, JsonObject> { ["programDetails"] = JsonNode.Parse(ProgramDetails)!.AsObject() },
+            new Dictionary<string, IReadOnlyList<string>> { ["X-ProgramEdit"] = ["abcd", "my prog"], ["X-PatchList"] = ["bank1"] });
+        var serializer = TestDevice.CreateSerializer(schema.Document);
+
+        var edit = serializer.GetPlan(new SchemaName("Pe.XProgramEdit"));
+        var entries = Assert.IsType<ChoiceInfo>(Assert.Single(edit.Root.Members));
+        Assert.Equal(PropertySchemaGenerator.ResIdName, entries.Name);
+        Assert.True(entries.IsOpen);
+        Assert.Equal(["abcd", "myprog"], entries.Members.Select(member => member.Name));
+        Assert.Equal("my prog", MidiProperties.Find(entries.Members[1], MidiProperties.Key));
+        // each alternative has the structure of the resource
+        Assert.Equal(typeof(string), Assert.IsType<FieldInfo>(edit.Find(new SchemaPath("XProgramEdit.resId.myprog.name"))).ValueType.ClrType);
+        Assert.Equal(3, Assert.IsType<FieldInfo>(edit.Find(new SchemaPath("XProgramEdit.resId.abcd.lfoWaveform"))).DataType.Options?.Count);
+        // requireResId: only the resIds; else the doc tells the author it can also be read without one
+        Assert.DoesNotContain("without a resId", MidiProperties.DocOf(entries), StringComparison.Ordinal);
+        var list = serializer.GetPlan(new SchemaName("Pe.XPatchList"));
+        Assert.IsType<FieldInfo>(list.Find(new SchemaPath("XPatchList.resId.bank1.items.title")));
+        Assert.Contains("without a resId", MidiProperties.DocOf(Assert.IsType<ChoiceInfo>(Assert.Single(list.Root.Members))), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generate_AResourceThatRequiresAResIdWithoutLinks_IsAPlainRootWithANote()
+    {
+        var (serializer, _) = Compile();
+
+        var edit = serializer.GetPlan(new SchemaName("Pe.XProgramEdit"));
+
+        Assert.IsType<FieldInfo>(edit.Find(new SchemaPath("XProgramEdit.name")));
+        Assert.Contains("requires a resId", MidiProperties.DocOf(edit.Root), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Links_GiveTheResIdsByResource_EachOnceInTheOrderFound()
+    {
+        var resourceIds = new Dictionary<string, List<string>>();
+
+        PropertyLinks.Collect(JsonNode.Parse("""
+            [ { "title": "Melodic", "links": [ { "resource": "ProgramList", "resId": "melodic" }, { "resource": "ChCtrlList", "resId": "channel" } ] },
+              { "title": "Drums", "links": [ { "resource": "ProgramList", "resId": "drums" } ], "more": { "resource": "ProgramList", "resId": "melodic" } },
+              { "resource": "NoId" } ]
+            """), resourceIds);
+
+        Assert.Equal(["melodic", "drums"], resourceIds["ProgramList"]);
+        Assert.Equal(["channel"], resourceIds["ChCtrlList"]);
+        Assert.False(resourceIds.ContainsKey("NoId"));
     }
 
     [Fact]

@@ -23,7 +23,9 @@ public class PropertyExchangeSessionTests
     {
         ["ResourceList"] = """[{"resource":"DeviceInfo"},{"resource":"ChannelList","canSubscribe":true},{"resource":"ProgramList","requireResId":true}]""",
         ["DeviceInfo"] = """{"manufacturerId":[0,0,65],"manufacturer":"Microsoft","familyId":[11,0],"family":"Windows","modelId":[1,0],"model":"General MIDI Synth","versionId":[1,0,0,0],"version":"1.0.0.0"}""",
-        ["ChannelList"] = """[{"title":"Melodic","channel":1,"programTitle":"Piano 1","bankPC":[0,0,0]},{"title":"Drums","channel":10,"programTitle":"Standard","bankPC":[0,0,0]}]""",
+        ["ChannelList"] = """[{"title":"Melodic","channel":1,"programTitle":"Piano 1","bankPC":[0,0,0],"links":[{"resource":"ProgramList","resId":"melodic"}]},{"title":"Drums","channel":10,"programTitle":"Standard","bankPC":[0,0,0],"links":[{"resource":"ProgramList","resId":"drums"}]}]""",
+        ["ProgramList/melodic"] = """[{"title":"Piano 1","bankPC":[0,0,0]},{"title":"Piano 2","bankPC":[0,0,1]}]""",
+        ["ProgramList/drums"] = """[{"title":"Standard","bankPC":[120,0,0]}]""",
     };
 
     private static async Task<(PropertyExchangeDevice Device, PropertySchema Schema, Serializer Serializer)> Discover(FakeCapabilityInquiry ci)
@@ -54,6 +56,9 @@ public class PropertyExchangeSessionTests
         Assert.Equal(["DeviceInfo", "ChannelList", "ProgramList"], device.Resources.Select(resource => resource.Name));
         Assert.Equal(["DeviceInfo", "ChannelList", "ProgramList"], schema.Document.Roots.Select(root => root.Name));
         Assert.All(schema.Document.Roots, root => serializer.GetPlan(new SchemaName($"Synth.{root.Name}")));
+        // the resIds of ProgramList come from the links in the ChannelList
+        var entries = PropertyData.EntriesOf(serializer.GetPlan(new SchemaName("Synth.ProgramList")).Root);
+        Assert.Equal(["melodic", "drums"], entries!.Members.Select(member => member.Name));
     }
 
     [Fact]
@@ -91,9 +96,49 @@ public class PropertyExchangeSessionTests
     }
 
     [Fact]
+    public async Task RequestData_AResourceWithEntries_IsReadPerResId()
+    {
+        var ci = new FakeCapabilityInquiry(Synthesizer);
+        var (device, _, serializer) = await Discover(ci);
+        await using var session = CreateSession(serializer, device);
+        var gets = ci.Gets.Count;
+
+        var values = new FieldValueStore();
+        var result = await session.RequestData(Whole(serializer, "ProgramList"), values, CancellationToken.None);
+
+        Assert.True(result.IsComplete);
+        Assert.Equal(2, result.Blocks.Count);
+        Assert.Equal(["melodic", "drums"], ci.Gets.Skip(gets).Select(header => header["resId"]!.GetValue<string>()));
+        Assert.Equal("Piano 2", Value(values, "ProgramList.resId.melodic.items.title", 1));
+        Assert.Equal(120L, Value(values, "ProgramList.resId.drums.items.bankPC.item", 0, 0));
+    }
+
+    [Fact]
+    public async Task RequestData_ARangeInOneEntry_ReadsOnlyThatEntry()
+    {
+        var ci = new FakeCapabilityInquiry(Synthesizer);
+        var (device, _, serializer) = await Discover(ci);
+        await using var session = CreateSession(serializer, device);
+        var gets = ci.Gets.Count;
+
+        var values = new FieldValueStore();
+        var range = serializer.GetPlan(new SchemaName("Synth.ProgramList")).CreateRange("ProgramList.resId.drums");
+        var result = await session.RequestData(range, values, CancellationToken.None);
+
+        Assert.Equal(BlockStatus.Completed, Assert.Single(result.Blocks).Status);
+        Assert.Equal("drums", Assert.Single(ci.Gets.Skip(gets))["resId"]!.GetValue<string>());
+        Assert.Equal("Standard", Value(values, "ProgramList.resId.drums.items.title", 0));
+        Assert.Null(Value(values, "ProgramList.resId.melodic.items.title", 0));
+    }
+
+    [Fact]
     public async Task RequestData_AResourceThatNeedsAnId_OrIsNotThere_IsNotCompleted()
     {
-        var resources = new Dictionary<string, string>(Synthesizer);
+        // no links to the entries of ProgramList: it is a plain root
+        var resources = new Dictionary<string, string>(Synthesizer)
+        {
+            ["ChannelList"] = """[{"title":"Melodic","channel":1,"programTitle":"Piano 1","bankPC":[0,0,0]}]""",
+        };
         var (device, _, serializer) = await Discover(new FakeCapabilityInquiry(resources));
         resources.Remove("ChannelList");
         await using var session = CreateSession(serializer, device);

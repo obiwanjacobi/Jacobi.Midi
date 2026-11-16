@@ -105,6 +105,7 @@ public class SchemaInstantiatorTests
         var msg = Assert.IsType<InstanceChoice>(root.Members[3]);
 
         Assert.True(msg.IsOpen);
+        Assert.True(msg.HasBodies);
         Assert.Equal(["Env.BodyA", "Env.BodyB"], msg.Options.Select(option => option.Name));
         Assert.Null(msg.Selected);
 
@@ -368,7 +369,9 @@ public class SchemaInstantiatorTests
         var root = CreateRoot(Envelope, "Root");
         var mode = Assert.IsType<InstanceChoice>(root.Members[4]);
 
-        Assert.False(mode.IsOpen);
+        // without a selected index the choice is open: the instance selects one of its members
+        Assert.True(mode.IsOpen);
+        Assert.False(mode.HasBodies);
         Assert.True(mode.CanSelect);
         Assert.Equal(["One", "Two"], mode.Options.Select(option => option.Name));
         mode.SelectedOption = mode.Options[1];
@@ -511,7 +514,12 @@ public class SchemaInstantiatorTests
                 { "name": "Data", "kind": "repeat", "count": 2, "members": [{ "name": "V", "kind": "field", "datatype": "sys.uint8" }] },
                 { "name": "End", "kind": "field", "datatype": "sys.uint8", "value": "247" }] },
             { "name": "Env", "kind": "group", "members": [{ "name": "Payload", "kind": "choice", "memberNodeDef": "Body" }] },
-            { "name": "BodyB", "kind": "group", "nodeDef": "Body", "members": [{ "name": "Value", "kind": "field", "datatype": "sys.uint8" }] }
+            { "name": "BodyB", "kind": "group", "nodeDef": "Body", "members": [{ "name": "Value", "kind": "field", "datatype": "sys.uint8" }] },
+            { "name": "Pick", "kind": "group", "members": [
+                { "name": "Which", "kind": "choice", "members": [
+                    { "name": "G", "kind": "group", "members": [{ "name": "X", "kind": "field", "datatype": "sys.uint8" }] },
+                    { "name": "F", "kind": "field", "datatype": "sys.uint8" }] },
+                { "name": "Tail", "kind": "field", "datatype": "sys.uint8", "value": "247" }] }
           ]
         }
         """;
@@ -560,6 +568,55 @@ public class SchemaInstantiatorTests
         var bytes = instantiator.Serialize(instantiator.FindRootName(env)!.Value, root, []).Single().Bytes;
 
         Assert.Equal([0x07], bytes);
+    }
+
+    [Theory]
+    [InlineData("G", new byte[] { 0x09, 0xF7 })]
+    [InlineData("F", new byte[] { 0x07, 0xF7 })]
+    public void Serialize_WritesTheSelectedMemberOfAnOpenChoice(string member, byte[] expected)
+    {
+        var (instantiator, document) = CreateInstantiator(Serializable);
+        var pick = (EditGroup)document.Members.Single(node => node.Name == "Pick");
+        var root = Assert.IsType<InstanceGroup>(instantiator.Create(pick));
+        var choice = Assert.IsType<InstanceChoice>(root.Members[0]);
+        Assert.True(choice.IsOpen);
+        Assert.False(choice.HasBodies);
+        choice.SelectedOption = choice.Options.Single(option => option.Name == member);
+        var field = choice.Selected is InstanceGroup group ? (InstanceField)group.Members[0] : Assert.IsType<InstanceField>(choice.Selected);
+        field.Value = member == "G" ? "9" : "7";
+
+        var bytes = instantiator.Serialize(instantiator.FindRootName(pick)!.Value, root, []).Single().Bytes;
+
+        Assert.Equal(expected, bytes);
+    }
+
+    [Theory]
+    [InlineData("G")]
+    [InlineData("F")]
+    public void Deserialize_ReadsTheSelectedMemberOfAnOpenChoice(string member)
+    {
+        var (instantiator, document) = CreateInstantiator(Serializable);
+        var pick = (EditGroup)document.Members.Single(node => node.Name == "Pick");
+        var root = Assert.IsType<InstanceGroup>(instantiator.Create(pick));
+        var choice = Assert.IsType<InstanceChoice>(root.Members[0]);
+        choice.SelectedOption = choice.Options.Single(option => option.Name == member);
+
+        instantiator.Deserialize(instantiator.FindRootName(pick)!.Value, root, [0x05, 0xF7], []);
+
+        var field = choice.Selected is InstanceGroup group ? (InstanceField)group.Members[0] : Assert.IsType<InstanceField>(choice.Selected);
+        Assert.Equal("5", field.Value);
+    }
+
+    [Fact]
+    public void Deserialize_OpenChoiceWithoutAlternative_AsksToSelectIt()
+    {
+        var (instantiator, document) = CreateInstantiator(Serializable);
+        var pick = (EditGroup)document.Members.Single(node => node.Name == "Pick");
+        var root = Assert.IsType<InstanceGroup>(instantiator.Create(pick));
+
+        var exception = Assert.ThrowsAny<Exception>(() => instantiator.Deserialize(instantiator.FindRootName(pick)!.Value, root, [0x05, 0xF7], []));
+
+        Assert.Contains("Select the alternative of the open choice 'Pick.Which'", exception.ToString());
     }
 
     [Fact]

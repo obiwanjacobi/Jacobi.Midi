@@ -140,8 +140,8 @@ internal sealed class AddressMap : IMessageMap
         => Plan.CreateRange(path, instance, path, instance);
 
     /// <summary>A range from one node occurrence up to and including another (in plan order).</summary>
-    public PlanRange CreateRange(SchemaPath fromPath, InstancePath fromInstance, SchemaPath toPath, InstancePath toInstance)
-        => Plan.CreateRange(fromPath, fromInstance, toPath, toInstance);
+    public PlanRange CreateRange(SchemaPath beginPath, InstancePath beginInstance, SchemaPath endPath, InstancePath endInstance)
+        => Plan.CreateRange(beginPath, beginInstance, endPath, endInstance);
 
     /// <summary>The addresses a node range occupies (widened to whole addresses, gaps included).</summary>
     public AddressRange GetAddressRange(PlanRange range)
@@ -154,8 +154,8 @@ internal sealed class AddressMap : IMessageMap
 
         var first = LayoutOf(range.First);
         var last = LayoutOf(range.Last);
-        var start = _layout.AddressOf(first, range.FromInstance, lastItem: false);
-        var end = _layout.AddressOf(last, range.ToInstance, lastItem: true) + last.Size;
+        var start = _layout.AddressOf(first, range.BeginInstance, lastItem: false);
+        var end = _layout.AddressOf(last, range.EndInstance, lastItem: true) + last.Size;
         return new AddressRange(start, end - start);
     }
 

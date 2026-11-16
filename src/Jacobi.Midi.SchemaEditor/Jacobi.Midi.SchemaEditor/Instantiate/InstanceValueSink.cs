@@ -7,11 +7,11 @@ using Jacobi.Midi.SchemaEditor.Models;
 namespace Jacobi.Midi.SchemaEditor.Instantiate;
 
 /// <summary>
-/// The value model the serializer reads into: one scope of an <see cref="InstanceNode"/> tree (a group, repeat item,
-/// choice or open choice body). The mirror of <see cref="InstanceValueSource"/>: the members of the scope are found by name
+/// The value model the serializer reads into: one scope of an <see cref="InstanceNode"/> tree (a group, repeat, repeat
+/// item or choice). The mirror of <see cref="InstanceValueSource"/>: the members of the scope are found by name
 /// and the field values are formatted as text (the label of a data type option when it has one).
 /// The items of a repeat are added as they are read and a choice selects the alternative that is read;
-/// the body of an open choice must have been selected by the user.
+/// the alternative of an open choice (a member, or a body) must have been selected by the user.
 /// When the values are accumulated (see <see cref="Begin"/>), a read adds to the values of the earlier reads, e.g. the data
 /// messages of one patch that each carry a part of it.
 /// </summary>
@@ -164,9 +164,12 @@ internal sealed class InstanceValueSink : IOpenChoiceSink
 
     public IValueSink EnterGroup(GroupContext context) => Scope(Find(context));
 
+    public IValueSink EnterRepeat(RepeatContext context, int count) => Scope(Find(context));
+
+    // on the scope of the repeat
     public IValueSink EnterItem(RepeatContext context, int index, int count)
     {
-        if (Find(context) is not InstanceRepeat repeat)
+        if (_ignore || _node is not InstanceRepeat repeat)
         {
             return Scope(null);
         }
@@ -194,11 +197,15 @@ internal sealed class InstanceValueSink : IOpenChoiceSink
     }
 
     public OpenChoiceSinkResult EnterOpenChoice(OpenChoiceContext context)
-        => Find(context) is InstanceChoice { SelectedOption: { } option, Selected: { } body }
-            ? new OpenChoiceSinkResult(Scope(body), new SchemaName(option.Name))
-            : throw new InvalidOperationException($"Select the body of the open choice '{context.Path}' before matching.");
+        => Find(context) is InstanceChoice { SelectedOption: { } option, HasSelected: true } choice
+            ? OpenChoiceSinkResult.Select(Scope(choice), new SchemaName(option.Name))
+            : throw new InvalidOperationException($"Select the alternative of the open choice '{context.Path}' before matching.");
 
     public void ExitGroup(GroupContext context)
+    {
+    }
+
+    public void ExitRepeat(RepeatContext context, int count)
     {
     }
 
@@ -221,8 +228,8 @@ internal sealed class InstanceValueSink : IOpenChoiceSink
         _ when _ignore => null,
         null => String.Equals(context.Node.Path.Value, _target.Path.Value, StringComparison.OrdinalIgnoreCase) ? _target : null,
         InstanceGroup group => group.Members.FirstOrDefault(member => IsNamed(member, context.Name)),
-        // the scope of a choice holds the selected alternative
-        InstanceChoice choice => choice.Selected is { } selected && IsNamed(selected, context.Name) ? selected : null,
+        // the scope of a choice holds the selected alternative (a body by any name: the root that is selected)
+        InstanceChoice choice => choice.Selected is { } selected && (choice.HasBodies || IsNamed(selected, context.Name)) ? selected : null,
         _ => null
     };
 

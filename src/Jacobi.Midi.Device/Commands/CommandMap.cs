@@ -344,10 +344,14 @@ internal sealed class CommandMap
             return result;
         }
 
+        // a command root holds groups and fields only
         public IValueSource EnterGroup(GroupContext context) => new WatchedSource(scope.EnterGroup(context), watch);
-        public int GetCount(RepeatContext context) => scope.GetCount(context);
-        public IValueSource EnterItem(RepeatContext context, int index) => new WatchedSource(scope.EnterItem(context, index), watch);
-        public int GetSelectedIndex(ChoiceContext context) => scope.GetSelectedIndex(context);
-        public IValueSource EnterChoice(ChoiceContext context) => new WatchedSource(scope.EnterChoice(context), watch);
+        public void ExitGroup(GroupContext context) => scope.ExitGroup(context);
+        public IValueSource EnterRepeat(RepeatContext context, int count) => new WatchedSource(scope.EnterRepeat(context, count), watch);
+        public void ExitRepeat(RepeatContext context, int count) => scope.ExitRepeat(context, count);
+        public IValueSource EnterItem(RepeatContext context, int index, int count) => new WatchedSource(scope.EnterItem(context, index, count), watch);
+        public void ExitItem(RepeatContext context, int index, int count) => scope.ExitItem(context, index, count);
+        public IValueSource EnterChoice(ChoiceContext context, int selectedIndex) => new WatchedSource(scope.EnterChoice(context, selectedIndex), watch);
+        public void ExitChoice(ChoiceContext context, int selectedIndex) => scope.ExitChoice(context, selectedIndex);
     }
 }

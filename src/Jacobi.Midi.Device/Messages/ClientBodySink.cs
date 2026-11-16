@@ -17,25 +17,20 @@ internal sealed class ClientBodySink(IValueSink inner, SchemaPath dataChoice, Fu
     public void SetField(FieldContext context, LogicalField value) => inner.SetField(context, value);
 
     public OpenChoiceSinkResult EnterOpenChoice(OpenChoiceContext context)
-    {
-        if (inner is not IOpenChoiceSink openChoice)
-        {
-            throw new InvalidOperationException($"'{context.Path}': the value model does not support open choices.");
-        }
-        var selected = openChoice.EnterOpenChoice(context);
-        return String.Equals(context.Node.Path.Value, dataChoice.Value, StringComparison.OrdinalIgnoreCase)
-            ? narrow(selected)
-            : selected with { Scope = Wrap(selected.Scope) };
-    }
+        => String.Equals(context.Node.Path.Value, dataChoice.Value, StringComparison.OrdinalIgnoreCase)
+            ? narrow(ValueModels.EnterOpenChoice(inner, context, scope => scope))
+            : ValueModels.EnterOpenChoice(inner, context, Wrap);
 
-    public OpenRepeatAction NextItem(OpenRepeatReadContext context)
-        => inner is IOpenRepeatSink openSink ? openSink.NextItem(context) : OpenRepeatAction.Default;
+    public OpenRepeatSinkResult EnterOpenRepeat(OpenRepeatReadContext context) => ValueModels.EnterOpenRepeat(inner, context, Wrap);
+    public OpenRepeatAction NextItem(OpenRepeatReadContext context, int index) => ValueModels.NextItem(inner, context, index);
 
     public IValueSink EnterGroup(GroupContext context) => Wrap(inner.EnterGroup(context));
-    public IValueSink EnterItem(RepeatContext context, int index, int count) => Wrap(inner.EnterItem(context, index, count));
-    public IValueSink EnterChoice(ChoiceContext context, int selectedIndex) => Wrap(inner.EnterChoice(context, selectedIndex));
     public void ExitGroup(GroupContext context) => inner.ExitGroup(context);
+    public IValueSink EnterRepeat(RepeatContext context, int count) => Wrap(inner.EnterRepeat(context, count));
+    public void ExitRepeat(RepeatContext context, int count) => inner.ExitRepeat(context, count);
+    public IValueSink EnterItem(RepeatContext context, int index, int count) => Wrap(inner.EnterItem(context, index, count));
     public void ExitItem(RepeatContext context, int index, int count) => inner.ExitItem(context, index, count);
+    public IValueSink EnterChoice(ChoiceContext context, int selectedIndex) => Wrap(inner.EnterChoice(context, selectedIndex));
     public void ExitChoice(ChoiceContext context, int selectedIndex) => inner.ExitChoice(context, selectedIndex);
 
     private ClientBodySink Wrap(IValueSink scope) => new(scope, dataChoice, narrow);

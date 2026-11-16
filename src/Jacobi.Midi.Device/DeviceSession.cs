@@ -392,13 +392,13 @@ public sealed class DeviceSession : IAsyncDisposable
 
     private static bool IsProperty(PlanRange range) => MidiProperties.IsPropertyRoot(range.ExecutionPlan.Root.Group);
 
-    // a Property Exchange root: the resource is read whole (one block: the root), the sink gets all of it
+    // a Property Exchange root: the resource is read whole (one block: the root), the sink gets all of it; a resource
+    // with entries (the choice resId) is read per entry the range covers (a block per entry, with its resId)
     private async Task<TransferResult> ReceiveProperties(PlanRange range, IValueSink sink, IProgress<BlockResult>? progress, CancellationToken ct)
     {
         var plan = range.ExecutionPlan;
         var whole = plan.CreateRange(plan.Root.Path);
-        var resource = MidiProperties.Find(plan.Root, MidiProperties.Resource)
-            ?? throw Missing(ExchangeNames.RequestData, range, $"has no resource: the root has no {MidiProperties.Resource}");
+        var resource = PropertyData.KeyOf(plan.Root);
         PropertyExchangeDevice? attached;
         lock (_lock)
         {
@@ -406,31 +406,56 @@ public sealed class DeviceSession : IAsyncDisposable
         }
         var device = attached ?? throw Missing(ExchangeNames.RequestData, range, "cannot run: the session has no Property Exchange device (not found, or not yet)");
 
-        BlockResult result;
+        var results = new List<BlockResult>();
         if (device.Find(resource) is not { CanGet: true } entry)
         {
-            result = new BlockResult(whole, BlockStatus.Unavailable) { Reason = $"the device has no resource '{resource}' to get." };
+            results.Add(new BlockResult(whole, BlockStatus.Unavailable) { Reason = $"the device has no resource '{resource}' to get." });
+        }
+        else if (PropertyData.EntriesOf(plan.Root) is { } entries)
+        {
+            foreach (var resEntry in entries.Members.OfType<GroupInfo>())
+            {
+                var block = plan.CreateRange(resEntry.Path);
+                if (block.Overlaps(range))
+                {
+                    var resId = PropertyData.KeyOf(resEntry);
+                    results.Add(await GetProperty(device, new() { ["resource"] = resource, ["resId"] = resId }, block,
+                        data => PropertyData.CopyTo(plan.Root, resEntry, data, sink), ct));
+                }
+            }
         }
         else if (entry.RequireResId)
         {
-            result = new BlockResult(whole, BlockStatus.Unavailable) { Reason = $"'{resource}' needs a resource id, which is not supported yet." };
+            results.Add(new BlockResult(whole, BlockStatus.Unavailable)
+            {
+                Reason = $"'{resource}' needs a resource id (resId), and its root has no choice '{PropertySchemaGenerator.ResIdName}' with the entries.",
+            });
         }
         else
         {
-            try
-            {
-                var data = await device.Get(new System.Text.Json.Nodes.JsonObject { ["resource"] = resource }, ct);
-                PropertyData.CopyTo(plan.Root, data, sink);
-                result = new BlockResult(whole, BlockStatus.Completed);
-                Raise(whole, DeviceStateChange.Received);
-            }
-            catch (Exception exception) when (exception is MidiException or FormatException or System.Text.Json.JsonException)
-            {
-                result = new BlockResult(whole, BlockStatus.Failed, exception) { Reason = exception.Message };
-            }
+            results.Add(await GetProperty(device, new() { ["resource"] = resource }, whole, data => PropertyData.CopyTo(plan.Root, data, sink), ct));
         }
-        progress?.Report(result);
-        return new TransferResult([result]);
+        foreach (var result in results)
+        {
+            progress?.Report(result);
+        }
+        return new TransferResult(results);
+    }
+
+    // one Get: the data to the sink (copy) and the block received
+    private async Task<BlockResult> GetProperty(PropertyExchangeDevice device, System.Text.Json.Nodes.JsonObject header, PlanRange block,
+        Action<System.Text.Json.Nodes.JsonNode?> copy, CancellationToken ct)
+    {
+        try
+        {
+            copy(await device.Get(header, ct));
+            Raise(block, DeviceStateChange.Received);
+            return new BlockResult(block, BlockStatus.Completed);
+        }
+        catch (Exception exception) when (exception is MidiException or FormatException or System.Text.Json.JsonException)
+        {
+            return new BlockResult(block, BlockStatus.Failed, exception) { Reason = exception.Message };
+        }
     }
 
     private CommandMessages Commands
@@ -712,6 +737,8 @@ public sealed class DeviceSession : IAsyncDisposable
             }
 
             public IValueSink EnterGroup(GroupContext context) => this;
+            public IValueSink EnterRepeat(RepeatContext context, int count) => this;
+            public void ExitRepeat(RepeatContext context, int count) { }
             public IValueSink EnterItem(RepeatContext context, int index, int count) => this;
             public IValueSink EnterChoice(ChoiceContext context, int selectedIndex) => this;
             public void ExitGroup(GroupContext context) { }

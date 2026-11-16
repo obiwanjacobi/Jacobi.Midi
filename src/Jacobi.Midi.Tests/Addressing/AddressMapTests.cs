@@ -90,7 +90,7 @@ public class AddressMapTests
         Assert.Empty(match.Unmapped);
         var block = Assert.IsType<AddressBlock>(match.Block);
         Assert.Equal("AddressMap.Memory.Patch.Level", block.Nodes.First.Path.Value);
-        Assert.Equal(new InstancePath([5]), block.Nodes.FromInstance);
+        Assert.Equal(new InstancePath([5]), block.Nodes.BeginInstance);
         Assert.Same(block.Nodes.First, block.Nodes.Last);
     }
 
@@ -106,8 +106,8 @@ public class AddressMapTests
         Assert.Equal(new AddressRange(PatchAddress(1), PatchSize), block.Addresses);
         Assert.Equal("AddressMap.Memory.Patch.Switches.A", block.Nodes.First.Path.Value);
         Assert.Equal("AddressMap.Memory.Patch.Name", block.Nodes.Last.Path.Value);
-        Assert.Equal(new InstancePath([1]), block.Nodes.FromInstance);
-        Assert.Equal(new InstancePath([1]), block.Nodes.ToInstance);
+        Assert.Equal(new InstancePath([1]), block.Nodes.BeginInstance);
+        Assert.Equal(new InstancePath([1]), block.Nodes.EndInstance);
     }
 
     [Fact]
@@ -360,7 +360,7 @@ public class AddressMapTests
         Assert.Equal(PatchAddress(1), map.GetAddressRange(data.Block).Start);
         Assert.Equal(ModelId, data.Device["modelId"]);
         Assert.Equal(new AddressRange(PatchAddress(1), PatchSize), map.GetAddressRange(data.Block));
-        Assert.Equal(new InstancePath([1]), data.Block.FromInstance);
+        Assert.Equal(new InstancePath([1]), data.Block.BeginInstance);
     }
 
     [Fact]

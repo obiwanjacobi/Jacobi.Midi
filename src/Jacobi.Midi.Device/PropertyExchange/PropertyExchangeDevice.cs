@@ -55,8 +55,10 @@ public sealed class PropertyExchangeDevice
 
     /// <summary>
     /// Generates the schema document of the resources (see <see cref="PropertySchemaGenerator"/>), with the JSON
-    /// Schemas the entries refer to read from the device (<c>JSONSchema</c>). A referred schema the device does not
-    /// give is reported in the notes.
+    /// Schemas the entries refer to read from the device (<c>JSONSchema</c>), and the entries (<c>resId</c>s) of the
+    /// resources that the links in the data of the device refer to: the data of every resource that can be read without
+    /// a <c>resId</c> is read for that. A referred schema the device does not give, and a resource that could not be
+    /// read, are reported in the notes.
     /// </summary>
     /// <param name="documentName">The name of the document; null: after the model of the device (<c>DeviceInfo</c>),
     /// else <c>PropertyExchange</c>.</param>
@@ -77,8 +79,28 @@ public sealed class PropertyExchangeDevice
                 notes.Add($"The JSON Schema '{id}' could not be read: {exception.Message}");
             }
         }
-        var generated = PropertySchemaGenerator.Generate(documentName, Resources, referenced);
+        var resourceIds = await ResourceIds(notes, ct);
+        var generated = PropertySchemaGenerator.Generate(documentName, Resources, referenced,
+            resourceIds.ToDictionary(entry => entry.Key, entry => (IReadOnlyList<string>)entry.Value, StringComparer.Ordinal));
         return generated with { Notes = [.. notes, .. generated.Notes] };
+    }
+
+    // the resIds the links in the data of the resources refer to, by resource
+    private async Task<Dictionary<string, List<string>>> ResourceIds(List<string> notes, CancellationToken ct)
+    {
+        var resourceIds = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (var resource in Resources.Where(resource => resource is { CanGet: true, RequireResId: false, IsJson: true }))
+        {
+            try
+            {
+                PropertyLinks.Collect(await Get(new JsonObject { ["resource"] = resource.Name }, ct), resourceIds);
+            }
+            catch (Exception exception) when (exception is MidiException or System.Text.Json.JsonException)
+            {
+                notes.Add($"'{resource.Name}' could not be read for the links to the entries (resId) of resources: {exception.Message}");
+            }
+        }
+        return resourceIds;
     }
 
     // the model of the device as a schema name; null when it has no DeviceInfo (with a model)

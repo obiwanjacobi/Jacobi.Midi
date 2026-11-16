@@ -14,20 +14,61 @@ namespace Jacobi.Midi.Device.PropertyExchange;
 /// (<c>midi.key</c>, else the name), a repeat the elements of an array, a field a value converted to the type of the
 /// field. A root of a resource that is an array or a value has one member, which takes the data itself. A key the data
 /// does not have gives no value; a value of the wrong kind is an error.
+/// A resource with entries has the choice <c>resId</c> as the one member of its root: the data of an entry goes to its
+/// alternative.
 /// </summary>
 internal static class PropertyData
 {
+    /// <summary>
+    /// The name the device knows a node by: the resource of a root, the <c>resId</c> of an entry, the key of a member
+    /// (<c>midi.key</c>, else the name of the node).
+    /// </summary>
+    public static string KeyOf(NodeInfo node) => MidiProperties.Find(node, MidiProperties.Key) ?? node.Name;
+
+    /// <summary>The choice <c>resId</c> of a root of a resource with entries; null for a resource without entries.</summary>
+    public static ChoiceInfo? EntriesOf(GroupInfo root)
+        => root.Members is [ChoiceInfo { Name: PropertySchemaGenerator.ResIdName } entries] ? entries : null;
+
     /// <summary>Gives the data to the sink, as a read of the whole root.</summary>
     /// <exception cref="FormatException">A value does not fit its field.</exception>
     public static void CopyTo(GroupInfo root, JsonNode? data, IValueSink sink)
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(sink);
-        // a resource that is an array or a single value: its one member takes the data
-        if (data is not JsonObject && root.Members is [var only])
+        Content(root, data, sink);
+        sink.ExitGroup(new GroupContext { Node = root, Services = NoServices.Instance, Instance = InstancePath.Empty });
+    }
+
+    /// <summary>
+    /// Gives the data of one entry to the sink, as a read of the root with that alternative of the choice <c>resId</c>.
+    /// The entry is known from the request, so the choice is entered with its index (as a choice with a selected index).
+    /// </summary>
+    /// <exception cref="FormatException">A value does not fit its field.</exception>
+    public static void CopyTo(GroupInfo root, GroupInfo entry, JsonNode? data, IValueSink sink)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentNullException.ThrowIfNull(sink);
+        if (EntriesOf(root) is not { } entries || !entries.Members.Contains(entry))
+            throw new ArgumentException($"'{entry.Path}' is not an entry (resId) of '{root.Path}'.", nameof(entry));
+
+        var choiceContext = new ChoiceContext { Node = entries, Services = NoServices.Instance, Instance = InstancePath.Empty };
+        var choice = sink.EnterChoice(choiceContext, entry.Index);
+        var entryContext = new GroupContext { Node = entry, Services = NoServices.Instance, Instance = InstancePath.Empty };
+        var scope = choice.EnterGroup(entryContext);
+        Content(entry, data, scope);
+        scope.ExitGroup(entryContext);
+        choice.ExitChoice(choiceContext, entry.Index);
+        sink.ExitGroup(new GroupContext { Node = root, Services = NoServices.Instance, Instance = InstancePath.Empty });
+    }
+
+    // the data of a resource (or of an entry): a resource that is an array or a single value has one member, which takes the data
+    private static void Content(GroupInfo group, JsonNode? data, IValueSink sink)
+    {
+        if (data is not JsonObject && group.Members is [var only])
             Member(only, data, sink, InstancePath.Empty);
         else
-            Members(root, data, sink, InstancePath.Empty);
+            Members(group, data, sink, InstancePath.Empty);
     }
 
     private static void Members(GroupInfo group, JsonNode? data, IValueSink sink, InstancePath instance)
@@ -36,8 +77,7 @@ internal static class PropertyData
             return;
         foreach (var member in group.Members)
         {
-            var key = MidiProperties.Find(member, MidiProperties.Key) ?? member.Name;
-            if (json.TryGetPropertyValue(key, out var value))
+            if (json.TryGetPropertyValue(KeyOf(member), out var value))
                 Member(member, value, sink, instance);
         }
     }
@@ -55,9 +95,11 @@ internal static class PropertyData
                 if (data is not JsonArray items)
                     break;
                 var context = new RepeatContext { Node = repeat, Services = NoServices.Instance, Instance = instance };
+                // the data gives the number of items
+                var repeatScope = sink.EnterRepeat(context, items.Count);
                 for (var index = 0; index < items.Count; index++)
                 {
-                    var item = sink.EnterItem(context, index, items.Count);
+                    var item = repeatScope.EnterItem(context, index, items.Count);
                     var itemInstance = instance.Append(index);
                     // an array of values: the item's one field takes the element
                     if (items[index] is not JsonObject && repeat.Members is [FieldInfo element])
@@ -66,6 +108,7 @@ internal static class PropertyData
                         Members(repeat, items[index], item, itemInstance);
                     item.ExitItem(context, index, items.Count);
                 }
+                repeatScope.ExitRepeat(context, items.Count);
                 break;
 
             case GroupInfo group:
