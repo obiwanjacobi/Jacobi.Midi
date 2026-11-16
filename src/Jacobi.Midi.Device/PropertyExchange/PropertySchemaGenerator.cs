@@ -139,6 +139,7 @@ public static class PropertySchemaGenerator
             List<SchemaProperty> properties =
             [
                 new() { Name = MidiProperties.Role, Value = MidiProperties.RolePropertyExchange },
+                .. Access(resource),
                 .. Tags(resource.Name, name, schema, note),
             ];
             if (resIds.Count == 0)
@@ -279,6 +280,12 @@ public static class PropertySchemaGenerator
                     return null;
             }
         }
+
+        // a resource that cannot be set (canSet "none") is read-only; else the default readwrite (no tag)
+        private static IEnumerable<SchemaProperty> Access(PropertyResource resource)
+            => String.Equals(resource.CanSet, PropertyResource.CanSetNone, StringComparison.OrdinalIgnoreCase)
+                ? [new() { Name = MidiProperties.Access, Value = MidiProperties.AccessRead }]
+                : [];
 
         // the JSON key when the node got another name, and the documentation (with a note of the generator)
         private static List<SchemaProperty> Tags(string key, string name, JsonObject schema, string? note = null)

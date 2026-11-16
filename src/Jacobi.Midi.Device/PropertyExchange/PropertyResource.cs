@@ -14,11 +14,14 @@ public sealed record PropertyResource(string Name, JsonObject? Schema)
     private const string JsonMediaType = "application/json";
     private const string SchemaReferencePrefix = "midi+jsonschema://";
 
+    /// <summary>The <c>canSet</c> value of a resource that cannot be written (the default).</summary>
+    public const string CanSetNone = "none";
+
     /// <summary>The resource can be read (<c>canGet</c>, default true).</summary>
     public bool CanGet { get; init; } = true;
 
     /// <summary>How the resource can be written (<c>canSet</c>): <c>none</c> (default), <c>full</c> or <c>partial</c>.</summary>
-    public string CanSet { get; init; } = "none";
+    public string CanSet { get; init; } = CanSetNone;
 
     /// <summary>The resource accepts subscriptions (<c>canSubscribe</c>, default false).</summary>
     public bool CanSubscribe { get; init; }
@@ -55,7 +58,7 @@ public sealed record PropertyResource(string Name, JsonObject? Schema)
             resources.Add(new PropertyResource(name, properties["schema"] as JsonObject)
             {
                 CanGet = properties["canGet"]?.GetValue<bool>() ?? true,
-                CanSet = properties["canSet"]?.GetValue<string>() ?? "none",
+                CanSet = properties["canSet"]?.GetValue<string>() ?? CanSetNone,
                 CanSubscribe = properties["canSubscribe"]?.GetValue<bool>() ?? false,
                 RequireResId = properties["requireResId"]?.GetValue<bool>() ?? false,
                 MediaTypes = properties["mediaTypes"] is JsonArray types

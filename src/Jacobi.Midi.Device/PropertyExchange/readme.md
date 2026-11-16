@@ -24,6 +24,7 @@ resource). Each JSON resource with a schema becomes a root group with `midi.role
 | `minimum`, `maximum`, `enum` | a data type def with the facets or options |
 | a key that is not a valid name | a valid name, with the key in `midi.key` |
 | `description` (else `title`) | `midi.doc` |
+| a resource with `canSet` `none` (the default) | the root has `midi.access="read"` |
 | a resource with entries (`resId`s) | the root holds a choice `resId` without a selected index: a group per `resId` (`midi.key` when it is not a valid name) with the structure of the resource (the nodeDef `<root>_entry`) |
 
 So a JSON Pointer is a path with an instance: `/pitchEnvelope/rates/0` of `X-ProgramEdit` is

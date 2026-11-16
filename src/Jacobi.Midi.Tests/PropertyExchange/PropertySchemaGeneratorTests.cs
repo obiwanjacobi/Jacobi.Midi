@@ -97,6 +97,22 @@ public class PropertySchemaGeneratorTests
     }
 
     [Fact]
+    public void Generate_AResourceThatCannotBeSet_IsReadOnly()
+    {
+        var schema = Generate();
+        string? AccessOf(string root) => MidiProperties.Find(schema.Document.Roots.Single(group => group.Name == root), MidiProperties.Access);
+
+        // canSet none (the default of DeviceInfo and ChannelList): read-only
+        Assert.Equal(MidiProperties.AccessRead, AccessOf("DeviceInfo"));
+        Assert.Equal(MidiProperties.AccessRead, AccessOf("ChannelList"));
+        Assert.Equal(MidiProperties.AccessRead, AccessOf("XPatchList"));
+        // canSet full or partial: the default readwrite, no tag
+        Assert.Null(AccessOf("XTempo"));
+        Assert.Null(AccessOf("XGlobset"));
+        Assert.Null(AccessOf("XProgramEdit"));
+    }
+
+    [Fact]
     public void Generate_AResourceWithResIds_HasTheChoiceResId_WithAnAlternativePerResId()
     {
         var schema = PropertySchemaGenerator.Generate("Pe", PropertyResource.FromResourceList(JsonNode.Parse(ResourceList)),

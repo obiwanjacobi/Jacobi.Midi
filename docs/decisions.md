@@ -266,6 +266,13 @@ value model is being examined.
 52. **A `pe` root is named after its resource; `midi.key` holds the resource name when it is not a valid schema name
     (no `midi.resource`)**, and the same for a `resId` alternative. *Why:* one mechanism for every name that comes from
     the device (properties, resources, `resId`s).
+53. **`midi.access` is the access tag of any node, not only of an addressed one** (`readwrite`, `read`, `write`):
+    a read-only Property Exchange resource gets `midi.access="read"` on the group that is read-only (e.g. the root
+    `DeviceInfo`). No tag of its own for Property Exchange. *Why:* one tag for one concept; a schema author should not
+    have to learn a second tag that means the same.
+54. **The generator gives a resource with `canSet` `none` `midi.access="read"` on its root;** `full` and `partial`
+    get no tag (the default `readwrite`). *Why:* the device says per resource whether it can be written; the
+    standard resources (`DeviceInfo`, the lists) default to `none`, so no resource needs a special case.
 
 ## Invalid input in the item editors of the Schema Editor (2026-11-13)
 

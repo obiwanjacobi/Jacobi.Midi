@@ -36,9 +36,11 @@ public static class MidiProperties
     /// </summary>
     public const string Transfer = "midi.transfer";
     /// <summary>
-    /// The access of an addressed node: <c>readwrite</c> (default), <c>read</c> or <c>write</c> (address map, inherited).
+    /// The access of a node: <c>readwrite</c> (default), <c>read</c> or <c>write</c> (inherited). Any node: an addressed
+    /// node of an address map, a Property Exchange root.
     /// </summary>
     public const string Access = "midi.access";
+    
     /// <summary>
     /// The prefix of <c>midi.device.&lt;name&gt;</c>: a device value fixed for the device type, on the map root.
     /// </summary>
@@ -75,6 +77,13 @@ public static class MidiProperties
     /// The documentation of the node it is on: plain text, possibly multi-line (any node, not inherited).
     /// </summary>
     public const string Doc = "midi.doc";
+
+    // values of midi.access
+
+    /// <summary>The value of <see cref="Access"/> for a node that can only be read.</summary>
+    public const string AccessRead = "read";
+    /// <summary>The value of <see cref="Access"/> for a node that can only be written.</summary>
+    public const string AccessWrite = "write";
 
     // values of midi.role
 
@@ -117,7 +126,7 @@ public static class MidiProperties
         Describe(Stride, "Map: the number of addresses the node (or one repeat item) occupies."),
         Describe(Repeat, "Map: the number of items of a repeat in the address space."),
         Describe(Transfer, "Map: how a group or repeat is cut into blocks: atomic (always whole) or individual (each member or item on its own)."),
-        Describe(Access, "Map: readwrite (default), read or write; inherited."),
+        Describe(Access, "Any node: readwrite (default), read or write; inherited."),
         Describe(Unit, "Message or map root: what one message covers: range (default), field or atomic."),
         Describe(MaxDataSize, "Message or map root: the largest number of data bytes in one message."),
         Describe(Role, "Envelope: the value the node holds: address, size, data or device.<name>. Root: cmd1 or cmd2, a command root."),
