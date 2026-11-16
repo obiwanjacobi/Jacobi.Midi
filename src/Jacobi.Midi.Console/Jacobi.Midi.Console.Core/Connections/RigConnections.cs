@@ -285,7 +285,8 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
     /// atomic group from what it holds (requesting what it does not hold first).
     /// </summary>
     /// <param name="exchange">The name of the exchange, as the dashboard names it (<see cref="Dashboards.DashboardDevice.Send"/>).</param>
-    /// <exception cref="InvalidOperationException">The device is not online or has no state.</exception>
+    /// <exception cref="InvalidOperationException">The device is not online or has no state, or the parameter is
+    /// read-only (<c>midi.access="read"</c>).</exception>
     public void Send(string alias, string exchange, ParameterReference parameter)
     {
         ArgumentException.ThrowIfNullOrEmpty(exchange);
@@ -297,6 +298,8 @@ public sealed class RigConnections(IMidiApi api, string sessionName) : IAsyncDis
             queue = _links.GetValueOrDefault(alias)?.Queue ?? throw new InvalidOperationException($"'{alias}' is not online.");
             state = _rig?.Devices.GetValueOrDefault(alias) ?? throw new InvalidOperationException($"'{alias}' has no parameters: see the problems of the rig.");
         }
+        if (state.Find(parameter.Path) is { } node && MidiProperties.AccessOf(node) == NodeAccess.Read)
+            throw new InvalidOperationException($"'{parameter.Path}' of '{alias}' is read-only ({MidiProperties.Access}=\"{MidiProperties.AccessRead}\"): it is not sent.");
         queue.Enqueue(exchange, parameter, state);
     }
 

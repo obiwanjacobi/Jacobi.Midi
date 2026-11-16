@@ -63,8 +63,8 @@ internal sealed class SelectorTabsView : TabControl
         base.OnPropertyChanged(change);
         if (change.Property != SelectedIndexProperty || _isRefreshing || Parameter is not { } parameter)
             return;
-        // a page of no option is never selected: the value decides
-        if (SelectedIndex >= 0 && SelectorPages.OptionOf(Control.Children[SelectedIndex], parameter.Info.Options ?? []) is { } option)
+        // a page of no option is never selected, nor another page of a read-only value: the value decides
+        if (!parameter.Info.IsReadOnly && SelectedIndex >= 0 && SelectorPages.OptionOf(Control.Children[SelectedIndex], parameter.Info.Options ?? []) is { } option)
             parameter.Set((decimal)option);
         else
             Refresh();

@@ -192,17 +192,13 @@ internal sealed class AddressMap : IMessageMap
     }
 
     /// <summary>
-    /// Widens a node range to whole addresses and to the atomic groups it overlaps.
+    /// Widens a node range to the atomic groups it overlaps (<see cref="PlanRangeExtensions.WidenToAtomic"/>) and to
+    /// whole addresses.
     /// </summary>
     public PlanRange WidenToAtomic(PlanRange range)
     {
-        var span = GetAddressRange(range);
-        var widened = span;
-        foreach (var atomic in _layout.AtomicGroups(span))
-        {
-            widened = widened.Union(atomic.Range);
-        }
-        return Resolve(widened).Block?.Nodes ?? range;
+        var widened = range.WidenToAtomic();
+        return Resolve(GetAddressRange(widened)).Block?.Nodes ?? widened;
     }
 
     /// <summary>

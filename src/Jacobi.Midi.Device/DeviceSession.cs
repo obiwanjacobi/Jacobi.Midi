@@ -63,8 +63,9 @@ public sealed class DeviceStateChangedEventArgs(PlanRange nodes, DeviceStateChan
 /// <see cref="Execute"/>, any other exchange of its exchange files. A command root (<c>midi.role</c> <c>cmd1</c> or
 /// <c>cmd2</c>) goes through <see cref="CommandMessages"/>: its values are sent as channel messages and cannot be
 /// requested; the session answers from what it holds. A Property Exchange root (<c>midi.role</c> <c>pe</c>) goes
-/// through MIDI-CI (<see cref="PropertyExchangeDevice"/>): it is read whole with a Get of its resource (for now: Get
-/// only). The first use of a root starts listening to all of it, so the state follows the device.
+/// through MIDI-CI (<see cref="PropertyExchangeDevice"/>): it is read with a Get of its resource (or of each entry,
+/// <c>resId</c>) into the session's state, and answered from the state like any root; it is sent with a Set of the
+/// client's values over the state (no Subscribe yet). The first use of a root starts listening to all of it, so the state follows the device.
 /// The session works on a connection the client created and owns; create the session before the connection is
 /// opened, so nothing is missed. When the connection is lost the session is disconnected for good: every call throws,
 /// and the client disposes it and creates a new session.
@@ -77,7 +78,8 @@ public sealed class DeviceSession : IAsyncDisposable
     private readonly IMidiConnection? _connection;
     private readonly DeviceSessionOptions _options;
     private readonly Lock _lock = new();
-    private readonly Dictionary<IMessageMap, IDeviceState> _states = [];
+    // the state of a root by its plan: of a root with a message map or of a Property Exchange root
+    private readonly Dictionary<ExecutionPlan, IDeviceState> _states = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<CommandMap, CommandState> _commandStates = [];
     private readonly CancellationTokenSource _listening = new();
     private readonly List<Task> _listeners = [];
@@ -179,9 +181,10 @@ public sealed class DeviceSession : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(range);
         ArgumentNullException.ThrowIfNull(sink);
         ThrowIfNotConnected();
-        return IsProperty(range) ? ReceiveProperties(range, sink, progress, ct)
+        var fresh = (data ?? _options.Data) == SessionData.Device;
+        return IsProperty(range) ? ReceiveProperties(range, sink, fresh, progress, ct)
             : IsCommand(range) ? Task.FromResult(ReceiveCommands(range, sink, progress))
-            : Receive(ExchangeNames.RequestData, range, sink, (data ?? _options.Data) == SessionData.Device, progress, ct);
+            : Receive(ExchangeNames.RequestData, range, sink, fresh, progress, ct);
     }
 
     /// <summary>
@@ -214,6 +217,9 @@ public sealed class DeviceSession : IAsyncDisposable
     /// When that fails, nothing is sent and the result holds the blocks that could not be received. A sent block
     /// updates the state; a block that did not complete is invalidated (the device's values are no longer known).
     /// A command root is sent as channel messages, one block per field; the source supplies every field of the range.
+    /// A Property Exchange root is sent with a Set per block (the resource, or each entry it covers): the whole block
+    /// when it is atomic (<c>midi.transfer="atomic"</c>, a resource set whole), else the values of the range by their
+    /// JSON Pointer (<c>setPartial</c>); a read-only root (<c>midi.access="read"</c>) is not sent.
     /// </summary>
     /// <param name="data">Where the values of the atomic groups outside the range come from; null: the session's default (<see cref="DeviceSessionOptions.Data"/>).</param>
     /// <exception cref="InvalidOperationException">The session is disconnected, or (a command root) a field of the range has no value.</exception>
@@ -223,13 +229,10 @@ public sealed class DeviceSession : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(range);
         ArgumentNullException.ThrowIfNull(source);
         ThrowIfNotConnected();
-        if (IsProperty(range))
-        {
-            throw new NotSupportedException($"Sending a Property Exchange resource ('{range.ExecutionPlan.Name}') is not supported yet.");
-        }
-        return IsCommand(range)
-            ? SendCommands(range, source, progress, ct)
-            : Send(ExchangeNames.SendData, range, source, (data ?? _options.Data) == SessionData.Device, progress, ct);
+        var fresh = (data ?? _options.Data) == SessionData.Device;
+        return IsProperty(range) ? SendProperties(range, source, fresh, progress, ct)
+            : IsCommand(range) ? SendCommands(range, source, progress, ct)
+            : Send(ExchangeNames.SendData, range, source, fresh, progress, ct);
     }
 
     /// <summary>
@@ -253,9 +256,13 @@ public sealed class DeviceSession : IAsyncDisposable
 
         if (IsProperty(range))
         {
-            return name == ExchangeNames.RequestData
-                ? ReceiveProperties(range, data.Sink ?? throw Missing(name, range, "receives data: it needs a sink"), progress, ct)
-                : throw Missing(name, range, $"does not apply to a Property Exchange root: it only has {ExchangeNames.RequestData} for now");
+            return name switch
+            {
+                ExchangeNames.RequestData => ReceiveProperties(range, data.Sink ?? throw Missing(name, range, "receives data: it needs a sink"), fresh: true, progress, ct),
+                ExchangeNames.SendData => SendProperties(range, data.Source ?? throw Missing(name, range, "sends data: it needs a source"),
+                    _options.Data == SessionData.Device, progress, ct),
+                _ => throw Missing(name, range, $"does not apply to a Property Exchange root: it only has {ExchangeNames.SendData} and {ExchangeNames.RequestData}"),
+            };
         }
         if (IsCommand(range))
         {
@@ -305,14 +312,10 @@ public sealed class DeviceSession : IAsyncDisposable
             return;
         }
 
-        if (_exchange is null)
-        {
-            return;
-        }
         IDeviceState? state;
         lock (_lock)
         {
-            _states.TryGetValue(_exchange.MapOf(range), out state);
+            _states.TryGetValue(range.ExecutionPlan, out state);
         }
         if (state is not null)
         {
@@ -392,9 +395,9 @@ public sealed class DeviceSession : IAsyncDisposable
 
     private static bool IsProperty(PlanRange range) => MidiProperties.IsPropertyRoot(range.ExecutionPlan.Root.Group);
 
-    // a Property Exchange root: the resource is read whole (one block: the root), the sink gets all of it; a resource
-    // with entries (the choice resId) is read per entry the range covers (a block per entry, with its resId)
-    private async Task<TransferResult> ReceiveProperties(PlanRange range, IValueSink sink, IProgress<BlockResult>? progress, CancellationToken ct)
+    // a Property Exchange root: per block (the whole resource, or each entry (resId) the range covers) from the state,
+    // or with a Get of the block (with its resId) into the state; the sink gets the block from the state
+    private async Task<TransferResult> ReceiveProperties(PlanRange range, IValueSink sink, bool fresh, IProgress<BlockResult>? progress, CancellationToken ct)
     {
         var plan = range.ExecutionPlan;
         var whole = plan.CreateRange(plan.Root.Path);
@@ -405,26 +408,14 @@ public sealed class DeviceSession : IAsyncDisposable
             attached = _properties;
         }
         var device = attached ?? throw Missing(ExchangeNames.RequestData, range, "cannot run: the session has no Property Exchange device (not found, or not yet)");
+        var state = PropertyStateOf(range);
 
         var results = new List<BlockResult>();
         if (device.Find(resource) is not { CanGet: true } entry)
         {
             results.Add(new BlockResult(whole, BlockStatus.Unavailable) { Reason = $"the device has no resource '{resource}' to get." });
         }
-        else if (PropertyData.EntriesOf(plan.Root) is { } entries)
-        {
-            foreach (var resEntry in entries.Members.OfType<GroupInfo>())
-            {
-                var block = plan.CreateRange(resEntry.Path);
-                if (block.Overlaps(range))
-                {
-                    var resId = PropertyData.KeyOf(resEntry);
-                    results.Add(await GetProperty(device, new() { ["resource"] = resource, ["resId"] = resId }, block,
-                        data => PropertyData.CopyTo(plan.Root, resEntry, data, sink), ct));
-                }
-            }
-        }
-        else if (entry.RequireResId)
+        else if (!state.HasEntries && entry.RequireResId)
         {
             results.Add(new BlockResult(whole, BlockStatus.Unavailable)
             {
@@ -433,7 +424,17 @@ public sealed class DeviceSession : IAsyncDisposable
         }
         else
         {
-            results.Add(await GetProperty(device, new() { ["resource"] = resource }, whole, data => PropertyData.CopyTo(plan.Root, data, sink), ct));
+            foreach (var (resEntry, block) in state.Blocks(range))
+            {
+                var result = !fresh && state.Contains(block)
+                    ? new BlockResult(block, BlockStatus.Completed)
+                    : await GetProperty(device, Header(resource, resEntry), block, data => state.Take(resEntry, data), ct);
+                if (result.Status == BlockStatus.Completed)
+                {
+                    state.CopyTo(block, sink);
+                }
+                results.Add(result);
+            }
         }
         foreach (var result in results)
         {
@@ -442,13 +443,143 @@ public sealed class DeviceSession : IAsyncDisposable
         return new TransferResult(results);
     }
 
-    // one Get: the data to the sink (copy) and the block received
-    private async Task<BlockResult> GetProperty(PropertyExchangeDevice device, System.Text.Json.Nodes.JsonObject header, PlanRange block,
-        Action<System.Text.Json.Nodes.JsonNode?> copy, CancellationToken ct)
+    // a Property Exchange root: the client's values over the state, completed (an atomic block is sent whole) with a Get
+    // of what the state does not hold; then a Set per block (the resource, or each entry the range covers). A block
+    // that is not sent is invalidated (the device's values are no longer known).
+    private async Task<TransferResult> SendProperties(PlanRange range, IValueSource source, bool fresh, IProgress<BlockResult>? progress, CancellationToken ct)
+    {
+        var plan = range.ExecutionPlan;
+        var whole = plan.CreateRange(plan.Root.Path);
+        var resource = PropertyData.KeyOf(plan.Root);
+        PropertyExchangeDevice? attached;
+        lock (_lock)
+        {
+            attached = _properties;
+        }
+        var device = attached ?? throw Missing(ExchangeNames.SendData, range, "cannot run: the session has no Property Exchange device (not found, or not yet)");
+        var state = PropertyStateOf(range);
+
+        var results = new List<BlockResult>();
+        var fetched = new HashSet<PlanRange>();
+        if (device.Find(resource) is not { } entry)
+        {
+            results.Add(new BlockResult(whole, BlockStatus.Unavailable) { Reason = $"the device has no resource '{resource}' to set." });
+        }
+        else if (MidiProperties.AccessOf(plan.Root) == NodeAccess.Read)
+        {
+            results.Add(new BlockResult(whole, BlockStatus.Unavailable) { Reason = $"'{resource}' cannot be set ({MidiProperties.Access}=\"{MidiProperties.AccessRead}\")." });
+        }
+        else if (!state.HasEntries && entry.RequireResId)
+        {
+            results.Add(new BlockResult(whole, BlockStatus.Unavailable)
+            {
+                Reason = $"'{resource}' needs a resource id (resId), and its root has no choice '{PropertySchemaGenerator.ResIdName}' with the entries.",
+            });
+        }
+        else
+        {
+            // the fields and items of a block are known from its data: a block the state does not hold is read first; then
+            // exactly the client's values of the range, and what completes the atomic blocks from the state or a Get
+            foreach (var (resEntry, block) in state.Blocks(range.WidenToAtomic()).Where(block => !state.Contains(block.Block)))
+            {
+                if (await Fetch(resEntry, block) is { } failed)
+                {
+                    return failed;
+                }
+            }
+            var client = state.ClientValues(range, source);
+            foreach (var (resEntry, block) in state.Blocks(range.WidenToAtomic()).Where(block => !fetched.Contains(block.Block) && !state.Completes(block.Block, client, fresh)))
+            {
+                if (await Fetch(resEntry, block) is { } failed)
+                {
+                    return failed;
+                }
+            }
+            state.Merge(range, client);
+
+            foreach (var (resEntry, block) in state.Blocks(range))
+            {
+                if (await SetProperty(device, state, resource, resEntry, range, block, ct) is not { } result)
+                {
+                    continue;
+                }
+                if (result.Status == BlockStatus.Completed)
+                {
+                    Raise(block, DeviceStateChange.Sent);
+                }
+                else
+                {
+                    state.Clear(block);
+                    Raise(block, DeviceStateChange.Invalidated);
+                }
+                results.Add(result);
+            }
+        }
+        foreach (var result in results)
+        {
+            progress?.Report(result);
+        }
+        return new TransferResult(results);
+
+        // a Get of a block into the state; the result of the send when it fails (nothing is sent)
+        async Task<TransferResult?> Fetch(GroupInfo? resEntry, PlanRange block)
+        {
+            var received = await GetProperty(device, Header(resource, resEntry), block, data => state.Take(resEntry, data), ct);
+            fetched.Add(block);
+            if (received.Status == BlockStatus.Completed)
+            {
+                return null;
+            }
+            progress?.Report(received);
+            return new TransferResult([received]);
+        }
+    }
+
+    // one Set of a block from the state: whole when the block is atomic, else the values of the range by JSON Pointer;
+    // null when the range has nothing to set in the block (only read-only values)
+    private static async Task<BlockResult?> SetProperty(PropertyExchangeDevice device, PropertyDeviceState state, string resource,
+        GroupInfo? resEntry, PlanRange range, PlanRange block, CancellationToken ct)
     {
         try
         {
-            copy(await device.Get(header, ct));
+            var header = Header(resource, resEntry);
+            System.Text.Json.Nodes.JsonNode? body;
+            if (MidiProperties.TransferOf(resEntry ?? range.ExecutionPlan.Root, out _) == NodeTransfer.Atomic)
+            {
+                body = state.Body(resEntry);
+            }
+            else
+            {
+                var values = state.PartialBody(resEntry, range);
+                if (values.Count == 0)
+                {
+                    return null;
+                }
+                header["setPartial"] = true;
+                body = values;
+            }
+            await device.Set(header, body, ct);
+            return new BlockResult(block, BlockStatus.Completed);
+        }
+        catch (Exception exception) when (exception is MidiException or FormatException)
+        {
+            return new BlockResult(block, BlockStatus.Failed, exception) { Reason = exception.Message };
+        }
+    }
+
+    // the header of an inquiry of a block: the resource, and the resId of an entry
+    private static System.Text.Json.Nodes.JsonObject Header(string resource, GroupInfo? resEntry)
+        => resEntry is null
+            ? new() { ["resource"] = resource }
+            : new() { ["resource"] = resource, ["resId"] = PropertyData.KeyOf(resEntry) };
+
+    // one Get: the data into the state (take) and the block received
+    private async Task<BlockResult> GetProperty(PropertyExchangeDevice device, System.Text.Json.Nodes.JsonObject header, PlanRange block,
+        Action<System.Text.Json.Nodes.JsonNode?> take, CancellationToken ct)
+    {
+        try
+        {
+            take(await device.Get(header, ct));
             Raise(block, DeviceStateChange.Received);
             return new BlockResult(block, BlockStatus.Completed);
         }
@@ -469,7 +600,7 @@ public sealed class DeviceSession : IAsyncDisposable
     private async Task<TransferResult> Receive(string name, PlanRange range, IValueSink sink, bool fresh, IProgress<BlockResult>? progress, CancellationToken ct)
     {
         var exchange = ExchangeOf(name, range);
-        var state = StateOf(exchange.MapOf(range));
+        var state = StateOf(exchange, range);
 
         var results = new List<BlockResult>();
         BlockResult? before = null;
@@ -519,7 +650,7 @@ public sealed class DeviceSession : IAsyncDisposable
     private async Task<TransferResult> Send(string name, PlanRange range, IValueSource source, bool fresh, IProgress<BlockResult>? progress, CancellationToken ct)
     {
         var exchange = ExchangeOf(name, range);
-        var state = StateOf(exchange.MapOf(range));
+        var state = StateOf(exchange, range);
 
         // exactly the client's values of the range
         var client = state.ClientValues(range, source);
@@ -592,19 +723,34 @@ public sealed class DeviceSession : IAsyncDisposable
         return new TransferResult(results);
     }
 
-    // the state of a map; the first use of a map starts listening to all of it, so the state follows the device
-    private IDeviceState StateOf(IMessageMap map)
+    // the state of a root with a message map (the map creates it); the first use of a root starts listening to all of
+    // it, so the state follows the device
+    private IDeviceState StateOf(MessageExchange exchange, PlanRange range)
     {
         lock (_lock)
         {
-            if (!_states.TryGetValue(map, out var state))
+            if (!_states.TryGetValue(range.ExecutionPlan, out var state))
             {
-                state = map.CreateState();
-                _states[map] = state;
+                state = exchange.MapOf(range).CreateState();
+                _states[range.ExecutionPlan] = state;
                 var listened = state;
-                _listeners.Add(_exchange!.Listen(state.Whole, data => OnListened(listened, data), _listening.Token));
+                _listeners.Add(exchange.Listen(state.Whole, data => OnListened(listened, data), _listening.Token));
             }
             return state;
+        }
+    }
+
+    // the state of a Property Exchange root (no listening: the session does not subscribe yet)
+    private PropertyDeviceState PropertyStateOf(PlanRange range)
+    {
+        lock (_lock)
+        {
+            if (!_states.TryGetValue(range.ExecutionPlan, out var state))
+            {
+                state = new PropertyDeviceState(range.ExecutionPlan);
+                _states[range.ExecutionPlan] = state;
+            }
+            return (PropertyDeviceState)state;
         }
     }
 

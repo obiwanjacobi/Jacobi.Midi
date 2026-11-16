@@ -5,30 +5,6 @@ using Jacobi.Midi.Device.Messages;
 namespace Jacobi.Midi.Device.Addressing;
 
 /// <summary>
-/// Which way data may be transferred for an addressed node (<c>midi.access</c>).
-/// </summary>
-public enum NodeAccess
-{
-    ReadWrite,
-    /// <summary>The device only transmits the data (e.g. Yamaha System Information).</summary>
-    Read,
-    /// <summary>The device only receives the data (trigger addresses such as XG System On).</summary>
-    Write,
-}
-
-/// <summary>
-/// How a group or repeat is cut into blocks (<c>midi.transfer</c>), at its own level: its members (the items of a
-/// repeat). Without it, the unit and maximum data size of the message decide.
-/// </summary>
-internal enum NodeTransfer
-{
-    /// <summary>Never cut inside: the node is always transferred as a whole.</summary>
-    Atomic,
-    /// <summary>Always cut at the boundaries of its members (and its own start and end): each is transferred on its own.</summary>
-    Individual,
-}
-
-/// <summary>
 /// The static address layout of one plan node. <see cref="Offset"/> is relative to the frame the node is in:
 /// the item of the nearest enclosing repeat, or the absolute address space outside repeats.
 /// One instance per plan node, not per repeat item.
@@ -496,17 +472,13 @@ internal sealed class AddressLayout
         // a contradiction is an error (a cut an enclosing atomic node forbids), a redundancy is not (atomic in atomic)
         private NodeTransfer? Transfer(NodeInfo node, bool inAtomic)
         {
-            var text = MidiProperties.Find(node, MidiProperties.Transfer);
-            if (text is null)
+            var transfer = MidiProperties.TransferOf(node, out var error);
+            if (error is not null)
             {
+                Error(node, error);
                 return null;
             }
-            if (!Enum.TryParse<NodeTransfer>(text, ignoreCase: true, out var transfer))
-            {
-                Error(node, $"'{MidiProperties.Transfer}' must be atomic or individual, not '{text}'.");
-                return null;
-            }
-            if (node is FieldInfo)
+            if (transfer is not null && node is FieldInfo)
             {
                 Error(node, $"'{MidiProperties.Transfer}' only applies to groups and repeats.");
                 return null;
@@ -521,17 +493,12 @@ internal sealed class AddressLayout
 
         private NodeAccess Access(NodeInfo node, NodeAccess inherited)
         {
-            var text = MidiProperties.Find(node, MidiProperties.Access);
-            if (text is null)
+            var access = MidiProperties.AccessOf(node, inherited, out var error);
+            if (error is not null)
             {
-                return inherited;
+                Error(node, error);
             }
-            if (Enum.TryParse<NodeAccess>(text, ignoreCase: true, out var access))
-            {
-                return access;
-            }
-            Error(node, $"'{MidiProperties.Access}' must be readwrite, read or write, not '{text}'.");
-            return inherited;
+            return access;
         }
 
         private const string BitPackerKey = "sys.bitpacker";

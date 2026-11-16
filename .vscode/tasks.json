@@ -62,6 +62,36 @@
             "group": "build"
         },
         {
+            "label": "build VirtualDevice (Debug)",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/tools/Jacobi.Midi.VirtualDevice/Jacobi.Midi.VirtualDevice.csproj",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary"
+            ],
+            "problemMatcher": "$msCompile",
+            "group": "build"
+        },
+        {
+            "label": "build VirtualDevice (Release)",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/tools/Jacobi.Midi.VirtualDevice/Jacobi.Midi.VirtualDevice.csproj",
+                "--configuration",
+                "Release",
+                "--framework",
+                "net11.0-windows10.0.26100.0",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary"
+            ],
+            "problemMatcher": "$msCompile",
+            "group": "build"
+        },
+        {
             "label": "build Jacobi.Midi",
             "command": "dotnet",
             "type": "process",

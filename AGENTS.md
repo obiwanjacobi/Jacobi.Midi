@@ -38,6 +38,7 @@ Treat the code itself as the source of truth and check the readme files for curr
 ## Repository Layout
 
 - `src/` — the solution (`Jacobi.Midi.slnx`) and all projects. `src/readme.md` holds the product vision and backend notes.
+- `tools/` — development tools outside the solution, e.g. `Jacobi.Midi.VirtualDevice`: a virtual MIDI-CI Property Exchange device (Set included) to test against.
 - `docs/analysis/` — research notes on SysEx conventions per vendor (Roland, Yamaha, Korg, ...), common packing primitives and schema proposals.
 - `.vscode/` — build/launch configuration for the desktop Schema Editor.
 - `../Jacobi.BinarySerializer` — sibling repository referenced by project references (not packages); its projects are included in the solution.

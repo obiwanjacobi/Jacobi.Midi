@@ -7,11 +7,13 @@ using static Jacobi.Midi.Console.Faces.FaceDrawing;
 namespace Jacobi.Midi.Console.Looks.Foundry;
 
 /// <summary>
-/// Foundry text: an amber readout window. An unknown value shows dashes.
+/// Foundry text: an amber readout window. An unknown value shows dashes. The window takes the plate's width.
 /// </summary>
 public sealed class FoundryTextFace : Face
 {
     protected override Size Cells => new(7, 1.5);
+
+    protected override bool FillsWidth => true;
 
     protected override void RenderStatic(DrawingContext context, FaceState state)
         => context.DrawRectangle(DisplayBrush, new Pen(OutlineBrush, 1), new Rect(Bounds.Size), 3, 3);

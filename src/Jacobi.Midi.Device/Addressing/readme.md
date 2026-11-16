@@ -268,11 +268,12 @@ Namespace `Jacobi.Midi.Device.Addressing`.
 | `AddressBlock` | The addresses and the node range (`PlanRange`) of a block of the map (the exchange only sees the node range). |
 | `AddressMatch` | The result of resolving an address range: the block of whole fields it covers, whether it is aligned to field boundaries, and the unmapped addresses. |
 | `AddressSettings`, `AddressUnit` | The address settings of a message: its unit (`midi.unit`) and maximum data size (`midi.maxDataSize`). |
-| `NodeAccess` | The access of an addressed node (`midi.access`). |
 
-The generic types (`DeviceMessage`, `DeviceValues`, `ReceivedData`, `FieldValueStore` and the problems) are in
+The generic types (`DeviceMessage`, `DeviceValues`, `ReceivedData`, `FieldValueStore`, `NodeAccess` and the problems) are in
 `Jacobi.Midi.Device.Messages` (see [Messages](../Messages/readme.md)). Internal: `AddressMap` (an `IMessageMap`),
-`AddressMapProvider`, `AddressDeviceState`, `AddressProtocol` and `AddressLayout`.
+`AddressMapProvider`, `AddressDeviceState`, `AddressProtocol` and `AddressLayout`. `AddressLayout` reads `midi.access`
+and `midi.transfer` with `MidiProperties.AccessOf` and `TransferOf`, and `AddressMap.WidenToAtomic` widens a range with
+the extension `WidenToAtomic` (in `Messages`) before widening to whole addresses.
 
 ## Limitations
 

@@ -31,6 +31,15 @@ public sealed record ParameterInfo(string Name, Type ValueType, ValueRange? Rang
     /// </summary>
     public string? Doc { get; init; }
 
+    /// <summary>
+    /// Which way the value may be transferred (the field's <c>midi.access</c>, inherited): a read-only value is shown,
+    /// but cannot be changed and is never sent.
+    /// </summary>
+    public NodeAccess Access { get; init; } = NodeAccess.ReadWrite;
+
+    /// <summary>True when the device only transmits the value (<see cref="NodeAccess.Read"/>).</summary>
+    public bool IsReadOnly => Access == NodeAccess.Read;
+
     public ParameterKind Kind
         => Options is not null ? ParameterKind.Choice
             : ValueType == typeof(bool) ? ParameterKind.Switch
@@ -74,6 +83,7 @@ public sealed record ParameterInfo(string Name, Type ValueType, ValueRange? Rang
         {
             Default = defaultValue,
             Doc = DocOf(field),
+            Access = MidiProperties.AccessOf(field),
         };
     }
 

@@ -7,14 +7,15 @@ namespace Jacobi.Midi.Device.Addressing;
 
 /// <summary>
 /// Creates the <see cref="AddressMap"/> of a root. It claims a root that has the tags it owns: an address-map tag
-/// (<c>midi.address</c>, <c>midi.stride</c>, <c>midi.repeat</c>, <c>midi.transfer</c>, <c>midi.access</c>) on a node of
-/// the root, or a data message with the role <c>address</c> that carries the root. A claimed root that is not a valid
+/// (<c>midi.address</c>, <c>midi.stride</c>, <c>midi.repeat</c>) on a node of the root, or a data message with the role
+/// <c>address</c> that carries the root. <c>midi.transfer</c> and <c>midi.access</c> are tags of any node: they do not
+/// make a root an address map. A claimed root that is not a valid
 /// address map is reported with a <see cref="MessageMapException"/>; it is never passed on to another provider.
 /// </summary>
 internal sealed class AddressMapProvider : IMessageMapProvider
 {
     private static readonly string[] MapTags =
-        [MidiProperties.Address, MidiProperties.Stride, MidiProperties.Repeat, MidiProperties.Transfer, MidiProperties.Access];
+        [MidiProperties.Address, MidiProperties.Stride, MidiProperties.Repeat];
 
     public IMessageMap? TryCreate(Serializer serializer, ExecutionPlan plan)
         => Claims(serializer, plan) ? AddressMap.Create(serializer, plan) : null;

@@ -273,6 +273,47 @@ value model is being examined.
 54. **The generator gives a resource with `canSet` `none` `midi.access="read"` on its root;** `full` and `partial`
     get no tag (the default `readwrite`). *Why:* the device says per resource whether it can be written; the
     standard resources (`DeviceInfo`, the lists) default to `none`, so no resource needs a special case.
+55. **A Set of a resource with `canSet` `full` uses `midi.transfer="atomic"`, and the session's state completes it**
+    (as a send of an address map does: widen to the atomic nodes, the missing values from the state or a Get first);
+    for a resource with `resId`s the tag goes on each entry, as a Set goes per entry. `midi.transfer` is, like
+    `midi.access`, a tag of any node. *Why:* the same mechanism as the address map, no tag of its own for PE.
+56. **`midi.access` and `midi.transfer` are read on plan nodes by `MidiProperties`** (`AccessOf` with inheritance,
+    `TransferOf` the node's own; the value checked once, by `Validate`), with `NodeAccess` and `NodeTransfer` in
+    `Messages`; where a transfer may be (not on a field, no `individual` inside an atomic node) stays with its user,
+    `AddressLayout`. The widening of a `PlanRange` to the atomic nodes it overlaps, by the plan structure, is the
+    extension method `WidenToAtomic` (`PlanRangeExtensions`); `AddressMap.WidenToAtomic` adds only the widening to
+    whole addresses. *Why:* a `pe` root has no addresses; the readers of a tag belong with the other readers of tags
+    (`RoleOf`, `CommandProtocolOf`), a range operation is not a tag reader; one place of truth for each.
+57. **The address provider claims a root by `midi.address`, `midi.stride` or `midi.repeat` only** (or a data message
+    with an `address` role that carries it), not by `midi.transfer` or `midi.access` (revises decision 22). *Why:* those
+    two are tags of any node (decisions 53, 55); `midi.repeat` stays, as it only means something in an address space.
+58. **The session keeps a state for a `pe` root** (`PropertyDeviceState`, an `IDeviceState`): a Get goes into the
+    state, the sink gets the block from it, and a `RequestData` is answered from it as for any root (`SessionData`). A
+    block (the whole resource or an entry) is held whole or not at all. The session keys all its states by the plan of
+    the root, not by the message map (a `pe` root has none), so `Invalidate` and `Clear` are one code path. *Why:* a Set
+    of an atomic resource is completed from the state (decision 55); the same mechanism as the other roots.
+59. **The `pe` state keeps flat field values plus the item counts in a new `FieldValueStoreWithCounts`**, not the JSON
+    and not an extended `FieldValueStore`: as a sink it takes the count of every repeat it enters with one, so its data
+    must be complete. *Why:* merging JSON is more cumbersome than keeping a dictionary and counts in sync; the count of a
+    partial transfer (an address map read up to a target item) is too small, so the existing store and its users stay
+    as they are.
+60. **A Set of a `pe` root follows the tags of the schema, not the `ResourceList`:** a block (the resource or an entry)
+    that is atomic (`midi.transfer="atomic"`) is set whole, any other with `setPartial` and the values of the range by
+    JSON Pointer; a read-only root (`midi.access="read"`) is not sent. A block the state does not hold is read first,
+    as its fields and items are only known from its data; then the client's values, completed as for an address map.
+    *Why:* the schema is the source of truth the author may touch up (the generator writes the tags from `canSet`);
+    one rule for every kind of root.
+61. **In the console a read-only parameter (`midi.access="read"`, inherited) is shown but cannot be changed, and is
+    never sent:** `ParameterInfo.Access` (from `MidiProperties.AccessOf`, now public); a control cannot change it in
+    Play mode (`CanChange`; a control with slots only its writable slots), and `RigConnections.Send` refuses it. The
+    same for every kind of root. *Why:* a change the device does not take is no change; for an address map it went
+    nowhere without a word, for a `pe` root every change was a failed send.
+62. **A write-only value (`midi.access="write"`) is not given back by `DeviceSession.RequestData` (for now):** the
+    session's state keeps what was sent, but a request only gives what the device sends; the console keeps the value
+    the user set in its own `DeviceState`, which a receive does not overwrite. *Why:* the console already has the
+    value; giving the state's copy back on a request waits for a client that needs it.
+63. **Property Exchange data that is not JSON (`mediaTypes`) is not supported:** the generator leaves such a resource
+    out, with a note. *Why:* not needed; the parameters of a device are JSON resources.
 
 ## Invalid input in the item editors of the Schema Editor (2026-11-13)
 
@@ -934,7 +975,7 @@ See the Device todo, *Message exchange for schemas without an address map*.
     `DeviceValues`) report problems too, and a client handles an invalid map the same way whatever its kind; the
     base layer (`Messages`) no longer depends on `Addressing` (apart from the provider chain).
 22. **The address provider claims a root by its tags:** an address-map tag (`midi.address`, `midi.stride`,
-    `midi.repeat`, `midi.atomic`, `midi.access`) on a node of the root, or a data message with an `address` role that
+    `midi.repeat`~~, `midi.atomic`, `midi.access`~~; revised by decision 57) on a node of the root, or a data message with an `address` role that
     carries the root. Every other root goes to the dump provider. *Why:* decision 5; a broken address map still gets
     address errors.
 23. **A dump is sent whole, from the client's values only** (for now): the dump state does not complete a partial

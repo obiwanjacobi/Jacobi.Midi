@@ -22,7 +22,7 @@ provider that claims the root wins.
 
 | Order | Provider | Claims a root | Map |
 | ----- | -------- | ------------- | --- |
-| 1 | `AddressMapProvider` | with an address-map tag (`midi.address`, `midi.stride`, `midi.repeat`, `midi.transfer`, `midi.access`) on one of its nodes, or carried by a data message with the role `address` | `AddressMap` (see [Addressing](../Addressing/readme.md)) |
+| 1 | `AddressMapProvider` | with an address-map tag (`midi.address`, `midi.stride`, `midi.repeat`) on one of its nodes (`midi.transfer` and `midi.access` are tags of any node), or carried by a data message with the role `address` | `AddressMap` (see [Addressing](../Addressing/readme.md)) |
 | 2 | `DumpMapProvider` | every other root | `DumpMap` (below) |
 
 A provider claims a root by the tags it owns and then reports the problems of those tags itself: a broken address
@@ -134,6 +134,7 @@ Namespace `Jacobi.Midi.Device.Messages`.
 | `MessageMapKind` | How the data of a root is carried in messages: `Address`, `CarriedDump` or `MessageDump`. |
 | `DeviceValues` | The device values by name (`deviceId`, `modelId`, ...): those of the root plus those of the client. |
 | `FieldValueStore` | A flat value model of field values by path and instance of a root's plan. |
+| `NodeAccess` | The access of a node (`midi.access`): read and write, read only or write only; inherited. Read on plan nodes by `MidiProperties` (internal `AccessOf`, and `TransferOf` for `midi.transfer`); the internal extension `WidenToAtomic` (`PlanRangeExtensions`) widens a range to the atomic nodes it overlaps, for any kind of root. |
 | `DeviceMessage` | A message group of the schemas with its role nodes. |
 | `ReceivedData` | A recognised data message: its device values and block; `Decode` reads its values into a value model. |
 | `MessageMapException`, `MessageMapProblem`, `MessageMapProblemSeverity` | All problems found in a map and its messages, each located at its schema node. |

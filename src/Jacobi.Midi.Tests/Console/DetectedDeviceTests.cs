@@ -51,6 +51,31 @@ public class DetectedDeviceTests
     }
 
     [Fact]
+    public void AParameterOfAResourceThatCannotBeSet_IsReadOnly()
+    {
+        var schema = PropertySchemaGenerator.Generate("Settable", PropertyResource.FromResourceList(JsonNode.Parse(
+            """[{"resource":"DeviceInfo"},{"resource":"X-Tempo","canSet":"full","schema":{"type":"integer","minimum":40,"maximum":240}}]""")));
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.schema.xml");
+        File.WriteAllText(path, Jacobi.BinarySerializer.Schema.Xml.XmlSerializer.Serialize(schema.Document));
+        try
+        {
+            var library = ConsoleLibrary.BuiltIn().AddSchemaFile(path).Build();
+            var state = new DeviceState(new DeviceInstance { Alias = "device", Schema = "Settable", IsDetected = true }, library);
+
+            var model = ParameterInfo.From(Assert.IsType<Jacobi.BinarySerializer.Execution.FieldInfo>(state.Find("DeviceInfo.model")));
+            var tempo = ParameterInfo.From(Assert.IsType<Jacobi.BinarySerializer.Execution.FieldInfo>(state.Find("XTempo.value")));
+
+            // the access of the root (midi.access="read" from canSet none) is the access of its fields
+            Assert.True(model.IsReadOnly);
+            Assert.False(tempo.IsReadOnly);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void AVariable_IndexesARepeatOfTheRootThePathStartsAt()
     {
         var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.schema.xml");

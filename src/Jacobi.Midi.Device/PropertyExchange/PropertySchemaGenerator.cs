@@ -140,6 +140,8 @@ public static class PropertySchemaGenerator
             [
                 new() { Name = MidiProperties.Role, Value = MidiProperties.RolePropertyExchange },
                 .. Access(resource),
+                // a resource set whole is atomic; with entries, each entry is set on its own
+                .. (resIds.Count == 0 ? Transfer(resource) : []),
                 .. Tags(resource.Name, name, schema, note),
             ];
             if (resIds.Count == 0)
@@ -159,7 +161,10 @@ public static class PropertySchemaGenerator
                 foreach (var resId in resIds)
                 {
                     var alternative = Unique(NameOf(resId), used);
-                    choice.Group(alternative, nodeDef: entry, properties: alternative == resId ? [] : [new() { Name = MidiProperties.Key, Value = resId }]);
+                    List<SchemaProperty> tags = [.. Transfer(resource)];
+                    if (alternative != resId)
+                        tags.Add(new() { Name = MidiProperties.Key, Value = resId });
+                    choice.Group(alternative, nodeDef: entry, properties: tags);
                 }
             }, properties: [new() { Name = MidiProperties.Doc, Value = doc }]), properties: properties);
         }
@@ -285,6 +290,13 @@ public static class PropertySchemaGenerator
         private static IEnumerable<SchemaProperty> Access(PropertyResource resource)
             => String.Equals(resource.CanSet, PropertyResource.CanSetNone, StringComparison.OrdinalIgnoreCase)
                 ? [new() { Name = MidiProperties.Access, Value = MidiProperties.AccessRead }]
+                : [];
+
+        // a resource that is only set whole (canSet "full") is atomic: a Set of a part of it sends all of it; one that
+        // can be set partially has no tag (each field on its own)
+        private static IEnumerable<SchemaProperty> Transfer(PropertyResource resource)
+            => String.Equals(resource.CanSet, PropertyResource.CanSetFull, StringComparison.OrdinalIgnoreCase)
+                ? [new() { Name = MidiProperties.Transfer, Value = MidiProperties.TransferAtomic }]
                 : [];
 
         // the JSON key when the node got another name, and the documentation (with a note of the generator)

@@ -20,7 +20,7 @@ namespace Jacobi.Midi.Console.Faces;
 /// state runs horizontally (<see cref="RangeFaceState.IsHorizontal"/>) the face turns its drawing a quarter clockwise
 /// (the bottom of the upright drawing on the left) and takes its cells the other way round. A face takes its own size,
 /// centred in the room its chrome gives it; a directional face stretches along its direction into all of it (a long
-/// fader has a long slot), and a face that fills the width (<see cref="FillsWidth"/>, a selector, a number box) stretches across it.
+/// fader has a long slot), and a face that fills the width (<see cref="FillsWidth"/>, a selector, a number box, a text) stretches across it.
 /// </para>
 /// </summary>
 public abstract class Face : Control
@@ -178,7 +178,7 @@ public abstract class Face : Control
 
     /// <summary>
     /// True for a face that takes the whole width of its room, never less than its own (<see cref="Cells"/>): a wider
-    /// plate gives its text more room (a selector's option names, a number box's number).
+    /// plate gives its text more room (a selector's option names, a number box's number, a text).
     /// </summary>
     protected virtual bool FillsWidth => false;
 

@@ -93,8 +93,17 @@ public abstract class ParameterControlBase : TemplatedControl
         set => SetValue(IsEditingProperty, value);
     }
 
-    /// <summary>True when the user can change the value: the control is enabled and not in Edit mode.</summary>
-    protected bool CanChange => IsEnabled && !IsEditing;
+    /// <summary>
+    /// True when the user can change the value: the control is enabled, not in Edit mode, and its value is not read-only
+    /// (of a control with slots: not every bound slot).
+    /// </summary>
+    protected bool CanChange => IsEnabled && !IsEditing && !IsReadOnly;
+
+    // the device only transmits the value (midi.access="read"): it is shown, never changed
+    private bool IsReadOnly
+        => Parameter is { } parameter
+            ? parameter.Info.IsReadOnly
+            : SlotValues.Count > 0 && SlotValues.Values.All(value => value.Info.IsReadOnly);
 
     /// <summary>What the face draws.</summary>
     public FaceState? FaceState
@@ -130,14 +139,14 @@ public abstract class ParameterControlBase : TemplatedControl
     /// <summary>Writes the value at a fraction of its range (0-1) to a bound slot, on a whole number of its steps.</summary>
     protected void WriteFraction(string slot, double fraction)
     {
-        if (!IsRefreshing && SlotValues.GetValueOrDefault(slot) is { Info.Range: { } range } value)
+        if (!IsRefreshing && SlotValues.GetValueOrDefault(slot) is { Info.Range: { } range, Info.IsReadOnly: false } value)
             value.Set(range.FromFraction(fraction, value.Info.Step));
     }
 
     /// <summary>Sets the bound slots to their defaults (a reset of a control with more than one slot).</summary>
     protected void ResetSlots()
     {
-        foreach (var value in SlotValues.Values)
+        foreach (var value in SlotValues.Values.Where(value => !value.Info.IsReadOnly))
         {
             if (value.Info.Default is { } known)
                 value.Set(known);

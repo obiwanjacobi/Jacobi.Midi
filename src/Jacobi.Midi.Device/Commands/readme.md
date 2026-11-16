@@ -2,8 +2,7 @@
 
 Device parameters that are set with ordinary channel messages (Control Change, RPN, NRPN, Program Change), described
 in the schemas like the SysEx data of the message maps, and used with the same value model. The design decisions are
-in [docs/decisions.md](../../../docs/decisions.md), *Parameter sources other than message maps*; the plan in
-[parameter-sources-plan.md](../parameter-sources-plan.md).
+in [docs/decisions.md](../../../docs/decisions.md), *Parameter sources other than message maps*.
 
 ## Command roots
 

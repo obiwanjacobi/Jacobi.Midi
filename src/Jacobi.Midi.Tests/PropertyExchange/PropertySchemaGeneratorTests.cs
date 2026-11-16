@@ -113,6 +113,30 @@ public class PropertySchemaGeneratorTests
     }
 
     [Fact]
+    public void Generate_AResourceThatIsSetWhole_IsAtomic_PerEntryWhenItHasEntries()
+    {
+        var schema = PropertySchemaGenerator.Generate("Pe", PropertyResource.FromResourceList(JsonNode.Parse(ResourceList)),
+            new Dictionary<string, JsonObject> { ["programDetails"] = JsonNode.Parse(ProgramDetails)!.AsObject() },
+            new Dictionary<string, IReadOnlyList<string>> { ["X-Globset"] = ["main", "my set"] });
+        SchemaGroup Root(string name) => schema.Document.Roots.Single(group => group.Name == name);
+        string? TransferOf(SchemaNode node) => MidiProperties.Find(node, MidiProperties.Transfer);
+
+        // canSet full: the root, or each entry (a Set goes per entry)
+        Assert.Equal(MidiProperties.TransferAtomic, TransferOf(Root("XTempo")));
+        var globset = Root("XGlobset");
+        Assert.Null(TransferOf(globset));
+        var entries = Assert.IsType<SchemaChoice>(Assert.Single(globset.Members));
+        Assert.All(entries.Members, entry => Assert.Equal(MidiProperties.TransferAtomic, TransferOf(entry)));
+        Assert.Equal("my set", MidiProperties.Find(entries.Members[1], MidiProperties.Key));
+        // canSet partial or none: no tag
+        Assert.Null(TransferOf(Root("XProgramEdit")));
+        Assert.Null(TransferOf(Root("DeviceInfo")));
+        // the tags make a valid schema
+        var serializer = TestDevice.CreateSerializer(schema.Document);
+        Assert.DoesNotContain(MessageMapValidator.Validate(serializer), problem => problem.Document == "Pe");
+    }
+
+    [Fact]
     public void Generate_AResourceWithResIds_HasTheChoiceResId_WithAnAlternativePerResId()
     {
         var schema = PropertySchemaGenerator.Generate("Pe", PropertyResource.FromResourceList(JsonNode.Parse(ResourceList)),

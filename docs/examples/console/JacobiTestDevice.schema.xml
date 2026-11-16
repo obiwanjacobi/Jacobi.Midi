@@ -1,0 +1,407 @@
+<schema name="JacobiTestDevice">
+  <members>
+    <group name="DeviceInfo">
+      <properties>
+        <property name="midi.role" value="pe" />
+        <property name="midi.access" value="read" />
+        <property name="midi.doc" value="MIDI-CI Property Exchange DeviceInfo." />
+      </properties>
+      <members>
+        <repeat name="manufacturerId" count="3">
+          <properties>
+            <property name="midi.doc" value="This is the System Exclusive ID Number. It is an array of the 3 data byte values (as integers) in the same structure as defined in MIDI-CI Inquiry &amp; Negotiation Messages." />
+          </properties>
+          <members>
+            <field name="item" datatype="DeviceInfo_manufacturerId_item" />
+          </members>
+        </repeat>
+        <repeat name="familyId" count="2">
+          <properties>
+            <property name="midi.doc" value="This is an array of the 2 data byte values (as integers) in the same structure as defined in MIDI-CI Inquiry &amp; Negotiation Messages." />
+          </properties>
+          <members>
+            <field name="item" datatype="DeviceInfo_familyId_item" />
+          </members>
+        </repeat>
+        <repeat name="modelId" count="2">
+          <properties>
+            <property name="midi.doc" value="This is an array of the 2 data byte values (as integers) in the same structure as defined in MIDI-CI Inquiry &amp; Negotiation Messages." />
+          </properties>
+          <members>
+            <field name="item" datatype="DeviceInfo_modelId_item" />
+          </members>
+        </repeat>
+        <repeat name="versionId" count="4">
+          <properties>
+            <property name="midi.doc" value="This is an array of the 4 data byte values (as integers) in the same structure as defined in MIDI-CI Inquiry &amp; Negotiation Messages." />
+          </properties>
+          <members>
+            <field name="item" datatype="DeviceInfo_versionId_item" />
+          </members>
+        </repeat>
+        <field name="manufacturer" datatype="sys.string">
+          <properties>
+            <property name="midi.doc" value="The name of the Manufacturer." />
+          </properties>
+        </field>
+        <field name="family" datatype="sys.string">
+          <properties>
+            <property name="midi.doc" value="The product family name." />
+          </properties>
+        </field>
+        <field name="model" datatype="sys.string">
+          <properties>
+            <property name="midi.doc" value="The model name." />
+          </properties>
+        </field>
+        <field name="version" datatype="sys.string">
+          <properties>
+            <property name="midi.doc" value="The firmware version." />
+          </properties>
+        </field>
+        <field name="serialNumber" datatype="sys.string">
+          <properties>
+            <property name="midi.doc" value="The Device may return a unique serial number." />
+          </properties>
+        </field>
+        <repeat name="links">
+          <properties>
+            <property name="midi.doc" value="Resources that return an object or an array of objects may provide links to other related Resources." />
+          </properties>
+          <members>
+            <field name="resource" datatype="sys.string">
+              <properties>
+                <property name="midi.doc" value="This is the Resource to be linked." />
+              </properties>
+            </field>
+            <field name="resId" datatype="sys.string">
+              <properties>
+                <property name="midi.doc" value="Resource Id, the identifier used to select the desired Payload Data entry." />
+              </properties>
+            </field>
+            <field name="title" datatype="sys.string">
+              <properties>
+                <property name="midi.doc" value="This is the human-readable title for this link. Fall back to the &quot;title&quot; Property in ResourceList if not supplied." />
+              </properties>
+            </field>
+            <field name="role" datatype="sys.string">
+              <properties>
+                <property name="midi.doc" value="This is the role for this linked resource." />
+              </properties>
+            </field>
+          </members>
+        </repeat>
+      </members>
+    </group>
+    <group name="ChannelList">
+      <properties>
+        <property name="midi.role" value="pe" />
+        <property name="midi.access" value="read" />
+        <property name="midi.doc" value="MIDI-CI Property Exchange ChannelList schema." />
+      </properties>
+      <members>
+        <repeat name="items">
+          <properties>
+            <property name="midi.doc" value="MIDI-CI Property Exchange ChannelList schema." />
+          </properties>
+          <members>
+            <field name="title" datatype="sys.string">
+              <properties>
+                <property name="midi.doc" value="The name of the Channel being described." />
+              </properties>
+            </field>
+            <field name="channel" datatype="ChannelList_items_channel">
+              <properties>
+                <property name="midi.doc" value="This is the Channel being described by this entry in the list of Channels. Channel numbering starts on the first channel on the first Group in the Function Block and continues across Groups in the Function Block. For example, if a Function Block contains 3 Groups it has Channels 1-48&#xA;An optional Cluster may exist, associated with the &quot;channel&quot;." />
+              </properties>
+            </field>
+            <field name="programTitle" datatype="sys.string">
+              <properties>
+                <property name="midi.doc" value="The name of the Program currently active on this Channel." />
+              </properties>
+            </field>
+            <repeat name="bankPC" count="3">
+              <properties>
+                <property name="midi.doc" value="This is a 3 item array containing the Bank MSB, Bank LSB and Program Change [MSB, LSB, PC] for the current Program." />
+              </properties>
+              <members>
+                <field name="item" datatype="ChannelList_items_bankPC_item" />
+              </members>
+            </repeat>
+            <field name="clusterChannelStart" datatype="ChannelList_items_clusterChannelStart">
+              <properties>
+                <property name="midi.doc" value="This is the starting Channel of The Cluster. Channel Cluster is always described by the lowest Channel." />
+              </properties>
+            </field>
+            <field name="clusterLength" datatype="ChannelList_items_clusterLength">
+              <properties>
+                <property name="midi.doc" value="This is the length of the Channel Cluster including the &quot;clusterChannelStart&quot;." />
+              </properties>
+            </field>
+            <field name="clusterMidiMode" datatype="ChannelList_items_clusterMidiMode">
+              <properties>
+                <property name="midi.doc" value="This is the MIDI Mode of the Cluster" />
+              </properties>
+            </field>
+            <field name="clusterType" datatype="ChannelList_items_clusterType">
+              <properties>
+                <property name="midi.doc" value="Declare the type of Channel Cluster. This aids in identifying basic, global and manager channels. " />
+              </properties>
+            </field>
+            <repeat name="links">
+              <properties>
+                <property name="midi.doc" value="Resources that return an object or an array of objects may provide links to other related Resources." />
+              </properties>
+              <members>
+                <field name="resource" datatype="sys.string">
+                  <properties>
+                    <property name="midi.doc" value="The Resource to be linked." />
+                  </properties>
+                </field>
+                <field name="resId" datatype="sys.string">
+                  <properties>
+                    <property name="midi.doc" value="Resource Id, the identifier used to select the desired Payload Data entry." />
+                  </properties>
+                </field>
+                <field name="title" datatype="sys.string">
+                  <properties>
+                    <property name="midi.doc" value="This is the human-readable title for this link. Fall back to using the &quot;title&quot; Property in ResourceList if not supplied." />
+                  </properties>
+                </field>
+                <field name="role" datatype="sys.string">
+                  <properties>
+                    <property name="midi.doc" value="This is the role for this linked resource." />
+                  </properties>
+                </field>
+              </members>
+            </repeat>
+            <field name="channelClusterId" datatype="sys.int64">
+              <properties>
+                <property name="midi.doc" value="If the Channel is a member of a Channel Cluster then this is the id of the Channel Cluster." />
+              </properties>
+            </field>
+            <field name="clusterBasicChannel" datatype="sys.bool">
+              <properties>
+                <property name="midi.doc" value="This declares if this is the Basic Channel for the Channel Cluster. If the Device is operating on multiple Channels which belong to the Channel Cluster, then MIDI messages sent to this channel set some parameters across multiple channels of the Channel Cluster which belong to the same." />
+              </properties>
+            </field>
+            <field name="deviceBasicChannel" datatype="sys.bool">
+              <properties>
+                <property name="midi.doc" value="This declares if this is the Basic Channel for the Device." />
+              </properties>
+            </field>
+            <field name="mpeZone" datatype="ChannelList_items_mpeZone">
+              <properties>
+                <property name="midi.doc" value="If the Device is using MPE, then this Property declares if the Channel is art of the Upper Zone or Lower Zone." />
+              </properties>
+            </field>
+          </members>
+        </repeat>
+      </members>
+    </group>
+    <group name="ProgramList">
+      <properties>
+        <property name="midi.role" value="pe" />
+        <property name="midi.access" value="read" />
+        <property name="midi.doc" value="MIDI CI Property Exchange Program List." />
+      </properties>
+      <members>
+        <choice name="resId">
+          <properties>
+            <property name="midi.doc" value="The entries of 'ProgramList' (resId) that links in the data of the device refer to. The resource can also be read without a resId: remove this choice for that." />
+          </properties>
+          <members>
+            <group name="main" nodeDef="ProgramList_entry" />
+          </members>
+        </choice>
+      </members>
+    </group>
+    <group name="XTempo">
+      <properties>
+        <property name="midi.role" value="pe" />
+        <property name="midi.transfer" value="atomic" />
+        <property name="midi.key" value="X-Tempo" />
+        <property name="midi.doc" value="The tempo in BPM." />
+      </properties>
+      <members>
+        <field name="value" datatype="XTempo_value">
+          <properties>
+            <property name="midi.doc" value="The tempo in BPM." />
+          </properties>
+        </field>
+      </members>
+    </group>
+    <group name="XGlobset">
+      <properties>
+        <property name="midi.role" value="pe" />
+        <property name="midi.transfer" value="atomic" />
+        <property name="midi.key" value="X-Globset" />
+        <property name="midi.doc" value="Global Settings" />
+      </properties>
+      <members>
+        <field name="deviceName" datatype="sys.string">
+          <properties>
+            <property name="midi.doc" value="The name of the device." />
+          </properties>
+        </field>
+        <field name="level" datatype="XGlobset_level">
+          <properties>
+            <property name="midi.doc" value="The master level." />
+          </properties>
+        </field>
+        <field name="audioOut" datatype="XGlobset_audioOut" />
+        <repeat name="links">
+          <members>
+            <field name="resource" datatype="sys.string" />
+            <field name="resId" datatype="sys.string" />
+          </members>
+        </repeat>
+      </members>
+    </group>
+    <group name="XProgramEdit">
+      <properties>
+        <property name="midi.role" value="pe" />
+        <property name="midi.key" value="X-ProgramEdit" />
+        <property name="midi.doc" value="Program Edit" />
+      </properties>
+      <members>
+        <choice name="resId">
+          <properties>
+            <property name="midi.doc" value="The entries of 'X-ProgramEdit' (resId) that links in the data of the device refer to." />
+          </properties>
+          <members>
+            <group name="patch1" nodeDef="XProgramEdit_entry" />
+            <group name="patch2" nodeDef="XProgramEdit_entry" />
+          </members>
+        </choice>
+      </members>
+    </group>
+  </members>
+  <nodeDefs>
+    <group name="ProgramList_entry">
+      <members>
+        <repeat name="items">
+          <properties>
+            <property name="midi.doc" value="MIDI CI Property Exchange Program List." />
+          </properties>
+          <members>
+            <field name="title" datatype="sys.string">
+              <properties>
+                <property name="midi.doc" value="Human-readable name of the Program." />
+              </properties>
+            </field>
+            <repeat name="bankPC" count="3">
+              <properties>
+                <property name="midi.doc" value="This is a 3 item array containing the Bank MSB, Bank LSB and Program Change [ MSB, LSB, PC ] for the current Program. Do not provide if there is no defined Program for the Mode e.g GM Mode. All Bank/PC messages are 0 based." />
+              </properties>
+              <members>
+                <field name="item" datatype="ProgramList_items_bankPC_item" />
+              </members>
+            </repeat>
+            <repeat name="category">
+              <properties>
+                <property name="midi.doc" value="A list of categories from the defined list." />
+              </properties>
+              <members>
+                <field name="item" datatype="sys.string" />
+              </members>
+            </repeat>
+            <repeat name="tags">
+              <properties>
+                <property name="midi.doc" value="A list of Meta-tags." />
+              </properties>
+              <members>
+                <field name="item" datatype="sys.string" />
+              </members>
+            </repeat>
+            <repeat name="links">
+              <properties>
+                <property name="midi.doc" value="Resources that return an object or an array of objects may provide links to other related Resources." />
+              </properties>
+              <members>
+                <field name="resource" datatype="sys.string">
+                  <properties>
+                    <property name="midi.doc" value="This is the Resource to be linked." />
+                  </properties>
+                </field>
+                <field name="resId" datatype="sys.string">
+                  <properties>
+                    <property name="midi.doc" value="Resource Id, the identifier used to select the desired Payload Data entry." />
+                  </properties>
+                </field>
+                <field name="title" datatype="sys.string">
+                  <properties>
+                    <property name="midi.doc" value="This is the human readable title for this link. Fall back to using the &quot;title&quot; Property in ResourceList if not supplied." />
+                  </properties>
+                </field>
+                <field name="role" datatype="sys.string">
+                  <properties>
+                    <property name="midi.doc" value="This is the role for this linked resource." />
+                  </properties>
+                </field>
+              </members>
+            </repeat>
+          </members>
+        </repeat>
+      </members>
+    </group>
+    <group name="XProgramEdit_entry">
+      <members>
+        <field name="name" datatype="sys.string">
+          <properties>
+            <property name="midi.doc" value="The name of the program." />
+          </properties>
+        </field>
+        <field name="lfoSpeed" datatype="XProgramEdit_lfoSpeed" />
+        <field name="lfoWaveform" datatype="XProgramEdit_lfoWaveform" />
+        <repeat name="rates" count="4">
+          <members>
+            <field name="item" datatype="XProgramEdit_rates_item" />
+          </members>
+        </repeat>
+      </members>
+    </group>
+  </nodeDefs>
+  <dataTypeDefs>
+    <dataTypeDef name="DeviceInfo_manufacturerId_item" basedOn="sys.int64" min="0" max="127" />
+    <dataTypeDef name="DeviceInfo_familyId_item" basedOn="sys.int64" min="0" max="127" />
+    <dataTypeDef name="DeviceInfo_modelId_item" basedOn="sys.int64" min="0" max="127" />
+    <dataTypeDef name="DeviceInfo_versionId_item" basedOn="sys.int64" min="0" max="127" />
+    <dataTypeDef name="ChannelList_items_channel" basedOn="sys.int64" min="1" max="256" />
+    <dataTypeDef name="ChannelList_items_bankPC_item" basedOn="sys.int64" min="0" max="127" />
+    <dataTypeDef name="ChannelList_items_clusterChannelStart" basedOn="sys.int64" min="1" max="256" />
+    <dataTypeDef name="ChannelList_items_clusterLength" basedOn="sys.int64" min="1" max="256" />
+    <dataTypeDef name="ChannelList_items_clusterMidiMode" basedOn="sys.int64" min="1" max="4" />
+    <dataTypeDef name="ChannelList_items_clusterType" basedOn="sys.string">
+      <options>
+        <option value="other" name="other" />
+        <option value="profile" name="profile" />
+        <option value="mpe1" name="mpe1" />
+      </options>
+    </dataTypeDef>
+    <dataTypeDef name="ChannelList_items_mpeZone" basedOn="sys.string">
+      <options>
+        <option value="upper" name="upper" />
+        <option value="lower" name="lower" />
+      </options>
+    </dataTypeDef>
+    <dataTypeDef name="ProgramList_items_bankPC_item" basedOn="sys.int64" min="0" max="127" />
+    <dataTypeDef name="XTempo_value" basedOn="sys.int64" min="40" max="240" />
+    <dataTypeDef name="XGlobset_level" basedOn="sys.int64" min="0" max="127" />
+    <dataTypeDef name="XGlobset_audioOut" basedOn="sys.string">
+      <options>
+        <option value="USB" name="USB" />
+        <option value="line" name="line" />
+      </options>
+    </dataTypeDef>
+    <dataTypeDef name="XProgramEdit_lfoSpeed" basedOn="sys.int64" min="0" max="127" />
+    <dataTypeDef name="XProgramEdit_lfoWaveform" basedOn="sys.string">
+      <options>
+        <option value="triangle" name="triangle" />
+        <option value="square" name="square" />
+        <option value="saw" name="saw" />
+      </options>
+    </dataTypeDef>
+    <dataTypeDef name="XProgramEdit_rates_item" basedOn="sys.int64" min="0" max="127" />
+  </dataTypeDefs>
+</schema>

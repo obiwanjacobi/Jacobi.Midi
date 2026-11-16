@@ -6,7 +6,8 @@ namespace Jacobi.Midi.Tests.PropertyExchange;
 
 /// <summary>
 /// MIDI-CI with one responder that supports Property Exchange and answers a Get with the data of its resources, as
-/// the test gives them (by resource name); a resource it does not have gets status 404.
+/// the test gives them (by resource name); a resource it does not have gets status 404. A Set is recorded and answered
+/// with <see cref="SetStatus"/> (the data of the resource does not change).
 /// </summary>
 internal sealed class FakeCapabilityInquiry(IReadOnlyDictionary<string, string> resources) : IMidiCapabilityInquiry
 {
@@ -32,8 +33,17 @@ internal sealed class FakeCapabilityInquiry(IReadOnlyDictionary<string, string> 
             : new MidiPropertyResponse(404, new JsonObject { ["status"] = 404 }, ReadOnlyMemory<byte>.Empty));
     }
 
+    /// <summary>The headers and bodies of the Set inquiries, in order.</summary>
+    public List<(JsonObject Header, JsonNode? Body)> Sets { get; } = [];
+
+    /// <summary>The status a Set is answered with.</summary>
+    public int SetStatus { get; set; } = 200;
+
     public Task<MidiPropertyResponse> SetProperty(MidiMuid responder, JsonObject header, ReadOnlyMemory<byte> body, CancellationToken ct)
-        => throw new NotSupportedException();
+    {
+        Sets.Add((header, body.IsEmpty ? null : JsonNode.Parse(Encoding.UTF8.GetString(body.Span))));
+        return Task.FromResult(new MidiPropertyResponse(SetStatus, new JsonObject { ["status"] = SetStatus }, ReadOnlyMemory<byte>.Empty));
+    }
 
     public Task<MidiPropertySubscription> Subscribe(MidiMuid responder, JsonObject header, CancellationToken ct)
         => throw new NotSupportedException();

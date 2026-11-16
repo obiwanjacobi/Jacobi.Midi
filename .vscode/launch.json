@@ -46,6 +46,29 @@
             "cwd": "${workspaceFolder}/src/Jacobi.Midi.Console/Jacobi.Midi.Console.Desktop",
             "console": "internalConsole",
             "stopAtEntry": false
+        },
+        {
+            "name": "Virtual Device (Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build VirtualDevice (Debug)",
+            "program": "${workspaceFolder}/tools/Jacobi.Midi.VirtualDevice/bin/Debug/net11.0-windows10.0.26100.0/Jacobi.Midi.VirtualDevice.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}/tools/Jacobi.Midi.VirtualDevice",
+            "console": "externalTerminal",
+            "stopAtEntry": false
+        },
+        {
+            "name": "Virtual Device (Release)",
+            "type": "coreclr",
+            "request": "launch",
+            "noDebug": true,
+            "preLaunchTask": "build VirtualDevice (Release)",
+            "program": "${workspaceFolder}/tools/Jacobi.Midi.VirtualDevice/bin/Release/net11.0-windows10.0.26100.0/Jacobi.Midi.VirtualDevice.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}/tools/Jacobi.Midi.VirtualDevice",
+            "console": "externalTerminal",
+            "stopAtEntry": false
         }
     ]
 }

@@ -1,5 +1,7 @@
+using System.Text.Json.Nodes;
 using Jacobi.BinarySerializer;
 using Jacobi.BinarySerializer.Execution;
+using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Core;
 using Jacobi.Midi.Device;
@@ -150,6 +152,197 @@ public class PropertyExchangeSessionTests
         var failed = Assert.Single(channels.Blocks);
         Assert.Equal(BlockStatus.Failed, failed.Status);
         Assert.Contains("404", failed.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RequestData_Again_IsAnsweredFromTheState_UnlessFromTheDevice()
+    {
+        var ci = new FakeCapabilityInquiry(Synthesizer);
+        var (device, _, serializer) = await Discover(ci);
+        await using var session = CreateSession(serializer, device);
+        await session.RequestData(Whole(serializer, "DeviceInfo"), new FieldValueStore(), CancellationToken.None);
+        var gets = ci.Gets.Count;
+
+        var values = new FieldValueStore();
+        var result = await session.RequestData(Whole(serializer, "DeviceInfo"), values, CancellationToken.None);
+
+        Assert.True(result.IsComplete);
+        Assert.Equal(gets, ci.Gets.Count);
+        Assert.Equal("General MIDI Synth", Value(values, "DeviceInfo.model"));
+        Assert.Equal(65L, Value(values, "DeviceInfo.manufacturerId.item", 2));
+
+        await session.RequestData(Whole(serializer, "DeviceInfo"), new FieldValueStore(), SessionData.Device, null, CancellationToken.None);
+        Assert.Equal(gets + 1, ci.Gets.Count);
+    }
+
+    [Fact]
+    public async Task RequestData_FromTheState_GivesTheItemCountsOfTheData()
+    {
+        var (device, _, serializer) = await Discover(new FakeCapabilityInquiry(Synthesizer));
+        await using var session = CreateSession(serializer, device);
+        await session.RequestData(Whole(serializer, "ProgramList"), new FieldValueStore(), CancellationToken.None);
+
+        var values = new FieldValueStoreWithCounts();
+        await session.RequestData(Whole(serializer, "ProgramList"), values, CancellationToken.None);
+
+        Assert.True(values.TryGetCount("ProgramList.resId.melodic.items", InstancePath.Empty, out var melodic));
+        Assert.Equal(2, melodic);
+        Assert.True(values.TryGetCount("ProgramList.resId.drums.items", InstancePath.Empty, out var drums));
+        Assert.Equal(1, drums);
+        Assert.True(values.TryGetCount("ProgramList.resId.melodic.items.bankPC", new InstancePath([1]), out var bankPC));
+        Assert.Equal(3, bankPC);
+        Assert.True(values.TryGet("ProgramList.resId.melodic.items.bankPC.item", new InstancePath([1, 2]), out var program));
+        Assert.Equal(1L, program.Value);
+    }
+
+    [Fact]
+    public async Task Invalidate_AnEntry_GetsOnlyThatEntryAgain()
+    {
+        var ci = new FakeCapabilityInquiry(Synthesizer);
+        var (device, _, serializer) = await Discover(ci);
+        await using var session = CreateSession(serializer, device);
+        var whole = Whole(serializer, "ProgramList");
+        await session.RequestData(whole, new FieldValueStore(), CancellationToken.None);
+        var gets = ci.Gets.Count;
+
+        session.Invalidate(serializer.GetPlan(new SchemaName("Synth.ProgramList")).CreateRange("ProgramList.resId.drums.items"));
+        var values = new FieldValueStore();
+        var result = await session.RequestData(whole, values, CancellationToken.None);
+
+        Assert.True(result.IsComplete);
+        Assert.Equal("drums", Assert.Single(ci.Gets.Skip(gets))["resId"]!.GetValue<string>());
+        Assert.Equal("Piano 2", Value(values, "ProgramList.resId.melodic.items.title", 1));
+        Assert.Equal("Standard", Value(values, "ProgramList.resId.drums.items.title", 0));
+    }
+
+    [Fact]
+    public async Task TheBodyOfAnEntry_IsTheDataOfItsGet()
+    {
+        var (_, _, serializer) = await Discover(new FakeCapabilityInquiry(Synthesizer));
+        var plan = serializer.GetPlan(new SchemaName("Synth.ProgramList"));
+        var state = new PropertyDeviceState(plan);
+        var drums = (GroupInfo)PropertyData.EntriesOf(plan.Root)!.Members[1];
+        var data = System.Text.Json.Nodes.JsonNode.Parse(Synthesizer["ProgramList/drums"]);
+
+        state.Take(drums, data);
+
+        Assert.True(System.Text.Json.Nodes.JsonNode.DeepEquals(data, state.Body(drums)));
+        // the pointer is relative to the entry; ProgramList cannot be set (read-only), so a partial body has nothing
+        var bank = (FieldInfo)plan.Find(new SchemaPath("ProgramList.resId.drums.items.bankPC.item"))!;
+        Assert.Equal("/0/bankPC/0", PropertyData.PointerOf(drums, bank, new InstancePath([0, 0])));
+        Assert.Empty(state.PartialBody(drums, state.Whole));
+    }
+
+    // resources that can be set: whole (a value, an object) and partially
+    private static readonly Dictionary<string, string> Settable = new()
+    {
+        ["ResourceList"] = """
+            [{"resource":"DeviceInfo"},
+             {"resource":"X-Tempo","canSet":"full","schema":{"type":"integer","minimum":40,"maximum":240}},
+             {"resource":"X-Globset","canSet":"full","schema":{"type":"object","properties":{"deviceName":{"type":"string"},"level":{"type":"integer"}}}},
+             {"resource":"X-Edit","canSet":"partial","schema":{"type":"object","properties":{"name":{"type":"string"},"rates":{"type":"array","items":{"type":"integer"}}}}}]
+            """,
+        ["DeviceInfo"] = Synthesizer["DeviceInfo"],
+        ["X-Tempo"] = "120",
+        ["X-Globset"] = """{"deviceName":"Synth","level":3}""",
+        ["X-Edit"] = """{"name":"Lead","rates":[1,2,3]}""",
+    };
+
+    private static PlanRange Field(Serializer serializer, string root, string path, params int[] instance)
+        => serializer.GetPlan(new SchemaName($"Synth.{root}")).CreateRange(new SchemaPath(path), new InstancePath(instance), new SchemaPath(path), new InstancePath(instance));
+
+    private static FieldValueStore Source(string path, object value, params int[] instance)
+    {
+        var source = new FieldValueStore();
+        source.Set(path, new InstancePath(instance), new LogicalField(path[(path.LastIndexOf('.') + 1)..], value.GetType(), value));
+        return source;
+    }
+
+    [Fact]
+    public async Task SendData_AResourceSetWhole_GetsWhatItDoesNotHold_AndSetsAllOfIt()
+    {
+        var ci = new FakeCapabilityInquiry(Settable);
+        var (device, _, serializer) = await Discover(ci);
+        await using var session = CreateSession(serializer, device);
+        var changes = new List<DeviceStateChange>();
+        session.StateChanged += (_, args) => changes.Add(args.Change);
+        var gets = ci.Gets.Count;
+
+        var result = await session.SendData(Field(serializer, "XGlobset", "XGlobset.level"), Source("XGlobset.level", 9L), CancellationToken.None);
+
+        Assert.True(result.IsComplete);
+        Assert.Equal("X-Globset", Assert.Single(ci.Gets.Skip(gets))["resource"]!.GetValue<string>());
+        var (header, body) = Assert.Single(ci.Sets);
+        Assert.Null(header["setPartial"]);
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""{"deviceName":"Synth","level":9}"""), body), body?.ToJsonString());
+        Assert.Equal([DeviceStateChange.Received, DeviceStateChange.Sent], changes);
+    }
+
+    [Fact]
+    public async Task SendData_AValueResource_SetsTheValue()
+    {
+        var ci = new FakeCapabilityInquiry(Settable);
+        var (device, _, serializer) = await Discover(ci);
+        await using var session = CreateSession(serializer, device);
+
+        await session.SendData(Field(serializer, "XTempo", "XTempo.value"), Source("XTempo.value", 130L), CancellationToken.None);
+
+        Assert.True(JsonNode.DeepEquals(JsonValue.Create(130L), Assert.Single(ci.Sets).Body));
+    }
+
+    [Fact]
+    public async Task SendData_APartialResource_SetsTheRangeByJsonPointer()
+    {
+        var ci = new FakeCapabilityInquiry(Settable);
+        var (device, _, serializer) = await Discover(ci);
+        await using var session = CreateSession(serializer, device);
+
+        var result = await session.SendData(Field(serializer, "XEdit", "XEdit.rates.item", 1), Source("XEdit.rates.item", 20L, 1), CancellationToken.None);
+
+        Assert.True(result.IsComplete);
+        var (header, body) = Assert.Single(ci.Sets);
+        Assert.True(header["setPartial"]!.GetValue<bool>());
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""{"/rates/1":20}"""), body), body?.ToJsonString());
+        // the state has the value that was set
+        var values = new FieldValueStore();
+        await session.RequestData(Whole(serializer, "XEdit"), values, CancellationToken.None);
+        Assert.Equal(20L, Value(values, "XEdit.rates.item", 1));
+    }
+
+    [Fact]
+    public async Task SendData_AReadOnlyResource_IsNotSent()
+    {
+        var ci = new FakeCapabilityInquiry(Settable);
+        var (device, _, serializer) = await Discover(ci);
+        await using var session = CreateSession(serializer, device);
+
+        var result = await session.SendData(Field(serializer, "DeviceInfo", "DeviceInfo.model"), Source("DeviceInfo.model", "Other"), CancellationToken.None);
+
+        Assert.Equal(BlockStatus.Unavailable, Assert.Single(result.Blocks).Status);
+        Assert.Empty(ci.Sets);
+    }
+
+    [Fact]
+    public async Task SendData_ASetThatFails_InvalidatesTheBlock()
+    {
+        var ci = new FakeCapabilityInquiry(Settable) { SetStatus = 400 };
+        var (device, _, serializer) = await Discover(ci);
+        await using var session = CreateSession(serializer, device);
+        var changes = new List<DeviceStateChange>();
+        session.StateChanged += (_, args) => changes.Add(args.Change);
+
+        var result = await session.SendData(Field(serializer, "XGlobset", "XGlobset.level"), Source("XGlobset.level", 9L), CancellationToken.None);
+        var gets = ci.Gets.Count;
+        var values = new FieldValueStore();
+        await session.RequestData(Whole(serializer, "XGlobset"), values, CancellationToken.None);
+
+        var failed = Assert.Single(result.Blocks);
+        Assert.Equal(BlockStatus.Failed, failed.Status);
+        Assert.Contains("400", failed.Reason, StringComparison.Ordinal);
+        Assert.Equal(DeviceStateChange.Invalidated, changes[1]);
+        // not held anymore: read again, with the device's value
+        Assert.Equal(gets + 1, ci.Gets.Count);
+        Assert.Equal(3L, Value(values, "XGlobset.level"));
     }
 
     [Fact]

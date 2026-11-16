@@ -1,0 +1,6 @@
+<rig format="jacobi.midi.rig/1">
+  <schema path="C:\My\MyProjects\public\Jacobi\Public\GitHub\Jacobi.Midi\docs\examples\console\JacobiTestDevice.schema.xml" />
+  <device alias="jacobitestdevice" name="JacobiTestDevice" schema="JacobiTestDevice" detected="true">
+    <endpoint name="Jacobi Test Device" sendGroup="0" receiveGroup="0" />
+  </device>
+</rig>

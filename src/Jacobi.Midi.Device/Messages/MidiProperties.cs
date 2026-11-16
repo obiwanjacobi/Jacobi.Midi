@@ -32,7 +32,7 @@ public static class MidiProperties
     public const string Repeat = "midi.repeat";
     /// <summary>
     /// How a group or repeat is cut into blocks: <c>atomic</c> (always whole) or <c>individual</c> (each member, or
-    /// repeat item, on its own) (address map).
+    /// repeat item, on its own). Any group or repeat: of an address map, a Property Exchange resource (atomic: set whole).
     /// </summary>
     public const string Transfer = "midi.transfer";
     /// <summary>
@@ -85,6 +85,11 @@ public static class MidiProperties
     /// <summary>The value of <see cref="Access"/> for a node that can only be written.</summary>
     public const string AccessWrite = "write";
 
+    // values of midi.transfer
+
+    /// <summary>The value of <see cref="Transfer"/> for a group or repeat that is always transferred whole.</summary>
+    public const string TransferAtomic = "atomic";
+
     // values of midi.role
 
     /// <summary>
@@ -125,7 +130,7 @@ public static class MidiProperties
         Describe(Address, "Map: the absolute start address of the node, in wire form (e.g. 0x40-00)."),
         Describe(Stride, "Map: the number of addresses the node (or one repeat item) occupies."),
         Describe(Repeat, "Map: the number of items of a repeat in the address space."),
-        Describe(Transfer, "Map: how a group or repeat is cut into blocks: atomic (always whole) or individual (each member or item on its own)."),
+        Describe(Transfer, "Group or repeat: how a group or repeat is cut into blocks: atomic (always whole) or individual (each member or item on its own)."),
         Describe(Access, "Any node: readwrite (default), read or write; inherited."),
         Describe(Unit, "Message or map root: what one message covers: range (default), field or atomic."),
         Describe(MaxDataSize, "Message or map root: the largest number of data bytes in one message."),
@@ -172,9 +177,9 @@ public static class MidiProperties
             Address or Stride or MaxDataSize or AddressBits or Repeat
                 => IsNumber(value) ? null : $"'{name}' must be a number, not '{value}'.",
             Transfer
-                => Enum.TryParse<NodeTransfer>(value, ignoreCase: true, out _) ? null : $"'{name}' must be atomic or individual, not '{value}'.",
+                => Enum.TryParse<NodeTransfer>(value, ignoreCase: true, out _) ? null : $"'{Transfer}' must be atomic or individual, not '{value}'.",
             Access
-                => Enum.TryParse<NodeAccess>(value, ignoreCase: true, out _) ? null : $"'{name}' must be readwrite, read or write, not '{value}'.",
+                => Enum.TryParse<NodeAccess>(value, ignoreCase: true, out _) ? null : $"'{Access}' must be readwrite, read or write, not '{value}'.",
             Unit
                 => Enum.TryParse<AddressUnit>(value, ignoreCase: true, out _) ? null : $"'{name}' must be range, field or atomic, not '{value}'.",
             Role
@@ -251,6 +256,35 @@ public static class MidiProperties
     {
         ArgumentNullException.ThrowIfNull(node);
         return Find(node, Doc);
+    }
+
+    /// <summary>
+    /// The access of a node of a plan (<c>midi.access</c>): its own or that of the nearest enclosing node with one;
+    /// readwrite by default. A value that is not valid counts as none.
+    /// </summary>
+    public static NodeAccess AccessOf(NodeInfo node)
+        => AccessOf(node, node.Parent is { } parent ? AccessOf(parent) : NodeAccess.ReadWrite, out _);
+
+    /// <summary>
+    /// The access of a node of a plan (<c>midi.access</c>): its own, else <paramref name="inherited"/> (also when its
+    /// own is not valid: <paramref name="error"/> says why).
+    /// </summary>
+    internal static NodeAccess AccessOf(NodeInfo node, NodeAccess inherited, out string? error)
+    {
+        var text = Find(node, Access);
+        error = text is null ? null : Validate(Access, text);
+        return error is null && Enum.TryParse<NodeAccess>(text, ignoreCase: true, out var access) ? access : inherited;
+    }
+
+    /// <summary>
+    /// The transfer of a node of a plan (<c>midi.transfer</c>): only its own, not inherited; null when it has none or
+    /// it is not valid (<paramref name="error"/> says why). Where it may be is checked by its user.
+    /// </summary>
+    internal static NodeTransfer? TransferOf(NodeInfo node, out string? error)
+    {
+        var text = Find(node, Transfer);
+        error = text is null ? null : Validate(Transfer, text);
+        return error is null && Enum.TryParse<NodeTransfer>(text, ignoreCase: true, out var transfer) ? transfer : null;
     }
 
     /// <summary>

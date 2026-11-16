@@ -125,6 +125,19 @@ public sealed class PropertyExchangeDevice
     internal async Task<JsonNode?> Get(JsonObject header, CancellationToken ct)
         => await Get(CapabilityInquiry, Responder, header, ct);
 
+    /// <summary>Sets the data of a resource: the whole resource, or with <c>setPartial</c> in the header the values by JSON Pointer.</summary>
+    /// <exception cref="MidiException">No reply, a NAK, or a status that is not a success.</exception>
+    internal async Task Set(JsonObject header, JsonNode? body, CancellationToken ct)
+    {
+        var data = body is null ? [] : Encoding.UTF8.GetBytes(body.ToJsonString());
+        var response = await CapabilityInquiry.SetProperty(Responder, header, data, ct);
+        if (!response.IsSuccess)
+        {
+            var message = response.Header["message"]?.ToString();
+            throw new MidiException($"Set '{header["resource"]}' of {Responder}: status {response.Status}{(message is null ? "" : $" ({message})")}.");
+        }
+    }
+
     private static async Task<JsonNode?> Get(IMidiCapabilityInquiry capabilityInquiry, MidiMuid responder, JsonObject header, CancellationToken ct)
     {
         var response = await capabilityInquiry.GetProperty(responder, header, ct);

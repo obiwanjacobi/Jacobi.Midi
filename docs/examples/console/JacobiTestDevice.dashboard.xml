@@ -1,0 +1,91 @@
+<dashboard format="jacobi.midi.dashboard/1" name="Virtual Test Device" cellSize="20" look="Anodized" rig="JacobiTestDevice.rig.xml">
+  <device alias="jacobitestdevice" schema="JacobiTestDevice" />
+  <grid size="56,57">
+    <section label="DeviceInfo" size="40,7" at="0,0" device="jacobitestdevice" base="DeviceInfo">
+      <text size="9,4" at="0,0">
+        <bind slot="value" parameter="manufacturer" />
+      </text>
+      <text size="9,4" at="9,0">
+        <bind slot="value" parameter="family" />
+      </text>
+      <text size="11,4" at="18,0">
+        <bind slot="value" parameter="model" />
+      </text>
+      <text size="9,4" at="29,0">
+        <bind slot="value" parameter="version" />
+      </text>
+    </section>
+    <section label="XTempo" size="7,10" at="33,7" device="jacobitestdevice" base="XTempo">
+      <knob size="5,7" at="0,0">
+        <bind slot="value" parameter="value" />
+      </knob>
+    </section>
+    <section label="XGlobset" size="28,18" at="0,7" device="jacobitestdevice" base="XGlobset">
+      <text size="12,4" at="0,0">
+        <bind slot="value" parameter="deviceName" />
+      </text>
+      <knob size="5,7" at="14,0">
+        <bind slot="value" parameter="level" />
+      </knob>
+      <selector size="6,4" at="19,0">
+        <bind slot="value" parameter="audioOut" />
+      </selector>
+      <section label="links" size="26,7" at="0,8" base="XGlobset.links[$links]">
+        <variable name="links" value="0" />
+        <numberBox label="links" size="6,4" at="0,0">
+          <bind slot="value" parameter="$links" />
+        </numberBox>
+        <text size="9,4" at="6,0">
+          <bind slot="value" parameter="resource" />
+        </text>
+        <text size="9,4" at="15,0">
+          <bind slot="value" parameter="resId" />
+        </text>
+      </section>
+    </section>
+    <section label="XProgramEdit" size="38,32" at="0,25" device="jacobitestdevice" base="XProgramEdit">
+      <grid label="resId" size="36,29" at="0,0" base="XProgramEdit.resId">
+        <section label="patch1" size="35,13" at="0,0" base="XProgramEdit.resId.patch1">
+          <text size="9,4" at="0,0">
+            <bind slot="value" parameter="name" />
+          </text>
+          <knob size="5,7" at="9,0">
+            <bind slot="value" parameter="lfoSpeed" />
+          </knob>
+          <selector size="6,4" at="14,0">
+            <bind slot="value" parameter="lfoWaveform" />
+          </selector>
+          <section label="rates" size="13,10" at="20,0" base="XProgramEdit.resId.patch1.rates[$rates]">
+            <variable name="rates" value="0" />
+            <numberBox label="rates" size="6,4" at="0,0">
+              <bind slot="value" parameter="$rates" />
+            </numberBox>
+            <knob size="5,7" at="6,0">
+              <bind slot="value" parameter="item" />
+            </knob>
+          </section>
+        </section>
+        <section label="patch2" size="35,13" at="0,14" base="XProgramEdit.resId.patch2">
+          <text size="9,4" at="0,0">
+            <bind slot="value" parameter="name" />
+          </text>
+          <knob size="5,7" at="9,0">
+            <bind slot="value" parameter="lfoSpeed" />
+          </knob>
+          <selector size="6,4" at="14,0">
+            <bind slot="value" parameter="lfoWaveform" />
+          </selector>
+          <section label="rates" size="13,10" at="20,0" base="XProgramEdit.resId.patch2.rates[$rates]">
+            <variable name="rates" value="0" />
+            <numberBox label="rates" size="6,4" at="0,0">
+              <bind slot="value" parameter="$rates" />
+            </numberBox>
+            <knob size="5,7" at="6,0">
+              <bind slot="value" parameter="item" />
+            </knob>
+          </section>
+        </section>
+      </grid>
+    </section>
+  </grid>
+</dashboard>

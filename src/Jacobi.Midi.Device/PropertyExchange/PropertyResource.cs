@@ -17,6 +17,9 @@ public sealed record PropertyResource(string Name, JsonObject? Schema)
     /// <summary>The <c>canSet</c> value of a resource that cannot be written (the default).</summary>
     public const string CanSetNone = "none";
 
+    /// <summary>The <c>canSet</c> value of a resource that can only be written whole.</summary>
+    public const string CanSetFull = "full";
+
     /// <summary>The resource can be read (<c>canGet</c>, default true).</summary>
     public bool CanGet { get; init; } = true;
 
