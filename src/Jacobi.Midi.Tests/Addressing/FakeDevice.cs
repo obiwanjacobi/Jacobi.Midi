@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Jacobi.Midi.Core;
 using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Device.Exchange;
@@ -31,6 +32,9 @@ internal sealed class FakeDevice : ISysExPort
     public List<byte[]> Requests { get; } = [];
     public List<byte[]> DataSets { get; } = [];
 
+    /// <summary>When each message (request or data) was sent to the device, in the order of <see cref="Send"/>.</summary>
+    public List<(byte[] Message, long Timestamp)> Sent { get; } = [];
+
     public event SysExReceivedHandler? Received;
 
     public MidiConnectionState State { get; private set; } = MidiConnectionState.Open;
@@ -42,6 +46,7 @@ internal sealed class FakeDevice : ISysExPort
     public ValueTask Send(ReadOnlyMemory<byte> sysEx, CancellationToken ct)
     {
         var bytes = sysEx.ToArray();
+        Sent.Add((bytes, Stopwatch.GetTimestamp()));
         switch (bytes[4])
         {
             case 0x01:

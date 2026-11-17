@@ -17,7 +17,17 @@ internal sealed class FakeMidiApi : IMidiApi
     public List<MidiEndpointInfo> Endpoints { get; } = [];
 
     /// <summary>The sessions created, in order.</summary>
-    public List<FakeMidiSession> Sessions { get; } = [];
+    private readonly List<FakeMidiSession> _sessions = [];
+
+    /// <summary>The sessions created, in order (a copy: sessions are created on other threads).</summary>
+    public IReadOnlyList<FakeMidiSession> Sessions
+    {
+        get
+        {
+            lock (_sessions)
+                return [.. _sessions];
+        }
+    }
 
     /// <summary>Answers a SysEx message sent on a connection (endpoint id, group, message); null: no answer.</summary>
     public Func<string, byte, byte[], byte[]?>? Responder { get; set; }
@@ -39,7 +49,8 @@ internal sealed class FakeMidiApi : IMidiApi
     public Task<IMidiSession> CreateSession(MidiSessionOptions options, CancellationToken ct)
     {
         var session = new FakeMidiSession(this);
-        Sessions.Add(session);
+        lock (_sessions)
+            _sessions.Add(session);
         return Task.FromResult<IMidiSession>(session);
     }
 
@@ -94,7 +105,17 @@ internal sealed class FakeEndpointObserver(FakeMidiApi api) : IMidiEndpointObser
 /// <summary>A session of the <see cref="FakeMidiApi"/>: connects to the endpoints that are there.</summary>
 internal sealed class FakeMidiSession(FakeMidiApi api) : IMidiSession
 {
-    public List<FakeMidiConnection> Connections { get; } = [];
+    private readonly List<FakeMidiConnection> _connections = [];
+
+    /// <summary>The connections created, in order (a copy: connections are created on other threads).</summary>
+    public IReadOnlyList<FakeMidiConnection> Connections
+    {
+        get
+        {
+            lock (_connections)
+                return [.. _connections];
+        }
+    }
 
     public bool IsDisposed { get; private set; }
 
@@ -105,8 +126,8 @@ internal sealed class FakeMidiSession(FakeMidiApi api) : IMidiSession
         var endpoint = api.Endpoints.FirstOrDefault(endpoint => endpoint.Id == endpointId)
             ?? throw new InvalidOperationException($"No endpoint '{endpointId}'.");
         var connection = new FakeMidiConnection(api, endpoint);
-        lock (Connections)
-            Connections.Add(connection);
+        lock (_connections)
+            _connections.Add(connection);
         return Task.FromResult<IMidiConnection>(connection);
     }
 
@@ -125,8 +146,20 @@ internal sealed class FakeMidiConnection(FakeMidiApi api, MidiEndpointInfo endpo
 {
     private readonly Dictionary<byte, SysEx7Assembler> _assemblers = [];
 
-    /// <summary>The SysEx messages sent, with their group.</summary>
-    public List<(byte Group, byte[] SysEx)> Sent { get; } = [];
+    private readonly List<(byte Group, byte[] SysEx)> _sent = [];
+
+    /// <summary>
+    /// The SysEx messages sent, with their group: a copy, so a test can look at it while messages are sent on another
+    /// thread (enumerating the list itself then fails).
+    /// </summary>
+    public IReadOnlyList<(byte Group, byte[] SysEx)> Sent
+    {
+        get
+        {
+            lock (_sent)
+                return [.. _sent];
+        }
+    }
 
     public bool IsDisposed { get; private set; }
 
@@ -167,8 +200,8 @@ internal sealed class FakeMidiConnection(FakeMidiApi api, MidiEndpointInfo endpo
                 _assemblers[group] = assembler = new SysEx7Assembler(group);
             if (assembler.TryAdd(packet, out var sysEx))
             {
-                lock (Sent)
-                    Sent.Add((group, sysEx));
+                lock (_sent)
+                    _sent.Add((group, sysEx));
                 if (api.Responder?.Invoke(endpoint.Id, group, sysEx) is { } answer)
                     Receive(api.ReplyGroup(group), answer);
             }

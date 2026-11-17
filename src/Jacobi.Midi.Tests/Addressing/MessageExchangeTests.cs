@@ -4,7 +4,6 @@ using Jacobi.BinarySerializer.Processor;
 using Jacobi.BinarySerializer.Schema;
 using Jacobi.Midi.Device.Addressing;
 using Jacobi.Midi.Device.Exchange;
-using System.Diagnostics;
 using Xunit;
 using static Jacobi.Midi.Tests.Addressing.TestDevice;
 using Jacobi.Midi.Device.Messages;
@@ -20,14 +19,14 @@ public class MessageExchangeTests
     private static PlanRange Range(Serializer serializer, string path, params int[] instance)
         => serializer.GetPlan(MapName).CreateRange(path, new InstancePath(instance), path, new InstancePath(instance));
 
-    private static MessageExchange CreateExchange(Serializer serializer, FakeDevice device, int timeoutMs = 1000, DeviceValues? values = null,
+    internal static MessageExchange CreateExchange(Serializer serializer, FakeDevice device, int timeoutMs = 1000, DeviceValues? values = null,
         ExchangeDefinitions? exchanges = null)
         => new(new MessageMaps(serializer), exchanges ?? CreateExchanges(timeoutMs), device, values ?? new DeviceValues { ["deviceId"] = 0 });
 
-    private static Task<TransferResult> RequestData(MessageExchange exchange, PlanRange range, IValueSink sink)
+    internal static Task<TransferResult> RequestData(MessageExchange exchange, PlanRange range, IValueSink sink)
         => exchange.Execute(ExchangeNames.RequestData, range, new ExchangeData { Sink = sink }, TestContext.Current.CancellationToken);
 
-    private static Task<TransferResult> SendData(MessageExchange exchange, PlanRange range, IValueSource source)
+    internal static Task<TransferResult> SendData(MessageExchange exchange, PlanRange range, IValueSource source)
         => exchange.Execute(ExchangeNames.SendData, range, new ExchangeData { Source = source }, TestContext.Current.CancellationToken);
 
     [Fact]
@@ -218,28 +217,6 @@ public class MessageExchangeTests
         Assert.True(result.IsComplete);
         Assert.Empty(device.Requests);
         Assert.Equal(Convert.ToHexString(DataMessage(GlobalStart + 9, [0x33])), Convert.ToHexString(Assert.Single(device.DataSets)));
-    }
-
-    [Fact]
-    public async Task Send_KeepsTheMessageIntervalBetweenMessages()
-    {
-        var serializer = CreateSerializer();
-        var device = new FakeDevice();
-        var exchanges = new ExchangeDefinitions();
-        exchanges.Add(ExchangeDefinitionReader.ReadXml(ExchangeXml.Replace("messageInterval=\"20\"", "messageInterval=\"60\""), "test"));
-        await using var exchange = CreateExchange(serializer, device, exchanges: exchanges);
-        var values = new FieldValueStore();
-        var range = serializer.GetPlan(MapName)
-            .CreateRange("AddressMap.Memory.Patch", new InstancePath([0]), "AddressMap.Memory.Patch", new InstancePath([2]));
-        Assert.True((await RequestData(exchange, range, values)).IsComplete);
-
-        var watch = Stopwatch.StartNew();
-        var result = await SendData(exchange, range, values);
-
-        Assert.True(result.IsComplete);
-        Assert.Equal(3, device.DataSets.Count);
-        // 60 ms after the last request, and between the three data messages
-        Assert.True(watch.ElapsedMilliseconds >= 3 * 60 - 10, $"{watch.ElapsedMilliseconds} ms");
     }
 
     [Fact]
