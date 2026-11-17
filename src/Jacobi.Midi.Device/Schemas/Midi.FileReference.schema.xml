@@ -1,0 +1,69 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  File Reference (7E 0B): refers to a file (e.g. a DLS or SMF file) by its URL instead of sending it.
+
+  Universal System Exclusive messages (MIDI 1.0 Detailed Specification and its Recommended Practices):
+
+    F0 7E <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   non-real time
+    F0 7F <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   real time
+
+  The device ID 7F addresses all devices. Each message is a root of its own: a dump that is a message itself
+  (see src/Jacobi.Midi.Device/Messages/readme.md); its header comes from the nodeDefs universalNonRealTime and
+  universalRealTime of the 'midi' schema.
+  Multi-byte values are 7 bits per byte, least significant byte first (lsb14, lsb21, lsb28, lsb35), unless noted.
+-->
+<schema name="Midi.FileReference">
+  <includes>
+    <include schema="midi" />
+  </includes>
+  <members>
+    <!-- [TODO] verify the context and byte count (2 bytes each, least significant first) and the data of each message against RP-031. -->
+    <group name="OpenFile" nodeDef="Midi.universalNonRealTime" midi.doc="Open File (7E 0B 01): opens a file in a context.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x0B" />
+        <field name="SubId2" datatype="sys.uint8" value="0x01" />
+        <field name="Context" nodeDef="Midi.lsb14" midi.doc="The context: identifies the file in the messages that follow." />
+        <field name="ByteCount" nodeDef="Midi.lsb14" midi.doc="The number of data bytes." />
+        <field name="Data" datatype="sys.bytes" midi.doc="The file type (4 ASCII characters) and the URL of the file (ASCII, 00 terminated).">
+          <byteLength ref="^.ByteCount" />
+        </field>
+      </members>
+    </group>
+
+    <group name="SelectContents" nodeDef="Midi.universalNonRealTime" midi.doc="Select or Reselect Contents (7E 0B 02): selects the contents of an open file (e.g. a DLS instrument).">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x0B" />
+        <field name="SubId2" datatype="sys.uint8" value="0x02" />
+        <field name="Context" nodeDef="Midi.lsb14" midi.doc="The context: identifies the file in the messages that follow." />
+        <field name="ByteCount" nodeDef="Midi.lsb14" midi.doc="The number of data bytes." />
+        <field name="Data" datatype="sys.bytes" midi.doc="The contents to select (depends on the file type).">
+          <byteLength ref="^.ByteCount" />
+        </field>
+      </members>
+    </group>
+
+    <group name="OpenFileAndSelectContents" nodeDef="Midi.universalNonRealTime" midi.doc="Open File and Select Contents (7E 0B 03).">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x0B" />
+        <field name="SubId2" datatype="sys.uint8" value="0x03" />
+        <field name="Context" nodeDef="Midi.lsb14" midi.doc="The context: identifies the file in the messages that follow." />
+        <field name="ByteCount" nodeDef="Midi.lsb14" midi.doc="The number of data bytes." />
+        <field name="Data" datatype="sys.bytes" midi.doc="The file type, the URL and the contents to select.">
+          <byteLength ref="^.ByteCount" />
+        </field>
+      </members>
+    </group>
+
+    <group name="CloseFile" nodeDef="Midi.universalNonRealTime" midi.doc="Close File (7E 0B 04): closes the file of a context.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x0B" />
+        <field name="SubId2" datatype="sys.uint8" value="0x04" />
+        <field name="Context" nodeDef="Midi.lsb14" midi.doc="The context: identifies the file in the messages that follow." />
+        <field name="ByteCount" nodeDef="Midi.lsb14" midi.doc="The number of data bytes." />
+        <field name="Data" datatype="sys.bytes" midi.doc="Empty.">
+          <byteLength ref="^.ByteCount" />
+        </field>
+      </members>
+    </group>
+  </members>
+</schema>

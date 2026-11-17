@@ -1,0 +1,72 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  File Dump (7E 07): the transfer of a file. The handshake messages (ACK, NAK, Wait, Cancel, End of File) are in the
+  'midi' schema.
+  The data of a packet is 7-in-8 packed (a byte with the high bits of the next 7 bytes, then those 7 bytes): the
+  processor midi.pack7 on the Data field unpacks it; the byte count is the number of packed bytes.
+  A data packet ends with a checksum: the XOR of all bytes from 7E up to it, 7 bits (the processor midi.xorchecksum on
+  the message: it covers the whole message, it is not a field).
+
+  Universal System Exclusive messages (MIDI 1.0 Detailed Specification and its Recommended Practices):
+
+    F0 7E <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   non-real time
+    F0 7F <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   real time
+
+  The device ID 7F addresses all devices. Each message is a root of its own: a dump that is a message itself
+  (see src/Jacobi.Midi.Device/Messages/readme.md); its header comes from the nodeDefs universalNonRealTime and
+  universalRealTime of the 'midi' schema.
+  Multi-byte values are 7 bits per byte, least significant byte first (lsb14, lsb21, lsb28, lsb35), unless noted.
+-->
+<schema name="Midi.FileDump">
+  <includes>
+    <include schema="midi" />
+  </includes>
+  <members>
+    <!-- [TODO] verify the sender ID byte, the 4 type characters and the name up to F7 against the File Dump specification. -->
+    <group name="Header" nodeDef="Midi.universalNonRealTime" midi.doc="Header (7E 07 01): announces a file dump.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x07" />
+        <field name="SubId2" datatype="sys.uint8" value="0x01" />
+        <field name="SenderId" datatype="sys.uint8" midi.doc="The device ID of the sender." />
+        <field name="Type" datatype="sys.string" byteLength="4" midi.doc="The type of the file: 4 ASCII characters, e.g. MIDI, MIEX, ESEQ, TEXT, BIN&lt;space&gt;, MAC&lt;space&gt;.">
+          <processor name="midi.string" />
+        </field>
+        <field name="Length" nodeDef="Midi.lsb28" midi.doc="The length of the file in bytes." />
+        <field name="Name" datatype="sys.string" byteLength="-1" midi.doc="The name of the file (ASCII), up to the end of the message.">
+          <processor name="midi.string" />
+        </field>
+      </members>
+    </group>
+
+    <!-- [TODO] verify the bit order of the high-bit byte (bit 6: the first byte of the group) against the File Dump specification. -->
+    <group name="DataPacket" nodeDef="Midi.universalNonRealTime" midi.doc="Data Packet (7E 07 02): a part of the file.">
+      <processors>
+        <processor name="midi.xorchecksum" />
+      </processors>
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x07" />
+        <field name="SubId2" datatype="sys.uint8" value="0x02" />
+        <field name="PacketNumber" datatype="sys.uint8" midi.doc="The running packet count, 0-127." />
+        <field name="ByteCount" datatype="Midi.countMinusOne" midi.doc="The number of packed data bytes on the wire (written as the count minus one)." />
+        <field name="Data" datatype="sys.bytes" midi.doc="The data of the file (unpacked); on the wire 7-in-8 packed.">
+          <processor name="midi.pack7" bitorder="big" />
+          <byteLength ref="^.ByteCount" />
+        </field>
+      </members>
+    </group>
+
+    <group name="Request" nodeDef="Midi.universalNonRealTime" midi.doc="Request (7E 07 03): asks for a file.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x07" />
+        <field name="SubId2" datatype="sys.uint8" value="0x03" />
+        <field name="RequesterId" datatype="sys.uint8" midi.doc="The device ID of the requester (the receiver of the file)." />
+        <field name="Type" datatype="sys.string" byteLength="4" midi.doc="The type of the file: 4 ASCII characters.">
+          <processor name="midi.string" />
+        </field>
+        <field name="Name" datatype="sys.string" byteLength="-1" midi.doc="The name of the file (ASCII), up to the end of the message.">
+          <processor name="midi.string" />
+        </field>
+      </members>
+    </group>
+  </members>
+</schema>

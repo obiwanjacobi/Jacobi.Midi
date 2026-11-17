@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  MIDI Visual Control (7E 0C): controls video and lighting devices. The commands are not described here.
+
+  Universal System Exclusive messages (MIDI 1.0 Detailed Specification and its Recommended Practices):
+
+    F0 7E <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   non-real time
+    F0 7F <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   real time
+
+  The device ID 7F addresses all devices. Each message is a root of its own: a dump that is a message itself
+  (see src/Jacobi.Midi.Device/Messages/readme.md); its header comes from the nodeDefs universalNonRealTime and
+  universalRealTime of the 'midi' schema.
+  Multi-byte values are 7 bits per byte, least significant byte first (lsb14, lsb21, lsb28, lsb35), unless noted.
+-->
+<schema name="Midi.VisualControl">
+  <includes>
+    <include schema="midi" />
+  </includes>
+  <members>
+    <!-- [TODO] verify the message layout (version byte?) against the MIDI Visual Control specification. -->
+    <group name="Command" nodeDef="Midi.universalNonRealTime" midi.doc="MIDI Visual Control (7E 0C).">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x0C" />
+        <field name="Data" nodeDef="Midi.data" midi.doc="The MIDI Visual Control commands." />
+      </members>
+    </group>
+  </members>
+</schema>

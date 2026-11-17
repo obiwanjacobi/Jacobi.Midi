@@ -54,7 +54,20 @@ public sealed class FieldValueStore : IValueSink, IOpenRepeatSource
     IValueSource IValueSource.EnterRepeat(RepeatContext context, int count) => this;
     IValueSource IValueSource.EnterItem(RepeatContext context, int index, int count) => this;
     IValueSource IValueSource.EnterChoice(ChoiceContext context, int selectedIndex) => this;
-    // a repeat without a count is written item by item with the engine's own rule (the store holds no number of items)
+    // a repeat without a count is written item by item: an item the store holds a value of is written, the first one it
+    // holds none of ends the repeat (the store holds no number of items)
     public OpenRepeatSourceResult EnterOpenRepeat(RepeatContext context) => OpenRepeatSourceResult.ItemByItem(this);
-    public OpenRepeatAction NextItem(RepeatContext context, int index) => OpenRepeatAction.Default;
+    public OpenRepeatAction NextItem(RepeatContext context, int index)
+        => HoldsItem(context.Path, context.Instance, index) ? OpenRepeatAction.Next : OpenRepeatAction.End;
+
+    // true when a field below the repeat at 'path' (its occurrence 'instance') has a value in item 'index'
+    private bool HoldsItem(string path, InstancePath instance, int index)
+    {
+        var prefix = path + ".";
+        var depth = instance.Length;
+        return _values.Keys.Any(key => key.Path.StartsWith(prefix, StringComparison.Ordinal)
+            && key.Instance.Length > depth
+            && key.Instance[depth] == index
+            && key.Instance.AsSpan()[..depth].SequenceEqual(instance.AsSpan()));
+    }
 }

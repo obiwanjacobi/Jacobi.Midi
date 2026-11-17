@@ -1,0 +1,48 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Downloadable Sounds (7E 0A): turn DLS and its voice allocation on or off.
+
+  Universal System Exclusive messages (MIDI 1.0 Detailed Specification and its Recommended Practices):
+
+    F0 7E <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   non-real time
+    F0 7F <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   real time
+
+  The device ID 7F addresses all devices. Each message is a root of its own: a dump that is a message itself
+  (see src/Jacobi.Midi.Device/Messages/readme.md); its header comes from the nodeDefs universalNonRealTime and
+  universalRealTime of the 'midi' schema.
+  Multi-byte values are 7 bits per byte, least significant byte first (lsb14, lsb21, lsb28, lsb35), unless noted.
+-->
+<schema name="Midi.DownloadableSounds">
+  <includes>
+    <include schema="midi" />
+  </includes>
+  <members>
+    <group name="TurnOn" nodeDef="Midi.universalNonRealTime" midi.doc="Turn DLS On (7E 0A 01).">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x0A" />
+        <field name="SubId2" datatype="sys.uint8" value="0x01" />
+      </members>
+    </group>
+
+    <group name="TurnOff" nodeDef="Midi.universalNonRealTime" midi.doc="Turn DLS Off (7E 0A 02).">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x0A" />
+        <field name="SubId2" datatype="sys.uint8" value="0x02" />
+      </members>
+    </group>
+
+    <group name="VoiceAllocationOff" nodeDef="Midi.universalNonRealTime" midi.doc="Turn DLS Voice Allocation Off (7E 0A 03).">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x0A" />
+        <field name="SubId2" datatype="sys.uint8" value="0x03" />
+      </members>
+    </group>
+
+    <group name="VoiceAllocationOn" nodeDef="Midi.universalNonRealTime" midi.doc="Turn DLS Voice Allocation On (7E 0A 04).">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x0A" />
+        <field name="SubId2" datatype="sys.uint8" value="0x04" />
+      </members>
+    </group>
+  </members>
+</schema>

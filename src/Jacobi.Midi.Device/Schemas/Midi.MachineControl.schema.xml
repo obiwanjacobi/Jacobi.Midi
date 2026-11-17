@@ -1,0 +1,35 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  MIDI Machine Control (7F 06 commands, 7F 07 responses): controls recorders and other transport machines.
+  The commands and responses are not described here.
+
+  Universal System Exclusive messages (MIDI 1.0 Detailed Specification and its Recommended Practices):
+
+    F0 7E <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   non-real time
+    F0 7F <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   real time
+
+  The device ID 7F addresses all devices. Each message is a root of its own: a dump that is a message itself
+  (see src/Jacobi.Midi.Device/Messages/readme.md); its header comes from the nodeDefs universalNonRealTime and
+  universalRealTime of the 'midi' schema.
+  Multi-byte values are 7 bits per byte, least significant byte first (lsb14, lsb21, lsb28, lsb35), unless noted.
+-->
+<schema name="Midi.MachineControl">
+  <includes>
+    <include schema="midi" />
+  </includes>
+  <members>
+    <group name="Commands" nodeDef="Midi.universalRealTime" midi.doc="MMC commands (7F 06): one or more commands with their data.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x06" />
+        <field name="Data" nodeDef="Midi.data" midi.doc="The commands, e.g. 01 STOP, 02 PLAY, 06 RECORD STROBE." />
+      </members>
+    </group>
+
+    <group name="Responses" nodeDef="Midi.universalRealTime" midi.doc="MMC responses (7F 07): one or more responses with their data.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x07" />
+        <field name="Data" nodeDef="Midi.data" midi.doc="The responses and information fields." />
+      </members>
+    </group>
+  </members>
+</schema>

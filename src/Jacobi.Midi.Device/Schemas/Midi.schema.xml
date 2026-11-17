@@ -1,7 +1,187 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  The base schema of all MIDI device schemas: the processors and nodeDefs they share, and the most common universal
+  System Exclusive messages (General Information, Device Control and the handshake of the sample and file dumps).
+  The other universal messages are in a schema per category: Midi.<category> (e.g. Midi.SampleDump).
+
+  Universal System Exclusive messages (MIDI 1.0 Detailed Specification and its Recommended Practices):
+
+    F0 7E <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   non-real time
+    F0 7F <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   real time
+
+  The device ID 7F addresses all devices. Each message is a root of its own: a dump that is a message itself
+  (see src/Jacobi.Midi.Device/Messages/readme.md); its header comes from the nodeDefs universalNonRealTime and
+  universalRealTime of the 'midi' schema.
+  Multi-byte values are 7 bits per byte, least significant byte first (lsb14, lsb21, lsb28, lsb35), unless noted.
+-->
 <schema name="Midi">
+  <nodeDefs>
+    <group name="sysexMessage" midi.doc="A System Exclusive message: F0 ... F7 around its members.">
+      <processors>
+        <processor name="midi.sysex" />
+      </processors>
+    </group>
+    <group name="universalNonRealTime" nodeDef="sysexMessage" midi.doc="The header of a universal non-real time message: F0 7E &lt;device ID&gt;.">
+      <members>
+        <field name="UniversalId" datatype="sys.uint8" value="0x7E" midi.doc="Universal Non-Real Time (7E)." />
+        <field name="DeviceId" datatype="sys.uint8" midi.role="device.deviceId" midi.doc="The device the message is for or from; 7F: all devices." />
+      </members>
+    </group>
+    <group name="universalRealTime" nodeDef="sysexMessage" midi.doc="The header of a universal real time message: F0 7F &lt;device ID&gt;.">
+      <members>
+        <field name="UniversalId" datatype="sys.uint8" value="0x7F" midi.doc="Universal Real Time (7F)." />
+        <field name="DeviceId" datatype="sys.uint8" midi.role="device.deviceId" midi.doc="The device the message is for or from; 7F: all devices." />
+      </members>
+    </group>
+    <field name="lsb14" datatype="sys.uint16" byteLength="2" midi.doc="A 14-bit value in 2 bytes, least significant first.">
+      <processor name="sysexbyte" byteorder="little" />
+    </field>
+    <field name="lsb21" datatype="sys.uint32" byteLength="3" midi.doc="A 21-bit value in 3 bytes, least significant first.">
+      <processor name="sysexbyte" byteorder="little" />
+    </field>
+    <field name="lsb28" datatype="sys.uint32" byteLength="4" midi.doc="A 28-bit value in 4 bytes, least significant first.">
+      <processor name="sysexbyte" byteorder="little" />
+    </field>
+    <field name="lsb35" datatype="sys.uint64" byteLength="5" midi.doc="A 35-bit value in 5 bytes, least significant first.">
+      <processor name="sysexbyte" byteorder="little" />
+    </field>
+    <field name="msb14" datatype="sys.uint16" byteLength="2" midi.doc="A 14-bit value in 2 bytes, most significant first.">
+      <processor name="sysexbyte" />
+    </field>
+    <field name="data" datatype="sys.bytes" byteLength="-1" midi.doc="The rest of the message (up to F7, or up to the checksum)." />
+  </nodeDefs>
+  <dataTypeDefs>
+    <dataTypeDef name="countMinusOne" basedOn="sys.uint8" shift="1" valueType="sys.uint16" midi.doc="A count written as the count minus one (0 means 1)." />
+  </dataTypeDefs>
   <processorDefs>
     <processor name="sysexbyte" processor="sys.bitslicer" bits="7" byteorder="big" />
     <processor name="string" processor="sys.string" padding="32" validBytes="0x20-0x7F" encoding="ascii" />
   </processorDefs>
+  <members>
+    <group name="IdentityRequest" nodeDef="Midi.universalNonRealTime" midi.doc="Identity Request (7E 06 01): asks the device to identify itself; device ID 7F asks all devices.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x06" />
+        <field name="SubId2" datatype="sys.uint8" value="0x01" />
+      </members>
+    </group>
+
+    <group name="IdentityReply" nodeDef="Midi.universalNonRealTime" midi.doc="Identity Reply (7E 06 02): the identity of a device with a 1-byte manufacturer ID.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x06" />
+        <field name="SubId2" datatype="sys.uint8" value="0x02" />
+        <field name="ManufacturerId" datatype="sys.uint8" midi.doc="The 1-byte manufacturer ID (not 00)." />
+        <field name="FamilyCode" nodeDef="Midi.lsb14" midi.doc="The device family code." />
+        <field name="FamilyMember" nodeDef="Midi.lsb14" midi.doc="The device family member (model) code." />
+        <field name="SoftwareRevision" datatype="sys.bytes" byteLength="4" midi.doc="The software revision level (format by the manufacturer)." />
+      </members>
+    </group>
+
+    <group name="IdentityReplyExtendedId" nodeDef="Midi.universalNonRealTime" midi.doc="Identity Reply (7E 06 02): the identity of a device with an extended (3-byte) manufacturer ID: 00 xx xx.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x06" />
+        <field name="SubId2" datatype="sys.uint8" value="0x02" />
+        <field name="ExtendedId" datatype="sys.uint8" value="0x00" midi.doc="The extended manufacturer ID prefix (00)." />
+        <field name="ManufacturerId" datatype="sys.bytes" byteLength="2" midi.doc="The 2 bytes of the extended manufacturer ID after the 00." />
+        <field name="FamilyCode" nodeDef="Midi.lsb14" midi.doc="The device family code." />
+        <field name="FamilyMember" nodeDef="Midi.lsb14" midi.doc="The device family member (model) code." />
+        <field name="SoftwareRevision" datatype="sys.bytes" byteLength="4" midi.doc="The software revision level (format by the manufacturer)." />
+      </members>
+    </group>
+
+    <group name="MasterVolume" nodeDef="Midi.universalRealTime" midi.doc="Master Volume (7F 04 01): the volume of the whole device.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x04" />
+        <field name="SubId2" datatype="sys.uint8" value="0x01" />
+        <field name="Volume" nodeDef="Midi.lsb14" midi.doc="0 (off) to 16383 (maximum)." />
+      </members>
+    </group>
+
+    <group name="MasterBalance" nodeDef="Midi.universalRealTime" midi.doc="Master Balance (7F 04 02): the left/right balance of the whole device.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x04" />
+        <field name="SubId2" datatype="sys.uint8" value="0x02" />
+        <field name="Balance" nodeDef="Midi.lsb14" midi.doc="0 is hard left, 8192 center, 16383 hard right." />
+      </members>
+    </group>
+
+    <group name="MasterFineTuning" nodeDef="Midi.universalRealTime" midi.doc="Master Fine Tuning (7F 04 03): the tuning of the whole device in cents.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x04" />
+        <field name="SubId2" datatype="sys.uint8" value="0x03" />
+        <field name="FineTuning" nodeDef="Midi.lsb14" midi.doc="8192 is A440; -100 to almost +100 cents." />
+      </members>
+    </group>
+
+    <group name="MasterCoarseTuning" nodeDef="Midi.universalRealTime" midi.doc="Master Coarse Tuning (7F 04 04): the tuning of the whole device in semitones.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x04" />
+        <field name="SubId2" datatype="sys.uint8" value="0x04" />
+        <field name="Unused" datatype="sys.uint8" midi.doc="The LSB: not used (00)." />
+        <field name="CoarseTuning" datatype="sys.uint8" midi.doc="64 (40H) is A440; -64 to +63 semitones." />
+      </members>
+    </group>
+
+    <!-- [TODO] verify the slot path (2 bytes per slot) and the parameter/value pairs against CA-024. -->
+    <group name="GlobalParameterControl" nodeDef="Midi.universalRealTime" midi.doc="Global Parameter Control (7F 04 05): sets global parameters of a slot (e.g. the GM2 reverb and chorus).">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x04" />
+        <field name="SubId2" datatype="sys.uint8" value="0x05" />
+        <field name="SlotPathLength" datatype="sys.uint8" midi.doc="The number of slots in the slot path." />
+        <field name="ParameterIdWidth" datatype="sys.uint8" midi.doc="The number of bytes of a parameter ID." />
+        <field name="ValueWidth" datatype="sys.uint8" midi.doc="The number of bytes of a value." />
+        <repeat name="SlotPath" midi.doc="The path to the slot: a pair of bytes per level.">
+          <count ref="^.SlotPathLength" />
+          <members>
+            <field name="Msb" datatype="sys.uint8" />
+            <field name="Lsb" datatype="sys.uint8" />
+          </members>
+        </repeat>
+        <repeat name="Parameters" midi.doc="The parameter ID/value pairs, up to the end of the message.">
+          <members>
+            <field name="ParameterId" datatype="sys.bytes">
+              <byteLength ref="^.^.ParameterIdWidth" />
+            </field>
+            <field name="Value" datatype="sys.bytes">
+              <byteLength ref="^.^.ValueWidth" />
+            </field>
+          </members>
+        </repeat>
+      </members>
+    </group>
+
+    <group name="EndOfFile" nodeDef="Midi.universalNonRealTime" midi.doc="End of File (7E 7B): the transfer is complete.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x7B" />
+        <field name="PacketNumber" datatype="sys.uint8" />
+      </members>
+    </group>
+
+    <group name="Wait" nodeDef="Midi.universalNonRealTime" midi.doc="Wait (7E 7C): the receiver is busy; the sender waits for an ACK.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x7C" />
+        <field name="PacketNumber" datatype="sys.uint8" />
+      </members>
+    </group>
+
+    <group name="Cancel" nodeDef="Midi.universalNonRealTime" midi.doc="Cancel (7E 7D): the transfer is aborted.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x7D" />
+        <field name="PacketNumber" datatype="sys.uint8" />
+      </members>
+    </group>
+
+    <group name="Nak" nodeDef="Midi.universalNonRealTime" midi.doc="NAK (7E 7E): the packet was not received correctly; send it again.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x7E" />
+        <field name="PacketNumber" datatype="sys.uint8" />
+      </members>
+    </group>
+
+    <group name="Ack" nodeDef="Midi.universalNonRealTime" midi.doc="ACK (7E 7F): the packet was received correctly; send the next.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x7F" />
+        <field name="PacketNumber" datatype="sys.uint8" />
+      </members>
+    </group>
+  </members>
 </schema>

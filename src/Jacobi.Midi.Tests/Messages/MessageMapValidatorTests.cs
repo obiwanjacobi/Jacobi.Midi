@@ -26,11 +26,30 @@ public class MessageMapValidatorTests
 
         Assert.Empty(Of(problems, MessageMapProblemSeverity.Error));
         Assert.Empty(Of(problems, MessageMapProblemSeverity.Warning));
-        var information = Of(problems, MessageMapProblemSeverity.Information).ToList();
+        // the universal messages of the base schemas (Midi, Midi.<category>) are dumps whose device ID the client supplies
+        var information = Of(problems, MessageMapProblemSeverity.Information)
+            .Where(problem => !IsUniversal(problem.Document)).ToList();
         // the data message is the one the map finds; the request is only a message when an exchange file names it
         Assert.Equal(["Message.Data.DeviceId"], information.Select(p => p.Path.Value));
         Assert.All(information, problem => Assert.Equal("TestEnvelope", problem.Document));
     }
+
+    [Fact]
+    public void Validate_UniversalMessages_OnlyTheDeviceIdIsSuppliedByTheClient()
+    {
+        var problems = Validate().Where(problem => IsUniversal(problem.Document)).ToList();
+
+        Assert.NotEmpty(problems);
+        Assert.All(problems, problem =>
+        {
+            Assert.Equal(MessageMapProblemSeverity.Information, problem.Severity);
+            Assert.EndsWith(".DeviceId", problem.Path.Value, StringComparison.Ordinal);
+        });
+    }
+
+    private static bool IsUniversal(string document)
+        => String.Equals(document, "Midi", StringComparison.OrdinalIgnoreCase)
+        || document.StartsWith("Midi.", StringComparison.OrdinalIgnoreCase);
 
     [Fact]
     public void Validate_ADumpThatIsAMessageItself_IsValidatedLikeAnyMap()

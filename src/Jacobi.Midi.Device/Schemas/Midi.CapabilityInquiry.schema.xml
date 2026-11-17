@@ -1,0 +1,341 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  MIDI Capability Inquiry (MIDI-CI, 7E 0D; M2-101-UM v1.2): discovery, profile configuration, property exchange and
+  process inquiry between a MIDI-CI initiator and responder.
+
+    F0 7E <device ID> 0D <sub-ID#2> <version> <source MUID> <destination MUID> ... F7
+
+  The device ID is the address: 00-0F a channel, 7E the group, 7F the function block. A MUID is 28 bits in 4 bytes,
+  least significant first; 0FFFFFFF is the broadcast MUID. Version 1 messages lack the fields marked 'version 2'.
+  The protocol negotiation messages (10-1F) are deprecated and not described.
+
+  Universal System Exclusive messages (MIDI 1.0 Detailed Specification and its Recommended Practices):
+
+    F0 7E <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   non-real time
+    F0 7F <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   real time
+
+  The device ID 7F addresses all devices. Each message is a root of its own: a dump that is a message itself
+  (see src/Jacobi.Midi.Device/Messages/readme.md); its header comes from the nodeDefs universalNonRealTime and
+  universalRealTime of the 'midi' schema.
+  Multi-byte values are 7 bits per byte, least significant byte first (lsb14, lsb21, lsb28, lsb35), unless noted.
+-->
+<schema name="Midi.CapabilityInquiry">
+  <includes>
+    <include schema="midi" />
+  </includes>
+  <nodeDefs>
+    <group name="ciMessage" nodeDef="Midi.universalNonRealTime" midi.doc="The header of a MIDI-CI message; each message sets its SubId2.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x0D" />
+        <field name="SubId2" datatype="sys.uint8" midi.doc="The MIDI-CI message type." />
+        <field name="Version" datatype="sys.uint8" midi.doc="The MIDI-CI message version: 01 or 02." />
+        <field name="SourceMuid" nodeDef="Midi.lsb28" midi.doc="The MUID of the sender." />
+        <field name="DestinationMuid" nodeDef="Midi.lsb28" midi.doc="The MUID of the receiver; 0FFFFFFF: broadcast." />
+      </members>
+    </group>
+    <group name="propertyExchangeMessage" nodeDef="ciMessage" midi.doc="A Property Exchange message with a header and (a chunk of) property data.">
+      <members>
+        <field name="RequestId" datatype="sys.uint8" midi.doc="The request ID: pairs the reply with the inquiry." />
+        <field name="HeaderLength" nodeDef="Midi.lsb14" midi.doc="The length of the header data." />
+        <field name="Header" datatype="sys.bytes" midi.doc="The header data (JSON).">
+          <byteLength ref="^.HeaderLength" />
+        </field>
+        <field name="ChunkCount" nodeDef="Midi.lsb14" midi.doc="The number of chunks of the property data (0: unknown)." />
+        <field name="ChunkNumber" nodeDef="Midi.lsb14" midi.doc="The number of this chunk (1 based)." />
+        <field name="DataLength" nodeDef="Midi.lsb14" midi.doc="The length of the property data in this chunk." />
+        <field name="Data" datatype="sys.bytes" midi.doc="The property data (of this chunk).">
+          <byteLength ref="^.DataLength" />
+        </field>
+      </members>
+    </group>
+  </nodeDefs>
+  <members>
+    <!-- [TODO] verify the device info, the category bits and the version 2 fields against M2-101-UM v1.2. -->
+    <group name="Discovery" nodeDef="ciMessage" midi.doc="Discovery (7E 0D 70): an initiator looks for MIDI-CI devices.">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x70" />
+        <field name="ManufacturerId" datatype="sys.bytes" byteLength="3" midi.doc="The manufacturer ID: 3 bytes (a 1-byte ID followed by 00 00)." />
+        <field name="FamilyCode" nodeDef="Midi.lsb14" midi.doc="The device family code." />
+        <field name="FamilyMember" nodeDef="Midi.lsb14" midi.doc="The device family member (model) code." />
+        <field name="SoftwareRevision" datatype="sys.bytes" byteLength="4" midi.doc="The software revision level." />
+        <field name="CategorySupported" datatype="sys.uint8" midi.doc="The MIDI-CI categories: bit 2 profile configuration, bit 3 property exchange, bit 4 process inquiry." />
+        <field name="MaxSysExSize" nodeDef="Midi.lsb28" midi.doc="The largest SysEx message the device can receive." />
+        <field name="OutputPathId" datatype="sys.uint8" midi.doc="The output path ID of the initiator (version 2)." />
+      </members>
+    </group>
+
+    <group name="ReplyToDiscovery" nodeDef="ciMessage" midi.doc="Reply to Discovery (7E 0D 71).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x71" />
+        <field name="ManufacturerId" datatype="sys.bytes" byteLength="3" midi.doc="The manufacturer ID: 3 bytes (a 1-byte ID followed by 00 00)." />
+        <field name="FamilyCode" nodeDef="Midi.lsb14" midi.doc="The device family code." />
+        <field name="FamilyMember" nodeDef="Midi.lsb14" midi.doc="The device family member (model) code." />
+        <field name="SoftwareRevision" datatype="sys.bytes" byteLength="4" midi.doc="The software revision level." />
+        <field name="CategorySupported" datatype="sys.uint8" midi.doc="The MIDI-CI categories: bit 2 profile configuration, bit 3 property exchange, bit 4 process inquiry." />
+        <field name="MaxSysExSize" nodeDef="Midi.lsb28" midi.doc="The largest SysEx message the device can receive." />
+        <field name="OutputPathId" datatype="sys.uint8" midi.doc="The output path ID from the Discovery (version 2)." />
+        <field name="FunctionBlock" datatype="sys.uint8" midi.doc="The function block of the responder; 7F: none (version 2)." />
+      </members>
+    </group>
+
+    <!-- [TODO] verify the endpoint messages (72, 73) against M2-101-UM v1.2. -->
+    <group name="EndpointInquiry" nodeDef="ciMessage" midi.doc="Inquiry: Endpoint Information (7E 0D 72).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x72" />
+        <field name="Status" datatype="sys.uint8" midi.doc="The information asked for: 00 the product instance ID." />
+      </members>
+    </group>
+
+    <group name="ReplyToEndpointInquiry" nodeDef="ciMessage" midi.doc="Reply to Endpoint Information (7E 0D 73).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x73" />
+        <field name="Status" datatype="sys.uint8" midi.doc="The information given." />
+        <field name="DataLength" nodeDef="Midi.lsb14" midi.doc="The length of the information." />
+        <field name="Data" datatype="sys.bytes" midi.doc="The information.">
+          <byteLength ref="^.DataLength" />
+        </field>
+      </members>
+    </group>
+
+    <!-- [TODO] verify the ACK/NAK body (status code, status data, 5 detail bytes, message text) against M2-101-UM v1.2. -->
+    <group name="Ack" nodeDef="ciMessage" midi.doc="ACK (7E 0D 7D): a message was accepted.">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x7D" />
+        <field name="OriginalSubId2" datatype="sys.uint8" midi.doc="The sub-ID#2 of the message this is the answer to." />
+        <field name="StatusCode" datatype="sys.uint8" midi.doc="The status code." />
+        <field name="StatusData" datatype="sys.uint8" midi.doc="The status data." />
+        <field name="Details" datatype="sys.bytes" byteLength="5" midi.doc="The details (by status code)." />
+        <field name="MessageLength" nodeDef="Midi.lsb14" midi.doc="The length of the message text." />
+        <field name="MessageText" datatype="sys.bytes" midi.doc="The message text (ASCII).">
+          <byteLength ref="^.MessageLength" />
+        </field>
+      </members>
+    </group>
+
+    <group name="InvalidateMuid" nodeDef="ciMessage" midi.doc="Invalidate MUID (7E 0D 7E): the MUID is no longer valid.">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x7E" />
+        <field name="TargetMuid" nodeDef="Midi.lsb28" midi.doc="The MUID to invalidate." />
+      </members>
+    </group>
+
+    <group name="Nak" nodeDef="ciMessage" midi.doc="NAK (7E 0D 7F): a message was not accepted (version 2 body).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x7F" />
+        <field name="OriginalSubId2" datatype="sys.uint8" midi.doc="The sub-ID#2 of the message this is the answer to." />
+        <field name="StatusCode" datatype="sys.uint8" midi.doc="The status code." />
+        <field name="StatusData" datatype="sys.uint8" midi.doc="The status data." />
+        <field name="Details" datatype="sys.bytes" byteLength="5" midi.doc="The details (by status code)." />
+        <field name="MessageLength" nodeDef="Midi.lsb14" midi.doc="The length of the message text." />
+        <field name="MessageText" datatype="sys.bytes" midi.doc="The message text (ASCII).">
+          <byteLength ref="^.MessageLength" />
+        </field>
+      </members>
+    </group>
+
+    <group name="ProfileInquiry" nodeDef="ciMessage" midi.doc="Profile Inquiry (7E 0D 20): asks for the profiles.">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x20" />
+      </members>
+    </group>
+
+    <group name="ReplyToProfileInquiry" nodeDef="ciMessage" midi.doc="Reply to Profile Inquiry (7E 0D 21): the enabled and disabled profiles.">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x21" />
+        <field name="EnabledCount" nodeDef="Midi.lsb14" midi.doc="The number of enabled profiles." />
+        <repeat name="Enabled" midi.doc="The enabled profiles.">
+          <count ref="^.EnabledCount" />
+          <members>
+            <field name="ProfileId" datatype="sys.bytes" byteLength="5" midi.doc="The profile ID: 5 bytes." />
+          </members>
+        </repeat>
+        <field name="DisabledCount" nodeDef="Midi.lsb14" midi.doc="The number of disabled profiles." />
+        <repeat name="Disabled" midi.doc="The disabled profiles.">
+          <count ref="^.DisabledCount" />
+          <members>
+            <field name="ProfileId" datatype="sys.bytes" byteLength="5" midi.doc="The profile ID: 5 bytes." />
+          </members>
+        </repeat>
+      </members>
+    </group>
+
+    <group name="SetProfileOn" nodeDef="ciMessage" midi.doc="Set Profile On (7E 0D 22).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x22" />
+        <field name="ProfileId" datatype="sys.bytes" byteLength="5" midi.doc="The profile ID: 5 bytes." />
+        <field name="ChannelCount" nodeDef="Midi.lsb14" midi.doc="The number of channels (version 2)." />
+      </members>
+    </group>
+
+    <group name="SetProfileOff" nodeDef="ciMessage" midi.doc="Set Profile Off (7E 0D 23).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x23" />
+        <field name="ProfileId" datatype="sys.bytes" byteLength="5" midi.doc="The profile ID: 5 bytes." />
+        <field name="Reserved" nodeDef="Midi.lsb14" midi.doc="Reserved: 00 00 (version 2)." />
+      </members>
+    </group>
+
+    <group name="ProfileEnabledReport" nodeDef="ciMessage" midi.doc="Profile Enabled Report (7E 0D 24).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x24" />
+        <field name="ProfileId" datatype="sys.bytes" byteLength="5" midi.doc="The profile ID: 5 bytes." />
+        <field name="ChannelCount" nodeDef="Midi.lsb14" midi.doc="The number of channels (version 2)." />
+      </members>
+    </group>
+
+    <group name="ProfileDisabledReport" nodeDef="ciMessage" midi.doc="Profile Disabled Report (7E 0D 25).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x25" />
+        <field name="ProfileId" datatype="sys.bytes" byteLength="5" midi.doc="The profile ID: 5 bytes." />
+        <field name="ChannelCount" nodeDef="Midi.lsb14" midi.doc="The number of channels (version 2)." />
+      </members>
+    </group>
+
+    <group name="ProfileAddedReport" nodeDef="ciMessage" midi.doc="Profile Added Report (7E 0D 26).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x26" />
+        <field name="ProfileId" datatype="sys.bytes" byteLength="5" midi.doc="The profile ID: 5 bytes." />
+      </members>
+    </group>
+
+    <group name="ProfileRemovedReport" nodeDef="ciMessage" midi.doc="Profile Removed Report (7E 0D 27).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x27" />
+        <field name="ProfileId" datatype="sys.bytes" byteLength="5" midi.doc="The profile ID: 5 bytes." />
+      </members>
+    </group>
+
+    <group name="ProfileDetailsInquiry" nodeDef="ciMessage" midi.doc="Profile Details Inquiry (7E 0D 28).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x28" />
+        <field name="ProfileId" datatype="sys.bytes" byteLength="5" midi.doc="The profile ID: 5 bytes." />
+        <field name="InquiryTarget" datatype="sys.uint8" midi.doc="What is asked for (defined by the profile)." />
+      </members>
+    </group>
+
+    <group name="ReplyToProfileDetails" nodeDef="ciMessage" midi.doc="Reply to Profile Details Inquiry (7E 0D 29).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x29" />
+        <field name="ProfileId" datatype="sys.bytes" byteLength="5" midi.doc="The profile ID: 5 bytes." />
+        <field name="InquiryTarget" datatype="sys.uint8" midi.doc="What was asked for." />
+        <field name="DataLength" nodeDef="Midi.lsb14" midi.doc="The length of the details." />
+        <field name="Data" datatype="sys.bytes" midi.doc="The details (defined by the profile).">
+          <byteLength ref="^.DataLength" />
+        </field>
+      </members>
+    </group>
+
+    <!-- [TODO] verify the data length (4 bytes) against M2-101-UM v1.2. -->
+    <group name="ProfileSpecificData" nodeDef="ciMessage" midi.doc="Profile Specific Data (7E 0D 2F).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x2F" />
+        <field name="ProfileId" datatype="sys.bytes" byteLength="5" midi.doc="The profile ID: 5 bytes." />
+        <field name="DataLength" nodeDef="Midi.lsb28" midi.doc="The length of the data." />
+        <field name="Data" datatype="sys.bytes" midi.doc="The data (defined by the profile).">
+          <byteLength ref="^.DataLength" />
+        </field>
+      </members>
+    </group>
+
+    <group name="PropertyExchangeCapabilities" nodeDef="ciMessage" midi.doc="Inquiry: Property Exchange Capabilities (7E 0D 30).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x30" />
+        <field name="SimultaneousRequests" datatype="sys.uint8" midi.doc="The number of requests the initiator supports at the same time." />
+        <field name="MajorVersion" datatype="sys.uint8" midi.doc="The Property Exchange major version (version 2)." />
+        <field name="MinorVersion" datatype="sys.uint8" midi.doc="The Property Exchange minor version (version 2)." />
+      </members>
+    </group>
+
+    <group name="ReplyToPropertyExchangeCapabilities" nodeDef="ciMessage" midi.doc="Reply to Property Exchange Capabilities (7E 0D 31).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x31" />
+        <field name="SimultaneousRequests" datatype="sys.uint8" midi.doc="The number of requests the responder supports at the same time." />
+        <field name="MajorVersion" datatype="sys.uint8" midi.doc="The Property Exchange major version (version 2)." />
+        <field name="MinorVersion" datatype="sys.uint8" midi.doc="The Property Exchange minor version (version 2)." />
+      </members>
+    </group>
+
+    <group name="GetPropertyData" nodeDef="propertyExchangeMessage" midi.doc="Inquiry: Get Property Data (7E 0D 34).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x34" />
+      </members>
+    </group>
+
+    <group name="ReplyToGetPropertyData" nodeDef="propertyExchangeMessage" midi.doc="Reply to Get Property Data (7E 0D 35).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x35" />
+      </members>
+    </group>
+
+    <group name="SetPropertyData" nodeDef="propertyExchangeMessage" midi.doc="Inquiry: Set Property Data (7E 0D 36).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x36" />
+      </members>
+    </group>
+
+    <group name="ReplyToSetPropertyData" nodeDef="propertyExchangeMessage" midi.doc="Reply to Set Property Data (7E 0D 37).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x37" />
+      </members>
+    </group>
+
+    <group name="Subscription" nodeDef="propertyExchangeMessage" midi.doc="Subscription (7E 0D 38).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x38" />
+      </members>
+    </group>
+
+    <group name="ReplyToSubscription" nodeDef="propertyExchangeMessage" midi.doc="Reply to Subscription (7E 0D 39).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x39" />
+      </members>
+    </group>
+
+    <group name="Notify" nodeDef="propertyExchangeMessage" midi.doc="Notify (7E 0D 3F).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x3F" />
+      </members>
+    </group>
+
+    <group name="ProcessInquiryCapabilities" nodeDef="ciMessage" midi.doc="Inquiry: Process Inquiry Capabilities (7E 0D 40).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x40" />
+      </members>
+    </group>
+
+    <group name="ReplyToProcessInquiryCapabilities" nodeDef="ciMessage" midi.doc="Reply to Process Inquiry Capabilities (7E 0D 41).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x41" />
+        <field name="SupportedFeatures" datatype="sys.uint8" midi.doc="Bit 0: MIDI Message Report." />
+      </members>
+    </group>
+
+    <!-- [TODO] verify the process inquiry bitmaps against M2-101-UM v1.2. -->
+    <group name="MidiMessageReport" nodeDef="ciMessage" midi.doc="Inquiry: MIDI Message Report (7E 0D 42): asks for the current state of the MIDI messages.">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x42" />
+        <field name="MessageDataControl" datatype="sys.uint8" midi.doc="00: no data; 01: only non-default values; 7F: full." />
+        <field name="SystemMessages" datatype="sys.uint8" midi.doc="The system messages to report (bitmap)." />
+        <field name="Reserved" datatype="sys.uint8" midi.doc="Reserved: 00." />
+        <field name="ChannelControllerMessages" datatype="sys.uint8" midi.doc="The channel controller messages to report (bitmap)." />
+        <field name="NoteDataMessages" datatype="sys.uint8" midi.doc="The note data messages to report (bitmap)." />
+      </members>
+    </group>
+
+    <group name="ReplyToMidiMessageReport" nodeDef="ciMessage" midi.doc="Reply to MIDI Message Report (7E 0D 43): the messages that will be reported.">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x43" />
+        <field name="SystemMessages" datatype="sys.uint8" midi.doc="The system messages that are reported (bitmap)." />
+        <field name="Reserved" datatype="sys.uint8" midi.doc="Reserved: 00." />
+        <field name="ChannelControllerMessages" datatype="sys.uint8" midi.doc="The channel controller messages that are reported (bitmap)." />
+        <field name="NoteDataMessages" datatype="sys.uint8" midi.doc="The note data messages that are reported (bitmap)." />
+      </members>
+    </group>
+
+    <group name="EndOfMidiMessageReport" nodeDef="ciMessage" midi.doc="End of MIDI Message Report (7E 0D 44).">
+      <members>
+        <field name="SubId2" datatype="sys.uint8" value="0x44" />
+      </members>
+    </group>
+  </members>
+</schema>

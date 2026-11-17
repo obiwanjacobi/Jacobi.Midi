@@ -1,0 +1,41 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  General MIDI System messages (7E 09): switch a device into or out of General MIDI mode.
+
+  Universal System Exclusive messages (MIDI 1.0 Detailed Specification and its Recommended Practices):
+
+    F0 7E <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   non-real time
+    F0 7F <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   real time
+
+  The device ID 7F addresses all devices. Each message is a root of its own: a dump that is a message itself
+  (see src/Jacobi.Midi.Device/Messages/readme.md); its header comes from the nodeDefs universalNonRealTime and
+  universalRealTime of the 'midi' schema.
+  Multi-byte values are 7 bits per byte, least significant byte first (lsb14, lsb21, lsb28, lsb35), unless noted.
+-->
+<schema name="Midi.GM">
+  <includes>
+    <include schema="midi" />
+  </includes>
+  <members>
+    <group name="GeneralMidi1SystemOn" nodeDef="Midi.universalNonRealTime" midi.doc="General MIDI 1 System On (7E 09 01).">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x09" />
+        <field name="SubId2" datatype="sys.uint8" value="0x01" />
+      </members>
+    </group>
+
+    <group name="GeneralMidiSystemOff" nodeDef="Midi.universalNonRealTime" midi.doc="General MIDI System Off (7E 09 02).">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x09" />
+        <field name="SubId2" datatype="sys.uint8" value="0x02" />
+      </members>
+    </group>
+
+    <group name="GeneralMidi2SystemOn" nodeDef="Midi.universalNonRealTime" midi.doc="General MIDI 2 System On (7E 09 03).">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x09" />
+        <field name="SubId2" datatype="sys.uint8" value="0x03" />
+      </members>
+    </group>
+  </members>
+</schema>

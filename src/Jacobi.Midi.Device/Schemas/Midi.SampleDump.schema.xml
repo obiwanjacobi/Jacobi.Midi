@@ -1,0 +1,138 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Sample Dump Standard (7E 01, 02, 03) and its extensions (7E 05). The handshake messages (ACK, NAK, Wait, Cancel,
+  End of File) are in the 'midi' schema.
+  A data packet ends with a checksum: the XOR of all bytes from 7E up to it, 7 bits (the processor midi.xorchecksum on
+  the message: it covers the whole message, it is not a field).
+
+  Universal System Exclusive messages (MIDI 1.0 Detailed Specification and its Recommended Practices):
+
+    F0 7E <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   non-real time
+    F0 7F <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   real time
+
+  The device ID 7F addresses all devices. Each message is a root of its own: a dump that is a message itself
+  (see src/Jacobi.Midi.Device/Messages/readme.md); its header comes from the nodeDefs universalNonRealTime and
+  universalRealTime of the 'midi' schema.
+  Multi-byte values are 7 bits per byte, least significant byte first (lsb14, lsb21, lsb28, lsb35), unless noted.
+-->
+<schema name="Midi.SampleDump">
+  <includes>
+    <include schema="midi" />
+  </includes>
+  <members>
+    <group name="Header" nodeDef="Midi.universalNonRealTime" midi.doc="Dump Header (7E 01): announces a sample dump and describes the sample.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x01" />
+        <field name="SampleNumber" nodeDef="Midi.lsb14" midi.doc="The number of the sample." />
+        <field name="SampleFormat" datatype="sys.uint8" midi.doc="The number of significant bits of a sample word (8-28)." />
+        <field name="SamplePeriod" nodeDef="Midi.lsb21" midi.doc="The sample period (1/sample rate) in nanoseconds." />
+        <field name="SampleLength" nodeDef="Midi.lsb21" midi.doc="The length of the sample in words." />
+        <field name="LoopStart" nodeDef="Midi.lsb21" midi.doc="The word number of the sustain loop start." />
+        <field name="LoopEnd" nodeDef="Midi.lsb21" midi.doc="The word number of the sustain loop end." />
+        <field name="LoopType" datatype="sys.uint8" midi.doc="00: forward only; 01: backward/forward; 7F: loop off." />
+      </members>
+    </group>
+
+    <group name="DataPacket" nodeDef="Midi.universalNonRealTime" midi.doc="Data Packet (7E 02): 120 bytes of sample data.">
+      <processors>
+        <processor name="midi.xorchecksum" />
+      </processors>
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x02" />
+        <field name="PacketNumber" datatype="sys.uint8" midi.doc="The running packet count, 0-127." />
+        <field name="Data" datatype="sys.bytes" byteLength="120" midi.doc="The sample data, left justified 7 bits per byte." />
+      </members>
+    </group>
+
+    <group name="Request" nodeDef="Midi.universalNonRealTime" midi.doc="Dump Request (7E 03): asks for a sample dump.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x03" />
+        <field name="SampleNumber" nodeDef="Midi.lsb14" midi.doc="The number of the sample." />
+      </members>
+    </group>
+
+    <group name="LoopPointsTransmission" nodeDef="Midi.universalNonRealTime" midi.doc="Loop Points Transmission (7E 05 01): sets a loop of a sample.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x05" />
+        <field name="SubId2" datatype="sys.uint8" value="0x01" />
+        <field name="SampleNumber" nodeDef="Midi.lsb14" midi.doc="The number of the sample." />
+        <field name="LoopNumber" nodeDef="Midi.lsb14" midi.doc="The loop number; 7F 7F: delete all loops." />
+        <field name="LoopType" datatype="sys.uint8" midi.doc="00: forward only; 01: backward/forward; 7F: loop off." />
+        <field name="LoopStart" nodeDef="Midi.lsb21" midi.doc="The word number of the loop start." />
+        <field name="LoopEnd" nodeDef="Midi.lsb21" midi.doc="The word number of the loop end." />
+      </members>
+    </group>
+
+    <group name="LoopPointsRequest" nodeDef="Midi.universalNonRealTime" midi.doc="Loop Points Request (7E 05 02): asks for a loop of a sample.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x05" />
+        <field name="SubId2" datatype="sys.uint8" value="0x02" />
+        <field name="SampleNumber" nodeDef="Midi.lsb14" midi.doc="The number of the sample." />
+        <field name="LoopNumber" nodeDef="Midi.lsb14" midi.doc="The loop number; 7F 7F: all loops." />
+      </members>
+    </group>
+
+    <group name="SampleNameTransmission" nodeDef="Midi.universalNonRealTime" midi.doc="Sample Name Transmission (7E 05 03): the name of a sample.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x05" />
+        <field name="SubId2" datatype="sys.uint8" value="0x03" />
+        <field name="SampleNumber" nodeDef="Midi.lsb14" midi.doc="The number of the sample." />
+        <field name="LanguageTagLength" datatype="sys.uint8" midi.doc="The length of the language tag (0: none)." />
+        <field name="LanguageTag" datatype="sys.bytes" midi.doc="The language tag (RFC 1766); not used yet.">
+          <byteLength ref="^.LanguageTagLength" />
+        </field>
+        <field name="NameLength" datatype="sys.uint8" midi.doc="The length of the name, up to 127." />
+        <field name="Name" datatype="sys.bytes" midi.doc="The name of the sample (ASCII).">
+          <byteLength ref="^.NameLength" />
+        </field>
+      </members>
+    </group>
+
+    <group name="SampleNameRequest" nodeDef="Midi.universalNonRealTime" midi.doc="Sample Name Request (7E 05 04): asks for the name of a sample.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x05" />
+        <field name="SubId2" datatype="sys.uint8" value="0x04" />
+        <field name="SampleNumber" nodeDef="Midi.lsb14" midi.doc="The number of the sample." />
+      </members>
+    </group>
+
+    <!-- [TODO] verify the field order and sizes (sample rate 2 x 4 bytes, positions 5 bytes) and the loop types against CA-019. -->
+    <group name="ExtendedHeader" nodeDef="Midi.universalNonRealTime" midi.doc="Extended Dump Header (7E 05 05): announces a sample dump with a higher rate, length and channels.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x05" />
+        <field name="SubId2" datatype="sys.uint8" value="0x05" />
+        <field name="SampleNumber" nodeDef="Midi.lsb14" midi.doc="The number of the sample." />
+        <field name="SampleFormat" datatype="sys.uint8" midi.doc="The number of significant bits of a sample word (8-28)." />
+        <field name="SampleRate" nodeDef="Midi.lsb28" midi.doc="The integer part of the sample rate in Hz." />
+        <field name="SampleRateFraction" nodeDef="Midi.lsb28" midi.doc="The fractional part of the sample rate." />
+        <field name="SampleLength" nodeDef="Midi.lsb35" midi.doc="The length of the sample in words." />
+        <field name="LoopStart" nodeDef="Midi.lsb35" midi.doc="The word number of the sustain loop start." />
+        <field name="LoopEnd" nodeDef="Midi.lsb35" midi.doc="The word number of the sustain loop end." />
+        <field name="LoopType" datatype="sys.uint8" midi.doc="00: forward; 01: backward/forward; 02: forward with release; 03: backward/forward with release; 40: backward; 41: backward with release; 7F: loop off." />
+        <field name="Channels" datatype="sys.uint8" midi.doc="The number of channels (0 means 1)." />
+      </members>
+    </group>
+
+    <!-- [TODO] verify the layout against CA-019. -->
+    <group name="ExtendedLoopPointsTransmission" nodeDef="Midi.universalNonRealTime" midi.doc="Extended Loop Points Transmission (7E 05 06): sets a loop of a sample (35-bit positions).">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x05" />
+        <field name="SubId2" datatype="sys.uint8" value="0x06" />
+        <field name="SampleNumber" nodeDef="Midi.lsb14" midi.doc="The number of the sample." />
+        <field name="LoopNumber" nodeDef="Midi.lsb14" midi.doc="The loop number; 7F 7F: delete all loops." />
+        <field name="LoopType" datatype="sys.uint8" midi.doc="As in the Extended Dump Header." />
+        <field name="LoopStart" nodeDef="Midi.lsb35" midi.doc="The word number of the loop start." />
+        <field name="LoopEnd" nodeDef="Midi.lsb35" midi.doc="The word number of the loop end." />
+      </members>
+    </group>
+
+    <group name="ExtendedLoopPointsRequest" nodeDef="Midi.universalNonRealTime" midi.doc="Extended Loop Points Request (7E 05 07): asks for a loop of a sample.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x05" />
+        <field name="SubId2" datatype="sys.uint8" value="0x07" />
+        <field name="SampleNumber" nodeDef="Midi.lsb14" midi.doc="The number of the sample." />
+        <field name="LoopNumber" nodeDef="Midi.lsb14" midi.doc="The loop number; 7F 7F: all loops." />
+      </members>
+    </group>
+  </members>
+</schema>

@@ -43,9 +43,11 @@ internal sealed record MessageMapIssue(MessageMapProblem Problem, EditNode? Node
 internal static class MessageMapCheck
 {
     /// <summary>
-    /// The issues in the compiled document and the documents it includes, errors first; empty when they have no tags or
-    /// no problems. The other compiled documents take part (e.g. the device maps that conform to an envelope of the
-    /// document), but their own issues are left out.
+    /// The issues of the compiled document, errors first; empty when it has no tags or no problems. The errors and warnings
+    /// of the documents it includes are shown too, their information only when it is about a map of the document (e.g. a
+    /// role of a vendor envelope that the device map does not fix), not every message of the base schemas. The other
+    /// compiled documents take part (e.g. the device maps that conform to an envelope of the document), but their own
+    /// issues are left out.
     /// </summary>
     /// <param name="processors">The processors the schemas use (the plans are built with them).</param>
     public static IReadOnlyList<MessageMapIssue> Run(SchemaSetCompilation compilation, IProcessorProvider processors)
@@ -59,6 +61,9 @@ internal static class MessageMapCheck
         var shown = IncludeClosure(compilation.Document, compilation.Documents);
         return [.. MessageMapValidator.Validate(serializer)
             .Where(problem => shown.Contains(problem.Document))
+            .Where(problem => problem.Severity != MessageMapProblemSeverity.Information
+                || IsOf(problem.Document, compilation.Document)
+                || problem.Map is { } map && IsOf(map.Namespace, compilation.Document))
             .Select(problem => new MessageMapIssue(problem,
                 CompiledNodeLocator.FindAuthored(compilation.Documents, problem.Document, problem.Path)))
             .OrderBy(issue => issue.Problem.Severity)];
@@ -74,6 +79,9 @@ internal static class MessageMapCheck
             => node.Properties.Any(property => MidiProperties.IsTag(property.Name))
             || (node is EditGroup group && group.Members.Any(HasTags));
     }
+
+    private static bool IsOf(string document, EditDocument edited)
+        => String.Equals(document, edited.Name, StringComparison.OrdinalIgnoreCase);
 
     // the names of the document and the documents it includes (transitively)
     private static HashSet<string> IncludeClosure(EditDocument document, IReadOnlyList<EditDocument> documents)

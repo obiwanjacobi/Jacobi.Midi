@@ -1,0 +1,64 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Controller Destination Setting (7F 09, General MIDI 2): what a controller of a channel controls.
+
+  Universal System Exclusive messages (MIDI 1.0 Detailed Specification and its Recommended Practices):
+
+    F0 7E <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   non-real time
+    F0 7F <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   real time
+
+  The device ID 7F addresses all devices. Each message is a root of its own: a dump that is a message itself
+  (see src/Jacobi.Midi.Device/Messages/readme.md); its header comes from the nodeDefs universalNonRealTime and
+  universalRealTime of the 'midi' schema.
+  Multi-byte values are 7 bits per byte, least significant byte first (lsb14, lsb21, lsb28, lsb35), unless noted.
+-->
+<schema name="Midi.ControllerDestination">
+  <includes>
+    <include schema="midi" />
+  </includes>
+  <members>
+    <!-- [TODO] verify the parameter numbers and ranges against the General MIDI 2 specification. -->
+    <group name="ChannelPressure" nodeDef="Midi.universalRealTime" midi.doc="Channel Pressure (7F 09 01).">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x09" />
+        <field name="SubId2" datatype="sys.uint8" value="0x01" />
+        <field name="Channel" datatype="sys.uint8" midi.doc="The MIDI channel, 0-15." />
+        <repeat name="Destinations" midi.doc="The parameter/range pairs.">
+          <members>
+            <field name="Parameter" datatype="sys.uint8" midi.doc="00 pitch; 01 filter cutoff; 02 amplitude; 03 LFO pitch depth; 04 LFO filter depth; 05 LFO amplitude depth." />
+            <field name="Range" datatype="sys.uint8" midi.doc="The control range." />
+          </members>
+        </repeat>
+      </members>
+    </group>
+
+    <group name="PolyKeyPressure" nodeDef="Midi.universalRealTime" midi.doc="Polyphonic Key Pressure (7F 09 02).">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x09" />
+        <field name="SubId2" datatype="sys.uint8" value="0x02" />
+        <field name="Channel" datatype="sys.uint8" midi.doc="The MIDI channel, 0-15." />
+        <repeat name="Destinations" midi.doc="The parameter/range pairs.">
+          <members>
+            <field name="Parameter" datatype="sys.uint8" midi.doc="00 pitch; 01 filter cutoff; 02 amplitude; 03 LFO pitch depth; 04 LFO filter depth; 05 LFO amplitude depth." />
+            <field name="Range" datatype="sys.uint8" midi.doc="The control range." />
+          </members>
+        </repeat>
+      </members>
+    </group>
+
+    <group name="ControlChange" nodeDef="Midi.universalRealTime" midi.doc="Control Change (7F 09 03).">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x09" />
+        <field name="SubId2" datatype="sys.uint8" value="0x03" />
+        <field name="Channel" datatype="sys.uint8" midi.doc="The MIDI channel, 0-15." />
+        <field name="Controller" datatype="sys.uint8" midi.doc="The controller number, 01-1F or 40-5F." />
+        <repeat name="Destinations" midi.doc="The parameter/range pairs.">
+          <members>
+            <field name="Parameter" datatype="sys.uint8" midi.doc="00 pitch; 01 filter cutoff; 02 amplitude; 03 LFO pitch depth; 04 LFO filter depth; 05 LFO amplitude depth." />
+            <field name="Range" datatype="sys.uint8" midi.doc="The control range." />
+          </members>
+        </repeat>
+      </members>
+    </group>
+  </members>
+</schema>

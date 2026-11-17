@@ -3,6 +3,46 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## A field that takes the rest of the data (2026-11-17)
+
+Issue: the name of a File Dump header or request runs up to F7: no length, no terminator. A field without a length
+could only take the rest of an enclosing size window (only `sys.bytes`, implicitly), and a message root has no size.
+
+1. **`byteLength="-1"` (a constant) declares that a field takes the rest**: of the enclosing size window, or without one
+   of the data, up to the tails the layout processors reserve (e.g. F7, a checksum). The field (or the group that ends
+   in it) must be last. Any data type with a length; a referenced length cannot be -1. *Why:* explicit in the schema,
+   no format change, no processor needs to tell the plan whether it delimits a value itself (a string terminator).
+2. **`sys.bytes` declares it too:** a field without a `byteLength` has no length (reading or writing it fails; the plan
+   still builds, it is also used without bytes, e.g. Property Exchange). *Why:* one rule for every data type.
+3. **A string that takes the rest is written as is**, without padding, and read without trimming. *Why:* the bytes
+   left are the text.
+
+## Universal SysEx messages in the base schemas (2026-11-17)
+
+Issue: the universal System Exclusive messages (7E non-real time, 7F real time) had no schema definitions.
+
+1. **The common messages are in the base `Midi` schema** (General Information, Device Control, the handshake of the
+   sample and file dumps); **every other category has a schema of its own, `Midi.<Category>`** (e.g. `Midi.GM`,
+   `Midi.SampleDump`, `Midi.CapabilityInquiry`), embedded in Jacobi.Midi.Device. *Why:* a device schema that includes
+   `midi` does not get every universal message; a category is loaded when it is needed.
+2. **One root per message, on a shared base:** the nodeDef `sysexMessage` holds the `midi.sysex` processor;
+   `universalNonRealTime` / `universalRealTime` add the header (`UniversalId`, `DeviceId` with `midi.role="device.deviceId"`);
+   a message adds `SubId1`, `SubId2` and its data. A category can add its own header nodeDef and let the message
+   override a member of it (`Midi.CapabilityInquiry`: `ciMessage`, each message sets `SubId2`). *Why:* the framing and
+   header are written once (see *A nodeDef on a root*); a message is a dump that is a message itself.
+3. **A `FieldValueStore` writes a repeat without a count with the items it holds values of** (the first item without
+   values ends it). *Why:* the trailing data of a message (e.g. MMC commands) could not be written from a store.
+4. **The universal checksum is a processor of its own, `midi.xorchecksum`** (the XOR of the group's bytes, 7 bits), in
+   Jacobi.Midi.Device next to `midi.sysex`; not `sys.crc` (a polynomial CRC) and not a generic `sys.checksum`. Like
+   `roland.checksum` it appends and checks the byte, which is no field of the schema. It is declared on the message
+   root: the checksum covers the whole message between F0 and itself, so no checksum scope group. *Why:* a small,
+   specific processor, the same kind as the vendor checksums; a client never computes it.
+5. **The 7-in-8 packing is a processor, `midi.pack7`, a field processor of a `sys.bytes` field** (not a dataTypeDef:
+   facets cannot change the number of bytes). The `byteLength` of the field is the packed length on the wire, the value
+   the unpacked data; `bitorder` says where the high bit of a group's first byte is (`little`: bit 0, Korg; `big`: bit
+   6, File Dump). In the `midi` namespace because a universal message uses it. A layout variant for structured dumps
+   (Korg) follows when a schema needs it. *Why:* the File Dump data is one blob; the minimal processor that covers it.
+
 ## Copy and paste of values in the Schema Editor (2026-11-17)
 
 Issue: the values of a group could only be pasted into a group of the same shape (the same nodeDef or schema node); with

@@ -9,6 +9,10 @@ public sealed class ProcessorFactory : IProcessorFactory
     {
         // Layout Processors
         {  "sysex", new SysExProcessor() },
+        {  "xorchecksum", new XorChecksumProcessor() },
+
+        // Field Processors
+        {  "pack7", new Pack7Processor() },
     };
 
     public string Namespace => "midi";

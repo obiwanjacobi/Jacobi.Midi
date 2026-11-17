@@ -50,6 +50,26 @@ public class MessageMapCheckTests
     }
 
     [Fact]
+    public void Run_TheInformationOfAnIncludedDocument_IsOnlyShownWhenItIsAboutAMapOfTheDocument()
+    {
+        var (viewModel, roland, gp8) = LoadRoland();
+
+        // Roland includes 'midi': the information of its universal messages is not shown with Roland ...
+        var rolandIssues = MessageMapCheck.Run(viewModel.LoadedSchemas.Compile(roland), viewModel.OpenedAssemblies.Processors);
+        // ... but with 'midi' itself it is
+        var midi = viewModel.OpenedAssemblies.Load(
+            Assembly.LoadFrom(TestHelpers.AssemblyPathOf("Jacobi.Midi.Device")), "Jacobi.Midi.Device.dll")
+            .Schemas.Single(schema => schema.Name == "Midi").Document.Schema;
+        var midiIssues = MessageMapCheck.Run(viewModel.LoadedSchemas.Compile(midi), viewModel.OpenedAssemblies.Processors);
+        // the DeviceId of the Roland envelope (an included document) is shown with Gp8: it is about the Gp8 map
+        var gp8Issues = MessageMapCheck.Run(viewModel.LoadedSchemas.Compile(gp8), viewModel.OpenedAssemblies.Processors);
+
+        Assert.DoesNotContain(rolandIssues, issue => issue.Problem.Document == "Midi");
+        Assert.Contains(midiIssues, issue => issue.IsInformation && issue.Problem.Document == "Midi");
+        Assert.Contains(gp8Issues, issue => issue.IsInformation && issue.Problem.Document == "Roland");
+    }
+
+    [Fact]
     public void FindAuthored_FollowsTheNodeDefs()
     {
         var (viewModel, _, gp8) = LoadRoland();

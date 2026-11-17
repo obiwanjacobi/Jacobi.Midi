@@ -1,0 +1,79 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  MIDI Time Code: the full message and user bits (7F 01), the set-up messages (7E 04) and the real time cueing
+  messages (7F 05). The quarter frame message is a system common message (F1), not System Exclusive.
+  The set-up and cueing messages have the type of event in sub-ID#2 (one root each, the type is a field).
+
+  Universal System Exclusive messages (MIDI 1.0 Detailed Specification and its Recommended Practices):
+
+    F0 7E <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   non-real time
+    F0 7F <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   real time
+
+  The device ID 7F addresses all devices. Each message is a root of its own: a dump that is a message itself
+  (see src/Jacobi.Midi.Device/Messages/readme.md); its header comes from the nodeDefs universalNonRealTime and
+  universalRealTime of the 'midi' schema.
+  Multi-byte values are 7 bits per byte, least significant byte first (lsb14, lsb21, lsb28, lsb35), unless noted.
+-->
+<schema name="Midi.TimeCode">
+  <includes>
+    <include schema="midi" />
+  </includes>
+  <nodeDefs>
+    <group name="hoursAndRate" midi.doc="The hours byte: 0rrhhhhh (the frame rate and the hours).">
+      <processors>
+        <processor name="sys.bitpacker" />
+      </processors>
+      <members>
+        <field name="Hours" datatype="sys.uint8" bits="5" midi.doc="0-23." />
+        <field name="FrameRate" datatype="sys.uint8" bits="2" midi.doc="0: 24 fps; 1: 25 fps; 2: 30 fps drop frame; 3: 30 fps non-drop." />
+      </members>
+    </group>
+  </nodeDefs>
+  <members>
+    <group name="FullMessage" nodeDef="Midi.universalRealTime" midi.doc="Full Message (7F 01 01): a complete time code position, e.g. when locating.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x01" />
+        <field name="SubId2" datatype="sys.uint8" value="0x01" />
+        <group name="HoursAndRate" nodeDef="hoursAndRate">
+        </group>
+        <field name="Minutes" datatype="sys.uint8" midi.doc="0-59." />
+        <field name="Seconds" datatype="sys.uint8" midi.doc="0-59." />
+        <field name="Frames" datatype="sys.uint8" midi.doc="0-29 (depends on the frame rate)." />
+      </members>
+    </group>
+
+    <group name="UserBits" nodeDef="Midi.universalRealTime" midi.doc="User Bits (7F 01 02): the SMPTE user bits.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x01" />
+        <field name="SubId2" datatype="sys.uint8" value="0x02" />
+        <field name="UserBits" datatype="sys.bytes" byteLength="8" midi.doc="The 8 nibbles of the user bits (0000aaaa ... 0000hhhh)." />
+        <field name="BinaryGroupFlags" datatype="sys.uint8" midi.doc="The binary group flag bits (000000ij)." />
+      </members>
+    </group>
+
+    <group name="Setup" nodeDef="Midi.universalNonRealTime" midi.doc="Set-up (7E 04): sets up cueing points and events at a time code position, ahead of time.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x04" />
+        <field name="Type" datatype="sys.uint8" midi.doc="The type of event (sub-ID#2): 00: special; 01: punch in points; 02: punch out points; 03: delete punch in point; 04: delete punch out point; 05: event start points; 06: event stop points; 07: event start points with additional info; 08: event stop points with additional info; 09: delete event start point; 0A: delete event stop point; 0B: cue points; 0C: cue points with additional info; 0D: delete cue point; 0E: event name in additional info." />
+        <group name="HoursAndRate" nodeDef="hoursAndRate">
+        </group>
+        <field name="Minutes" datatype="sys.uint8" midi.doc="0-59." />
+        <field name="Seconds" datatype="sys.uint8" midi.doc="0-59." />
+        <field name="Frames" datatype="sys.uint8" midi.doc="0-29 (depends on the frame rate)." />
+        <field name="FractionalFrames" datatype="sys.uint8" midi.doc="1/100 frames, 0-99." />
+        <field name="EventNumber" nodeDef="Midi.lsb14" midi.doc="The event number (with type 00: the special type)." />
+        <field name="AdditionalInfo" nodeDef="Midi.data" midi.doc="Additional information (nibblized MIDI messages, or the event name)." />
+      </members>
+    </group>
+
+    <!-- [TODO] verify: real time cueing has no time fields (only the event number); Jacobi.Midi.Messages.TimeCodeCueingMessage reads time fields for 7F 05 too. -->
+    <group name="Cueing" nodeDef="Midi.universalRealTime" midi.doc="Real Time Cueing (7F 05): an event that happens now.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x05" />
+        <field name="Type" datatype="sys.uint8" midi.doc="The type of event (sub-ID#2): 00: special; 01: punch in points; 02: punch out points; 03: delete punch in point; 04: delete punch out point; 05: event start points; 06: event stop points; 07: event start points with additional info; 08: event stop points with additional info; 09: delete event start point; 0A: delete event stop point; 0B: cue points; 0C: cue points with additional info; 0D: delete cue point; 0E: event name in additional info." />
+        <field name="EventNumber" nodeDef="Midi.lsb14" midi.doc="The event number (with type 00: the special type)." />
+        <field name="AdditionalInfo" nodeDef="Midi.data" midi.doc="Additional information (nibblized MIDI messages, or the event name)." />
+      </members>
+    </group>
+  </members>
+</schema>

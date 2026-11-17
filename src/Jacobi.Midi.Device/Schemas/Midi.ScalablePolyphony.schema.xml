@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Scalable Polyphony MIDI (7F 0B): the Maximum Instantaneous Polyphony (MIP) message.
+
+  Universal System Exclusive messages (MIDI 1.0 Detailed Specification and its Recommended Practices):
+
+    F0 7E <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   non-real time
+    F0 7F <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   real time
+
+  The device ID 7F addresses all devices. Each message is a root of its own: a dump that is a message itself
+  (see src/Jacobi.Midi.Device/Messages/readme.md); its header comes from the nodeDefs universalNonRealTime and
+  universalRealTime of the 'midi' schema.
+  Multi-byte values are 7 bits per byte, least significant byte first (lsb14, lsb21, lsb28, lsb35), unless noted.
+-->
+<schema name="Midi.ScalablePolyphony">
+  <includes>
+    <include schema="midi" />
+  </includes>
+  <members>
+    <!-- [TODO] verify the channel/MIP pairs against RP-034. -->
+    <group name="Mip" nodeDef="Midi.universalRealTime" midi.doc="Scalable Polyphony MIDI MIP (7F 0B 01): the channel priority order and the MIP of each channel.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x0B" />
+        <field name="SubId2" datatype="sys.uint8" value="0x01" />
+        <repeat name="Channels" midi.doc="The channel/MIP pairs.">
+          <members>
+            <field name="Channel" datatype="sys.uint8" midi.doc="The MIDI channel, 0-15 (in priority order)." />
+            <field name="Mip" datatype="sys.uint8" midi.doc="The cumulative maximum instantaneous polyphony." />
+          </members>
+        </repeat>
+      </members>
+    </group>
+  </members>
+</schema>

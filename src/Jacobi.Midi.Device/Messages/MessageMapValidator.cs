@@ -167,7 +167,8 @@ public static class MessageMapValidator
                     && !map.Device.TryGet(role[MidiProperties.RoleDevicePrefix.Length..], out _))
                 {
                     problems.Information(document, node.Path,
-                        $"the role '{role}' is not fixed by the map '{root}' ({MidiProperties.DevicePrefix}{role[MidiProperties.RoleDevicePrefix.Length..]}): the client supplies the value.");
+                        $"the role '{role}' is not fixed by the map '{root}' ({MidiProperties.DevicePrefix}{role[MidiProperties.RoleDevicePrefix.Length..]}): the client supplies the value.",
+                        root);
                 }
             }
         }

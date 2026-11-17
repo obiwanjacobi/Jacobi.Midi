@@ -1,0 +1,246 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  MIDI Tuning Standard (7E 08 non-real time, 7F 08 real time).
+  A frequency is 3 bytes: the semitone (the MIDI key of equal temperament at or below it) and the fraction of a semitone
+  in 14 bits, most significant first (units of 100/16384 cent); 7F 7F 7F: no change.
+  A dump ends with a checksum: the XOR of all bytes from 7E up to it, 7 bits (the processor midi.xorchecksum on the
+  message: it covers the whole message, it is not a field).
+
+  Universal System Exclusive messages (MIDI 1.0 Detailed Specification and its Recommended Practices):
+
+    F0 7E <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   non-real time
+    F0 7F <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   real time
+
+  The device ID 7F addresses all devices. Each message is a root of its own: a dump that is a message itself
+  (see src/Jacobi.Midi.Device/Messages/readme.md); its header comes from the nodeDefs universalNonRealTime and
+  universalRealTime of the 'midi' schema.
+  Multi-byte values are 7 bits per byte, least significant byte first (lsb14, lsb21, lsb28, lsb35), unless noted.
+-->
+<schema name="Midi.Tuning">
+  <includes>
+    <include schema="midi" />
+  </includes>
+  <nodeDefs>
+    <group name="frequency" midi.doc="A frequency: xx yy zz (7F 7F 7F: no change).">
+      <members>
+        <field name="Semitone" datatype="sys.uint8" midi.doc="The semitone (MIDI key) at or below the frequency." />
+        <field name="Fraction" nodeDef="Midi.msb14" midi.doc="The fraction of a semitone above it, in units of 100/16384 cent." />
+      </members>
+    </group>
+  </nodeDefs>
+  <members>
+    <group name="BulkDumpRequest" nodeDef="Midi.universalNonRealTime" midi.doc="Bulk Tuning Dump Request (7E 08 00): asks for a tuning program.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x08" />
+        <field name="SubId2" datatype="sys.uint8" value="0x00" />
+        <field name="Program" datatype="sys.uint8" midi.doc="The tuning program, 0-127." />
+      </members>
+    </group>
+
+    <!-- [TODO] verify that the checksum covers the whole message from 7E (the specification text names 388 bytes after the program number). -->
+    <group name="BulkDump" nodeDef="Midi.universalNonRealTime" midi.doc="Bulk Tuning Dump (7E 08 01): the frequencies of all 128 keys of a tuning program.">
+      <processors>
+        <processor name="midi.xorchecksum" />
+      </processors>
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x08" />
+        <field name="SubId2" datatype="sys.uint8" value="0x01" />
+        <field name="Program" datatype="sys.uint8" midi.doc="The tuning program, 0-127." />
+        <field name="Name" datatype="sys.string" byteLength="16" midi.doc="The name of the tuning (16 ASCII characters).">
+          <processor name="midi.string" />
+        </field>
+        <repeat name="Keys" count="128" midi.doc="The frequency of each MIDI key, 0-127.">
+          <members>
+            <group name="Frequency" nodeDef="frequency">
+            </group>
+          </members>
+        </repeat>
+      </members>
+    </group>
+
+    <!-- [TODO] verify sub-ID#2 03 (bank and program) against the MIDI Tuning Standard. -->
+    <group name="KeyBasedDumpRequest" nodeDef="Midi.universalNonRealTime" midi.doc="Key-Based Tuning Dump Request (7E 08 03): asks for a tuning program of a bank.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x08" />
+        <field name="SubId2" datatype="sys.uint8" value="0x03" />
+        <field name="Bank" datatype="sys.uint8" midi.doc="The tuning bank, 0-127." />
+        <field name="Program" datatype="sys.uint8" midi.doc="The tuning program, 0-127." />
+      </members>
+    </group>
+
+    <group name="KeyBasedDump" nodeDef="Midi.universalNonRealTime" midi.doc="Key-Based Tuning Dump (7E 08 04): the frequencies of all 128 keys of a tuning program of a bank.">
+      <processors>
+        <processor name="midi.xorchecksum" />
+      </processors>
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x08" />
+        <field name="SubId2" datatype="sys.uint8" value="0x04" />
+        <field name="Bank" datatype="sys.uint8" midi.doc="The tuning bank, 0-127." />
+        <field name="Program" datatype="sys.uint8" midi.doc="The tuning program, 0-127." />
+        <field name="Name" datatype="sys.string" byteLength="16" midi.doc="The name of the tuning (16 ASCII characters).">
+          <processor name="midi.string" />
+        </field>
+        <repeat name="Keys" count="128" midi.doc="The frequency of each MIDI key, 0-127.">
+          <members>
+            <group name="Frequency" nodeDef="frequency">
+            </group>
+          </members>
+        </repeat>
+      </members>
+    </group>
+
+    <!-- [TODO] verify the layout of the scale/octave dumps (05, 06) and the 2-byte offset (most significant first). -->
+    <group name="ScaleOctaveDump1Byte" nodeDef="Midi.universalNonRealTime" midi.doc="Scale/Octave Tuning Dump, 1-byte form (7E 08 05).">
+      <processors>
+        <processor name="midi.xorchecksum" />
+      </processors>
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x08" />
+        <field name="SubId2" datatype="sys.uint8" value="0x05" />
+        <field name="Bank" datatype="sys.uint8" midi.doc="The tuning bank, 0-127." />
+        <field name="Program" datatype="sys.uint8" midi.doc="The tuning program, 0-127." />
+        <field name="Name" datatype="sys.string" byteLength="16" midi.doc="The name of the tuning (16 ASCII characters).">
+          <processor name="midi.string" />
+        </field>
+        <repeat name="Offsets" count="12" midi.doc="The offset of each note of the octave (C to B) from equal temperament.">
+          <members>
+            <field name="Offset" datatype="sys.uint8" midi.doc="64 (40H) is equal temperament; -64 to +63 cents." />
+          </members>
+        </repeat>
+      </members>
+    </group>
+
+    <group name="ScaleOctaveDump2Byte" nodeDef="Midi.universalNonRealTime" midi.doc="Scale/Octave Tuning Dump, 2-byte form (7E 08 06).">
+      <processors>
+        <processor name="midi.xorchecksum" />
+      </processors>
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x08" />
+        <field name="SubId2" datatype="sys.uint8" value="0x06" />
+        <field name="Bank" datatype="sys.uint8" midi.doc="The tuning bank, 0-127." />
+        <field name="Program" datatype="sys.uint8" midi.doc="The tuning program, 0-127." />
+        <field name="Name" datatype="sys.string" byteLength="16" midi.doc="The name of the tuning (16 ASCII characters).">
+          <processor name="midi.string" />
+        </field>
+        <repeat name="Offsets" count="12" midi.doc="The offset of each note of the octave (C to B) from equal temperament.">
+          <members>
+            <field name="Offset" nodeDef="Midi.msb14" midi.doc="8192 is equal temperament; -100 to almost +100 cents." />
+          </members>
+        </repeat>
+      </members>
+    </group>
+
+    <group name="SingleNoteTuningChangeBank" nodeDef="Midi.universalNonRealTime" midi.doc="Single Note Tuning Change with Bank Select (7E 08 07): changes keys of a tuning program, ahead of time.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x08" />
+        <field name="SubId2" datatype="sys.uint8" value="0x07" />
+        <field name="Bank" datatype="sys.uint8" midi.doc="The tuning bank, 0-127." />
+        <field name="Program" datatype="sys.uint8" midi.doc="The tuning program, 0-127." />
+        <field name="ChangeCount" datatype="sys.uint8" midi.doc="The number of changes." />
+        <repeat name="Changes" midi.doc="The new frequency of each key.">
+          <count ref="^.ChangeCount" />
+          <members>
+            <field name="Key" datatype="sys.uint8" midi.doc="The MIDI key number." />
+            <group name="Frequency" nodeDef="frequency">
+            </group>
+          </members>
+        </repeat>
+      </members>
+    </group>
+
+    <group name="ScaleOctaveTuning1Byte" nodeDef="Midi.universalNonRealTime" midi.doc="Scale/Octave Tuning, 1-byte form (7E 08 08): tunes the notes of the octave on channels, ahead of time.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x08" />
+        <field name="SubId2" datatype="sys.uint8" value="0x08" />
+        <field name="ChannelMask" datatype="sys.uint32" byteLength="3" midi.doc="The channels to tune: 000000ff (16-15) 0ggggggg (14-8) 0hhhhhhh (7-1).">
+          <processor name="midi.sysexbyte" />
+        </field>
+        <repeat name="Offsets" count="12" midi.doc="The offset of each note of the octave (C to B) from equal temperament.">
+          <members>
+            <field name="Offset" datatype="sys.uint8" midi.doc="64 (40H) is equal temperament; -64 to +63 cents." />
+          </members>
+        </repeat>
+      </members>
+    </group>
+
+    <group name="ScaleOctaveTuning2Byte" nodeDef="Midi.universalNonRealTime" midi.doc="Scale/Octave Tuning, 2-byte form (7E 08 09): tunes the notes of the octave on channels, ahead of time.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x08" />
+        <field name="SubId2" datatype="sys.uint8" value="0x09" />
+        <field name="ChannelMask" datatype="sys.uint32" byteLength="3" midi.doc="The channels to tune: 000000ff (16-15) 0ggggggg (14-8) 0hhhhhhh (7-1).">
+          <processor name="midi.sysexbyte" />
+        </field>
+        <repeat name="Offsets" count="12" midi.doc="The offset of each note of the octave (C to B) from equal temperament.">
+          <members>
+            <field name="Offset" nodeDef="Midi.msb14" midi.doc="8192 is equal temperament; -100 to almost +100 cents." />
+          </members>
+        </repeat>
+      </members>
+    </group>
+
+    <group name="SingleNoteTuningChange" nodeDef="Midi.universalRealTime" midi.doc="Single Note Tuning Change (7F 08 02): changes keys of a tuning program, now.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x08" />
+        <field name="SubId2" datatype="sys.uint8" value="0x02" />
+        <field name="Program" datatype="sys.uint8" midi.doc="The tuning program, 0-127." />
+        <field name="ChangeCount" datatype="sys.uint8" midi.doc="The number of changes." />
+        <repeat name="Changes" midi.doc="The new frequency of each key.">
+          <count ref="^.ChangeCount" />
+          <members>
+            <field name="Key" datatype="sys.uint8" midi.doc="The MIDI key number." />
+            <group name="Frequency" nodeDef="frequency">
+            </group>
+          </members>
+        </repeat>
+      </members>
+    </group>
+
+    <group name="SingleNoteTuningChangeBankRealTime" nodeDef="Midi.universalRealTime" midi.doc="Single Note Tuning Change with Bank Select (7F 08 07): changes keys of a tuning program, now.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x08" />
+        <field name="SubId2" datatype="sys.uint8" value="0x07" />
+        <field name="Bank" datatype="sys.uint8" midi.doc="The tuning bank, 0-127." />
+        <field name="Program" datatype="sys.uint8" midi.doc="The tuning program, 0-127." />
+        <field name="ChangeCount" datatype="sys.uint8" midi.doc="The number of changes." />
+        <repeat name="Changes" midi.doc="The new frequency of each key.">
+          <count ref="^.ChangeCount" />
+          <members>
+            <field name="Key" datatype="sys.uint8" midi.doc="The MIDI key number." />
+            <group name="Frequency" nodeDef="frequency">
+            </group>
+          </members>
+        </repeat>
+      </members>
+    </group>
+
+    <group name="ScaleOctaveTuning1ByteRealTime" nodeDef="Midi.universalRealTime" midi.doc="Scale/Octave Tuning, 1-byte form (7F 08 08): tunes the notes of the octave on channels, now.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x08" />
+        <field name="SubId2" datatype="sys.uint8" value="0x08" />
+        <field name="ChannelMask" datatype="sys.uint32" byteLength="3" midi.doc="The channels to tune: 000000ff (16-15) 0ggggggg (14-8) 0hhhhhhh (7-1).">
+          <processor name="midi.sysexbyte" />
+        </field>
+        <repeat name="Offsets" count="12" midi.doc="The offset of each note of the octave (C to B) from equal temperament.">
+          <members>
+            <field name="Offset" datatype="sys.uint8" midi.doc="64 (40H) is equal temperament; -64 to +63 cents." />
+          </members>
+        </repeat>
+      </members>
+    </group>
+
+    <group name="ScaleOctaveTuning2ByteRealTime" nodeDef="Midi.universalRealTime" midi.doc="Scale/Octave Tuning, 2-byte form (7F 08 09): tunes the notes of the octave on channels, now.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x08" />
+        <field name="SubId2" datatype="sys.uint8" value="0x09" />
+        <field name="ChannelMask" datatype="sys.uint32" byteLength="3" midi.doc="The channels to tune: 000000ff (16-15) 0ggggggg (14-8) 0hhhhhhh (7-1).">
+          <processor name="midi.sysexbyte" />
+        </field>
+        <repeat name="Offsets" count="12" midi.doc="The offset of each note of the octave (C to B) from equal temperament.">
+          <members>
+            <field name="Offset" nodeDef="Midi.msb14" midi.doc="8192 is equal temperament; -100 to almost +100 cents." />
+          </members>
+        </repeat>
+      </members>
+    </group>
+  </members>
+</schema>

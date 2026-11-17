@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Key-Based Instrument Control (7F 0A, General MIDI 2): controller values for one key (e.g. a drum sound).
+
+  Universal System Exclusive messages (MIDI 1.0 Detailed Specification and its Recommended Practices):
+
+    F0 7E <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   non-real time
+    F0 7F <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   real time
+
+  The device ID 7F addresses all devices. Each message is a root of its own: a dump that is a message itself
+  (see src/Jacobi.Midi.Device/Messages/readme.md); its header comes from the nodeDefs universalNonRealTime and
+  universalRealTime of the 'midi' schema.
+  Multi-byte values are 7 bits per byte, least significant byte first (lsb14, lsb21, lsb28, lsb35), unless noted.
+-->
+<schema name="Midi.KeyBasedInstrumentControl">
+  <includes>
+    <include schema="midi" />
+  </includes>
+  <members>
+    <!-- [TODO] verify the layout against the General MIDI 2 specification. -->
+    <group name="Control" nodeDef="Midi.universalRealTime" midi.doc="Key-Based Instrument Control (7F 0A 01).">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x0A" />
+        <field name="SubId2" datatype="sys.uint8" value="0x01" />
+        <field name="Channel" datatype="sys.uint8" midi.doc="The MIDI channel, 0-15." />
+        <field name="Key" datatype="sys.uint8" midi.doc="The MIDI key number." />
+        <repeat name="Controls" midi.doc="The controller/value pairs.">
+          <members>
+            <field name="Controller" datatype="sys.uint8" midi.doc="The controller number, e.g. 07 volume, 0A pan, 5B reverb, 5D chorus." />
+            <field name="Value" datatype="sys.uint8" />
+          </members>
+        </repeat>
+      </members>
+    </group>
+  </members>
+</schema>

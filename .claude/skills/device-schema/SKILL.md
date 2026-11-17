@@ -11,7 +11,8 @@ When handed a .pdf look for the Midi Implementation section or similar. If the .
 
 A device schema describes the SysEx data of one device: its parameters and, for address based devices, its
 address map. It builds on a vendor envelope schema (`Roland.schema.xml`: the messages), which builds on the base `midi`
-schema (`Midi.schema.xml` in `src/Jacobi.Midi.Device`: shared processor definitions).
+schema (`Midi.schema.xml` in `src/Jacobi.Midi.Device`: shared processor definitions and nodeDefs, the common universal
+SysEx messages; the other universal messages are in `Midi.<Category>.schema.xml` next to it).
 
 Sources of truth, read them when a rule below is not enough:
 - Schema format: `../Jacobi.BinarySerializer/src/Jacobi.BinarySerializer/Schema/readme.md` and `schema.xsd` next to it.
@@ -111,6 +112,7 @@ Put the comment on its own line **above** the member (GP-8 style), not trailing 
 - Multi-byte values: give the field a `byteLength` and a field processor: `midi.sysexbyte` (7 + 7 bits, MSB first), `sys.bitslicer bits="4" byteorder="big"` (nibbles). Make it a nodeDef when it recurs (`sysex14`, `nibble8`).
 - Bit flags in one byte: a group with `byteLength="1"` and `sys.bitpacker`, fields with `bits` (see `EffectSwiches1` in `Gp8.schema.xml`).
 - Fixed bytes (ids, commands, terminators): a field with `value`. The reader checks it, the writer supplies it.
+- Data that runs to the end of the message (up to F7 or the checksum): `byteLength="-1"` on the last field (`sys.bytes`, or `sys.string` with `midi.string`); `Midi.data` is such a `sys.bytes` field.
 
 ## Address map (address based devices)
 

@@ -1,0 +1,65 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Notation Information (7F 03): the bar number and the time signature.
+
+  Universal System Exclusive messages (MIDI 1.0 Detailed Specification and its Recommended Practices):
+
+    F0 7E <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   non-real time
+    F0 7F <device ID> <sub-ID#1> [<sub-ID#2>] ... F7   real time
+
+  The device ID 7F addresses all devices. Each message is a root of its own: a dump that is a message itself
+  (see src/Jacobi.Midi.Device/Messages/readme.md); its header comes from the nodeDefs universalNonRealTime and
+  universalRealTime of the 'midi' schema.
+  Multi-byte values are 7 bits per byte, least significant byte first (lsb14, lsb21, lsb28, lsb35), unless noted.
+-->
+<schema name="Midi.Notation">
+  <includes>
+    <include schema="midi" />
+  </includes>
+  <members>
+    <group name="BarNumber" nodeDef="Midi.universalRealTime" midi.doc="Bar Number (7F 03 01): the bar that is playing.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x03" />
+        <field name="SubId2" datatype="sys.uint8" value="0x01" />
+        <field name="Bar" nodeDef="Midi.lsb14" midi.doc="The bar number (14 bits, signed); 00 40 (-8192): not running." />
+      </members>
+    </group>
+
+    <!-- [TODO] verify that the length counts all bytes after it and the compound pairs. -->
+    <group name="TimeSignatureImmediate" nodeDef="Midi.universalRealTime" midi.doc="Time Signature, immediate (7F 03 02): starts now.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x03" />
+        <field name="SubId2" datatype="sys.uint8" value="0x02" />
+        <field name="Length" datatype="sys.uint8" midi.doc="The number of data bytes that follow." />
+        <field name="Numerator" datatype="sys.uint8" midi.doc="The number of beats in a bar." />
+        <field name="DenominatorPower" datatype="sys.uint8" midi.doc="The beat unit as a power of 2 (2: a quarter note)." />
+        <field name="ClocksPerClick" datatype="sys.uint8" midi.doc="The number of MIDI clocks per metronome click." />
+        <field name="ThirtySecondNotesPerQuarter" datatype="sys.uint8" midi.doc="The number of notated 32nd notes in a MIDI quarter note (24 clocks)." />
+        <repeat name="Compound" midi.doc="More numerator/denominator pairs of a compound time signature.">
+          <members>
+            <field name="Numerator" datatype="sys.uint8" />
+            <field name="DenominatorPower" datatype="sys.uint8" />
+          </members>
+        </repeat>
+      </members>
+    </group>
+
+    <group name="TimeSignatureDelayed" nodeDef="Midi.universalRealTime" midi.doc="Time Signature, delayed (7F 03 42): starts at the next bar.">
+      <members>
+        <field name="SubId1" datatype="sys.uint8" value="0x03" />
+        <field name="SubId2" datatype="sys.uint8" value="0x42" />
+        <field name="Length" datatype="sys.uint8" midi.doc="The number of data bytes that follow." />
+        <field name="Numerator" datatype="sys.uint8" midi.doc="The number of beats in a bar." />
+        <field name="DenominatorPower" datatype="sys.uint8" midi.doc="The beat unit as a power of 2 (2: a quarter note)." />
+        <field name="ClocksPerClick" datatype="sys.uint8" midi.doc="The number of MIDI clocks per metronome click." />
+        <field name="ThirtySecondNotesPerQuarter" datatype="sys.uint8" midi.doc="The number of notated 32nd notes in a MIDI quarter note (24 clocks)." />
+        <repeat name="Compound" midi.doc="More numerator/denominator pairs of a compound time signature.">
+          <members>
+            <field name="Numerator" datatype="sys.uint8" />
+            <field name="DenominatorPower" datatype="sys.uint8" />
+          </members>
+        </repeat>
+      </members>
+    </group>
+  </members>
+</schema>

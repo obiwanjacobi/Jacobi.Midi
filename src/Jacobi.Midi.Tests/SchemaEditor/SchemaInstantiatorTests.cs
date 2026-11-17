@@ -279,7 +279,7 @@ public class SchemaInstantiatorTests
         var viewModel = new MainViewModel();
         var loaded = viewModel.OpenedAssemblies.Load(
             Assembly.LoadFrom(TestHelpers.AssemblyPathOf("Jacobi.Midi.Device")), "Jacobi.Midi.Device.dll");
-        var embedded = Assert.Single(loaded.Schemas);
+        var embedded = Assert.Single(loaded.Schemas, schema => schema.Name == "Midi");
         // an open document with the name of the embedded schema is used instead of it
         viewModel.NewDocumentCommand.Execute(null);
         var replacing = viewModel.SelectedDocument!;
@@ -351,7 +351,7 @@ public class SchemaInstantiatorTests
         var viewModel = new MainViewModel();
         var loaded = viewModel.OpenedAssemblies.Load(
             Assembly.LoadFrom(TestHelpers.AssemblyPathOf("Jacobi.Midi.Device")), "Jacobi.Midi.Device.dll");
-        var embedded = Assert.Single(loaded.Schemas);
+        var embedded = Assert.Single(loaded.Schemas, schema => schema.Name == "Midi");
         viewModel.NewDocumentCommand.Execute(null);
         viewModel.SelectedDocument!.Schema.Name = embedded.Name;
         viewModel.SelectedDocument!.MarkChanged();
@@ -467,7 +467,7 @@ public class SchemaInstantiatorTests
         var viewModel = new MainViewModel();
         var loaded = viewModel.OpenedAssemblies.Load(
             Assembly.LoadFrom(TestHelpers.AssemblyPathOf("Jacobi.Midi.Device")), "Jacobi.Midi.Device.dll");
-        var embedded = Assert.Single(loaded.Schemas);
+        var embedded = Assert.Single(loaded.Schemas, schema => schema.Name == "Midi");
         viewModel.NewDocumentCommand.Execute(null);
         viewModel.SelectedDocument!.AddInclude(embedded.Name);
         viewModel.SelectedItem = viewModel.SelectedDocument!.Schema.Members.Single();

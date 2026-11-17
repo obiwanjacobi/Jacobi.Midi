@@ -22,8 +22,12 @@ public enum MessageMapProblemSeverity
 /// <param name="Path">The path of the node from a root of the document, e.g. 'Message16.RQ1.Address'; empty for the document.</param>
 /// <param name="Message">What is wrong, without the path.</param>
 /// <param name="Severity">How serious the problem is.</param>
+/// <param name="Map">
+/// The map root the problem is about when that is not the root of <paramref name="Path"/>: e.g. a role of an envelope
+/// message (in the vendor schema) that the map of a device does not fix. Null otherwise.
+/// </param>
 public sealed record MessageMapProblem(string Document, SchemaPath Path, string Message,
-    MessageMapProblemSeverity Severity = MessageMapProblemSeverity.Error)
+    MessageMapProblemSeverity Severity = MessageMapProblemSeverity.Error, SchemaName? Map = null)
 {
     public override string ToString() => Path.IsEmpty ? Message : $"{Path.Value}: {Message}";
 }
@@ -41,6 +45,6 @@ internal sealed class MessageMapProblems : List<MessageMapProblem>
     public void Warning(string document, SchemaPath path, string message)
         => Add(new MessageMapProblem(document, path, message, MessageMapProblemSeverity.Warning));
 
-    public void Information(string document, SchemaPath path, string message)
-        => Add(new MessageMapProblem(document, path, message, MessageMapProblemSeverity.Information));
+    public void Information(string document, SchemaPath path, string message, SchemaName? map = null)
+        => Add(new MessageMapProblem(document, path, message, MessageMapProblemSeverity.Information, map));
 }
