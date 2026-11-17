@@ -5,10 +5,11 @@ namespace Jacobi.Midi.SchemaEditor.Instantiate;
 
 /// <summary>
 /// The values of a group of an instance tree (a group, repeat item or body of an open choice), copied to be pasted into
-/// another instance of the same group (see <see cref="ShapeOf"/>). They travel as text (JSON), e.g. on the system clipboard,
-/// so they can be pasted in another instantiate or match dialog.
-/// Copied are the field values, the selected alternative of each choice and the items of each repeat; not the inclusion of the
-/// parts of an address map nor the item of the address space an address map repeat shows (they decide what is sent where).
+/// any group: the members are matched by name, the values of the members both have are pasted (see <see cref="PasteInto"/>).
+/// They travel as text (JSON), e.g. on the system clipboard, so they can be pasted in another instantiate or match dialog.
+/// Copied are the values of the edited fields (not a constant nor a value supplied by an address map), the selected
+/// alternative of each choice and the items of each repeat; not the inclusion of the parts of an address map nor the item of
+/// the address space an address map repeat shows (they decide what is sent where).
 /// </summary>
 internal sealed class InstanceValues
 {
@@ -20,83 +21,69 @@ internal sealed class InstanceValues
 
     private readonly JsonObject _values;
 
-    private InstanceValues(string shape, string source, JsonObject values)
+    private InstanceValues(string source, int fieldCount, JsonObject values)
     {
-        Shape = shape;
         Source = source;
+        FieldCount = fieldCount;
         _values = values;
     }
-
-    /// <summary>The groups the values fit (see <see cref="ShapeOf"/>).</summary>
-    public string Shape { get; }
 
     /// <summary>The display path of the group the values were copied from, e.g. <c>Root.Patches[3]</c>.</summary>
     public string Source { get; }
 
-    /// <summary>
-    /// What the values of <paramref name="group"/> fit, as text: groups with the same shape take each other's values.
-    /// <list type="bullet">
-    /// <item>A group of a node def (or a root that conforms to one): <c>nodeDef:Document.Name</c>.</item>
-    /// <item>A group in an instance of a node def: that node def and the path below it, <c>nodeDef:Document.Name/Common</c>.</item>
-    /// <item>Any other group: its schema node, <c>schema:Document.Root.Path</c>; the same for all items of a repeat.</item>
-    /// </list>
-    /// </summary>
-    public static string ShapeOf(InstanceGroup group)
-    {
-        ArgumentNullException.ThrowIfNull(group);
-        for (InstanceNode? node = group; node is not null; node = node.Parent)
-        {
-            if (node.Schema.NodeDef is { } nodeDef && ReferenceEquals(node, group))
-            {
-                return $"nodeDef:{nodeDef.Qualify(node.Document)}";
-            }
-            // (a repeat item has the path of its repeat: it is met first)
-            if (node.Schema is { NodeDef: { } instanceOf, IsNodeDefInstance: true }
-                && group.Path.Value.StartsWith($"{node.Path.Value}.", StringComparison.OrdinalIgnoreCase))
-            {
-                return $"nodeDef:{instanceOf.Qualify(node.Document)}/{group.Path.Value[(node.Path.Value.Length + 1)..]}";
-            }
-            // the path of the body of an open choice starts anew
-            if (node is InstanceBody)
-            {
-                break;
-            }
-        }
-        return $"schema:{group.Document}.{group.Path.Value}";
-    }
-
-    /// <summary>True when the values can be pasted into <paramref name="target"/>: it has the same <see cref="Shape"/>.</summary>
-    public bool Fits(InstanceGroup target) => String.Equals(Shape, ShapeOf(target), StringComparison.OrdinalIgnoreCase);
+    /// <summary>The number of field values that were copied.</summary>
+    public int FieldCount { get; }
 
     /// <summary>Copies the values of <paramref name="group"/>.</summary>
     public static InstanceValues Copy(InstanceGroup group)
     {
         ArgumentNullException.ThrowIfNull(group);
-        return new(ShapeOf(group), group.DisplayPath, CopyGroup(group));
+        var fieldCount = 0;
+        var values = CopyGroup(group, ref fieldCount);
+        return new(group.DisplayPath, fieldCount, values);
     }
 
-    private static JsonObject CopyGroup(InstanceGroup group)
+    private static JsonObject CopyGroup(InstanceGroup group, ref int fieldCount)
     {
         var values = new JsonObject(NodeOptions);
         foreach (var member in group.Members)
         {
-            values[member.Name] = CopyNode(member);
+            // a constant or a supplied value is not the user's: it is not copied
+            if (member is InstanceField { IsEditable: false })
+            {
+                continue;
+            }
+            values[member.Name] = CopyNode(member, ref fieldCount);
         }
         return values;
     }
 
-    private static JsonNode? CopyNode(InstanceNode node) => node switch
+    private static JsonNode? CopyNode(InstanceNode node, ref int fieldCount)
     {
-        InstanceField field => JsonValue.Create(field.Value),
-        InstanceGroup group => CopyGroup(group),
-        InstanceRepeat repeat => new JsonArray([.. repeat.Items.Select(CopyGroup)]),
-        InstanceChoice choice => new JsonObject(NodeOptions)
+        switch (node)
         {
-            ["selected"] = choice.SelectedOption?.Name,
-            ["value"] = choice.Selected is { } selected ? CopyNode(selected) : null
-        },
-        _ => null
-    };
+            case InstanceField field:
+                fieldCount++;
+                return JsonValue.Create(field.Value);
+            case InstanceGroup group:
+                return CopyGroup(group, ref fieldCount);
+            case InstanceRepeat repeat:
+                var items = new JsonArray();
+                foreach (var item in repeat.Items)
+                {
+                    items.Add(CopyGroup(item, ref fieldCount));
+                }
+                return items;
+            case InstanceChoice choice:
+                return new JsonObject(NodeOptions)
+                {
+                    ["selected"] = choice.SelectedOption?.Name,
+                    ["value"] = choice.Selected is { } selected ? CopyNode(selected, ref fieldCount) : null
+                };
+            default:
+                return null;
+        }
+    }
 
     /// <summary>The values as text (JSON), recognized by <see cref="TryParse"/>.</summary>
     public string ToText()
@@ -104,8 +91,8 @@ internal sealed class InstanceValues
         var text = new JsonObject
         {
             ["format"] = Format,
-            ["shape"] = Shape,
             ["source"] = Source,
+            ["fields"] = FieldCount,
             ["values"] = _values.DeepClone()
         };
         return text.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
@@ -124,10 +111,10 @@ internal sealed class InstanceValues
         {
             if (JsonNode.Parse(text, NodeOptions) is JsonObject root
                 && root["format"]?.GetValue<string>() == Format
-                && root["shape"]?.GetValue<string>() is { } shape
+                && root["fields"]?.GetValue<int>() is { } fieldCount
                 && root["values"] is JsonObject copied)
             {
-                values = new InstanceValues(shape, root["source"]?.GetValue<string>() ?? String.Empty, copied);
+                values = new InstanceValues(root["source"]?.GetValue<string>() ?? String.Empty, fieldCount, copied);
                 return true;
             }
         }
@@ -139,29 +126,37 @@ internal sealed class InstanceValues
     }
 
     /// <summary>
-    /// Pastes the values into <paramref name="target"/>, which must fit them (see <see cref="Fits"/>): sets the fields that are
-    /// edited (not a constant nor supplied by an address map), selects the alternative of each choice and gives each open repeat
-    /// the number of items that was copied.
+    /// True when pasting into <paramref name="target"/> would give a value to at least one of its fields (a member both have,
+    /// by name); nothing is changed.
     /// </summary>
-    /// <param name="problems">Receives what could not be pasted, e.g. a field of the target that has no copied value.</param>
-    /// <returns>The number of fields that received a value.</returns>
-    /// <exception cref="InvalidOperationException">The values do not fit <paramref name="target"/>.</exception>
-    public int PasteInto(InstanceGroup target, ICollection<string> problems)
+    public bool Matches(InstanceGroup target)
     {
         ArgumentNullException.ThrowIfNull(target);
-        ArgumentNullException.ThrowIfNull(problems);
-        if (!Fits(target))
-        {
-            throw new InvalidOperationException(
-                $"The values of '{Source}' ({Shape}) do not fit '{target.DisplayPath}' ({ShapeOf(target)}).");
-        }
-        var paster = new Paster(problems);
+        var paster = new Paster(apply: false);
+        paster.Paste(target, _values);
+        return paster.Count > 0;
+    }
+
+    /// <summary>
+    /// Pastes the values into <paramref name="target"/>: the members are matched by name, at every level; a member the target
+    /// does not have, or a member without a copied value, is skipped. Sets the edited fields (not a constant nor supplied by
+    /// an address map), selects the alternative of each choice (when it has it and the alternative is not fixed) and gives each
+    /// open repeat the number of items that was copied.
+    /// </summary>
+    /// <returns>The number of fields that received a value (of <see cref="FieldCount"/>).</returns>
+    public int PasteInto(InstanceGroup target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        var paster = new Paster(apply: true);
         paster.Paste(target, _values);
         return paster.Count;
     }
 
-    /// <summary>Pastes the copied values into the nodes of a tree, counting the fields and collecting the problems.</summary>
-    private sealed class Paster(ICollection<string> problems)
+    /// <summary>
+    /// Pastes the copied values into the nodes of a tree and counts the fields that receive one; with <c>apply</c> false only
+    /// counts (an alternative or repeat items that would have to be created count as one field).
+    /// </summary>
+    private sealed class Paster(bool apply)
     {
         public int Count { get; private set; }
 
@@ -181,9 +176,7 @@ internal sealed class InstanceValues
                 case (InstanceChoice choice, JsonObject selection):
                     PasteChoice(choice, selection);
                     break;
-                default:
-                    problems.Add($"{node.DisplayPath}: the copied value does not fit.");
-                    break;
+                    // another kind of node with the same name: nothing to paste
             }
         }
 
@@ -191,13 +184,12 @@ internal sealed class InstanceValues
         {
             if (!field.IsEditable)
             {
-                if (!String.Equals(field.Value, value, StringComparison.Ordinal))
-                {
-                    problems.Add($"{field.DisplayPath}: kept '{field.Value}' ({field.RoleSupply ?? "a constant"}), the copied value is '{value}'.");
-                }
                 return;
             }
-            field.Value = value;
+            if (apply)
+            {
+                field.Value = value;
+            }
             Count++;
         }
 
@@ -209,31 +201,24 @@ internal sealed class InstanceValues
                 {
                     Paste(member, value);
                 }
-                else
-                {
-                    problems.Add($"{member.DisplayPath}: has no copied value.");
-                }
-            }
-            var names = group.Members.Select(member => member.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            foreach (var (name, _) in members.Where(member => !names.Contains(member.Key)))
-            {
-                problems.Add($"{group.DisplayPath}.{name}: the copied value has no field or group here.");
             }
         }
 
         private void PasteRepeat(InstanceRepeat repeat, JsonArray items)
         {
-            if (repeat.IsOpen)
+            if (repeat.IsOpen && repeat.Items.Count != items.Count)
             {
+                if (!apply)
+                {
+                    // the items are made to measure on a paste: they take the values
+                    Count += items.Count > 0 ? 1 : 0;
+                    return;
+                }
                 repeat.Truncate(items.Count);
                 while (repeat.Items.Count < items.Count)
                 {
                     repeat.AddNewItem();
                 }
-            }
-            else if (repeat.Items.Count != items.Count)
-            {
-                problems.Add($"{repeat.DisplayPath}: {items.Count} item(s) copied into {repeat.Items.Count} ({repeat.CountText}).");
             }
             for (var index = 0; index < Math.Min(items.Count, repeat.Items.Count); index++)
             {
@@ -252,9 +237,12 @@ internal sealed class InstanceValues
                 var option = choice.Options.FirstOrDefault(option => String.Equals(option.Name, selected, StringComparison.OrdinalIgnoreCase));
                 if (option is null || !choice.CanSelect)
                 {
-                    problems.Add(option is null
-                        ? $"{choice.DisplayPath}: has no alternative '{selected}'."
-                        : $"{choice.DisplayPath}: the alternative is fixed to '{choice.SelectedOption?.Name}', '{selected}' was copied.");
+                    return;
+                }
+                if (!apply)
+                {
+                    // the alternative is selected on a paste: its body takes the values
+                    Count++;
                     return;
                 }
                 choice.SelectedOption = option;

@@ -3,6 +3,35 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## Copy and paste of values in the Schema Editor (2026-11-17)
+
+Issue: the values of a group could only be pasted into a group of the same shape (the same nodeDef or schema node); with
+a nodeDef that a node extends (members of its own, overrides), the same nodeDef no longer means the same members.
+
+1. **The values are pasted into the members with the same name, at every level;** the others are skipped. No shape
+   check. *Why:* all common fields are useful; a wrong match by name is the user's concern.
+2. **The Paste button of a group is disabled when no field matches** the copied values on the clipboard (read again
+   when the dialog opens and when the window is activated). *Why:* no paste that does nothing.
+3. **The outcome is only a count:** "Pasted 2 of 8 value(s)". Constants and supplied values are not copied. *Why:* a
+   partial paste is normal use, not a problem to list.
+
+## A nodeDef on a root (2026-11-17)
+
+Issue: the universal SysEx messages would repeat the `midi.sysex` processor on every root. A root that referenced a
+nodeDef did not get its members or processors: the BinarySerializer treated such a root only as a body of an open
+choice (the nodeDef as its contract).
+
+1. **A nodeDef reference applies the same way on every node, roots included:** the members of the nodeDef first, then
+   the node's own; processors and properties merge as on any other node. *Why:* one rule for all nodes; a root can
+   share a base (e.g. a SysEx message with its processor).
+2. **Whether a nodeDef is a contract is decided by the open choice** (its `memberNodeDef`), not by the nodeDef or the
+   nodes that reference it. A body gets the members of its contract. *Why:* the contract is the open choice's concern.
+3. **A member with the name of a nodeDef member overrides it** (the referencing node wins, no error). *Why:* a use can
+   adapt one member of a shared base.
+4. **Sibling members never share a name;** a duplicate is a compile error. *Why:* members are addressed by name.
+5. **An open choice on its own contract is only supported on a concrete node,** not inside the nodeDef that is the
+   contract (a clear compile error). *Why:* every body would get the choice again; a concrete node is enough.
+
 ## Parameter sources other than message maps (2026-11-14)
 
 Issue: the console only supports parameters of a message map (SysEx through the message exchange). Devices also

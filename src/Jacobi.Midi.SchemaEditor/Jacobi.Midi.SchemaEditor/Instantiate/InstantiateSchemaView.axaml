@@ -50,7 +50,7 @@
     </UserControl.Styles>
 
     <UserControl.Resources>
-        <!-- copy the values of a group (group, repeat item, body) to the clipboard, or paste them into another instance of the same group -->
+        <!-- copy the values of a group (group, repeat item, body) to the clipboard, or paste them into the members with the same name of a group -->
         <DataTemplate x:Key="ValuesButtons" x:DataType="inst:InstanceGroup">
             <StackPanel Orientation="Horizontal" Spacing="4">
                 <Button Classes="values" Content="Copy" CommandParameter="{Binding}"
@@ -58,7 +58,7 @@
                         ToolTip.Tip="Copy the values (fields, selected alternatives, repeat items) to the clipboard" />
                 <Button Classes="values" Content="Paste" CommandParameter="{Binding}"
                         Command="{Binding $parent[inst:InstantiateSchemaView].((inst:InstantiateSchemaViewModel)DataContext).PasteValuesCommand}"
-                        ToolTip.Tip="Paste the values copied from the same group, or from a group of the same node def" />
+                        ToolTip.Tip="Paste the copied values into the fields with the same name (enabled when at least one matches)" />
             </StackPanel>
         </DataTemplate>
     </UserControl.Resources>
