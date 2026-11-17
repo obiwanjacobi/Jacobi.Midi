@@ -6,32 +6,45 @@ namespace Jacobi.Midi.Console.Core.Files;
 
 /// <summary>
 /// What all console files share: the choice of text format, the <c>format</c> attribute of the root that names the
-/// kind of file and its version, the schema sources (<c>assembly</c> and <c>schema</c> elements) and the notation
+/// kind of file and its version, the schema sources (<c>assembly</c>, <c>schema</c> and <c>exchange</c> elements) and the notation
 /// of colors.
 /// </summary>
 internal static class ConsoleFile
 {
-    /// <summary>Adds the sources as <c>assembly</c> and <c>schema</c> elements.</summary>
+    // the roles of the sources, with the list of the sources each one is read into and written from
+    private static readonly (FileRole Role, Func<SchemaSources, IReadOnlyList<string>> Get, Func<SchemaSources, IReadOnlyList<string>, SchemaSources> With)[] SourceRoles =
+    [
+        (FileRoles.Assemblies, sources => sources.Assemblies, (sources, paths) => sources with { Assemblies = paths }),
+        (FileRoles.Schemas, sources => sources.Schemas, (sources, paths) => sources with { Schemas = paths }),
+        (FileRoles.Exchanges, sources => sources.Exchanges, (sources, paths) => sources with { Exchanges = paths }),
+    ];
+
+    /// <summary>Adds the sources as <c>assembly</c>, <c>schema</c> and <c>exchange</c> elements.</summary>
     public static void AddSources(FileElement element, SchemaSources sources)
     {
-        foreach (var assembly in sources.Assemblies)
-            element.Add(new FileElement(FileRoles.Assemblies.ElementName!, FileRoles.Assemblies).Set(FileRoles.Assemblies.ValueAttribute!, assembly));
-        foreach (var schema in sources.Schemas)
-            element.Add(new FileElement(FileRoles.Schemas.ElementName!, FileRoles.Schemas).Set(FileRoles.Schemas.ValueAttribute!, schema));
+        foreach (var (role, get, _) in SourceRoles)
+        {
+            foreach (var path in get(sources))
+                element.Add(new FileElement(role.ElementName!, role).Set(role.ValueAttribute!, path));
+        }
     }
 
-    /// <summary>True when the element is an <c>assembly</c> or <c>schema</c> element, read into the lists.</summary>
-    public static bool TryReadSource(FileElement element, List<string> assemblies, List<string> schemas)
-    {
-        var role = element.Name == FileRoles.Assemblies.ElementName ? FileRoles.Assemblies
-            : element.Name == FileRoles.Schemas.ElementName ? FileRoles.Schemas
-            : null;
-        if (role is null)
-            return false;
+    /// <summary>True when the element is a source element (<c>assembly</c>, <c>schema</c> or <c>exchange</c>).</summary>
+    public static bool IsSource(FileElement element)
+        => SourceRoles.Any(source => source.Role.ElementName == element.Name);
 
-        (role == FileRoles.Assemblies ? assemblies : schemas).Add(element.GetRequired(role.ValueAttribute!));
-        element.EnsureAllRead();
-        return true;
+    /// <summary>True when the element is a source element (see <see cref="IsSource"/>); its path is added to the sources.</summary>
+    public static bool TryReadSource(FileElement element, ref SchemaSources sources)
+    {
+        foreach (var (role, get, with) in SourceRoles)
+        {
+            if (role.ElementName != element.Name)
+                continue;
+            sources = with(sources, [.. get(sources), element.GetRequired(role.ValueAttribute!)]);
+            element.EnsureAllRead();
+            return true;
+        }
+        return false;
     }
 
     public const string FormatAttribute = "format";

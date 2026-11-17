@@ -127,12 +127,11 @@ public static class DashboardFile
         ConsoleFile.CheckFormat(root, Format);
 
         var devices = new List<DashboardDevice>();
-        var assemblies = new List<string>();
-        var schemas = new List<string>();
+        var sources = SchemaSources.None;
         LayoutControl? layout = null;
         foreach (var child in root.TakeChildren())
         {
-            if (ConsoleFile.TryReadSource(child, assemblies, schemas))
+            if (ConsoleFile.TryReadSource(child, ref sources))
             {
                 continue;
             }
@@ -161,7 +160,7 @@ public static class DashboardFile
             Look = root.Get("look"),
             RigPath = root.Get("rig"),
             Devices = devices,
-            Sources = new SchemaSources { Assemblies = assemblies, Schemas = schemas },
+            Sources = sources,
             Layout = layout ?? throw root.Error("the dashboard has no layout control."),
         };
         root.EnsureAllRead();

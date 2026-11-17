@@ -17,6 +17,7 @@ public class RigFileTests
         <rig format="jacobi.midi.rig/1">
           <assembly path="Acme.Midi.dll" />
           <schema path="C:/Schemas/Acme.xml" />
+          <exchange path="C:/Schemas/Acme.exchange.xml" />
           <device alias="synth" name="Acme S-1" schema="Acme" color="#3D8BFD">
             <deviceValue name="deviceId" value="0x10" />
             <deviceValue name="groupId" value="7F1CH" />
@@ -31,6 +32,7 @@ public class RigFileTests
           "format": "jacobi.midi.rig/1",
           "assemblies": [ "Acme.Midi.dll" ],
           "schemas": [ "C:/Schemas/Acme.xml" ],
+          "exchanges": [ "C:/Schemas/Acme.exchange.xml" ],
           "devices": [
             {
               "alias": "synth", "name": "Acme S-1", "schema": "Acme", "color": "#3D8BFD",
@@ -49,6 +51,7 @@ public class RigFileTests
 
         Assert.Equal(["Acme.Midi.dll"], rig.Sources.Assemblies);
         Assert.Equal(["C:/Schemas/Acme.xml"], rig.Sources.Schemas);
+        Assert.Equal(["C:/Schemas/Acme.exchange.xml"], rig.Sources.Exchanges);
         Assert.Equal(2, rig.Devices.Count);
 
         var synth = rig.Find("SYNTH")!;

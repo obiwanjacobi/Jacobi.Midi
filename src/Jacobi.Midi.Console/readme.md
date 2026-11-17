@@ -14,9 +14,9 @@ the devices) is in the [todo list](todo.md).
 
 | Term | Meaning |
 |------|---------|
-| **Rig** | The devices of the user: a list of device instances, and the assemblies and schema files they need. Saved in its own file, so the same rig serves all dashboards. |
+| **Rig** | The devices of the user: a list of device instances, and the assemblies, schema files and exchange files they need. Saved in its own file, so the same rig serves all dashboards. |
 | **Device instance** | One device of the rig: an **alias** (`synth`, `pedalboard`), a display name, the **schema**: a schema document (e.g. `Gx700`), all of whose root groups are the device's (its address map, command roots, Property Exchange roots), the `DeviceValues` its roots do not fix (e.g. `deviceId`), how to reach it (the endpoint by name and the UMP groups to send and receive on; usually the same group), its color, and its own assemblies and schema files. |
-| **Schema library** | The schemas and processors the console works with, compiled into one `SchemaSet` and `Serializer`: the built-in assemblies plus the assemblies and schema files of the rig and the dashboard (see [Schemas](#schemas)). |
+| **Schema library** | The schemas, exchange files and processors the console works with, compiled into one `SchemaSet` and `Serializer`: the built-in assemblies plus the assemblies, schema files and exchange files of the rig and the dashboard (see [Schemas](#schemas)). |
 | **Index variable** | A repeat index the user changes in the UI, e.g. the patch number: declared on a layout control and used in binding paths as `Programs[$patch]`. Changed by a control bound to `$patch`. |
 | **Parameter** | One field of the root group of a device (usually its address map), identified by its schema path and `InstancePath` (e.g. the `Rate` of the phaser in the temporary patch). The display name, value range, steps and option names come from the schema's data type (`min`, `max`, `scale`, `shift`, `options`). |
 | **Dashboard** | A tree of controls: layout controls that contain parameter controls and other layout controls. It refers to devices by alias only, so it is portable between rigs. |
@@ -294,12 +294,20 @@ The property panel opens the same chooser for each area of the selected control.
 - *For all controls of device ...*: the pick becomes the device's color in the rig instead of the control's.
 
 A pick applies at once. The dashboard or the rig is then changed. The file menu (☰ at the left of the toolbar) has
-*Open* (*Rig…*, *Dashboard…*, *Dump…*), *Save*, *Save as* and *Close dashboard*: *Save › Dashboard* or *Rig* writes
+*Open…*, *Load assembly…*, *Save*, *Save as* and *Close dashboard*. *Open…* opens every kind of file of the console;
+the end of the file's name tells its kind (`ConsoleFileTypes`), and the file picker has a filter for each:
+`*.rig.xml`/`*.rig.json` (a rig, in place of the open one), `*.dashboard.xml`/`*.dashboard.json` (a dashboard, next to
+the open ones), `*.schema.xml`/`*.schema.json` and `*.exchange.xml`/`*.exchange.json` (a schema or exchange file, into
+the rig: see *The device panel* in [Edit and Play](#edit-and-play)), `*.syx` (a dump, offline only). A file whose name ends otherwise is not
+opened: a message box tells why, and so does a dump opened with MIDI. *Load assembly…* loads an assembly into the rig
+with all it embeds (schemas, exchange files, processors). *Save › Dashboard* or *Rig* writes *Save › Dashboard* or *Rig* writes
 that one, *Save › All* (Ctrl+S) writes the selected dashboard and the rig when they changed, *Save as* writes one of them to
 another file (XML or JSON by its extension). A file that was not
-read from disk (a new dashboard) is saved with a file picker. A changed marker (●) shows unsaved changes: of each open
+read from disk (a new dashboard) is saved with a file picker. The save pickers have the same filters as *Open…*
+(`*.rig.xml`, `*.rig.json`, ...; a generated schema `*.schema.xml`, `*.schema.json`); a name that does not end as the
+files of its kind do is not saved (a message box tells why), as *Open…* would not open it. A changed marker (●) shows unsaved changes: of each open
 dashboard next to its name in the list of dashboards, of the rig next to the RIG heading (Edit mode), of the rig or the
-selected dashboard on the file menu, and on the items of *Save*. Unsaved changes are not discarded silently: *Open › Rig…* (in place of a changed rig) and *Close
+selected dashboard on the file menu, and on the items of *Save*. Unsaved changes are not discarded silently: *Open…* of a rig, *New rig* and opening the rig of a dashboard (in place of a changed rig; an empty rig, without devices and sources, is replaced without asking) and *Close
 dashboard* (of a changed dashboard) ask the user to confirm first, and so does closing the window (desktop) while the rig or an open dashboard has unsaved changes, naming them. When the dashboard gives a device a color of its own, a new rig
 color does not show on it; the console says so.
 
@@ -335,7 +343,7 @@ every dashboard; each dashboard (`DashboardSession`) has its own index variables
 schemas rebuilds the schema library, and with it the device states (their values are reset; this is reported). The
 console starts empty: open a rig and its dashboards (*Open*), or make a new dashboard. A GP-8 example (a rig and two
 dashboards) is in `docs/examples/console` of the repository; its values come from the bulk dump of the tests
-(`src/Jacobi.Midi.Tests/Schema/gp8-sysex.syx`, *Open › Dump…*).
+(`src/Jacobi.Midi.Tests/Schema/gp8-sysex.syx`, *Open…*).
 
 In *Play* mode the layout is locked and only the values change. Where the values come from is chosen in the MIDI bar
 (see [MIDI](#midi)).
@@ -390,13 +398,16 @@ device values the message maps of its roots need (`MessageMapInfo.RequiredDevice
 a value; a name they do not need is marked, and so are the required ones still without a value, or why they are not
 known), the MIDI endpoint and UMP groups with the
 device's connection and its tests (see [MIDI](#midi)) and colors; *Remove* takes it out. A device has no schema files
-or assemblies of its own: it is made from a schema of the library. The *+* of the rig adds a device for a schema of the library with device data (the
-other root groups in a submenu; named after it: `Gp8.AddressMap` is `gp8`). It also brings in the schemas (and
-exchange files) of a schema file or an assembly the user picks: the file becomes a schema source of the rig
-(`Rig.Sources`), and the root groups of the documents it brings (`SchemaLibrary.RootsFromFile`) are offered by the *+*
-from then on; no device is added. A file that brings no root group is not added (reported). A document of the file that
+or assemblies of its own: it is made from a schema of the library. The *+* of the rig adds a device for a schema of the library with device data (all
+its root groups are the device's; named after it: `Gp8` is `gp8`); the schemas are grouped by the first part of
+their name (`SchemaGroup`: `Midi`, `Midi.GM`, ... in a submenu `Midi`; a group of one schema is a plain item). A schema file or exchange file opened with
+*Open…* of the file menu, or an assembly loaded with *Load assembly…*, becomes a source of the rig (`Rig.Sources`). The root groups of the documents it brings
+(`SchemaLibrary.RootsFromFile`, `RootsFromAssembly`) are offered by the *+* from then on, and the exchanges of an
+exchange file (`SchemaLibrary.ExchangesFromFile`) can be chosen for the devices of its root; no device is added. A
+file that brings nothing is not added (reported): a schema file without a root group, an exchange file that cannot be
+read or is for a root the schemas do not have, an assembly with neither. A document of the file that
 replaces a built-in one of the same name does so for all devices of the rig, and is shown as information. A change of the schemas builds
-the library again, which resets the values of the devices (reported); schema files and assemblies are loaded by their
+the library again, which resets the values of the devices (reported); schema files, exchange files and assemblies are loaded by their
 path, so not in the browser. Open dashboards that use a renamed or removed alias are reported (a renamed one is
 renamed in the dashboard's properties).
 
@@ -418,7 +429,7 @@ The MIDI bar (in the toolbar) shows whether the devices of the rig are connected
 amber: some, red: none) with a summary; a click opens the list of the devices with the status of each.
 
 - **Edit mode is always connected**, to choose the endpoints and test the devices.
-- **Play mode** has an explicit choice of where the values come from: **Offline** (dump files: *Open › Dump…*) or **MIDI** (the devices). With MIDI, the controls of a device that is not online are disabled; *Open › Dump…* is only available offline.
+- **Play mode** has an explicit choice of where the values come from: **Offline** (dump files: *Open…*) or **MIDI** (the devices). With MIDI, the controls of a device that is not online are disabled; a dump is only loaded offline (with MIDI, *Open…* of a dump tells so).
 - Without a MIDI backend (the browser host) the console stays offline; the bar says so.
 
 **Receiving the values.** In Play mode with MIDI, the values of the parameters the dashboard shown is bound to are
@@ -486,12 +497,15 @@ the same objects the message exchange needs to read and write the MIDI messages.
 them, in this order:
 
 1. the built-in assemblies: the serializer's processors (`sys`) and the base `midi` schema with its processors (`SchemaLibraryBuilder.CoreAssemblies`), and the device assemblies the host preloads (Roland, Yamaha, ...);
-2. the assemblies and schema files of the rig;
+2. the assemblies, schema files and exchange files of the rig;
 3. those of the dashboard.
 
-An assembly brings its embedded schemas (`.xml`, `.json` resources) and its processor factories. A schema document of a
-later source replaces an earlier one with the same name, so a rig or a dashboard can customise a built-in schema;
-the replacement is shown as information in the notifications. A source that cannot be loaded (a missing file, an
+An assembly brings its embedded schemas (`.xml`, `.json` resources), its exchange files (`.exchange.xml`,
+`.exchange.json` resources) and its processor factories; per source the assemblies come first, then the schema files,
+then the exchange files. A schema document of a later source replaces an earlier one with the same name, and an
+exchange file one for the same root (`For`), so a rig or a dashboard can customise a built-in schema or exchange file;
+the replacement is shown as information in the notifications. An exchange file for a root the schemas do not have is
+reported. A source that cannot be loaded (a missing file, an
 assembly that does not load, an invalid schema) is reported and the others are still used; schemas that do not compile
 are reported and the library then has no serializer.
 
@@ -511,7 +525,7 @@ value is unknown.
 
 - **Reading and writing.** Controls use `TryGetValue` and `SetValue`; a value sink (`CreateSink`) and a value source (`Source`) give the values to and take them from the serializer and the message exchange.
 - **Changes.** `ValueChanged` reports every value that changed, with its origin: `User`, `Device` or `Dump`. Setting the known value again reports nothing. The event is raised on the thread that changed the value; the UI marshals it.
-- **Dumps.** `LoadDump` splits a dump into its SysEx messages (`SysExSplitter` of the Messages project) and decodes the data messages of the device's map for this device (`MessageMaps.Load`, any kind of map); other messages are skipped and reported. *Open › Dump…* loads a `.syx` file into every device of the rig: each takes the messages that are its data. `SaveDump` writes a range of the map as the data messages the exchange would send (`MessageMaps.Save`): widened where the map requires it (atomic groups, the whole root of a dump), all their values must be known.
+- **Dumps.** `LoadDump` splits a dump into its SysEx messages (`SysExSplitter` of the Messages project) and decodes the data messages of the device's map for this device (`MessageMaps.Load`, any kind of map); other messages are skipped and reported. *Open…* of a `.syx` file loads it into every device of the rig: each takes the messages that are its data. `SaveDump` writes a range of the map as the data messages the exchange would send (`MessageMaps.Save`): widened where the map requires it (atomic groups, the whole root of a dump), all their values must be known.
 - **Lossy values.** A value of a dump that the schema does not describe (a physical value that is not one of the options of its data type) is read as the data type's `optionsDefault` and saved as that: such bytes are not reproduced. The GP-8 bulk dump in the tests has four patches like that (`DynamicFilter.UpDown`, `Compressor.Turbo`).
 
 ## Files
@@ -527,6 +541,7 @@ one.
   "format": "jacobi.midi.rig/1",
   "assemblies": [ "Acme.Midi.dll" ],
   "schemas": [ "C:/Schemas/Acme.xml" ],
+  "exchanges": [ "C:/Schemas/Acme.exchange.xml" ],
   "devices": [
     {
       "alias": "synth",
@@ -546,6 +561,7 @@ The same rig in XML:
 <rig format="jacobi.midi.rig/1">
   <assembly path="Acme.Midi.dll" />
   <schema path="C:/Schemas/Acme.xml" />
+  <exchange path="C:/Schemas/Acme.exchange.xml" />
   <device alias="synth" name="Acme S-1" schema="Acme" color="#3D8BFD">
     <deviceValue name="deviceId" value="0x10" />
     <endpoint name="USB MIDI Interface" group="0" />
@@ -553,7 +569,7 @@ The same rig in XML:
 </rig>
 ```
 
-- `assemblies`, `schemas`: on the rig for all its devices (see [Schemas](#schemas)); a relative path is relative to the rig file. A dashboard has them too; a device does not (reported when it has).
+- `assemblies`, `schemas`, `exchanges`: on the rig for all its devices (see [Schemas](#schemas)); a relative path is relative to the rig file. A dashboard has them too; a device does not (reported when it has).
 - `deviceValues`: in the notation of the schemas (`0x10`, `10H` or decimal); written in hex.
 - `endpoint`: the endpoint is matched by its **name** and UMP group (0-15 in the file, shown as 1-16). Endpoint ids are not portable (native Windows ids) and do not identify an instrument behind a DIN port. When no endpoint with that name is found, the device is shown as not connected and the user can pick another endpoint.
 - `color`, `plateColor`, `panelColor`: the colors of the device's controls (see [Color](#color)).
@@ -643,7 +659,7 @@ format-neutral elements (a name, attributes and child elements) and back; one XM
 such a tree into text and back:
 
 - In **XML** an element is an element: its attributes are attributes, its children child elements, without wrappers.
-- In **JSON** an element is an object: its attributes are properties, its children are grouped in a property by their role (`children`, `segments`, `devices`, `variables` as arrays; `layout`, `endpoint` as an object; `bind`, `deviceValues` as an object of key and value; `assemblies`, `schemas` as an array of values). Elements of different kinds in one role (the controls) give their kind in `type`. These roles are listed in one place (`FileRoles`).
+- In **JSON** an element is an object: its attributes are properties, its children are grouped in a property by their role (`children`, `segments`, `devices`, `variables` as arrays; `layout`, `endpoint` as an object; `bind`, `deviceValues` as an object of key and value; `assemblies`, `schemas`, `exchanges` as an array of values). Elements of different kinds in one role (the controls) give their kind in `type`. These roles are listed in one place (`FileRoles`).
 
 Reading is strict: an unknown attribute or element, a missing required value, an invalid value (a binding, a color,
 a size) or a duplicate (a device alias, a slot) is reported with its location in the file, e.g.

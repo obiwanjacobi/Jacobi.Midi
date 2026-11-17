@@ -322,21 +322,55 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     /// <summary>The selected dashboard must be built again: an edit was done or undone.</summary>
     public event EventHandler? DashboardChanged;
 
-    /// <summary>Opens another rig in place of the open one; when that changed since it was saved, after the user confirmed discarding the changes.</summary>
+    /// <summary>
+    /// Opens a file the user picks, of any kind the console opens; the end of its name tells its kind
+    /// (<see cref="ConsoleFileTypes"/>): a rig (in place of the open one), a dashboard (next to the open ones), a schema
+    /// or exchange file (into the rig, see <see cref="AddRigSource"/>) or a dump (into the devices, offline). A file
+    /// whose name does not follow the convention is not opened: a message tells why.
+    /// </summary>
     [RelayCommand]
-    private async Task OpenRig()
+    private async Task Open()
     {
-        if (!await ConfirmDiscard(RigOrigin, "Open another rig", $"The rig '{RigOrigin.Name}' has unsaved changes. Opening another rig discards them.", "Open"))
+        if (await PickFile("Open", ConsoleFileTypes.All) is not { } file)
             return;
-        if (await PickFile("Open rig", "Rig", "*.xml", "*.json") is { } file)
-            LoadRig(file);
+        switch (ConsoleFileTypes.KindOf(file.Name))
+        {
+            case ConsoleFileKind.Rig:
+                await OpenRig(file);
+                break;
+            case ConsoleFileKind.Dashboard:
+                await OpenDashboard(await ReadFile(file));
+                break;
+            case ConsoleFileKind.Schema:
+                LoadRigSource(SchemaSourceKind.Schema, file);
+                break;
+            case ConsoleFileKind.Exchange:
+                LoadRigSource(SchemaSourceKind.Exchange, file);
+                break;
+            case ConsoleFileKind.Dump:
+                await LoadDump(file);
+                break;
+            default:
+                await ShowMessage("CANNOT OPEN", $"'{file.Name}'",
+                    $"The end of the name of a file tells what it is: {String.Join(", ", ConsoleFileTypes.All.Select(type => type.Pattern))}. " +
+                    "The name of this file ends in none of them, so it cannot be opened.");
+                break;
+        }
     }
 
-    /// <summary>Starts a new, empty rig (not saved yet) in place of the open one; when that changed since it was saved, after the user confirmed discarding the changes.</summary>
+    // opens another rig in place of the open one; when that changed since it was saved, after the user confirmed
+    // discarding the changes (not asked for an empty rig, which loses nothing)
+    private async Task OpenRig(IStorageFile file)
+    {
+        if (_rig.IsEmpty || await ConfirmDiscard(RigOrigin, "Open another rig", $"The rig '{RigOrigin.Name}' has unsaved changes. Opening another rig discards them.", "Open"))
+            LoadRig(await ReadFile(file));
+    }
+
+    /// <summary>Starts a new, empty rig (not saved yet) in place of the open one; when that changed since it was saved, after the user confirmed discarding the changes (not asked for an empty rig).</summary>
     [RelayCommand]
     private async Task NewRig()
     {
-        if (!await ConfirmDiscard(RigOrigin, "New rig", $"The rig '{RigOrigin.Name}' has unsaved changes. A new rig discards them.", "New rig"))
+        if (!_rig.IsEmpty && !await ConfirmDiscard(RigOrigin, "New rig", $"The rig '{RigOrigin.Name}' has unsaved changes. A new rig discards them.", "New rig"))
             return;
         UseRig(new Rig(), NewRigOrigin());
     }
@@ -371,12 +405,9 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         OpenSessions();
     }
 
-    /// <summary>Opens another dashboard on the rig, next to the open ones.</summary>
-    [RelayCommand]
-    private async Task OpenDashboard()
+    // opens another dashboard on the rig, next to the open ones
+    private async Task OpenDashboard(PickedFile file)
     {
-        if (await PickFile("Open dashboard", "Dashboard", "*.xml", "*.json") is not { } file)
-            return;
         Dashboard dashboard;
         try
         {
@@ -411,7 +442,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     /// <summary>
     /// Makes sure the rig a dashboard is opened on has its devices: when the open rig does not (or no rig is open), the
     /// rig the dashboard was made with (<see cref="Dashboard.RigPath"/>) is opened, after the user confirmed replacing
-    /// the open one. A rig that is not found is located by the user; the dashboard then refers to it there (a change of
+    /// the open one (not asked for an empty rig, <see cref="Rig.IsEmpty"/>). A rig that is not found is located by the user; the dashboard then refers to it there (a change of
     /// the dashboard). Without its rig the dashboard is opened as it is and its problems are reported.
     /// </summary>
     private async Task OpenRigOf(Dashboard dashboard, FileOrigin origin)
@@ -427,8 +458,10 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             return;
 
         var rigName = Path.GetFileName(rigPath);
-        if (!await Confirm("ANOTHER RIG", $"Open the rig '{rigName}'", $"'{dashboard.Name}' was made with the rig '{rigPath}'; the open rig '{RigOrigin.Name}' does not have its devices. Opening its rig replaces the open one.", "Replace")
-            || !await ConfirmDiscard(RigOrigin, "Replace the rig", $"The rig '{RigOrigin.Name}' has unsaved changes. Opening another rig discards them.", "Replace"))
+        // an empty rig is replaced without asking, also when it changed: there is nothing to lose
+        if (!_rig.IsEmpty
+            && (!await Confirm("ANOTHER RIG", $"Open the rig '{rigName}'", $"'{dashboard.Name}' was made with the rig '{rigPath}'; the open rig '{RigOrigin.Name}' does not have its devices. Opening its rig replaces the open one.", "Replace")
+            || !await ConfirmDiscard(RigOrigin, "Replace the rig", $"The rig '{RigOrigin.Name}' has unsaved changes. Opening another rig discards them.", "Replace")))
             return;
 
         var file = await ReadFile(referred!);
@@ -436,12 +469,12 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         if (file is null)
         {
             if (!await Confirm("RIG NOT FOUND", $"Locate the rig '{rigName}'", $"'{dashboard.Name}' was made with the rig '{rigPath}', which cannot be found. Locate it, or open the dashboard without it.", "Locate")
-                || await PickFile($"Locate the rig '{rigName}'", "Rig", "*.xml", "*.json") is not { } picked)
+                || await PickFile($"Locate the rig '{rigName}'", ConsoleFileTypes.Of(ConsoleFileKind.Rig)) is not { } picked)
             {
                 Report($"'{dashboard.Name}'", $"its rig '{rigPath}' was not found; the dashboard is opened without it.");
                 return;
             }
-            file = picked;
+            file = await ReadFile(picked);
             located = true;
         }
         if (!LoadRig(file) || !located)
@@ -506,22 +539,21 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     // a dump is the source of the values offline; in MIDI mode the devices are
     private bool CanLoadDump() => Midi.IsOffline;
 
-    [RelayCommand(CanExecute = nameof(CanLoadDump))]
-    private async Task LoadDump()
+    // loads a dump file into the devices of the rig; offline only (a message tells so in MIDI mode)
+    private async Task LoadDump(IStorageFile file)
     {
-        if (StorageProvider is null || Rig is null)
+        if (Rig is null)
             return;
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        if (!CanLoadDump())
         {
-            Title = "Load dump",
-            FileTypeFilter = [new FilePickerFileType("SysEx dump") { Patterns = ["*.syx"] }, FilePickerFileTypes.All],
-        });
-        if (files.Count == 0)
+            await ShowMessage("OFFLINE ONLY", $"'{file.Name}'",
+                "The values of the devices come from a dump only offline; with MIDI they come from the devices. Switch to Offline and open the dump again.");
             return;
-        await using var stream = await files[0].OpenReadAsync();
+        }
+        await using var stream = await file.OpenReadAsync();
         using var bytes = new MemoryStream();
         await stream.CopyToAsync(bytes);
-        LoadDump(files[0].Name, bytes.ToArray());
+        LoadDump(file.Name, bytes.ToArray());
     }
 
     /// <summary>Writes the selected dashboard and the rig when they changed; asks where for a file not saved before.</summary>
@@ -1113,37 +1145,79 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     }
 
     /// <summary>
-    /// Adds a schema file or an assembly the user picks to the schemas of the rig (<see cref="Rig.Sources"/>): the
-    /// library is built again with it (the values of the devices are reset) and the root groups it brings are offered
-    /// by the + of the rig; no device is added.
+    /// Loads an assembly the user picks into the rig (<see cref="Rig.Sources"/>): all it embeds, its schemas, exchange
+    /// files and processors. See <see cref="AddRigSource"/>.
     /// </summary>
-    public async Task AddRigSource(SchemaSourceKind kind)
+    [RelayCommand]
+    private async Task LoadAssembly()
     {
-        if (await PickSource(kind) is not { } path)
-            return;
+        if (await PickFile("Load an assembly", [new FilePickerFileType("Assembly") { Patterns = ["*.dll"] }]) is { } file)
+            LoadRigSource(SchemaSourceKind.Assembly, file);
+    }
+
+    // a schema file, exchange file or assembly on this computer into the rig: they are loaded by their path (not in the browser)
+    private void LoadRigSource(SchemaSourceKind kind, IStorageFile file)
+    {
+        if (file.TryGetLocalPath() is { } path)
+            AddRigSource(kind, path);
+        else
+            Report($"'{file.Name}'", "schema files, exchange files and assemblies are loaded from a file on this computer; here the file has no path.");
+    }
+
+    /// <summary>
+    /// Adds a schema file, exchange file or assembly to the sources of the rig (<see cref="Rig.Sources"/>): the library
+    /// is built again with it (the values of the devices are reset). The root groups a schema file or assembly brings
+    /// are offered by the + of the rig; the exchanges of an exchange file can be chosen for the devices of its root.
+    /// No device is added. A source that brings nothing the rig can use is not added (reported): a schema file without
+    /// a root group, an exchange file that cannot be read or is for a root the schemas do not have, an assembly with
+    /// neither.
+    /// </summary>
+    private void AddRigSource(SchemaSourceKind kind, string path)
+    {
         var rig = _rig;
         var name = Path.GetFileName(path);
-        if (rig.Sources.Schemas.Concat(rig.Sources.Assemblies).Contains(path, StringComparer.OrdinalIgnoreCase))
+        if (rig.Sources.All.Contains(path, StringComparer.OrdinalIgnoreCase))
         {
             Status = $"The rig has '{name}' already.";
             return;
         }
         var sources = SourcesWith(rig.Sources, kind, path);
-        // the root groups of the documents the file brings (also those that replace a built-in schema of the same
-        // name, which is told in the notifications); a file that brings none is not added
+        // what the source brings (also what replaces a built-in schema or exchange file, which is told in the notifications)
         var library = BuildLibrary(sources);
-        var brought = kind == SchemaSourceKind.Assembly ? library.RootsFromAssembly(AssemblyNameOf(path)) : library.RootsFromFile(path);
-        if (brought.Count == 0)
+        string? brought = null;
+        switch (kind)
+        {
+            case SchemaSourceKind.Schema when library.RootsFromFile(path) is { Count: > 0 } roots:
+                brought = $"its {roots.Count} root group(s) can be added as a device with the + of the rig";
+                break;
+            case SchemaSourceKind.Exchange when library.ExchangesFromFile(path) is { } set:
+                if (!library.HasRoot(set.For))
+                {
+                    Report($"'{name}'", $"it is for '{set.For}', which is not a root group of the schemas of the rig: it is not added to the rig.");
+                    return;
+                }
+                brought = $"its exchanges ({String.Join(", ", set.Exchanges.Select(exchange => exchange.Name))}) can be chosen for the devices of '{set.For}'";
+                break;
+            case SchemaSourceKind.Assembly:
+                var assemblyName = AssemblyNameOf(path);
+                var (assemblyRoots, exchanges) = (library.RootsFromAssembly(assemblyName), library.ExchangesFromAssembly(assemblyName));
+                if (assemblyRoots.Count > 0 || exchanges.Count > 0)
+                    brought = $"its {assemblyRoots.Count} root group(s) can be added as a device with the + of the rig, with {exchanges.Count} exchange file(s)";
+                break;
+        }
+        if (brought is null)
         {
             var problems = library.Problems.Where(problem => problem.IsError).Select(problem => $"{problem.Source}: {problem.Message}").ToList();
             Report($"'{name}'", problems.Count > 0
                 ? $"it is not added to the rig: {String.Join(" ", problems)}"
-                : "it has no root group: it is not added to the rig.");
+                : kind == SchemaSourceKind.Assembly
+                    ? "it has no root group and no exchange file: it is not added to the rig."
+                    : "it has no root group: it is not added to the rig.");
             return;
         }
         if (!DoRigEdit(new ValueEdit<SchemaSources>("schemas of the rig", () => rig.Sources, value => rig.Sources = value, sources), rebuildsLibrary: true))
             return;
-        Status = $"'{name}' added to the rig: its {brought.Count} root group(s) can be added as a device with the + of the rig; the schemas were built again, so the values of the devices were reset. Save to keep it in the rig.";
+        Status = $"'{name}' added to the rig: {brought}; the schemas were built again, so the values of the devices were reset. Save to keep it in the rig.";
     }
 
     /// <summary>
@@ -1204,7 +1278,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     // writes a generated schema document to a file the user picks (XML or JSON by its extension); its path, or null
     private async Task<string?> SaveSchema(Jacobi.BinarySerializer.Schema.SchemaDocument document)
     {
-        if (await PickSaveFile("Schema", $"{document.Name}.schema.xml") is not { } file)
+        if (await PickSaveFile(ConsoleFileKind.Schema, $"{document.Name}.schema.xml") is not { } file)
             return null;
         if (file.TryGetLocalPath() is not { } path)
         {
@@ -1252,29 +1326,12 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     }
 
     private static SchemaSources SourcesWith(SchemaSources sources, SchemaSourceKind kind, string path)
-        => kind == SchemaSourceKind.Assembly
-            ? sources with { Assemblies = [.. sources.Assemblies, path] }
-            : sources with { Schemas = [.. sources.Schemas, path] };
-
-    // a schema file or assembly on this computer: they are loaded by their path (not in the browser)
-    private async Task<string?> PickSource(SchemaSourceKind kind)
-    {
-        if (StorageProvider is null)
-            return null;
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        => kind switch
         {
-            Title = kind == SchemaSourceKind.Assembly ? "Add an assembly with schemas" : "Add a schema file",
-            FileTypeFilter = kind == SchemaSourceKind.Assembly
-                ? [new FilePickerFileType("Assembly") { Patterns = ["*.dll"] }]
-                : [new FilePickerFileType("Schema") { Patterns = ["*.xml", "*.json"] }],
-        });
-        if (files.Count == 0)
-            return null;
-        if (files[0].TryGetLocalPath() is { } path)
-            return path;
-        Report($"'{files[0].Name}'", "schemas and assemblies are loaded from a file on this computer; here the file has no path.");
-        return null;
-    }
+            SchemaSourceKind.Assembly => sources with { Assemblies = [.. sources.Assemblies, path] },
+            SchemaSourceKind.Exchange => sources with { Exchanges = [.. sources.Exchanges, path] },
+            _ => sources with { Schemas = [.. sources.Schemas, path] },
+        };
 
     /// <summary>Takes a device out of the rig; the open dashboards that use it are reported.</summary>
     public void RemoveDevice(DeviceInstance device)
@@ -1425,7 +1482,6 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         foreach (var item in RigTree.Where(item => item.Instance is not null))
             item.Connection = Midi.ConnectionOf(item.Instance!.Alias);
         DeviceProperties?.RefreshConnection();
-        LoadDumpCommand.NotifyCanExecuteChanged();
         RequestDataCommand.NotifyCanExecuteChanged();
         ReceiveFromDevices();
     }
@@ -1814,16 +1870,17 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
 
     private bool HasReports() => _reports.Count > 0;
 
-    private async Task<PickedFile?> PickFile(string title, string kind, params string[] patterns)
+    // a file the user picks of one of the console's file types; null when none is picked
+    private Task<IStorageFile?> PickFile(string title, IReadOnlyList<ConsoleFileType> types)
+        => PickFile(title, [.. types.Select(type => new FilePickerFileType(type.Name) { Patterns = [type.Pattern] })]);
+
+    // a file the user picks with the filters; null when none is picked
+    private async Task<IStorageFile?> PickFile(string title, IReadOnlyList<FilePickerFileType> filters)
     {
         if (StorageProvider is null)
             return null;
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = title,
-            FileTypeFilter = [new FilePickerFileType(kind) { Patterns = patterns }],
-        });
-        return files.Count == 0 ? null : await ReadFile(files[0]);
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = title, FileTypeFilter = filters });
+        return files.Count == 0 ? null : files[0];
     }
 
     // a file by its path; null when it is not found or the host has no file paths (the browser)
@@ -1874,22 +1931,26 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         => !origin.IsChanged || await Confirm("UNSAVED CHANGES", title, $"{message} Continue?", confirmText);
 
     // shows the confirmation dialog; true when the user confirmed
-    private Task<bool> Confirm(string caption, string title, string message, string confirmText)
+    private Task<bool> Confirm(string caption, string title, string message, string confirmText, bool canCancel = true)
     {
         var answer = new TaskCompletionSource<bool>();
         ConfirmDialog = new ConfirmViewModel(caption, title, message, confirmText, confirmed =>
         {
             ConfirmDialog = null;
             answer.SetResult(confirmed);
-        });
+        }, canCancel);
         return answer.Task;
     }
+
+    // shows a message the user acknowledges (the confirmation dialog without cancel)
+    private Task ShowMessage(string caption, string title, string message)
+        => Confirm(caption, title, message, "OK", canCancel: false);
 
     private async Task<bool> WriteDashboard(bool saveAs)
     {
         if (SelectedDashboard is not { Dashboard: var dashboard, Origin: var origin })
             return false;
-        return await SaveFile("Dashboard", origin, saveAs, [dashboard.Sources], (format, directory) =>
+        return await SaveFile(ConsoleFileKind.Dashboard, origin, saveAs, [dashboard.Sources], (format, directory) =>
         {
             // the dashboard is made with the open rig: it refers to it, when both have a place
             if (LocalPath(RigOrigin) is { } rig && directory is not null)
@@ -1901,12 +1962,12 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     private async Task<bool> WriteRig(bool saveAs)
     {
         var rig = _rig;
-        return await SaveFile("Rig", RigOrigin, saveAs, [rig.Sources], (format, _) => RigFile.Write(rig, format));
+        return await SaveFile(ConsoleFileKind.Rig, RigOrigin, saveAs, [rig.Sources], (format, _) => RigFile.Write(rig, format));
     }
 
     // writes a file to where it was read from, or where the user picks (Save as, or a file not saved before);
     // the format follows the extension
-    private async Task<bool> SaveFile(string kind, FileOrigin origin, bool saveAs, IReadOnlyList<SchemaSources> sources, Func<FileFormat, string?, string> write)
+    private async Task<bool> SaveFile(ConsoleFileKind kind, FileOrigin origin, bool saveAs, IReadOnlyList<SchemaSources> sources, Func<FileFormat, string?, string> write)
     {
         var file = saveAs || origin.File is null ? await PickSaveFile(kind, origin.Name) : origin.File;
         if (file is null)
@@ -1929,9 +1990,9 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         }
 
         var saved = FileOrigin.Of(file);
-        // relative schema paths are read relative to the file: in another folder they point elsewhere
-        if (saved.Directory != origin.Directory && sources.Any(source => source.Schemas.Any(schema => !Path.IsPathRooted(schema))))
-            Inform($"'{file.Name}'", $"it refers to schema files by a relative path, which is now relative to {saved.Directory ?? "the new location"}.");
+        // relative source paths are read relative to the file: in another folder they point elsewhere
+        if (saved.Directory != origin.Directory && sources.Any(source => source.All.Any(path => !Path.IsPathRooted(path))))
+            Inform($"'{file.Name}'", $"it refers to schema files, exchange files or assemblies by a relative path, which is now relative to {saved.Directory ?? "the new location"}.");
         origin.File = file;
         origin.Name = saved.Name;
         origin.Directory = saved.Directory;
@@ -1939,21 +2000,28 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         return true;
     }
 
-    private async Task<IStorageFile?> PickSaveFile(string kind, string name)
+    // a file the user picks to save a kind of file in, with the filters of its types (ConsoleFileTypes), the type of
+    // the suggested name first; a name that does not end as the kind's files do is not used (a message tells why), as
+    // Open… would not open the file
+    private async Task<IStorageFile?> PickSaveFile(ConsoleFileKind kind, string name)
     {
         if (StorageProvider is null)
             return null;
-        return await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        var types = ConsoleFileTypes.Of(kind);
+        var suggested = types.FirstOrDefault(type => name.EndsWith(type.Extension, StringComparison.OrdinalIgnoreCase)) ?? types[0];
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = $"Save {kind.ToLowerInvariant()} as",
+            Title = $"Save {kind.ToString().ToLowerInvariant()} as",
             SuggestedFileName = name,
-            DefaultExtension = Path.GetExtension(name) is { Length: > 0 } extension ? extension : ".xml",
-            FileTypeChoices =
-            [
-                new FilePickerFileType($"{kind} (XML)") { Patterns = ["*.xml"] },
-                new FilePickerFileType($"{kind} (JSON)") { Patterns = ["*.json"] },
-            ],
+            DefaultExtension = suggested.Extension,
+            FileTypeChoices = [.. types.OrderBy(type => type == suggested ? 0 : 1).Select(type => new FilePickerFileType(type.Name) { Patterns = [type.Pattern] })],
         });
+        if (file is null || ConsoleFileTypes.KindOf(file.Name) == kind)
+            return file;
+        await ShowMessage("CANNOT SAVE", $"'{file.Name}'",
+            $"The name of a {kind.ToString().ToLowerInvariant()} file ends in {String.Join(" or ", types.Select(type => type.Extension))}, " +
+            "so that Open… can tell what it is. The file is not saved; save it again with such a name.");
+        return null;
     }
 
     /// <summary>

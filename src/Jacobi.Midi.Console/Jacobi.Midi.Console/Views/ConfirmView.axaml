@@ -19,7 +19,7 @@
                 <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Foreground="{DynamicResource ConsoleTextBrush}" />
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,6,0,0">
-                    <Button Content="Cancel" Command="{Binding CancelCommand}" IsCancel="True" />
+                    <Button Content="Cancel" Command="{Binding CancelCommand}" IsCancel="True" IsVisible="{Binding CanCancel}" />
                     <Button Content="{Binding ConfirmText}" Classes="accent" Command="{Binding ConfirmCommand}" />
                 </StackPanel>
             </StackPanel>

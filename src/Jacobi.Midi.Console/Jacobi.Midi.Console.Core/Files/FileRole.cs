@@ -32,6 +32,7 @@ internal static class FileRoles
 {
     public static FileRole Assemblies { get; } = new("assemblies", FileRoleShape.Values, "assembly", ValueAttribute: "path");
     public static FileRole Schemas { get; } = new("schemas", FileRoleShape.Values, "schema", ValueAttribute: "path");
+    public static FileRole Exchanges { get; } = new("exchanges", FileRoleShape.Values, "exchange", ValueAttribute: "path");
     public static FileRole Devices { get; } = new("devices", FileRoleShape.List, "device");
     public static FileRole Variables { get; } = new("variables", FileRoleShape.List, "variable");
     public static FileRole DeviceValues { get; } = new("deviceValues", FileRoleShape.Map, "deviceValue", "name", "value");
@@ -42,7 +43,7 @@ internal static class FileRoles
     public static FileRole Segments { get; } = new("segments", FileRoleShape.List, "segment");
 
     private static readonly Dictionary<string, FileRole> ByJsonName =
-        new[] { Assemblies, Schemas, Devices, Variables, DeviceValues, Endpoint, Layout, Children, Bind, Segments }
+        new[] { Assemblies, Schemas, Exchanges, Devices, Variables, DeviceValues, Endpoint, Layout, Children, Bind, Segments }
             .ToDictionary(role => role.JsonName, StringComparer.Ordinal);
 
     public static bool TryGet(string jsonName, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out FileRole? role)

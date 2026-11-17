@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Jacobi.Midi.Console.Core.Palettes;
+using Jacobi.Midi.Console.Core.Schemas;
 using Jacobi.Midi.Console.Dashboards;
 using Jacobi.Midi.Console.Looks;
 using Jacobi.Midi.Console.ViewModels;
@@ -124,24 +125,30 @@ internal partial class MainView : UserControl
         ColorChooser.Create(_viewModel, null, device.Alias, area, current, device.Alias).ShowAt(button);
     }
 
-    // the + of the rig: a device for a schema with device data (all its roots are the device's); the schemas of a
-    // schema file or an assembly for the rig (their schemas are offered here then); a device detected on an endpoint; or
-    // a new rig in place of the open one
+    // the + of the rig: a device for a schema with device data (all its roots are the device's), grouped by the first part
+    // of their name (the schemas of the files and assemblies loaded into the rig are offered here too); a device
+    // detected on an endpoint; or a new rig in place of the open one
     private void OnAddDeviceClicked(object? sender, RoutedEventArgs e)
     {
         if (sender is not Button button || _viewModel is not { } viewModel)
             return;
         var menu = new MenuFlyout();
-        foreach (var schema in viewModel.DeviceSchemas)
-            menu.Items.Add(new MenuItem { Header = schema, Command = viewModel.AddDeviceCommand, CommandParameter = schema });
+        // the schemas grouped by the first part of their name (Midi, Midi.GM, ... under Midi); a group of one is an item
+        foreach (var group in SchemaGroup.Of(viewModel.DeviceSchemas))
+        {
+            var items = group.Schemas.Select(schema => new MenuItem { Header = schema, Command = viewModel.AddDeviceCommand, CommandParameter = schema }).ToList();
+            if (items.Count == 1)
+            {
+                menu.Items.Add(items[0]);
+                continue;
+            }
+            var submenu = new MenuItem { Header = group.Name };
+            foreach (var item in items)
+                submenu.Items.Add(item);
+            menu.Items.Add(submenu);
+        }
         if (viewModel.DeviceSchemas.Count > 0)
             menu.Items.Add(new Separator());
-        var fromSchema = new MenuItem { Header = "Schemas from a schema file…" };
-        fromSchema.Click += async (_, _) => await viewModel.AddRigSource(SchemaSourceKind.Schema);
-        var fromAssembly = new MenuItem { Header = "Schemas from an assembly…" };
-        fromAssembly.Click += async (_, _) => await viewModel.AddRigSource(SchemaSourceKind.Assembly);
-        menu.Items.Add(fromSchema);
-        menu.Items.Add(fromAssembly);
         // a device that describes itself (MIDI-CI Property Exchange), on an endpoint of the open MIDI connection
         var detect = new MenuItem { Header = "Detect a device on", IsEnabled = viewModel.Midi.IsConnected && viewModel.Midi.Endpoints.Count > 0 };
         foreach (var endpoint in viewModel.Midi.Endpoints)

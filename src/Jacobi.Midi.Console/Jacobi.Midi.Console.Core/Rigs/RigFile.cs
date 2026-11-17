@@ -66,12 +66,11 @@ public static class RigFile
     {
         ConsoleFile.CheckFormat(root, Format);
 
-        var assemblies = new List<string>();
-        var schemas = new List<string>();
+        var sources = SchemaSources.None;
         var devices = new List<DeviceInstance>();
         foreach (var child in root.TakeChildren())
         {
-            if (ConsoleFile.TryReadSource(child, assemblies, schemas))
+            if (ConsoleFile.TryReadSource(child, ref sources))
             {
                 continue;
             }
@@ -91,7 +90,7 @@ public static class RigFile
         root.EnsureAllRead();
         return new Rig
         {
-            Sources = new SchemaSources { Assemblies = assemblies, Schemas = schemas },
+            Sources = sources,
             Devices = devices,
         };
     }
@@ -102,7 +101,7 @@ public static class RigFile
         EndpointReference? endpoint = null;
         foreach (var child in element.TakeChildren())
         {
-            if (child.Name == FileRoles.Assemblies.ElementName || child.Name == FileRoles.Schemas.ElementName)
+            if (ConsoleFile.IsSource(child))
             {
                 throw child.Error($"a device cannot contain '{child.Name}': the schemas come from the rig (or the dashboard).");
             }

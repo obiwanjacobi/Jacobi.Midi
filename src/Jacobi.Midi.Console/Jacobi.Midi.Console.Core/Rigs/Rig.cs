@@ -16,6 +16,9 @@ public sealed class Rig
 
     public IReadOnlyList<DeviceInstance> Devices { get; set; } = [];
 
+    /// <summary>True when the rig has no devices and no sources: replacing it loses nothing.</summary>
+    public bool IsEmpty => Devices.Count == 0 && Sources.IsEmpty;
+
     /// <summary>The device instance with the alias (case-insensitive), or null.</summary>
     public DeviceInstance? Find(string alias)
         => Devices.FirstOrDefault(device => String.Equals(device.Alias, alias, StringComparison.OrdinalIgnoreCase));

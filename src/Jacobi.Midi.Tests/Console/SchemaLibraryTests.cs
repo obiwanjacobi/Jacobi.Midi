@@ -168,6 +168,50 @@ public sealed class SchemaLibraryTests : IDisposable
     }
 
     [Fact]
+    public void ExchangeFile_ReplacesTheEmbeddedOneForTheSameRoot()
+    {
+        var path = Write("Gp8.exchange.xml", Exchanges("Gp8.AddressMap", "custom"));
+
+        var library = BuiltIn().Add(new SchemaSources { Exchanges = ["Gp8.exchange.xml"] }, _directory).Build();
+
+        var replaced = Assert.Single(library.Problems);
+        Assert.False(replaced.IsError);
+        Assert.Contains("replaces the one of", replaced.Message);
+        var set = library.ExchangesFromFile(path);
+        Assert.NotNull(set);
+        Assert.Same(set, library.Exchanges.Find(new("Gp8.AddressMap")));
+        Assert.NotNull(library.Exchanges.Find(new("Gp8.AddressMap"), "custom"));
+    }
+
+    [Fact]
+    public void ExchangeFiles_ThatCannotBeUsed_AreReported()
+    {
+        Write("Unknown.exchange.xml", Exchanges("Unknown.AddressMap", "custom"));
+        Write("Broken.exchange.xml", "<exchanges");
+
+        var library = BuiltIn()
+            .Add(new SchemaSources { Exchanges = ["Missing.exchange.xml", "Unknown.exchange.xml", "Broken.exchange.xml"] }, _directory)
+            .Build();
+
+        Assert.True(library.IsCompiled);
+        Assert.Equal(3, library.Problems.Count);
+        Assert.Contains(library.Problems, problem => problem.Source.EndsWith("Missing.exchange.xml") && problem.Message.Contains("does not exist"));
+        Assert.Contains(library.Problems, problem => problem.Source.EndsWith("Unknown.exchange.xml") && problem.Message.Contains("not a root group"));
+        Assert.Contains(library.Problems, problem => problem.Source.EndsWith("Broken.exchange.xml") && problem.Message.Contains("cannot be read"));
+    }
+
+    // an exchange file for the root with one exchange of the name
+    private static string Exchanges(string root, string name) => $"""
+        <exchanges for="{root}">
+          <exchange name="{name}">
+            <turn name="write">
+              <send message="Roland.Message16.DT1" />
+            </turn>
+          </exchange>
+        </exchanges>
+        """;
+
+    [Fact]
     public void SourcesThatCannotBeLoaded_AreReported_AndTheOthersStillCompile()
     {
         Write("Broken.xml", "<schema");

@@ -3,6 +3,28 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## Loading exchange files in the console (2026-11-17)
+
+Issue: a rig or dashboard could list schema files and assemblies, but not exchange files (decision 11 of *Message
+exchange in the console*): a device of an authored schema file could not be synchronised.
+
+1. **Exchange files are a list of their own in the sources** (`SchemaSources.Exchanges`, an `exchange` element,
+   `exchanges` in JSON), not schema files told apart by their extension. *Why:* explicit in the file; no extension
+   sniffing in the file format.
+2. **One *Open…* in the file menu (☰) for every kind of file**: rig, dashboard, schema file, exchange file and dump,
+   in place of *Open › Rig… / Dashboard… / Dump…* and the rig's *Schemas from a schema file…*. The end of the file's
+   name tells its kind (`ConsoleFileTypes`: `*.rig.xml`, `*.dashboard.json`, `*.schema.xml`, `*.exchange.xml`, `*.syx`,
+   ...), with a filter per type and no plain `*.xml`/`*.json` or `*.*` filter; a file whose name does not follow the
+   convention is not opened (a message box). The picker that locates a dashboard's rig uses the rig filters too, and
+   so do the save pickers (rig, dashboard, generated schema): a name that does not follow the convention is not saved
+   (a message box), since *Open…* would not open it.
+   *Why:* one way in for every file; a file picker does not tell which filter was chosen, the name does.
+3. ***Load assembly…* stays a separate item of the file menu** (in place of the rig's *Schemas from an assembly…*).
+   *Why:* an assembly brings several kinds of resources at once (schemas, exchange files, processors).
+4. **A loaded file must bring something the rig can use**, else it is not added (reported): an exchange file for a
+   root the schemas do not have is refused, as a schema file without a root group; an assembly must bring a root
+   group or an exchange file. The library reports such an exchange file too. *Why:* nothing fails silently.
+
 ## A field that takes the rest of the data (2026-11-17)
 
 Issue: the name of a File Dump header or request runs up to F7: no length, no terminator. A field without a length

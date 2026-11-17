@@ -142,15 +142,41 @@ public sealed class SchemaLibrary
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
         var fullPath = Path.GetFullPath(path);
-        return RootsWhere(source => Path.IsPathRooted(source) && String.Equals(Path.GetFullPath(source), fullPath, StringComparison.OrdinalIgnoreCase));
+        return RootsWhere(source => IsFile(source, fullPath));
     }
 
     /// <summary>The roots of the documents an assembly embeds (see <see cref="RootsFromFile"/>).</summary>
     public IReadOnlyList<SchemaName> RootsFromAssembly(string assemblyName)
     {
         ArgumentException.ThrowIfNullOrEmpty(assemblyName);
-        return RootsWhere(source => source.StartsWith(assemblyName + "/", StringComparison.OrdinalIgnoreCase));
+        return RootsWhere(source => IsFromAssembly(source, assemblyName));
     }
+
+    /// <summary>
+    /// The exchange file read from a file, whether or not it replaced the one for the same root; null when the
+    /// library has none from the file (it could not be read, or a later one for the same root replaced it).
+    /// </summary>
+    public ExchangeDefinitionSet? ExchangesFromFile(string path)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        var fullPath = Path.GetFullPath(path);
+        return Exchanges.Sets.FirstOrDefault(set => IsFile(set.Source, fullPath));
+    }
+
+    /// <summary>The exchange files an assembly embeds that the library has (see <see cref="ExchangesFromFile"/>).</summary>
+    public IReadOnlyList<ExchangeDefinitionSet> ExchangesFromAssembly(string assemblyName)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(assemblyName);
+        return [.. Exchanges.Sets.Where(set => IsFromAssembly(set.Source, assemblyName))];
+    }
+
+    // a source in an assembly: 'assembly/resource'
+    private static bool IsFromAssembly(string source, string assemblyName)
+        => source.StartsWith(assemblyName + "/", StringComparison.OrdinalIgnoreCase);
+
+    // a source that is the file with the full path
+    private static bool IsFile(string source, string fullPath)
+        => Path.IsPathRooted(source) && String.Equals(Path.GetFullPath(source), fullPath, StringComparison.OrdinalIgnoreCase);
 
     // the roots of the documents, those with a message map first
     private IReadOnlyList<SchemaName> FindRoots()
@@ -168,8 +194,9 @@ public sealed class SchemaLibrary
     public ProcessorManager Processors { get; }
 
     /// <summary>
-    /// The exchange files of the assemblies: how the message exchange patterns (e.g. <see cref="ExchangeNames.RequestData"/>)
-    /// go for each map root. A file that cannot be read is in <see cref="Problems"/>.
+    /// The exchange files of the assemblies and the exchange files of the sources: how the message exchange patterns
+    /// (e.g. <see cref="ExchangeNames.RequestData"/>) go for each map root. A file that cannot be read, that replaces
+    /// another, or whose root is not a root group of the schemas is in <see cref="Problems"/>.
     /// </summary>
     public ExchangeDefinitions Exchanges { get; }
 
@@ -191,16 +218,18 @@ public sealed class SchemaLibrary
 }
 
 /// <summary>
-/// A problem with a source of a <see cref="SchemaLibrary"/>: an assembly or schema file that cannot be loaded, a
-/// schema that replaces another, or schemas that do not compile.
+/// A problem with a source of a <see cref="SchemaLibrary"/>: an assembly, schema file or exchange file that cannot be
+/// loaded, a schema or exchange file that replaces another, an exchange file for a root the schemas do not have, or
+/// schemas that do not compile.
 /// </summary>
 /// <param name="Source">The assembly, file or resource; 'compile' for the compilation of the whole set.</param>
 /// <param name="IsError">False for information that does not prevent the use of the library (a replaced schema).</param>
 public sealed record SchemaLibraryProblem(string Source, string Message, bool IsError = true);
 
 /// <summary>
-/// Collects assemblies and schema files in order and builds a <see cref="SchemaLibrary"/>. A schema document of a
-/// later source replaces an earlier one with the same name: a rig or dashboard can customise a built-in schema.
+/// Collects assemblies, schema files and exchange files in order and builds a <see cref="SchemaLibrary"/>. A schema
+/// document of a later source replaces an earlier one with the same name, and an exchange file one for the same root:
+/// a rig or dashboard can customise a built-in schema or exchange file.
 /// </summary>
 public sealed class SchemaLibraryBuilder
 {
@@ -283,7 +312,39 @@ public sealed class SchemaLibraryBuilder
         return this;
     }
 
-    /// <summary>Adds the assemblies and schema files of a rig or dashboard; relative paths are relative to <paramref name="baseDirectory"/>.</summary>
+    /// <summary>
+    /// Adds an exchange file (.exchange.xml or .exchange.json); it replaces the one for the same root (an embedded one
+    /// too), which is told as information.
+    /// </summary>
+    public SchemaLibraryBuilder AddExchangeFile(string path)
+    {
+        if (!File.Exists(path))
+        {
+            _problems.Add(new(path, "the exchange file does not exist."));
+            return this;
+        }
+        var before = _exchanges.Sets;
+        try
+        {
+            var set = _exchanges.AddFile(path);
+            if (before.FirstOrDefault(existing => existing.For == set.For) is { } replaced)
+                _problems.Add(new(path, $"the exchange file for '{set.For}' replaces the one of {replaced.Source}.", IsError: false));
+        }
+        catch (ExchangeDefinitionException exception)
+        {
+            _problems.Add(new(path, $"the exchange file cannot be read: {String.Join(" ", exception.Problems)}"));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _problems.Add(new(path, $"the exchange file cannot be read: {exception.Message}"));
+        }
+        return this;
+    }
+
+    /// <summary>
+    /// Adds the assemblies, schema files and exchange files of a rig or dashboard, in that order (a file replaces what
+    /// an assembly embeds); relative paths are relative to <paramref name="baseDirectory"/>.
+    /// </summary>
     public SchemaLibraryBuilder Add(SchemaSources sources, string? baseDirectory = null)
     {
         ArgumentNullException.ThrowIfNull(sources);
@@ -291,6 +352,8 @@ public sealed class SchemaLibraryBuilder
             AddAssembly(FilePaths.Resolve(assembly, baseDirectory));
         foreach (var schema in sources.Schemas)
             AddSchemaFile(FilePaths.Resolve(schema, baseDirectory));
+        foreach (var exchange in sources.Exchanges)
+            AddExchangeFile(FilePaths.Resolve(exchange, baseDirectory));
         return this;
     }
 
@@ -305,6 +368,9 @@ public sealed class SchemaLibraryBuilder
         {
             var schemas = builder.Compile();
             var serializer = new SerializerBuilder().AddSchemas(schemas).AddProcessors(_processors).Build();
+            // an exchange file for a root the schemas do not have cannot be used
+            foreach (var set in _exchanges.Sets.Where(set => !HasRoot(schemas, set.For)))
+                problems.Add(new(set.Source, $"the exchange file is for '{set.For}', which is not a root group of the schemas."));
             return new SchemaLibrary(_processors, _exchanges, schemas, serializer, problems, DocumentSources());
         }
         catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or NotSupportedException
@@ -314,6 +380,11 @@ public sealed class SchemaLibraryBuilder
             return new SchemaLibrary(_processors, _exchanges, null, null, problems, DocumentSources());
         }
     }
+
+    // true when a document of the schemas has the root
+    private static bool HasRoot(SchemaSet schemas, SchemaName root)
+        => schemas.Documents.Any(document => String.Equals(document.Name, root.Namespace, StringComparison.OrdinalIgnoreCase)
+            && document.Roots.Any(group => String.Equals(group.Name, root.Name, StringComparison.OrdinalIgnoreCase)));
 
     private Dictionary<string, string> DocumentSources()
         => _documents.ToDictionary(document => document.Key, document => document.Value.Source, StringComparer.OrdinalIgnoreCase);

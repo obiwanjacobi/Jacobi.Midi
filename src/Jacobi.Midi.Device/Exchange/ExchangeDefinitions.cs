@@ -11,7 +11,8 @@ namespace Jacobi.Midi.Device.Exchange;
 /// </summary>
 public sealed class ExchangeDefinitions
 {
-    private static readonly string[] Extensions = [".exchange.xml", ".exchange.json"];
+    /// <summary>The ends of the names of exchange files: <c>.exchange.xml</c> and <c>.exchange.json</c>.</summary>
+    public static IReadOnlyList<string> Extensions { get; } = [".exchange.xml", ".exchange.json"];
 
     private readonly Lock _lock = new();
     private readonly Dictionary<SchemaName, ExchangeDefinitionSet> _sets = [];
