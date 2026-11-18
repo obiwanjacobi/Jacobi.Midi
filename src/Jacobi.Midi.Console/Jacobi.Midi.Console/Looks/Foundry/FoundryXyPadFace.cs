@@ -8,7 +8,8 @@ namespace Jacobi.Midi.Console.Looks.Foundry;
 
 /// <summary>
 /// Foundry XY pad: an amber screen with an engraved grid, the point in the accent on crosshairs to its edges and a brass
-/// bead on it. An unknown value has a dashed ring in the middle.
+/// bead on it. An unknown value has a dashed ring in the middle. Of the XY pad's options (<see cref="FaceOptions.XyPad"/>)
+/// it takes all: <c>display</c> (the screen), <c>grid</c> and <c>crosshair</c>.
 /// </summary>
 public sealed class FoundryXyPadFace : Face
 {
@@ -16,7 +17,10 @@ public sealed class FoundryXyPadFace : Face
 
     protected override void RenderStatic(DrawingContext context, FaceState state)
     {
-        context.DrawRectangle(DisplayBrush, new Pen(OutlineBrush, 1), new Rect(Bounds.Size), 3, 3);
+        if (Options.Switch("display"))
+            context.DrawRectangle(DisplayBrush, new Pen(OutlineBrush, 1), new Rect(Bounds.Size), 3, 3);
+        if (!Options.Switch("grid"))
+            return;
         var area = PlotArea(Bounds.Size);
         var grid = new Pen(TrackBrush, 1);
         for (var line = 1; line < 4; line++)
@@ -37,9 +41,12 @@ public sealed class FoundryXyPadFace : Face
             return;
         }
         var point = PlotPoint(area, x, y);
-        var crosshair = new Pen(AccentBrush, 1.5);
-        context.DrawLine(crosshair, new Point(point.X, area.Bottom), new Point(point.X, area.Top));
-        context.DrawLine(crosshair, new Point(area.Left, point.Y), new Point(area.Right, point.Y));
+        if (Options.Switch("crosshair"))
+        {
+            var crosshair = new Pen(AccentBrush, 1.5);
+            context.DrawLine(crosshair, new Point(point.X, area.Bottom), new Point(point.X, area.Top));
+            context.DrawLine(crosshair, new Point(area.Left, point.Y), new Point(area.Right, point.Y));
+        }
         if (AccentGlow is { } glow)
             context.DrawEllipse(glow, null, point, 11, 11);
         context.DrawEllipse(SurfaceBrush, new Pen(OutlineBrush, 1), point, 6, 6);

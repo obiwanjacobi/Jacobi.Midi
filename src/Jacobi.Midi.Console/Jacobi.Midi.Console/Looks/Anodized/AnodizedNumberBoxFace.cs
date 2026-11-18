@@ -8,7 +8,8 @@ namespace Jacobi.Midi.Console.Looks.Anodized;
 
 /// <summary>
 /// Anodized number box: an OLED display with the number in the accent and ▲/▼ at the right. An unknown value shows a
-/// dash. The display takes the plate's width.
+/// dash. The display takes the plate's width. Of the number box's options (<see cref="FaceOptions.NumberBox"/>) it takes
+/// <c>display</c>.
 /// </summary>
 public sealed class AnodizedNumberBoxFace : Face
 {
@@ -20,7 +21,8 @@ public sealed class AnodizedNumberBoxFace : Face
 
     protected override void RenderStatic(DrawingContext context, FaceState state)
     {
-        context.DrawRectangle(DisplayBrush, new Pen(OutlineBrush, 1), Display, 3, 3);
+        if (Options.Switch("display"))
+            context.DrawRectangle(DisplayBrush, new Pen(OutlineBrush, 1), Display, 3, 3);
         DrawStepArrows(context, Display, TrackBrush, new Pen(TrackBrush, 1));
     }
 

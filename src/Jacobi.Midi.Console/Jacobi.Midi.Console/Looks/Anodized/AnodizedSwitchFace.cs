@@ -8,7 +8,8 @@ namespace Jacobi.Midi.Console.Looks.Anodized;
 
 /// <summary>
 /// Anodized switch: an LED bar in the accent (off: dark) above a machined push button.
-/// An unknown value has an outlined LED bar.
+/// An unknown value has an outlined LED bar. Of the switch's options (<see cref="FaceOptions.Switch"/>) it takes
+/// <c>lamp</c> (the LED bar).
 /// </summary>
 public sealed class AnodizedSwitchFace : Face
 {
@@ -25,7 +26,7 @@ public sealed class AnodizedSwitchFace : Face
 
     protected override void RenderValue(DrawingContext context, FaceState state)
     {
-        if (state is not SwitchFaceState switchState)
+        if (state is not SwitchFaceState switchState || !Options.Switch("lamp"))
             return;
 
         switch (switchState.IsOn)

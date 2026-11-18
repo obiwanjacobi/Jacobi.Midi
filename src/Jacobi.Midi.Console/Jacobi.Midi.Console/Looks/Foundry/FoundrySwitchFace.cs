@@ -8,7 +8,8 @@ namespace Jacobi.Midi.Console.Looks.Foundry;
 
 /// <summary>
 /// Foundry switch: a pilot lamp in the accent (dark when off) above a lever in a slot (up is on).
-/// An unknown value has an unlit, outlined lamp and the lever in the middle.
+/// An unknown value has an unlit, outlined lamp and the lever in the middle. Of the switch's options
+/// (<see cref="FaceOptions.Switch"/>) it takes <c>lamp</c>.
 /// </summary>
 public sealed class FoundrySwitchFace : Face
 {
@@ -25,6 +26,7 @@ public sealed class FoundrySwitchFace : Face
         if (state is not SwitchFaceState switchState)
             return;
 
+        if (Options.Switch("lamp"))
         switch (switchState.IsOn)
         {
             case true:

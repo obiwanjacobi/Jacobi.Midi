@@ -1,4 +1,5 @@
 using Jacobi.Midi.Console.Core.Dashboards;
+using Jacobi.Midi.Console.Core.Faces;
 using Jacobi.Midi.Console.Core.Files;
 using Jacobi.Midi.Console.Core.Palettes;
 using Xunit;
@@ -20,6 +21,7 @@ public class DashboardFileTests
             <variable name="patch" value="5" />
             <section label="Filter" device="synth" base="AddressMap.Edit.Filter" collapsible="true">
               <knob label="Cutoff" unit="Hz" decimals="1">
+                <options body="false" width="8" ends="flat" />
                 <bind slot="value" parameter="Cutoff" />
               </knob>
               <knob label="Resonance" color="#E8590C" grow="2">
@@ -63,7 +65,7 @@ public class DashboardFileTests
             "children": [
               { "type": "section", "label": "Filter", "device": "synth", "base": "AddressMap.Edit.Filter", "collapsible": true,
                 "children": [
-                  { "type": "knob", "label": "Cutoff", "unit": "Hz", "decimals": 1, "bind": { "value": "Cutoff" } },
+                  { "type": "knob", "label": "Cutoff", "unit": "Hz", "decimals": 1, "options": { "body": false, "width": 8, "ends": "flat" }, "bind": { "value": "Cutoff" } },
                   { "type": "knob", "label": "Resonance", "color": "#E8590C", "grow": 2, "bind": { "value": "Resonance" } }
                 ] },
               { "type": "envelope", "label": "Amp env", "size": [6, 3], "unit": "ms", "device": "synth", "base": "AddressMap.Edit.AmpEnv",
@@ -111,7 +113,7 @@ public class DashboardFileTests
 
         var cutoff = Assert.IsType<ValueControl>(section.Children[0]);
         Assert.Equal(ParameterControlKind.Knob, cutoff.Kind);
-        Assert.Equal(new DisplaySettings { Unit = "Hz", Decimals = 1 }, cutoff.Display);
+        Assert.Equal(new DisplaySettings { Unit = "Hz", Decimals = 1, Options = OptionValues.Of("body=false", "width=8", "ends=flat") }, cutoff.Display);
         Assert.Equal(new Binding("Cutoff"), cutoff.Bindings[SlotNames.Value]);
 
         var resonance = Assert.IsType<ValueControl>(section.Children[1]);
@@ -198,6 +200,29 @@ public class DashboardFileTests
         Assert.Equal(1, CountOf(written, "presentation"));
     }
 
+    [Theory]
+    [InlineData(FileFormat.Xml)]
+    [InlineData(FileFormat.Json)]
+    public void Write_HasTheOptions_OnlyThoseTheControlSets(FileFormat format)
+    {
+        var xml = """
+            <dashboard format="jacobi.midi.dashboard/1" name="Test">
+              <row>
+                <knob label="Cutoff"><options plate="false" ends="FLAT" /></knob>
+                <knob label="Reso" />
+              </row>
+            </dashboard>
+            """;
+
+        var written = DashboardFile.Write(DashboardFile.Read(xml, FileFormat.Xml), format);
+        var read = DashboardFile.Read(written, format);
+
+        // in their normal form
+        Assert.Equal(OptionValues.Of("plate=false", "ends=flat"), Assert.IsType<ValueControl>(read.Layout.Children[0]).Display.Options);
+        Assert.Equal(OptionValues.Empty, Assert.IsType<ValueControl>(read.Layout.Children[1]).Display.Options);
+        Assert.Equal(1, CountOf(written, "options"));
+    }
+
     private static int CountOf(string text, string part) => (text.Length - text.Replace(part, "", StringComparison.Ordinal).Length) / part.Length;
 
     [Fact]
@@ -237,6 +262,14 @@ public class DashboardFileTests
     [InlineData("""<knob faceScale="3.5" />""", "'faceScale': 3.5 is not from 0.5 to 3")]
     [InlineData("""<knob faceScale="big" />""", "'faceScale': 'big' is not a number")]
     [InlineData("""<selector presentation="tiles" />""", "'presentation': 'tiles' is not one of list, buttons")]
+    [InlineData("""<knob><options wheel="true" /></knob>""", "'knob' has no option 'wheel' (options: plate, fasteners, label, track, body, pointer, width, ends, value)")]
+    [InlineData("""<selector><options width="8" /></selector>""", "'selector' has no option 'width' (options: plate, fasteners, label, display, lamp, ends)")]
+    [InlineData("""<numberBox><options label="left" /></numberBox>""", "'label': 'left' is not one of above, below, none")]
+    [InlineData("""<knob><options body="maybe" /></knob>""", "'body': 'maybe' is not true or false")]
+    [InlineData("""<knob><options width="20" /></knob>""", "'width': 20 is not from 1 to 12")]
+    [InlineData("""<knob><options ends="square" /></knob>""", "'ends': 'square' is not one of round, flat")]
+    [InlineData("""<knob><options /><options /></knob>""", "'knob' has one 'options'")]
+    [InlineData("""<knob><options><bind slot="value" parameter="X" /></options></knob>""", "'options' cannot contain 'bind'")]
     public void Read_ReportsWhatDoesNotFit(string control, string message)
     {
         var xml = $"""<dashboard format="jacobi.midi.dashboard/1" name="Test"><row>{control}</row></dashboard>""";

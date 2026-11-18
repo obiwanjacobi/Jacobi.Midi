@@ -26,7 +26,7 @@ the devices) is in the [todo list](todo.md).
 | **Face** | The inner part of a parameter control: how its value is drawn (an arc, a ring of LEDs, a schematic symbol). Faces of one style for all control types form a **kit**. |
 | **Chrome** | The outer part of a control or section: the plate or frame around it, with the label and the value text. |
 | **Palette** | The colors a control is drawn with. Each device has its own palette, derived from the device's color. |
-| **Look** | A named combination of chrome, a kit of faces, a neutral palette, typography and a finish: the style of all controls. There are two ready-made looks to choose from (Foundry, Anodized). |
+| **Look** | A named combination of chrome, a kit of faces, a neutral palette, typography and a finish: the style of all controls. There are three ready-made looks to choose from (Foundry, Anodized, LCARS). |
 | **Edit / Play** | The two modes of a dashboard: in *Edit* the layout and bindings are changed, in *Play* the controls are used. |
 
 ### Single place of truth
@@ -231,7 +231,7 @@ The resource keys every look provides (the face themes take them; the chrome tem
 
 | Layer | Keys |
 |-------|------|
-| Palette | `ConsoleAccentBrush`, `ConsoleAccentTextBrush`, `ConsoleAccentDisplayBrush` (these three are derived from the accent in code, see [Color](#color)), `ConsoleTrackBrush`, `ConsoleBodyBrush`, `ConsoleSurfaceBrush`, `ConsolePointerBrush`, `ConsoleDisplayBrush`, `ConsoleDisplayTextBrush`, `ConsoleOutlineBrush`, `ConsoleTextBrush`, `ConsoleBackgroundBrush`, the materials `ConsolePlateBrush` (a control's plate, transparent when the controls are on the panel) and `ConsoleSectionBrush` (a section's panel) with `ConsolePlateTextBrush` (the label on the plate) (these three are tinted in code when a plate or panel has a color) (and look specific ones for its own chrome, e.g. `ConsoleScrewBrush`) |
+| Palette | `ConsoleAccentBrush`, `ConsoleAccentTextBrush`, `ConsoleAccentDisplayBrush` (these three are derived from the accent in code, see [Color](#color)), `ConsoleTrackBrush`, `ConsoleBodyBrush`, `ConsoleSurfaceBrush`, `ConsolePointerBrush`, `ConsoleDisplayBrush`, `ConsoleDisplayTextBrush`, `ConsoleOutlineBrush`, `ConsoleTextBrush`, `ConsoleBackgroundBrush`, the materials `ConsolePlateBrush` (a control's plate, shown when its option `plate` is on) and `ConsoleSectionBrush` (a section's panel) with `ConsolePlateTextBrush` (the label on the plate) (these three are tinted in code when a plate or panel has a color) (and look specific ones for its own chrome, e.g. `ConsoleScrewBrush`) |
 | Typography | `ConsoleLabelFont`, `ConsoleDisplayFont` |
 | Finish | `ConsoleGlowOpacity` (0 draws no glow) |
 
@@ -241,6 +241,34 @@ different kits share their drawing code where they can (one arc renderer, drawn 
 of faces is the real cost of this design, and it grows with the number of kits, not with the number of looks: a look
 is only a combination.
 
+**Options.** The parts of a chrome and a face can be switched, and some strokes set, per control: the **options**,
+declared once per control kind in Console.Core (`FaceOptions`: a name, a switch, number or choice, a default and a
+description). An option means the same in every kind that has it:
+
+| Kind | Options |
+|------|---------|
+| every control (the chrome) | `plate` (the plate the control is mounted on; off: on the panel), `fasteners` (its screws or rivets), `label` (`above`, `below` or `none`) |
+| knob | `track`, `body` (body and cap), `pointer`, `width` (of the arc and track), `ends` (`round` or `flat`), `value` (`below`: the chrome's readout; `inside`: drawn by the face inside the arc) |
+| slider | `track` (the slot, or the unlit segments), `cap`, `width` (of the slot), `segments` (a meter; 0: one fill), `ends` |
+| switch | `lamp`, `ends` (of a pair of ON/OFF keys) |
+| selector | `display` (of the list), `lamp` (an LED per key), `ends` (of each row of keys: `round` makes it a pill) |
+| number box, text | `display` |
+| XY pad | `display`, `grid`, `crosshair` |
+| envelope | `display`, `fill`, `beads` |
+
+The value of a knob is shown by the chrome (its readout, from the control's `ValueText`) or by the face: with `value`
+`inside` the control puts the value text in the face state (`RangeFaceState.Text`) and gives the chrome none, as the
+number box always does. The value of an option is
+the control's own (`DisplaySettings.Options`, `options` in the dashboard file), else the look's default
+(`Look.ChromeOptions`, `Look.FaceOptions`), else the declared default: as the colors, an option the control does not
+set follows the look. The control sets them on its built control (`FaceHost.OptionsProperty`, inherited); the face gets
+them complete (`Face.Options`, read by name: `Options.Switch("body")`), the chrome's switches are pseudo-classes by
+their name (`:plate`, `:fasteners`) and its choices by name and value (`:label-below`) that a look's chrome theme
+uses to show, hide and place its parts. A face draws the
+options in its own style (Anodized's `track` is its ring of unlit LEDs) and ignores those it has nothing for (its LEDs
+have no `width`). The control panel shows a field per option, built from the declarations, with what is inherited.
+The other controls get their options one by one.
+
 **Glow and other effects** belong to the finish and the palette (e.g. a glow radius), not to a face: effects are
 expensive while values change, so they are applied in one place and can be reduced in one place.
 
@@ -249,7 +277,7 @@ expensive while values change, so they are applied in one place and can be reduc
 Color carries meaning, not decoration. Three areas of controls and sections have a color (`ColorArea`):
 
 - the **accent**: what shows the value and the device (arcs, LEDs, a section's tag or strip); `color` in the files;
-- the **plate**: the material a control is mounted on (Foundry's steel plate; Anodized has none until it is given a color); `plateColor`;
+- the **plate**: the material a control is mounted on (Foundry's steel plate; Anodized's graphite aluminium), shown when the option `plate` is on (Anodized and LCARS have it off: their controls are on the panel); `plateColor`, which has no effect while the plate is off;
 - the **panel**: the material of a section (cast iron, aluminium); `panelColor`.
 
 The color of an area is found in this order; the first that is set wins:
@@ -271,9 +299,9 @@ the controls inside it.
 **Materials keep their shading.** A plate or panel color does not replace the look's material by a flat color: the
 stops of the material's gradient get the hue and saturation of the color, and keep their differences in lightness
 around it (`Palette.Tint`), so brushed steel becomes painted metal and keeps its light. A material the look does not
-have (Anodized's transparent plate) becomes a plain one, lit from above. The label on a plate gets the text color with
-the most contrast; on a look whose controls are on the panel, the labels follow the panel's color until the plate
-has one.
+have (a transparent one) becomes a plain one, lit from above. The label on a plate gets the text color with the most
+contrast; a control without a plate (option `plate` off) has its label on the panel, in the color for the panel's
+color.
 
 **Colors per device.** A device instance has its colors in the rig. Because they are part of the rig, a device has
 the same colors on every dashboard; a dashboard can override them, per area (e.g. two devices of the same color on
@@ -287,7 +315,7 @@ pointer, named in its title: on the face or on a section's tag or strip (the ele
 class `accentArea`) the accent, elsewhere on a parameter control its plate, elsewhere on a layout control its panel.
 The property panel opens the same chooser for each area of the selected control. It offers:
 
-- the colors of the look for the area: a few colors designed to suit it (in the module of the look; Foundry has metals and patina, steel and enamel plates, iron and painted panels; Anodized LED colors and anodized aluminium);
+- the colors of the look for the area: a few colors designed to suit it (in the module of the look; Foundry has metals and patina, steel and enamel plates, iron and painted panels; Anodized LED colors and anodized aluminium; LCARS its pastels and near-black panels);
 - tints and shades of the current color;
 - any color (a color view in a flyout of its own, applied with *Apply*);
 - *Inherited*: takes the color away, so the control has the color of the cascade again;
@@ -313,16 +341,17 @@ color does not show on it; the console says so.
 
 ### Looks
 
-Two ready-made looks, kept simple as the basis for tweaking:
+Three ready-made looks, kept simple as the basis for tweaking:
 
 | Look | Faces (kit) | Chrome | Palette |
 |------|-------------|--------|---------|
-| **Foundry** | knob: engraved track, bakelite body, brass cap; fader: dark slot, brass cap; switch: pilot lamp and lever; text: amber readout; selector: bakelite keys with brass names, lit in the accent; XY pad and envelope: amber screen, the point or curve in the accent, brass beads | a control on a brushed steel plate with four screws, an engraved label and an amber readout; a section on a cast iron panel with a tag in the device color | iron, steel, bakelite, brass, amber |
+| **Foundry** | knob: the arc knob (`Faces/ArcKnobFace`, shared) with all its parts: engraved track, bakelite body, brass cap; fader: dark slot, brass cap; switch: pilot lamp and lever; text: amber readout; selector: bakelite keys with brass names, lit in the accent; XY pad and envelope: amber screen, the point or curve in the accent, brass beads | a control on a brushed steel plate with four screws, an engraved label and an amber readout; a section on a cast iron panel with a tag in the device color | iron, steel, bakelite, brass, amber |
 | **Anodized** | knob: ring of LEDs, machined cap; fader: slot with an LED meter; switch: LED bar and push button; text: OLED display; selector: keys with an LED above each name; XY pad and envelope: OLED screen, the point or curve lit in the accent | a control on the panel with a printed label and an OLED readout; a section on an aluminium panel with an LED strip and a title in the device color | dark aluminium, LEDs and OLED in the accent |
+| **LCARS** | the Foundry kit, drawn flat by the look's palette and option defaults: knob: a wide arc with flat ends and the value inside, no body or pointer; fader: a meter of 10 segments without cap; selector: keys whose rows are pills; no displays behind numbers, texts and plots; and a switch of its own: the ON/OFF pair of keys (`Faces/PairSwitchFace`, `Kit.With`) | a control on the panel with a label in capitals below it and the value in a pill in the accent; a section on a black panel under a header strip in the device color: a rounded cap, the title, a bar and a rounded end cap | black, pastel bars in the accent, condensed capitals (Antonio, embedded under `Assets/Fonts` with its license) |
 
 Where things are, for tweaking (in `Jacobi.Midi.Console`):
 
-- **Modules**: each kit and the looks built on it are a **module**, a folder of its own under `Looks` (`Looks/Foundry`, `Looks/Anodized`), changed in isolation. A module has everything it offers: its faces (a file per face), its kit and its looks with their accent and swatches (`FoundryLooks`, `AnodizedLooks`), and the resources of its looks (`Foundry.axaml`). Modules need not offer the same: one may have more looks (other palettes on the same kit) or resources of its own (e.g. Foundry's `ConsoleScrewBrush`). A module finds its resources through its own assembly (`Look.ThemeOf`), so it can move to an assembly of its own later.
+- **Modules**: each kit and the looks built on it are a **module**, a folder of its own under `Looks` (`Looks/Foundry`, `Looks/Anodized`, `Looks/Lcars`), changed in isolation. A module has everything it offers: its faces (a file per face), its kit and its looks with their accent and swatches (`FoundryLooks`, `AnodizedLooks`), and the resources of its looks (`Foundry.axaml`). Modules need not offer the same: one may have more looks (other palettes on the same kit) or resources of its own (e.g. Foundry's `ConsoleScrewBrush`). A module may use the kit of another module until it has one of its own (LCARS uses Anodized's). A module finds its resources through its own assembly (`Look.ThemeOf`), so it can move to an assembly of its own later.
 - **Shapes**: the faces of a module (drawn in code; shared drawing code in `Faces/FaceDrawing`), collected in the kit of the module.
 - **Colors, materials, fonts and glow**: the palette, typography and finish in the resources of a look: the same keys in every look (see [Composable controls](#composable-controls)), solid colors or gradients.
 - **Chrome**: the `ControlChrome` and `SectionFrame` control themes in the same resources.
@@ -378,6 +407,7 @@ any of its repeat items is bound to, and fainter, a device, group or repeat with
 **The control panel** (right panel) edits the selected control:
 
 - its label, position in its grid (column, row), size (columns × rows) and display settings (unit, decimals);
+- its options (see *Options* in [Composable controls](#composable-controls)): a list per switch or choice and a number field per number, each with `inherited` (the look's value, shown in its caption);
 - its three colors (each opens the color chooser, ✕ makes it inherited);
 - its kind, with a button per kind (one single-value control into another, also into selector tabs and back, a grid into a section, a row into a column: `ControlCatalog.WithKind`); selector tabs get a page per option and at least their default size, and lose their pages when they become another kind; a page keeps its kind;
 - the pages of selector tabs: a list of the options to check (see [Selector tabs](#selector-tabs-show-a-page-per-option));
@@ -591,7 +621,8 @@ The same rig in XML:
         "device": "synth", "base": "AddressMap.Edit.Filter",
         "children": [
           { "type": "knob", "label": "Cutoff", "at": [0, 0], "size": [5, 7], "bind": { "value": "Cutoff" } },
-          { "type": "knob", "label": "Resonance", "at": [5, 0], "size": [5, 7], "bind": { "value": "Resonance" }, "color": "#E8590C" }
+          { "type": "knob", "label": "Resonance", "at": [5, 0], "size": [5, 7], "bind": { "value": "Resonance" }, "color": "#E8590C",
+            "options": { "pointer": false, "width": 8 } }
         ] },
       { "type": "envelope", "label": "Amp env", "at": [13, 0], "size": [10, 6], "unit": "ms",
         "device": "synth", "base": "AddressMap.Edit.AmpEnv",
@@ -623,6 +654,7 @@ The same dashboard in XML:
         <bind slot="value" parameter="Cutoff" />
       </knob>
       <knob label="Resonance" at="5,0" size="5,7" color="#E8590C">
+        <options pointer="false" width="8" />
         <bind slot="value" parameter="Resonance" />
       </knob>
     </section>
@@ -659,7 +691,7 @@ format-neutral elements (a name, attributes and child elements) and back; one XM
 such a tree into text and back:
 
 - In **XML** an element is an element: its attributes are attributes, its children child elements, without wrappers.
-- In **JSON** an element is an object: its attributes are properties, its children are grouped in a property by their role (`children`, `segments`, `devices`, `variables` as arrays; `layout`, `endpoint` as an object; `bind`, `deviceValues` as an object of key and value; `assemblies`, `schemas`, `exchanges` as an array of values). Elements of different kinds in one role (the controls) give their kind in `type`. These roles are listed in one place (`FileRoles`).
+- In **JSON** an element is an object: its attributes are properties, its children are grouped in a property by their role (`children`, `segments`, `devices`, `variables` as arrays; `layout`, `endpoint`, `options` as an object; `bind`, `deviceValues` as an object of key and value; `assemblies`, `schemas`, `exchanges` as an array of values). Elements of different kinds in one role (the controls) give their kind in `type`. These roles are listed in one place (`FileRoles`).
 
 Reading is strict: an unknown attribute or element, a missing required value, an invalid value (a binding, a color,
 a size) or a duplicate (a device alias, a slot) is reported with its location in the file, e.g.

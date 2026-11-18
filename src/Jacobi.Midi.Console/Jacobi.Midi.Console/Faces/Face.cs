@@ -74,6 +74,13 @@ public abstract class Face : Control
     public static readonly StyledProperty<FontFamily> DisplayFontProperty =
         AvaloniaProperty.Register<Face, FontFamily>(nameof(DisplayFont), FontFamily.Default);
 
+    /// <summary>
+    /// The options of the face (its parts and strokes, see <see cref="FaceOptions"/>), complete: the control's own
+    /// values over the look's over the declared defaults. Set by the <see cref="FaceHost"/>.
+    /// </summary>
+    public static readonly StyledProperty<OptionValues> OptionsProperty =
+        AvaloniaProperty.Register<Face, OptionValues>(nameof(Options), OptionValues.Empty);
+
     /// <summary>Finish: the opacity of the glow around lit parts (0-1); 0 draws no glow.</summary>
     public static readonly StyledProperty<double> GlowOpacityProperty =
         AvaloniaProperty.Register<Face, double>(nameof(GlowOpacity));
@@ -154,6 +161,12 @@ public abstract class Face : Control
     {
         get => GetValue(DisplayFontProperty);
         set => SetValue(DisplayFontProperty, value);
+    }
+
+    public OptionValues Options
+    {
+        get => GetValue(OptionsProperty);
+        set => SetValue(OptionsProperty, value);
     }
 
     public double GlowOpacity
@@ -256,9 +269,16 @@ public abstract class Face : Control
                 _static.InvalidateVisual();
             }
         }
+        else if (change.Property == OptionsProperty)
+        {
+            // the options may change the parts and the size of the face
+            InvalidateMeasure();
+            _static.InvalidateVisual();
+            _value.InvalidateVisual();
+        }
         else if (change.Property.OwnerType == typeof(Face))
         {
-            // a brush, the font or the glow: everything is drawn with them
+            // a brush, the font, the glow or the options: everything is drawn with them
             _static.InvalidateVisual();
             _value.InvalidateVisual();
         }

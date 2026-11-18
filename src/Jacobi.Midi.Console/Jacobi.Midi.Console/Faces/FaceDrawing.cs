@@ -172,6 +172,23 @@ internal static class FaceDrawing
         return new Rect(index % columns * pitch.Width, index / columns * pitch.Height, pitch.Width - KeyGap, pitch.Height - KeyGap);
     }
 
+    /// <summary>
+    /// The shape of a key of <paramref name="count"/> in the keys' area: with <paramref name="round"/> ends the first and
+    /// last key of a row are rounded at their outer side (the row is a pill) and the keys between are square; else every
+    /// key has slightly rounded corners.
+    /// </summary>
+    public static RoundedRect KeyShape(Size area, int count, int index, bool round)
+    {
+        var key = Key(area, count, index);
+        if (!round)
+            return new RoundedRect(key, 3);
+        var columns = KeyColumns(area.Width, count);
+        var isFirst = index % columns == 0;
+        var isLast = index % columns == columns - 1 || index == count - 1;
+        var radius = key.Height / 2;
+        return new RoundedRect(key, new CornerRadius(isFirst ? radius : 0, isLast ? radius : 0, isLast ? radius : 0, isFirst ? radius : 0));
+    }
+
     /// <summary>The key of <paramref name="count"/> at a position in the keys' area; null between or beside the keys.</summary>
     public static int? KeyAt(Size area, int count, Point position)
     {
@@ -193,6 +210,16 @@ internal static class FaceDrawing
             Trimming = TextTrimming.CharacterEllipsis,
         };
         context.DrawText(formatted, new Point(area.X + (area.Width - formatted.Width) / 2, area.Y + (area.Height - formatted.Height) / 2));
+    }
+
+    /// <summary>
+    /// The value text inside a round face (a knob with its value inside): centred, its size following the radius,
+    /// cut off ("…") when it does not fit.
+    /// </summary>
+    public static void DrawValueInside(DrawingContext context, string text, Point center, double radius, FontFamily font, IBrush? brush)
+    {
+        var half = radius * 0.7;
+        DrawTrimmedText(context, text, new Rect(center.X - half, center.Y - half, half * 2, half * 2), font, brush, Math.Max(8, radius * 0.45));
     }
 
     /// <summary>Text centred in a rectangle, in a font of the typography.</summary>

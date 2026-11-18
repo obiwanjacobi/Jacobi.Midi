@@ -3,6 +3,56 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## The LCARS look in the console (2026-11-17)
+
+Issue: a third look, after the LCARS-style control design (rounded caps, pastel bars, condensed capitals on black).
+
+1. **LCARS is a module of its own (`Looks/Lcars`), built in steps:** first its palette, typography and chrome (control
+   and section) on the kit of the Anodized module, then a kit of its own. *Why:* the look can be judged before the
+   faces are drawn; a module may borrow a kit.
+2. **The value stays in the chrome**, in a pill in the accent, not drawn inside the knob as in the design: a face only
+   gets its face state, not the value text. *Why:* keep the face contract.
+3. **The section's header strip shows the title only**, not the device name of the design: a section has a `Header`
+   only. *Why:* no new section data for a look.
+4. **Fonts a look needs are embedded under `Assets/Fonts`, with their license** (Antonio, SIL Open Font License).
+   *Why:* the same type on every platform; condensed system fonts differ per platform.
+5. **The frame of the design (elbows, the options on the side) is not part of the look for now**; it may become a
+   variant of the (selector) tabs later. *Why:* the look styles controls and sections; start simple.
+6. **A face is composed of parts and settings (e.g. a knob's track, arc, cap, pointer, stroke) that a control can
+   switch; the look supplies their defaults.** The user can change them per control. *Why:* a new look is mostly a
+   combination of options, not a new kit drawn in code; controls added in a look get that look's style.
+7. **A face option the control does not set is inherited from the look** (not copied into the control when it is
+   added), as the colors: switching the look changes the options the user did not set. *Why:* one rule for
+   everything a look supplies.
+8. **The knob is the first control with face options**, the other controls follow one by one. *Why:* work out the
+   basics on one case.
+9. **Options are generic: declared once per control kind** (`FaceOptions` in Console.Core: name, switch, number or
+   choice, default), with the values by name (`OptionValues`), not a typed record per kind. The file, the control
+   panel and the inheritance are written once; an option name means the same in every kind (`width`, `ends`).
+   *Why:* a control kind adds its declaration and its drawing only.
+10. **In the dashboard file the options are one `options` element per control** (`"options": { ... }` in JSON),
+    only those the control sets, each checked against the declaration. *Why:* apart from the control's own
+    attributes; strict as the rest of the file.
+11. **The chrome has options too: `plate` and `fasteners`**, for every control with a face. `plate` replaces the
+    look's `ControlsOnPanel` (it is the look's default: off for Anodized and LCARS). *Why:* one mechanism for
+    every part a look draws.
+12. **A plate color has no effect while `plate` is off;** giving a color does not switch the plate on. *Why:* the
+    user decides what is shown; a color does not change it.
+13. **Foundry's knob became the shared arc knob (`ArcKnobFace`)**: Foundry uses it with all its parts, LCARS
+    without body and pointer, with a wide arc and flat ends; a look overrides a single face with `Kit.With`.
+    *Why:* one drawing, combined by options.
+14. **The value of a knob can be drawn by its face** (amends 2): the knob's option `value` (`below`, `inside`); with
+    `inside` the control puts the value text in the face state and gives the chrome none. Only the knob for now; a
+    general move of the value from the chrome to the faces was not decided. *Why:* seen on one control first.
+15. **The label's place is a chrome option `label`: `above`, `below` or `none`.** *Why:* the LCARS design has its
+    labels below; a control may need none.
+16. **Every control kind has its options** (slider, switch, selector, number box, text, XY pad, envelope; see the
+    console's readme), honoured by the faces of every kit where they have the part; a face ignores an option it has
+    nothing for. *Why:* the user switches parts in any look; the looks only differ in their defaults.
+17. **LCARS draws with the Foundry kit and its own palette and option defaults, and has one face of its own: the ON/OFF
+    pair of keys (`PairSwitchFace`).** *Why:* flat parts are Foundry's parts without their materials; only the switch
+    is a different drawing. (Its ▲/▼ arrows follow, in the display text color of Foundry's faces.)
+
 ## Loading exchange files in the console (2026-11-17)
 
 Issue: a rig or dashboard could list schema files and assemblies, but not exchange files (decision 11 of *Message

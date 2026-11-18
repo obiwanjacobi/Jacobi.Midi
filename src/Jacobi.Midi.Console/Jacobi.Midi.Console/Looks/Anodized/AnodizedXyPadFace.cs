@@ -8,7 +8,8 @@ namespace Jacobi.Midi.Console.Looks.Anodized;
 
 /// <summary>
 /// Anodized XY pad: an OLED screen with a dotted grid, the point as a lit dot in the accent on crosshairs to its edges.
-/// An unknown value has a dashed ring in the middle.
+/// An unknown value has a dashed ring in the middle. Of the XY pad's options (<see cref="FaceOptions.XyPad"/>) it takes
+/// all: <c>display</c> (the screen), <c>grid</c> and <c>crosshair</c>.
 /// </summary>
 public sealed class AnodizedXyPadFace : Face
 {
@@ -16,7 +17,10 @@ public sealed class AnodizedXyPadFace : Face
 
     protected override void RenderStatic(DrawingContext context, FaceState state)
     {
-        context.DrawRectangle(DisplayBrush, new Pen(OutlineBrush, 1), new Rect(Bounds.Size), 3, 3);
+        if (Options.Switch("display"))
+            context.DrawRectangle(DisplayBrush, new Pen(OutlineBrush, 1), new Rect(Bounds.Size), 3, 3);
+        if (!Options.Switch("grid"))
+            return;
         var area = PlotArea(Bounds.Size);
         var grid = new Pen(TrackBrush, 1, new DashStyle([1, 3], 0));
         for (var line = 1; line < 4; line++)
@@ -37,7 +41,7 @@ public sealed class AnodizedXyPadFace : Face
             return;
         }
         var point = PlotPoint(area, x, y);
-        using (context.PushOpacity(0.6))
+        using (context.PushOpacity(Options.Switch("crosshair") ? 0.6 : 0))
         {
             var crosshair = new Pen(AccentBrush, 1);
             context.DrawLine(crosshair, new Point(point.X, area.Bottom), new Point(point.X, area.Top));

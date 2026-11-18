@@ -8,7 +8,8 @@ namespace Jacobi.Midi.Console.Looks.Foundry;
 
 /// <summary>
 /// Foundry number box: an amber readout with the number and ▲/▼ at the right. An unknown value shows a dash. The
-/// readout takes the plate's width.
+/// readout takes the plate's width. Of the number box's options (<see cref="FaceOptions.NumberBox"/>) it takes
+/// <c>display</c> (the readout; without it the number and the arrows are on the plate or panel).
 /// </summary>
 public sealed class FoundryNumberBoxFace : Face
 {
@@ -20,7 +21,8 @@ public sealed class FoundryNumberBoxFace : Face
 
     protected override void RenderStatic(DrawingContext context, FaceState state)
     {
-        context.DrawRectangle(DisplayBrush, new Pen(OutlineBrush, 1), Window, 3, 3);
+        if (Options.Switch("display"))
+            context.DrawRectangle(DisplayBrush, new Pen(OutlineBrush, 1), Window, 3, 3);
         using (context.PushOpacity(0.75))
             DrawStepArrows(context, Window, DisplayTextBrush, new Pen(OutlineBrush, 1));
     }

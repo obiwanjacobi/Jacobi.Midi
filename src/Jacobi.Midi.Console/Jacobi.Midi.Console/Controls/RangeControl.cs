@@ -3,7 +3,9 @@ using Avalonia;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.VisualTree;
+using Jacobi.Midi.Console.Core.Dashboards;
 using Jacobi.Midi.Console.Core.Faces;
+using Jacobi.Midi.Console.Faces;
 
 namespace Jacobi.Midi.Console.Controls;
 
@@ -264,9 +266,33 @@ public abstract class RangeControl : ParameterControlBase
     }
 }
 
-/// <summary>The knob: a number in a range, turned by dragging vertically.</summary>
+/// <summary>
+/// The knob: a number in a range, turned by dragging vertically. Its value is shown by the chrome (below the face) or,
+/// with its option <c>value</c> set to <c>inside</c>, by the face: then the face state carries the value text and the
+/// chrome has none.
+/// </summary>
 public sealed class KnobControl : RangeControl
 {
+    // the options are set on the control by the dashboard (inherited by its chrome and face)
+    private bool ShowsValueInside
+        => FaceOptions.Complete(ParameterControlKind.Knob, FaceHost.GetOptions(this)).Choice("value") == "inside";
+
+    protected override void UpdateFace()
+    {
+        base.UpdateFace();
+        if (ShowsValueInside && FaceState is { } state && state is RangeFaceState range)
+        {
+            FaceState = range with { Text = ValueText };
+            ValueText = null;
+        }
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == FaceHost.OptionsProperty)
+            UpdateFace();
+    }
 }
 
 /// <summary>

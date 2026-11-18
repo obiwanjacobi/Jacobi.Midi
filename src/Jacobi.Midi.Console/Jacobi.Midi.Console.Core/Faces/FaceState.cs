@@ -6,7 +6,8 @@ namespace Jacobi.Midi.Console.Core.Faces;
 /// <param name="Fraction">The value as a fraction of the range (0-1); null when the value is unknown.</param>
 /// <param name="Origin">Where the value is drawn from, as a fraction of the range: 0 for the minimum, 0.5 for the centre of a bipolar range.</param>
 /// <param name="IsHorizontal">True when the range runs from left to right (a horizontal slider); otherwise from the bottom up.</param>
-public readonly record struct RangeFaceState(double? Fraction, double Origin, bool IsHorizontal = false);
+/// <param name="Text">The value as text, for a face that shows it (a knob with its value inside); null when the chrome shows it.</param>
+public readonly record struct RangeFaceState(double? Fraction, double Origin, bool IsHorizontal = false, string? Text = null);
 
 /// <summary>The face state of a switch.</summary>
 /// <param name="IsOn">Null when the value is unknown.</param>

@@ -10,6 +10,8 @@ namespace Jacobi.Midi.Console.Looks.Anodized;
 /// Anodized selector: an OLED display with the selected option and ▲/▼ at the right; or keys with an LED above each
 /// option name, the LED and the name of the selected option lit in the accent, in as many rows as the plate's width
 /// needs. The display and the keys take the plate's width. An unknown value has a dash in the display, or all LEDs off.
+/// Of the selector's options (<see cref="FaceOptions.Selector"/>) it takes all: <c>display</c>, <c>lamp</c> (the LEDs)
+/// and <c>ends</c> (of the rows of keys).
 /// </summary>
 public sealed class AnodizedSelectorFace : Face
 {
@@ -27,6 +29,10 @@ public sealed class AnodizedSelectorFace : Face
             ? KeysSize(selector.Options.Count, room.Width)
             : base.SizeIn(room);
 
+    private bool IsRound => Options.Choice("ends") == "round";
+
+    private bool HasLamps => Options.Switch("lamp");
+
     protected override void RenderStatic(DrawingContext context, FaceState state)
     {
         if (state is not SelectorFaceState selector)
@@ -34,16 +40,18 @@ public sealed class AnodizedSelectorFace : Face
         if (selector.IsList)
         {
             var area = new Rect(Bounds.Size);
-            context.DrawRectangle(DisplayBrush, new Pen(OutlineBrush, 1), area, 3, 3);
+            if (Options.Switch("display"))
+                context.DrawRectangle(DisplayBrush, new Pen(OutlineBrush, 1), area, 3, 3);
             DrawStepArrows(context, area, TrackBrush, new Pen(TrackBrush, 1));
             return;
         }
         var off = new Pen(TrackBrush, 1);
         for (var index = 0; index < selector.Options.Count; index++)
         {
-            var key = Key(Bounds.Size, selector.Options.Count, index);
-            context.DrawRectangle(BodyBrush, new Pen(OutlineBrush, 1), key, 3, 3);
-            context.DrawRectangle(DisplayBrush, off, Led(key), 1, 1);
+            var key = KeyShape(Bounds.Size, selector.Options.Count, index, IsRound);
+            context.DrawRectangle(BodyBrush, new Pen(OutlineBrush, 1), key);
+            if (HasLamps)
+                context.DrawRectangle(DisplayBrush, off, Led(key.Rect), 1, 1);
         }
     }
 
@@ -63,13 +71,13 @@ public sealed class AnodizedSelectorFace : Face
         {
             var key = Key(Bounds.Size, selector.Options.Count, index);
             var isSelected = index == selector.Selected;
-            if (isSelected)
+            if (isSelected && HasLamps)
             {
                 if (AccentGlow is { } glow)
                     context.DrawRectangle(glow, null, Led(key).Inflate(3), 3, 3);
                 context.DrawRectangle(AccentBrush, null, Led(key), 1, 1);
             }
-            var label = new Rect(key.X, key.Y + LedHeight + 4, key.Width, key.Height - LedHeight - 4);
+            var label = HasLamps ? new Rect(key.X, key.Y + LedHeight + 4, key.Width, key.Height - LedHeight - 4) : key;
             using (context.PushOpacity(selector.Selected is null ? 0.5 : 1))
                 DrawTrimmedText(context, selector.Options[index], label, DisplayFont, isSelected ? AccentDisplayBrush : TrackBrush, 11);
         }

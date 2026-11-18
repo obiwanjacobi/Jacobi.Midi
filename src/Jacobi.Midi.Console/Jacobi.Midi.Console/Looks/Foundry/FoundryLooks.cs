@@ -10,10 +10,10 @@ namespace Jacobi.Midi.Console.Looks.Foundry;
 /// </summary>
 public static class FoundryLooks
 {
-    /// <summary>Industrial: engraved tracks, bakelite and brass, pilot lamps and amber readouts.</summary>
+    /// <summary>Industrial: engraved tracks, bakelite and brass (the arc knob with all its parts), pilot lamps and amber readouts.</summary>
     public static Kit Kit { get; } = new("foundry", new Dictionary<ParameterControlKind, Func<Face>>
     {
-        [ParameterControlKind.Knob] = () => new FoundryKnobFace(),
+        [ParameterControlKind.Knob] = () => new ArcKnobFace(),
         [ParameterControlKind.Slider] = () => new FoundryFaderFace(),
         [ParameterControlKind.Switch] = () => new FoundrySwitchFace(),
         [ParameterControlKind.NumberBox] = () => new FoundryNumberBoxFace(),

@@ -1,4 +1,5 @@
 using Jacobi.Midi.Console.Core.Dashboards;
+using Jacobi.Midi.Console.Core.Faces;
 using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Faces;
 
@@ -35,8 +36,11 @@ public static class AnodizedLooks
             [ColorArea.Plate] = Look.Colors("#3A3E44", "#A9B0B8", "#2D4F7A", "#7A2D2D", "#8C7440", "#4F3A6E", "#2D6A6A", "#1E2023"),
             // aluminium, blue, red, green, purple, grey, light grey, black
             [ColorArea.Panel] = Look.Colors("#34373B", "#1E2A3A", "#3A1F24", "#1F3A33", "#33293F", "#3A3A3A", "#4A4F55", "#121315"),
-        },
-        ControlsOnPanel: true);
+        })
+    {
+        // the controls are on the panel
+        ChromeOptions = OptionValues.Of("plate=false"),
+    };
 
     /// <summary>The looks of the module.</summary>
     public static IReadOnlyList<Look> All { get; } = [Anodized];

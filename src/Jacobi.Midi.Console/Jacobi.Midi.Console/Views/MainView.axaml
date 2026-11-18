@@ -491,6 +491,29 @@
                                                        ToolTip.Tip="The size of the face only, not of the plate, label or value: a face larger than its room on the plate is cut off" />
                                     </StackPanel>
 
+                                    <StackPanel Spacing="10" IsVisible="{Binding HasOptions}">
+                                        <TextBlock Text="Options of the plate and face (inherited: from the look)" Classes="caption" />
+                                        <ItemsControl ItemsSource="{Binding Options}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Spacing="6" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:FaceOptionField">
+                                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8" ToolTip.Tip="{Binding Description}">
+                                                        <TextBlock Text="{Binding Caption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                        <ComboBox Grid.Column="1" IsVisible="{Binding IsList}" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}"
+                                                                  HorizontalAlignment="Stretch" />
+                                                        <NumericUpDown Grid.Column="1" IsVisible="{Binding IsNumber}" Value="{Binding Number}"
+                                                                       Minimum="{Binding Minimum}" Maximum="{Binding Maximum}" Increment="1" FormatString="0.#"
+                                                                       PlaceholderText="inherited" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+
                                     <StackPanel Spacing="10" IsVisible="{Binding IsSelector}">
                                         <TextBlock Text="Presentation" Classes="caption" />
                                         <ComboBox ItemsSource="{Binding Presentations}" SelectedItem="{Binding Presentation}" HorizontalAlignment="Stretch"

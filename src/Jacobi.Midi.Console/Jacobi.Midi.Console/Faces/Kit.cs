@@ -17,4 +17,11 @@ public sealed class Kit(string name, IReadOnlyDictionary<ParameterControlKind, F
     /// <summary>A new face for the control kind; null when the kit has none.</summary>
     public Face? Create(ParameterControlKind kind)
         => faces.TryGetValue(kind, out var create) ? create() : null;
+
+    /// <summary>
+    /// Another kit (<paramref name="newName"/>): the faces of this one, with the face of <paramref name="kind"/>
+    /// replaced; for a look that overrides the face of a single control kind.
+    /// </summary>
+    public Kit With(string newName, ParameterControlKind kind, Func<Face> create)
+        => new(newName, new Dictionary<ParameterControlKind, Func<Face>>(faces) { [kind] = create });
 }

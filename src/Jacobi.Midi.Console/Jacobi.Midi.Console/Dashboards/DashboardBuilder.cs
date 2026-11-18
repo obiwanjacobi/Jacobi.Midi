@@ -12,6 +12,7 @@ using Avalonia.VisualTree;
 using Jacobi.Midi.Console.Chrome;
 using Jacobi.Midi.Console.Controls;
 using Jacobi.Midi.Console.Core.Dashboards;
+using Jacobi.Midi.Console.Core.Faces;
 using Jacobi.Midi.Console.Core.Devices;
 using Jacobi.Midi.Console.Core.Editing;
 using Jacobi.Midi.Console.Core.Palettes;
@@ -492,11 +493,14 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
             if (scope[area].Color != around[area].Color)
                 PaletteBrushes.Apply(built.Resources, area, scope[area].Color);
         }
-        // controls on the panel have their labels on it, until their plate has a color
-        if (editor.Look.ControlsOnPanel && scope[ColorArea.Plate].Color is null
-            && (scope[ColorArea.Panel].Color != around[ColorArea.Panel].Color || around[ColorArea.Plate].Color is not null))
+        // the options of the chrome and face: the control's own over the look's; a control without a plate has its label
+        // on the panel, in the text for the panel's color (a plate color has no effect then)
+        if (control is ParameterControl optioned && FaceOptions.Of(optioned.Kind).Count > 0)
         {
-            PaletteBrushes.ApplyPlateText(built.Resources, scope[ColorArea.Panel].Color);
+            var options = optioned.Display.Options.Over(editor.Look.OptionsOf(optioned.Kind));
+            FaceHost.SetOptions(built, options);
+            if (!FaceOptions.Complete(optioned.Kind, options).Switch("plate"))
+                PaletteBrushes.ApplyPlateText(built.Resources, scope[ColorArea.Panel].Color);
         }
 
         _built[built] = (control, scope);

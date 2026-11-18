@@ -8,7 +8,7 @@ namespace Jacobi.Midi.Console.Looks.Anodized;
 
 /// <summary>
 /// Anodized text: an OLED display with the text in the accent. An unknown value shows dashes. The display takes the
-/// plate's width.
+/// plate's width. Of the text's options (<see cref="FaceOptions.Text"/>) it takes <c>display</c>.
 /// </summary>
 public sealed class AnodizedTextFace : Face
 {
@@ -17,7 +17,10 @@ public sealed class AnodizedTextFace : Face
     protected override bool FillsWidth => true;
 
     protected override void RenderStatic(DrawingContext context, FaceState state)
-        => context.DrawRectangle(DisplayBrush, new Pen(OutlineBrush, 1), new Rect(Bounds.Size), 3, 3);
+    {
+        if (Options.Switch("display"))
+            context.DrawRectangle(DisplayBrush, new Pen(OutlineBrush, 1), new Rect(Bounds.Size), 3, 3);
+    }
 
     protected override void RenderValue(DrawingContext context, FaceState state)
     {

@@ -54,23 +54,24 @@
     <!-- finish -->
     <x:Double x:Key="ConsoleGlowOpacity">0.35</x:Double>
 
-    <!-- a control: a steel plate with four screws, an engraved label and an amber readout -->
+    <!-- a control: a steel plate with four screws, an engraved label and an amber readout; the options plate and
+         fasteners (pseudo-classes of the chrome) show the plate and the screws -->
     <ControlTheme x:Key="{x:Type chrome:ControlChrome}" TargetType="chrome:ControlChrome">
         <Setter Property="Padding" Value="16,12" />
         <Setter Property="Template">
             <ControlTemplate>
                 <Panel>
-                    <Border Background="{DynamicResource ConsolePlateBrush}" CornerRadius="6"
+                    <Border Name="PART_Plate" Background="{DynamicResource ConsolePlateBrush}" CornerRadius="6"
                             BorderBrush="#1A1A1A" BorderThickness="1"
                             BoxShadow="inset 0 1 0 0 #B0FFFFFF, 0 3 6 0 #99000000" />
-                    <Ellipse Width="9" Height="9" Margin="6" HorizontalAlignment="Left" VerticalAlignment="Top" Fill="{DynamicResource ConsoleScrewBrush}" />
-                    <Ellipse Width="9" Height="9" Margin="6" HorizontalAlignment="Right" VerticalAlignment="Top" Fill="{DynamicResource ConsoleScrewBrush}" />
-                    <Ellipse Width="9" Height="9" Margin="6" HorizontalAlignment="Left" VerticalAlignment="Bottom" Fill="{DynamicResource ConsoleScrewBrush}" />
-                    <Ellipse Width="9" Height="9" Margin="6" HorizontalAlignment="Right" VerticalAlignment="Bottom" Fill="{DynamicResource ConsoleScrewBrush}" />
+                    <Ellipse Classes="fastener" Width="9" Height="9" Margin="6" HorizontalAlignment="Left" VerticalAlignment="Top" Fill="{DynamicResource ConsoleScrewBrush}" />
+                    <Ellipse Classes="fastener" Width="9" Height="9" Margin="6" HorizontalAlignment="Right" VerticalAlignment="Top" Fill="{DynamicResource ConsoleScrewBrush}" />
+                    <Ellipse Classes="fastener" Width="9" Height="9" Margin="6" HorizontalAlignment="Left" VerticalAlignment="Bottom" Fill="{DynamicResource ConsoleScrewBrush}" />
+                    <Ellipse Classes="fastener" Width="9" Height="9" Margin="6" HorizontalAlignment="Right" VerticalAlignment="Bottom" Fill="{DynamicResource ConsoleScrewBrush}" />
                     <!-- the label, the face (the room the label and value leave: a fader stretches into it) and the value -->
-                    <Grid Margin="{TemplateBinding Padding}" RowDefinitions="Auto,*,Auto">
+                    <Grid Margin="{TemplateBinding Padding}" RowDefinitions="Auto,*,Auto,Auto">
                         <!-- engraved: a light copy one pixel lower; cut off at the plate's width (LabelSlot), in full in the tip -->
-                        <chrome:LabelSlot Margin="0,0,0,6" Tip="{TemplateBinding Label}" Doc="{TemplateBinding Doc}">
+                        <chrome:LabelSlot Name="PART_Label" Margin="0,0,0,6" Tip="{TemplateBinding Label}" Doc="{TemplateBinding Doc}">
                             <Panel HorizontalAlignment="Center">
                                 <TextBlock Text="{TemplateBinding Label, Converter={x:Static chrome:UpperCaseConverter.Instance}}"
                                            FontFamily="{DynamicResource ConsoleLabelFont}" TextTrimming="CharacterEllipsis"
@@ -91,6 +92,24 @@
                 </Panel>
             </ControlTemplate>
         </Setter>
+        <Style Selector="^:not(:plate) /template/ Border#PART_Plate">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="^:not(:plate) /template/ Ellipse.fastener">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="^:not(:fasteners) /template/ Ellipse.fastener">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+            <!-- the option label below: under the face and the value -->
+        <!-- the option label none: no label (its name is in the tip of the face host) -->
+        <Style Selector="^:label-none /template/ chrome|LabelSlot#PART_Label">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="^:label-below /template/ chrome|LabelSlot#PART_Label">
+            <Setter Property="Grid.Row" Value="3" />
+            <Setter Property="Margin" Value="0,6,0,0" />
+        </Style>
     </ControlTheme>
 
     <!-- a section: a cast iron panel with a tag in the device's color; the tag in the top inset (Padding, in cells) -->

@@ -1,3 +1,4 @@
+using Jacobi.Midi.Console.Core.Faces;
 using Jacobi.Midi.Console.Core.Files;
 using Jacobi.Midi.Console.Core.Schemas;
 
@@ -87,12 +88,33 @@ public static class DashboardFile
                     .Set("decimals", parameter.Display.Decimals)
                     .Set("faceScale", parameter.Display.FaceScale == DisplaySettings.Default.FaceScale ? null : parameter.Display.FaceScale)
                     .Set("presentation", parameter.Display.Presentation == DisplaySettings.Default.Presentation ? null : FileNames.Of(parameter.Display.Presentation));
+                AddOptions(element, parameter);
                 AddSlots(element, parameter);
                 break;
         }
         foreach (var child in control.Children)
             element.Add(ToElement(child, FileRoles.Children));
         return element;
+    }
+
+    // the options the control sets, in the order of their declaration
+    private static void AddOptions(FileElement element, ParameterControl control)
+    {
+        var values = control.Display.Options;
+        if (values.Count == 0)
+            return;
+        var options = new FileElement(FileRoles.Options.ElementName!, FileRoles.Options);
+        foreach (var option in FaceOptions.Of(control.Kind))
+        {
+            if (values[option.Name] is { } value)
+                options.Set(option.Name, value, option.Type switch
+                {
+                    FaceOptionType.Switch => FileValueKind.Boolean,
+                    FaceOptionType.Number => FileValueKind.Number,
+                    _ => FileValueKind.Text,
+                });
+        }
+        element.Add(options);
     }
 
     private static void AddSlots(FileElement element, ParameterControl control)
@@ -207,6 +229,9 @@ public static class DashboardFile
         }
         else if (FileNames.TryParse<ParameterControlKind>(element.Name, out var kind))
         {
+            // the options of the control, apart from its other content (bindings, segments, pages)
+            var all = element.TakeChildren();
+            var children = all.Where(child => !IsOptions(child)).ToList();
             var display = new DisplaySettings
             {
                 Unit = element.Get("unit"),
@@ -214,6 +239,7 @@ public static class DashboardFile
                 FaceScale = ConsoleFile.GetDecimal(element, "faceScale", DisplaySettings.MinimumFaceScale, DisplaySettings.MaximumFaceScale)
                     ?? DisplaySettings.Default.FaceScale,
                 Presentation = ConsoleFile.GetEnum<SelectorPresentation>(element, "presentation") ?? DisplaySettings.Default.Presentation,
+                Options = ReadOptions(element, kind, all.Where(IsOptions).ToList()),
             };
             control = kind switch
             {
@@ -221,9 +247,9 @@ public static class DashboardFile
                 {
                     Label = label, Size = size, At = at, Grow = grow, Colors = colors, Device = device, Base = basePath,
                     Display = display,
-                    Segments = [.. element.TakeChildren().Select(ReadSegment)],
+                    Segments = [.. children.Select(ReadSegment)],
                 },
-                ParameterControlKind.SelectorTabs => ReadSelectorTabs(element, new SelectorTabsControl
+                ParameterControlKind.SelectorTabs => ReadSelectorTabs(element, children, new SelectorTabsControl
                 {
                     Label = label, Size = size, At = at, Grow = grow, Colors = colors, Device = device, Base = basePath,
                     Display = display,
@@ -232,7 +258,7 @@ public static class DashboardFile
                 {
                     Label = label, Size = size, At = at, Grow = grow, Colors = colors, Device = device, Base = basePath,
                     Display = display,
-                    Bindings = ReadBindings(element, kind, element.TakeChildren()),
+                    Bindings = ReadBindings(element, kind, children),
                 },
             };
 
@@ -247,6 +273,32 @@ public static class DashboardFile
     }
 
     private static bool IsVariable(FileElement element) => element.Name == FileRoles.Variables.ElementName;
+
+    private static bool IsOptions(FileElement element) => element.Name == FileRoles.Options.ElementName;
+
+    // the options a control sets: each declared for its kind, with a value of the option
+    private static OptionValues ReadOptions(FileElement control, ParameterControlKind kind, IReadOnlyList<FileElement> elements)
+    {
+        if (elements.Count == 0)
+            return OptionValues.Empty;
+        if (elements.Count > 1)
+            throw elements[1].Error($"'{control.Name}' has one '{FileRoles.Options.ElementName}'.");
+        var element = elements[0];
+        var declared = FaceOptions.Of(kind);
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var attribute in element.Attributes)
+        {
+            var option = declared.FirstOrDefault(option => option.Name == attribute.Name)
+                ?? throw element.Error(declared.Count == 0
+                    ? $"'{control.Name}' has no options."
+                    : $"'{control.Name}' has no option '{attribute.Name}' (options: {String.Join(", ", declared.Select(option => option.Name))}).");
+            if (!option.TryNormalize(element.Get(attribute.Name)!, out var value, out var error))
+                throw element.Error($"'{attribute.Name}': {error}");
+            values[option.Name] = value;
+        }
+        element.EnsureAllRead();
+        return new OptionValues(values);
+    }
 
     private static List<IndexVariable> ReadVariables(FileElement layout, IEnumerable<FileElement> elements)
     {
@@ -292,9 +344,8 @@ public static class DashboardFile
     }
 
     // the bindings and the pages (grids) of selector tabs
-    private static SelectorTabsControl ReadSelectorTabs(FileElement element, SelectorTabsControl control)
+    private static SelectorTabsControl ReadSelectorTabs(FileElement element, IReadOnlyList<FileElement> children, SelectorTabsControl control)
     {
-        var children = element.TakeChildren();
         control.Bindings = ReadBindings(element, control.Kind, children.Where(IsBind));
         var pages = new List<DashboardControl>();
         foreach (var child in children.Where(child => !IsBind(child)))

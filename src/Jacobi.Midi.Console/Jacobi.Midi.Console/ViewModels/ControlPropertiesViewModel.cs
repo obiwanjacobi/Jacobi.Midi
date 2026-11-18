@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using Jacobi.Midi.Console.Core.Dashboards;
 using Binding = Jacobi.Midi.Console.Core.Dashboards.Binding;
 using Jacobi.Midi.Console.Core.Editing;
+using Jacobi.Midi.Console.Core.Faces;
 using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Looks;
 
@@ -165,6 +166,25 @@ internal sealed partial class ControlPropertiesViewModel(MainViewModel owner, Da
                 EditDisplay(parameter, "presentation", parameter.Display with { Presentation = value }, value.ToString());
         }
     }
+
+    /// <summary>
+    /// The options of the control's chrome and face (<see cref="FaceOptions"/>), each with the value the control sets
+    /// or inherits from the look the dashboard is shown with; none for a control without a face.
+    /// </summary>
+    public IReadOnlyList<FaceOptionField> Options
+    {
+        get
+        {
+            if (control is not ParameterControl parameter)
+                return [];
+            var inherited = FaceOptions.Complete(parameter.Kind, owner.ShownLook.OptionsOf(parameter.Kind));
+            return [.. FaceOptions.Of(parameter.Kind).Select(option => new FaceOptionField(option, parameter.Display.Options[option.Name],
+                inherited[option.Name]!, value => EditDisplay(parameter, $"option {option.Name}",
+                    parameter.Display with { Options = parameter.Display.Options.With(option.Name, value) }, value ?? "inherited")))];
+        }
+    }
+
+    public bool HasOptions => Options.Count > 0;
 
     /// <summary>The device alias of the bindings in and below the control; empty to inherit it.</summary>
     public string? Device

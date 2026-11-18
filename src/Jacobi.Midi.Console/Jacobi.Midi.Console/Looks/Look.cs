@@ -1,9 +1,12 @@
 using Avalonia;
 using Avalonia.Markup.Xaml.Styling;
+using Jacobi.Midi.Console.Core.Dashboards;
+using Jacobi.Midi.Console.Core.Faces;
 using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Faces;
 using Jacobi.Midi.Console.Looks.Anodized;
 using Jacobi.Midi.Console.Looks.Foundry;
+using Jacobi.Midi.Console.Looks.Lcars;
 
 namespace Jacobi.Midi.Console.Looks;
 
@@ -15,13 +18,23 @@ namespace Jacobi.Midi.Console.Looks;
 /// <param name="Theme">The resource dictionary of the look (palette and chrome themes).</param>
 /// <param name="Accent">The accent of controls without a color of their own or of their device.</param>
 /// <param name="Swatches">Per area, colors that suit the look, offered first when the user picks a color.</param>
-/// <param name="ControlsOnPanel">
-/// True when the controls have no plate of their own (it is transparent): their labels are on the panel, until the
-/// plate is given a color.
-/// </param>
 public sealed record Look(string Name, Kit Kit, Uri Theme, RgbColor Accent,
-    IReadOnlyDictionary<ColorArea, IReadOnlyList<RgbColor>> Swatches, bool ControlsOnPanel = false)
+    IReadOnlyDictionary<ColorArea, IReadOnlyList<RgbColor>> Swatches)
 {
+    /// <summary>
+    /// The look's defaults of the chrome's options (<see cref="Core.Faces.FaceOptions.Chrome"/>) for every control, e.g. no plate:
+    /// the controls are on the panel. A control's own values win; options neither give have their declared default.
+    /// </summary>
+    public OptionValues ChromeOptions { get; init; } = OptionValues.Empty;
+
+    /// <summary>The look's defaults of the options of the faces, per control kind (see <see cref="Core.Faces.FaceOptions"/>).</summary>
+    public IReadOnlyDictionary<ParameterControlKind, OptionValues> FaceOptions { get; init; } =
+        new Dictionary<ParameterControlKind, OptionValues>();
+
+    /// <summary>The look's defaults of the options of a control kind: of its face and of the chrome.</summary>
+    public OptionValues OptionsOf(ParameterControlKind kind)
+        => FaceOptions.GetValueOrDefault(kind, OptionValues.Empty).Over(ChromeOptions);
+
     public override string ToString() => Name;
 
     /// <summary>
@@ -43,7 +56,7 @@ public sealed record Look(string Name, Kit Kit, Uri Theme, RgbColor Accent,
 /// </summary>
 public static class ConsoleLooks
 {
-    public static IReadOnlyList<Look> All { get; } = [.. FoundryLooks.All, .. AnodizedLooks.All];
+    public static IReadOnlyList<Look> All { get; } = [.. FoundryLooks.All, .. AnodizedLooks.All, .. LcarsLooks.All];
 
     /// <summary>The look the console starts with.</summary>
     public static Look Default => All[0];

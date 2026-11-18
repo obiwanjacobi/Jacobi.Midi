@@ -1,0 +1,116 @@
+<!--
+    The LCARS look: flat pastel bars with rounded caps and condensed capitals (Antonio) on black.
+    The palette (colors for the faces) and the chrome of controls and sections.
+    The accent and the colors derived from it (ConsoleAccentBrush, ConsoleAccentTextBrush, ConsoleAccentDisplayBrush)
+    come from the look in code (see ConsoleLooks and PaletteBrushes); a control or section with a color of its own or
+    of its device overrides them, and its plate (ConsolePlateBrush, ConsolePlateTextBrush) and panel
+    (ConsoleSectionBrush) with this dictionary's colors replaced. Elements in the accent have the class accentArea:
+    a right-click on them picks the accent, elsewhere the plate or the panel.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:chrome="using:Jacobi.Midi.Console.Chrome">
+
+    <!-- palette: flat, no materials -->
+    <SolidColorBrush x:Key="ConsoleBackgroundBrush" Color="#000000" />
+    <SolidColorBrush x:Key="ConsoleTextBrush" Color="#FFCC99" />
+    <SolidColorBrush x:Key="ConsolePlateTextBrush" Color="#FFCC99" />
+    <SolidColorBrush x:Key="ConsoleTrackBrush" Color="#2E2633" />
+    <SolidColorBrush x:Key="ConsoleBodyBrush" Color="#2E2633" />
+    <!-- the names on unlit keys, beads, caps -->
+    <SolidColorBrush x:Key="ConsoleSurfaceBrush" Color="#FFCC99" />
+    <SolidColorBrush x:Key="ConsolePointerBrush" Color="#FFCC99" />
+    <SolidColorBrush x:Key="ConsoleDisplayBrush" Color="#000000" />
+    <SolidColorBrush x:Key="ConsoleDisplayTextBrush" Color="#FF9900" />
+    <SolidColorBrush x:Key="ConsoleSectionBrush" Color="#000000" />
+    <SolidColorBrush x:Key="ConsoleOutlineBrush" Color="#000000" />
+    <!-- a plate of violet grey (the look's controls are on the panel: option plate off) -->
+    <SolidColorBrush x:Key="ConsolePlateBrush" Color="#2E2633" />
+
+    <!-- typography: Antonio (SIL Open Font License, Assets/Fonts) -->
+    <FontFamily x:Key="ConsoleLabelFont">avares://Jacobi.Midi.Console/Assets/Fonts#Antonio</FontFamily>
+    <FontFamily x:Key="ConsoleDisplayFont">avares://Jacobi.Midi.Console/Assets/Fonts#Antonio</FontFamily>
+
+    <!-- finish: flat, no glow -->
+    <x:Double x:Key="ConsoleGlowOpacity">0</x:Double>
+
+    <!-- a control: on the panel (option plate off) or on a plate, with a label in capitals and the value in a pill in
+         the accent -->
+    <ControlTheme x:Key="{x:Type chrome:ControlChrome}" TargetType="chrome:ControlChrome">
+        <Setter Property="Padding" Value="8" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="PART_Plate" Background="{DynamicResource ConsolePlateBrush}" CornerRadius="12">
+                    <!-- the label, the face (the room the label and value leave: a fader stretches into it) and the value -->
+                    <Grid Margin="{TemplateBinding Padding}" RowDefinitions="Auto,*,Auto,Auto">
+                        <!-- cut off at the control's width (LabelSlot), in full in the tip -->
+                        <chrome:LabelSlot Name="PART_Label" Margin="0,0,0,6" Tip="{TemplateBinding Label}" Doc="{TemplateBinding Doc}">
+                            <TextBlock Text="{TemplateBinding Label, Converter={x:Static chrome:UpperCaseConverter.Instance}}"
+                                       FontFamily="{DynamicResource ConsoleLabelFont}" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource ConsolePlateTextBrush}" FontSize="14" LetterSpacing="1.5" />
+                        </chrome:LabelSlot>
+                        <ContentPresenter Grid.Row="1" Name="PART_ContentPresenter" Content="{TemplateBinding Content}" />
+                        <Border Grid.Row="2" Classes="accentArea" Background="{DynamicResource ConsoleAccentBrush}" CornerRadius="10" Padding="10,1" Margin="0,6,0,0"
+                                HorizontalAlignment="Center"
+                                IsVisible="{TemplateBinding ValueText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                            <TextBlock Text="{TemplateBinding ValueText, Converter={x:Static chrome:UpperCaseConverter.Instance}}"
+                                       Foreground="{DynamicResource ConsoleAccentTextBrush}"
+                                       FontFamily="{DynamicResource ConsoleDisplayFont}" FontSize="14" LetterSpacing="1" />
+                        </Border>
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+        <!-- the option plate off: the control is on the panel -->
+        <Style Selector="^:not(:plate) /template/ Border#PART_Plate">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+            <!-- the option label below: under the face and the value -->
+        <!-- the option label none: no label (its name is in the tip of the face host) -->
+        <Style Selector="^:label-none /template/ chrome|LabelSlot#PART_Label">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="^:label-below /template/ chrome|LabelSlot#PART_Label">
+            <Setter Property="Grid.Row" Value="3" />
+            <Setter Property="Margin" Value="0,6,0,0" />
+        </Style>
+    </ControlTheme>
+
+    <!-- a section: a black panel under a header strip in the device's color: a rounded cap, the title, a bar with the
+         chevron of a collapsible section and a rounded end cap; the strip in the top inset (Padding, in cells) -->
+    <ControlTheme x:Key="{x:Type chrome:SectionFrame}" TargetType="chrome:SectionFrame">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{DynamicResource ConsoleSectionBrush}">
+                    <Panel>
+                        <Grid ColumnDefinitions="Auto,Auto,*,Auto" Height="20" Margin="12,12,12,0" VerticalAlignment="Top">
+                            <Border Classes="accentArea" Background="{DynamicResource ConsoleAccentBrush}" Width="20" CornerRadius="10,0,0,10" />
+                            <TextBlock Grid.Column="1" Classes="accentArea" Background="Transparent" Margin="6,0" VerticalAlignment="Center"
+                                       Text="{TemplateBinding Header, Converter={x:Static chrome:UpperCaseConverter.Instance}}"
+                                       FontFamily="{DynamicResource ConsoleLabelFont}"
+                                       chrome:DocTip.Title="{TemplateBinding Header}" chrome:DocTip.Doc="{TemplateBinding Doc}"
+                                       IsVisible="{TemplateBinding Header, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                       Foreground="{DynamicResource ConsoleAccentDisplayBrush}" FontSize="18" FontWeight="Bold" LetterSpacing="1.5" />
+                            <Border Grid.Column="2" Classes="accentArea" Background="{DynamicResource ConsoleAccentBrush}" Margin="6,0,0,0">
+                                <!-- a collapsible section: the chevron, at the end of the bar -->
+                                <TextBlock Name="PART_Chevron" Text="▾" IsVisible="False" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0"
+                                           Foreground="{DynamicResource ConsoleAccentTextBrush}" FontSize="14" />
+                            </Border>
+                            <Border Grid.Column="3" Classes="accentArea" Background="{DynamicResource ConsoleAccentBrush}" Width="10" Margin="6,0,0,0" CornerRadius="0,10,10,0" />
+                        </Grid>
+                        <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" Margin="{TemplateBinding Padding}" />
+                    </Panel>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:collapsible /template/ TextBlock#PART_Chevron">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+        <Style Selector="^:collapsed /template/ TextBlock#PART_Chevron">
+            <Setter Property="Text" Value="▸" />
+        </Style>
+        <Style Selector="^:collapsed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+    </ControlTheme>
+</ResourceDictionary>

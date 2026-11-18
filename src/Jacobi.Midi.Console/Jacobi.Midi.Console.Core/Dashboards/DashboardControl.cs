@@ -1,3 +1,4 @@
+using Jacobi.Midi.Console.Core.Faces;
 using Jacobi.Midi.Console.Core.Palettes;
 
 namespace Jacobi.Midi.Console.Core.Dashboards;
@@ -289,6 +290,12 @@ public sealed record DisplaySettings
 
     /// <summary>How a selector shows its options.</summary>
     public SelectorPresentation Presentation { get; init; }
+
+    /// <summary>
+    /// The options of the control's chrome and face it sets (see <see cref="FaceOptions"/>); the others are inherited
+    /// from the look.
+    /// </summary>
+    public OptionValues Options { get; init; } = OptionValues.Empty;
 }
 
 /// <summary>How a selector shows its options: the selected one in a display with a droplist, or a button per option.</summary>

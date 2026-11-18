@@ -27,6 +27,14 @@ public sealed class FaceHost : Decorator
     public static readonly StyledProperty<FaceState?> StateProperty =
         AvaloniaProperty.Register<FaceHost, FaceState?>(nameof(State));
 
+    /// <summary>
+    /// The options of the control's chrome and face (see <see cref="FaceOptions"/>): the control's own values over the
+    /// look's. Set on a parameter control, inherited by its chrome and face host; the face host completes them with
+    /// the declared defaults of its kind for its face.
+    /// </summary>
+    public static readonly AttachedProperty<OptionValues> OptionsProperty =
+        AvaloniaProperty.RegisterAttached<FaceHost, Control, OptionValues>("Options", OptionValues.Empty, inherits: true);
+
     /// <summary>The face size: 1 shows the face at its own size. Set on a parameter control, inherited by its face host.</summary>
     public static readonly AttachedProperty<double> ScaleProperty =
         AvaloniaProperty.RegisterAttached<FaceHost, Control, double>("Scale", 1.0, inherits: true);
@@ -43,6 +51,10 @@ public sealed class FaceHost : Decorator
     {
         ClipToBounds = true;
     }
+
+    public static OptionValues GetOptions(Control control) => control.GetValue(OptionsProperty);
+
+    public static void SetOptions(Control control, OptionValues value) => control.SetValue(OptionsProperty, value);
 
     public static double GetScale(Control control) => control.GetValue(ScaleProperty);
 
@@ -75,6 +87,8 @@ public sealed class FaceHost : Decorator
             PlaceFace();
         else if (change.Property == StateProperty && Child is Face face)
             face.State = State;
+        else if (change.Property == OptionsProperty && Child is Face optioned)
+            optioned.Options = FaceOptions.Complete(Kind, GetOptions(this));
     }
 
     // the face's own size: first its width (a selector's keys take one column then), then its height in the room's
@@ -120,6 +134,7 @@ public sealed class FaceHost : Decorator
             Child = new TextBlock { Text = $"No {Kind} face in kit '{kit.Name}'" };
             return;
         }
+        face.Options = FaceOptions.Complete(Kind, GetOptions(this));
         face.State = State;
         Child = face;
     }

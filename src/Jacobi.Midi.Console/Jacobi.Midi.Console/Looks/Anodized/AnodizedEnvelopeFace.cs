@@ -8,7 +8,8 @@ namespace Jacobi.Midi.Console.Looks.Anodized;
 
 /// <summary>
 /// Anodized envelope: an OLED screen with the curve lit in the accent (with the finish's glow) and lit dots on the
-/// breakpoints. An unknown time or level makes the curve dashed and unlit.
+/// breakpoints. An unknown time or level makes the curve dashed and unlit. Of the envelope's options
+/// (<see cref="FaceOptions.Envelope"/>) it takes <c>display</c> (the screen) and <c>beads</c> (the dots); it has no fill.
 /// </summary>
 public sealed class AnodizedEnvelopeFace : Face
 {
@@ -16,7 +17,8 @@ public sealed class AnodizedEnvelopeFace : Face
 
     protected override void RenderStatic(DrawingContext context, FaceState state)
     {
-        context.DrawRectangle(DisplayBrush, new Pen(OutlineBrush, 1), new Rect(Bounds.Size), 3, 3);
+        if (Options.Switch("display"))
+            context.DrawRectangle(DisplayBrush, new Pen(OutlineBrush, 1), new Rect(Bounds.Size), 3, 3);
         var area = PlotArea(Bounds.Size);
         context.DrawLine(new Pen(TrackBrush, 1, new DashStyle([1, 3], 0)), PlotPoint(area, 0, 0), PlotPoint(area, 1, 0));
     }
@@ -36,6 +38,8 @@ public sealed class AnodizedEnvelopeFace : Face
         if (AccentGlow is { } glow)
             context.DrawGeometry(null, new Pen(glow, 6, lineJoin: PenLineJoin.Round, lineCap: PenLineCap.Round), curve);
         context.DrawGeometry(null, new Pen(AccentBrush, 2, lineJoin: PenLineJoin.Round), curve);
+        if (!Options.Switch("beads"))
+            return;
         foreach (var point in points.Where(point => point.Segment is not null))
             context.DrawEllipse(AccentBrush, null, PlotPoint(area, point.X, point.Y), 3.5, 3.5);
     }

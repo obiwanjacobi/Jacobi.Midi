@@ -41,9 +41,10 @@ internal static class FileRoles
     public static FileRole Children { get; } = new("children", FileRoleShape.List);
     public static FileRole Bind { get; } = new("bind", FileRoleShape.Map, "bind", "slot", "parameter");
     public static FileRole Segments { get; } = new("segments", FileRoleShape.List, "segment");
+    public static FileRole Options { get; } = new("options", FileRoleShape.Single, "options");
 
     private static readonly Dictionary<string, FileRole> ByJsonName =
-        new[] { Assemblies, Schemas, Exchanges, Devices, Variables, DeviceValues, Endpoint, Layout, Children, Bind, Segments }
+        new[] { Assemblies, Schemas, Exchanges, Devices, Variables, DeviceValues, Endpoint, Layout, Children, Bind, Segments, Options }
             .ToDictionary(role => role.JsonName, StringComparer.Ordinal);
 
     public static bool TryGet(string jsonName, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out FileRole? role)

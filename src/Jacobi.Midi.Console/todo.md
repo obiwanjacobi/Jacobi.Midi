@@ -133,6 +133,12 @@ What is planned for the console, and what was done. What the console does now is
 
   The [composable controls](readme.md#composable-controls) and the named resources are already there for this: no control has a color, size, font or shape of its own in code. A look then only selects other faces, chromes and resources.
 
+- [x] **LCARS look, step 1:** the `Looks/Lcars` module with its palette, typography (Antonio, embedded) and chrome of controls and sections, on the Anodized kit.
+- [x] **Options of the chrome and the knob:** generic options declared per control kind, set per control, defaults from the look (`plate`, `fasteners`; the knob's `track`, `body`, `pointer`, `width`, `ends`); the shared arc knob for Foundry and LCARS.
+- [x] **Options of the other controls**, one by one: slider, switch, selector, number box and text, XY pad and envelope. Also the label's place (`above`, `below`, `none`) and the knob's value inside its arc.
+- [x] **LCARS look, step 2: a kit of its own.** Done as the Foundry kit with the LCARS option defaults and one face of its own, the ON/OFF pair switch (`PairSwitchFace`). Knob: a thick arc with butt ends; slider: a stacked segment meter; switch: an ON/OFF pill pair; selector: pill keys, rounded at the outer ends; envelope: the curve with pill breakpoints; number box and text: large condensed figures; XY pad: a grid with a pill crosshair.
+- [ ] **LCARS frame:** the elbows and the options on the side of the design, perhaps as a variant of the (selector) tabs.
+
 ## Browser support
 
 - [ ] **The browser host does not build.** The native WebAssembly link (`emcc`) fails with `undefined symbol: saveSetjmp` / `testSetjmp`; the Schema Editor's browser host fails the same way. It started with the .NET 11.0.0 WebAssembly SDK (its Emscripten toolchain was installed on 2026-11-11; the last successful browser build is from 2026-10-23). Cause: `Avalonia.Skia` 12.1.x depends on `SkiaSharp.NativeAssets.WebAssembly` 3.119.4 and `HarfBuzzSharp.NativeAssets.WebAssembly` 8.3.1.3, whose static libraries for net9.0 and later are built with Emscripten 3.1.56 and its old setjmp/longjmp support. The new toolchain links with wasm exceptions (`-fwasm-exceptions`, `-wasm-enable-sjlj`) and no longer provides those symbols. Updating Avalonia (12.1.6 still uses SkiaSharp 3.119.4) does not help. Options:
