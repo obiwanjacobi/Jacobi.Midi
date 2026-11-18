@@ -19,6 +19,20 @@
         <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
     </UserControl.KeyBindings>
 
+    <UserControl.Resources>
+        <!-- an option of the selected control in the control panel: its name with what it inherits, and its value -->
+        <DataTemplate x:Key="OptionField" x:DataType="vm:FaceOptionField">
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="8" ToolTip.Tip="{Binding Description}">
+                <TextBlock Text="{Binding Caption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <ComboBox Grid.Column="1" IsVisible="{Binding IsList}" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}"
+                          HorizontalAlignment="Stretch" />
+                <NumericUpDown Grid.Column="1" IsVisible="{Binding IsNumber}" Value="{Binding Number}"
+                               Minimum="{Binding Minimum}" Maximum="{Binding Maximum}" Increment="1" FormatString="0.#"
+                               PlaceholderText="inherited" />
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
+
     <UserControl.Styles>
         <Style Selector="TextBlock.caption">
             <Setter Property="FontSize" Value="12" />
@@ -464,182 +478,185 @@
                                     <TextBlock Text="Label" Classes="caption" />
                                     <TextBox Text="{Binding Label, UpdateSourceTrigger=LostFocus}" PlaceholderText="the parameter's name" />
 
-                                    <StackPanel Spacing="10" IsVisible="{Binding IsInGrid}">
-                                        <TextBlock Text="Position in its grid (column, row)" Classes="caption" />
-                                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                            <NumericUpDown Value="{Binding Column}" Minimum="0" Increment="1" FormatString="0" ToolTip.Tip="Column (x)" />
-                                            <NumericUpDown Grid.Column="1" Value="{Binding Row}" Minimum="0" Increment="1" FormatString="0" ToolTip.Tip="Row (y)" />
-                                        </Grid>
-                                    </StackPanel>
-                                    <TextBlock Text="Size in cells (columns × rows)" Classes="caption" />
-                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                        <NumericUpDown Value="{Binding Columns}" Minimum="1" Increment="1" FormatString="0" ToolTip.Tip="Columns (width)" IsEnabled="{Binding CanResize}" />
-                                        <NumericUpDown Grid.Column="1" Value="{Binding Rows}" Minimum="1" Increment="1" FormatString="0" ToolTip.Tip="Rows (height)" IsEnabled="{Binding CanResize}" />
-                                    </Grid>
-
-                                    <StackPanel Spacing="10" IsVisible="{Binding IsParameter}">
-                                        <TextBlock Text="Unit" Classes="caption" />
-                                        <TextBox Text="{Binding Unit, UpdateSourceTrigger=LostFocus}" PlaceholderText="none" />
-                                        <TextBlock Text="Decimals" Classes="caption" />
-                                        <TextBox Text="{Binding Decimals, UpdateSourceTrigger=LostFocus}" PlaceholderText="as many as the value has" />
-                                    </StackPanel>
-
-                                    <StackPanel Spacing="10" IsVisible="{Binding HasFace}">
-                                        <TextBlock Text="Face size (1 is its own size)" Classes="caption" />
-                                        <NumericUpDown Value="{Binding FaceScale}" Minimum="{Binding MinimumFaceScale}" Maximum="{Binding MaximumFaceScale}"
-                                                       Increment="{Binding FaceScaleStep}" FormatString="0.0#"
-                                                       ToolTip.Tip="The size of the face only, not of the plate, label or value: a face larger than its room on the plate is cut off" />
-                                    </StackPanel>
-
-                                    <StackPanel Spacing="10" IsVisible="{Binding HasOptions}">
-                                        <TextBlock Text="Options (inherited: from the look)" Classes="caption" />
-                                        <ItemsControl ItemsSource="{Binding Options}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate>
-                                                    <StackPanel Spacing="6" />
-                                                </ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate x:DataType="vm:FaceOptionField">
-                                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8" ToolTip.Tip="{Binding Description}">
-                                                        <TextBlock Text="{Binding Caption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                                        <ComboBox Grid.Column="1" IsVisible="{Binding IsList}" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}"
-                                                                  HorizontalAlignment="Stretch" />
-                                                        <NumericUpDown Grid.Column="1" IsVisible="{Binding IsNumber}" Value="{Binding Number}"
-                                                                       Minimum="{Binding Minimum}" Maximum="{Binding Maximum}" Increment="1" FormatString="0.#"
-                                                                       PlaceholderText="inherited" />
-                                                    </Grid>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </StackPanel>
-
-                                    <StackPanel Spacing="10" IsVisible="{Binding IsSelector}">
-                                        <TextBlock Text="Presentation" Classes="caption" />
-                                        <ComboBox ItemsSource="{Binding Presentations}" SelectedItem="{Binding Presentation}" HorizontalAlignment="Stretch"
-                                                  ToolTip.Tip="List: the selected option with a droplist. Buttons: a button per option, more rows when they do not fit" />
-                                    </StackPanel>
-
-                                    <StackPanel Spacing="10" IsVisible="{Binding IsFlex}">
-                                        <TextBlock Text="Gap between the controls (cells)" Classes="caption" />
-                                        <NumericUpDown Value="{Binding Gap}" Minimum="0" Increment="1" FormatString="0" />
-                                        <CheckBox Content="Wrap onto more lines" IsChecked="{Binding Wrap}" />
-                                    </StackPanel>
-
-                                    <CheckBox Content="Collapsible (in Play mode, by its title)" IsChecked="{Binding Collapsible}" IsVisible="{Binding IsSection}"
-                                              ToolTip.Tip="A click on the title collapses the section to its title, and expands it again. It opens expanded." />
-
-                                    <TextBlock Text="Colors" Classes="heading" />
-                                    <Grid ColumnDefinitions="64,*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="8">
-                                        <TextBlock Text="Accent" VerticalAlignment="Center" />
-                                        <Button Grid.Column="1" Tag="{x:Static palettes:ColorArea.Accent}" Click="OnColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
-                                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                                <Border Width="16" Height="16" CornerRadius="2" BorderBrush="#80FFFFFF" BorderThickness="1" Background="{Binding AccentBrush}" />
-                                                <TextBlock Text="{Binding AccentColor}" />
+                                    <!-- the settings by function, each in a pane of its own -->
+                                    <Expander Header="Binding" IsExpanded="{Binding IsBindingPaneExpanded}" HorizontalAlignment="Stretch">
+                                        <StackPanel Spacing="10">
+                                            <TextBlock Text="Device (alias)" Classes="caption" />
+                                            <TextBox Text="{Binding Device, UpdateSourceTrigger=LostFocus}" PlaceholderText="{Binding InheritedDevice}" />
+                                            <TextBlock Text="Base (the path the bindings are relative to)" Classes="caption" />
+                                            <TextBox Text="{Binding Base, UpdateSourceTrigger=LostFocus}" PlaceholderText="{Binding InheritedBase}" TextWrapping="Wrap" />
+                                            <StackPanel Spacing="8" IsVisible="{Binding IsParameter}">
+                                                <TextBlock Text="Bindings ([device:]path or $variable)" Classes="heading" />
+                                                <ItemsControl ItemsSource="{Binding Slots}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:SlotViewModel">
+                                                            <StackPanel Spacing="4" Margin="0,0,0,6">
+                                                                <TextBlock Text="{Binding Name}" Classes="caption" />
+                                                                <TextBox Text="{Binding Text, UpdateSourceTrigger=LostFocus}" PlaceholderText="not bound: drop a parameter on the control"
+                                                                         TextWrapping="Wrap" FontSize="12" FontFamily="Cascadia Mono, Consolas, monospace" />
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
                                             </StackPanel>
-                                        </Button>
-                                        <Button Grid.Column="2" Content="✕" ToolTip.Tip="Inherit the color" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Accent}" />
-
-                                        <TextBlock Grid.Row="1" Text="Plate" VerticalAlignment="Center" />
-                                        <Button Grid.Row="1" Grid.Column="1" Tag="{x:Static palettes:ColorArea.Plate}" Click="OnColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
-                                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                                <Border Width="16" Height="16" CornerRadius="2" BorderBrush="#80FFFFFF" BorderThickness="1" Background="{Binding PlateBrush}" />
-                                                <TextBlock Text="{Binding PlateColor}" />
+                                            <StackPanel Spacing="8" IsVisible="{Binding IsLayout}">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBlock Text="Index variables (name, first item)" Classes="heading" VerticalAlignment="Center" />
+                                                    <Button Grid.Column="1" Content="+" ToolTip.Tip="Declare an index variable" Command="{Binding AddVariableCommand}" />
+                                                </Grid>
+                                                <ItemsControl ItemsSource="{Binding Variables}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:VariableViewModel">
+                                                            <Grid ColumnDefinitions="*,100,Auto" ColumnSpacing="6" Margin="0,0,0,6">
+                                                                <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" />
+                                                                <NumericUpDown Grid.Column="1" Value="{Binding Value}" Minimum="0" Increment="1" FormatString="0" ToolTip.Tip="The index the dashboard starts with (0 is the first item)" />
+                                                                <Button Grid.Column="2" Content="✕" ToolTip.Tip="Remove the variable" Command="{Binding RemoveCommand}" />
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
                                             </StackPanel>
-                                        </Button>
-                                        <Button Grid.Row="1" Grid.Column="2" Content="✕" ToolTip.Tip="Inherit the color" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Plate}" />
-
-                                        <TextBlock Grid.Row="2" Text="Panel" VerticalAlignment="Center" />
-                                        <Button Grid.Row="2" Grid.Column="1" Tag="{x:Static palettes:ColorArea.Panel}" Click="OnColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
-                                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                                <Border Width="16" Height="16" CornerRadius="2" BorderBrush="#80FFFFFF" BorderThickness="1" Background="{Binding PanelBrush}" />
-                                                <TextBlock Text="{Binding PanelColor}" />
+                                            <StackPanel Spacing="8" IsVisible="{Binding IsEnvelope}">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBlock Text="Segments" Classes="heading" VerticalAlignment="Center" />
+                                                    <Button Grid.Column="1" Content="+" ToolTip.Tip="Add a segment at the end" Command="{Binding AddSegmentCommand}" />
+                                                </Grid>
+                                                <ItemsControl ItemsSource="{Binding Segments}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:SegmentViewModel">
+                                                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" Margin="0,0,0,4">
+                                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                                                <CheckBox Grid.Column="1" Content="Holds" IsChecked="{Binding Hold}" ToolTip.Tip="Holds (sustains) until note off; one segment holds at most" />
+                                                                <Button Grid.Column="2" Content="✕" ToolTip.Tip="Remove the segment with its bindings" Command="{Binding RemoveCommand}" />
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
                                             </StackPanel>
-                                        </Button>
-                                        <Button Grid.Row="2" Grid.Column="2" Content="✕" ToolTip.Tip="Inherit the color" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Panel}" />
-                                    </Grid>
-
-                                    <TextBlock Text="Device and base" Classes="heading" />
-                                    <TextBlock Text="Device (alias)" Classes="caption" />
-                                    <TextBox Text="{Binding Device, UpdateSourceTrigger=LostFocus}" PlaceholderText="{Binding InheritedDevice}" />
-                                    <TextBlock Text="Base (the path the bindings are relative to)" Classes="caption" />
-                                    <TextBox Text="{Binding Base, UpdateSourceTrigger=LostFocus}" PlaceholderText="{Binding InheritedBase}" TextWrapping="Wrap" />
-
-                                    <StackPanel Spacing="8" IsVisible="{Binding IsLayout}">
-                                        <Grid ColumnDefinitions="*,Auto">
-                                            <TextBlock Text="Index variables (name, first item)" Classes="heading" VerticalAlignment="Center" />
-                                            <Button Grid.Column="1" Content="+" ToolTip.Tip="Declare an index variable" Command="{Binding AddVariableCommand}" />
-                                        </Grid>
-                                        <ItemsControl ItemsSource="{Binding Variables}">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate x:DataType="vm:VariableViewModel">
-                                                    <Grid ColumnDefinitions="*,100,Auto" ColumnSpacing="6" Margin="0,0,0,6">
-                                                        <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" />
-                                                        <NumericUpDown Grid.Column="1" Value="{Binding Value}" Minimum="0" Increment="1" FormatString="0" ToolTip.Tip="The index the dashboard starts with (0 is the first item)" />
-                                                        <Button Grid.Column="2" Content="✕" ToolTip.Tip="Remove the variable" Command="{Binding RemoveCommand}" />
+                                            <StackPanel Spacing="6" IsVisible="{Binding IsSelectorTabs}">
+                                                <TextBlock Text="Pages (an option each)" Classes="heading" />
+                                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" IsEnabled="{Binding CanChoosePages}"
+                                                        ToolTip.Tip="Choose the options that have a page">
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <TextBlock Text="{Binding PagesText}" />
+                                                        <TextBlock Grid.Column="1" Text="▾" Margin="8,0,0,0" />
                                                     </Grid>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </StackPanel>
-
-                                    <StackPanel Spacing="8" IsVisible="{Binding IsEnvelope}">
-                                        <Grid ColumnDefinitions="*,Auto">
-                                            <TextBlock Text="Segments" Classes="heading" VerticalAlignment="Center" />
-                                            <Button Grid.Column="1" Content="+" ToolTip.Tip="Add a segment at the end" Command="{Binding AddSegmentCommand}" />
-                                        </Grid>
-                                        <ItemsControl ItemsSource="{Binding Segments}">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate x:DataType="vm:SegmentViewModel">
-                                                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" Margin="0,0,0,4">
-                                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
-                                                        <CheckBox Grid.Column="1" Content="Holds" IsChecked="{Binding Hold}" ToolTip.Tip="Holds (sustains) until note off; one segment holds at most" />
-                                                        <Button Grid.Column="2" Content="✕" ToolTip.Tip="Remove the segment with its bindings" Command="{Binding RemoveCommand}" />
-                                                    </Grid>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </StackPanel>
-
-                                    <StackPanel Spacing="6" IsVisible="{Binding IsSelectorTabs}">
-                                        <TextBlock Text="Pages (an option each)" Classes="heading" />
-                                        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" IsEnabled="{Binding CanChoosePages}"
-                                                ToolTip.Tip="Choose the options that have a page">
-                                            <Grid ColumnDefinitions="*,Auto">
-                                                <TextBlock Text="{Binding PagesText}" />
-                                                <TextBlock Grid.Column="1" Text="▾" Margin="8,0,0,0" />
-                                            </Grid>
-                                            <Button.Flyout>
-                                                <Flyout Placement="BottomEdgeAlignedLeft">
-                                                    <ScrollViewer MaxHeight="400">
-                                                        <ItemsControl ItemsSource="{Binding Pages}" MinWidth="200" Margin="0,0,16,0">
-                                                            <ItemsControl.ItemTemplate>
-                                                                <DataTemplate x:DataType="vm:PageChoiceViewModel">
-                                                                    <CheckBox Content="{Binding Name}" IsChecked="{Binding HasPage}" IsEnabled="{Binding CanChange}" ToolTip.Tip="{Binding Tip}"
-                                                                              Classes.noOption="{Binding IsOfNoOption}" />
-                                                                </DataTemplate>
-                                                            </ItemsControl.ItemTemplate>
-                                                        </ItemsControl>
-                                                    </ScrollViewer>
-                                                </Flyout>
-                                            </Button.Flyout>
-                                        </Button>
-                                    </StackPanel>
-
-                                    <StackPanel Spacing="8" IsVisible="{Binding IsParameter}">
-                                        <TextBlock Text="Bindings ([device:]path or $variable)" Classes="heading" />
-                                        <ItemsControl ItemsSource="{Binding Slots}">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate x:DataType="vm:SlotViewModel">
-                                                    <StackPanel Spacing="4" Margin="0,0,0,6">
-                                                        <TextBlock Text="{Binding Name}" Classes="caption" />
-                                                        <TextBox Text="{Binding Text, UpdateSourceTrigger=LostFocus}" PlaceholderText="not bound: drop a parameter on the control"
-                                                                 TextWrapping="Wrap" FontSize="12" FontFamily="Cascadia Mono, Consolas, monospace" />
+                                                    <Button.Flyout>
+                                                        <Flyout Placement="BottomEdgeAlignedLeft">
+                                                            <ScrollViewer MaxHeight="400">
+                                                                <ItemsControl ItemsSource="{Binding Pages}" MinWidth="200" Margin="0,0,16,0">
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate x:DataType="vm:PageChoiceViewModel">
+                                                                            <CheckBox Content="{Binding Name}" IsChecked="{Binding HasPage}" IsEnabled="{Binding CanChange}" ToolTip.Tip="{Binding Tip}"
+                                                                                      Classes.noOption="{Binding IsOfNoOption}" />
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+                                                                </ItemsControl>
+                                                            </ScrollViewer>
+                                                        </Flyout>
+                                                    </Button.Flyout>
+                                                </Button>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Expander>
+                                    <Expander Header="Value" IsExpanded="{Binding IsValuePaneExpanded}" HorizontalAlignment="Stretch" IsVisible="{Binding HasValuePane}">
+                                        <StackPanel Spacing="10">
+                                            <StackPanel Spacing="10" IsVisible="{Binding IsParameter}">
+                                                <TextBlock Text="Unit" Classes="caption" />
+                                                <TextBox Text="{Binding Unit, UpdateSourceTrigger=LostFocus}" PlaceholderText="none" />
+                                                <TextBlock Text="Decimals" Classes="caption" />
+                                                <TextBox Text="{Binding Decimals, UpdateSourceTrigger=LostFocus}" PlaceholderText="as many as the value has" />
+                                            </StackPanel>
+                                            <StackPanel Spacing="10" IsVisible="{Binding IsSelector}">
+                                                <TextBlock Text="Presentation" Classes="caption" />
+                                                <ComboBox ItemsSource="{Binding Presentations}" SelectedItem="{Binding Presentation}" HorizontalAlignment="Stretch"
+                                                          ToolTip.Tip="List: the selected option with a droplist. Buttons: a button per option, more rows when they do not fit" />
+                                            </StackPanel>
+                                            <ItemsControl ItemsSource="{Binding ValueOptions}" ItemTemplate="{StaticResource OptionField}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <StackPanel Spacing="6" />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Expander>
+                                    <Expander Header="Look" IsExpanded="{Binding IsLookPaneExpanded}" HorizontalAlignment="Stretch">
+                                        <StackPanel Spacing="10">
+                                            <StackPanel Spacing="10" IsVisible="{Binding HasFace}">
+                                                <TextBlock Text="Face size (1 is its own size)" Classes="caption" />
+                                                <NumericUpDown Value="{Binding FaceScale}" Minimum="{Binding MinimumFaceScale}" Maximum="{Binding MaximumFaceScale}"
+                                                               Increment="{Binding FaceScaleStep}" FormatString="0.0#"
+                                                               ToolTip.Tip="The size of the face only, not of the plate, label or value: a face larger than its room on the plate is cut off" />
+                                            </StackPanel>
+                                            <ItemsControl ItemsSource="{Binding LookOptions}" ItemTemplate="{StaticResource OptionField}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <StackPanel Spacing="6" />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                            </ItemsControl>
+                                            <TextBlock Text="Colors (✕: inherited)" Classes="caption" />
+                                            <Grid ColumnDefinitions="64,*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="8">
+                                                <TextBlock Text="Accent" VerticalAlignment="Center" />
+                                                <Button Grid.Column="1" Tag="{x:Static palettes:ColorArea.Accent}" Click="OnColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <Border Width="16" Height="16" CornerRadius="2" BorderBrush="#80FFFFFF" BorderThickness="1" Background="{Binding AccentBrush}" />
+                                                        <TextBlock Text="{Binding AccentColor}" />
                                                     </StackPanel>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </StackPanel>
+                                                </Button>
+                                                <Button Grid.Column="2" Content="✕" ToolTip.Tip="Inherit the color" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Accent}" />
+
+                                                <TextBlock Grid.Row="1" Text="Plate" VerticalAlignment="Center" />
+                                                <Button Grid.Row="1" Grid.Column="1" Tag="{x:Static palettes:ColorArea.Plate}" Click="OnColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <Border Width="16" Height="16" CornerRadius="2" BorderBrush="#80FFFFFF" BorderThickness="1" Background="{Binding PlateBrush}" />
+                                                        <TextBlock Text="{Binding PlateColor}" />
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Grid.Row="1" Grid.Column="2" Content="✕" ToolTip.Tip="Inherit the color" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Plate}" />
+
+                                                <TextBlock Grid.Row="2" Text="Panel" VerticalAlignment="Center" />
+                                                <Button Grid.Row="2" Grid.Column="1" Tag="{x:Static palettes:ColorArea.Panel}" Click="OnColorClicked" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <Border Width="16" Height="16" CornerRadius="2" BorderBrush="#80FFFFFF" BorderThickness="1" Background="{Binding PanelBrush}" />
+                                                        <TextBlock Text="{Binding PanelColor}" />
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Grid.Row="2" Grid.Column="2" Content="✕" ToolTip.Tip="Inherit the color" Command="{Binding ClearColorCommand}" CommandParameter="{x:Static palettes:ColorArea.Panel}" />
+                                            </Grid>
+                                        </StackPanel>
+                                    </Expander>
+                                    <Expander Header="Place" IsExpanded="{Binding IsPlacePaneExpanded}" HorizontalAlignment="Stretch">
+                                        <StackPanel Spacing="10">
+                                            <StackPanel Spacing="10" IsVisible="{Binding IsInGrid}">
+                                                <TextBlock Text="Position in its grid (column, row)" Classes="caption" />
+                                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                                    <NumericUpDown Value="{Binding Column}" Minimum="0" Increment="1" FormatString="0" ToolTip.Tip="Column (x)" />
+                                                    <NumericUpDown Grid.Column="1" Value="{Binding Row}" Minimum="0" Increment="1" FormatString="0" ToolTip.Tip="Row (y)" />
+                                                </Grid>
+                                            </StackPanel>
+                                            <TextBlock Text="Size in cells (columns × rows)" Classes="caption" />
+                                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                                <NumericUpDown Value="{Binding Columns}" Minimum="1" Increment="1" FormatString="0" ToolTip.Tip="Columns (width)" IsEnabled="{Binding CanResize}" />
+                                                <NumericUpDown Grid.Column="1" Value="{Binding Rows}" Minimum="1" Increment="1" FormatString="0" ToolTip.Tip="Rows (height)" IsEnabled="{Binding CanResize}" />
+                                            </Grid>
+                                            <StackPanel Spacing="10" IsVisible="{Binding IsFlex}">
+                                                <TextBlock Text="Gap between the controls (cells)" Classes="caption" />
+                                                <NumericUpDown Value="{Binding Gap}" Minimum="0" Increment="1" FormatString="0" />
+                                                <CheckBox Content="Wrap onto more lines" IsChecked="{Binding Wrap}" />
+                                            </StackPanel>
+                                            <CheckBox Content="Collapsible (in Play mode, by its title)" IsChecked="{Binding Collapsible}" IsVisible="{Binding IsSection}"
+                                                      ToolTip.Tip="A click on the title collapses the section to its title, and expands it again. It opens expanded." />
+                                            <ItemsControl ItemsSource="{Binding PlaceOptions}" ItemTemplate="{StaticResource OptionField}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <StackPanel Spacing="6" />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Expander>
                                 </StackPanel>
                             </DataTemplate>
                         </ContentControl.ContentTemplate>

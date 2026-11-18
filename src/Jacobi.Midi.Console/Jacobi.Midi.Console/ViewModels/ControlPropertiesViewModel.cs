@@ -192,7 +192,26 @@ internal sealed partial class ControlPropertiesViewModel(MainViewModel owner, Da
             owner.Place(control, current.At, current.Size);
     }
 
-    public bool HasOptions => Options.Count > 0;
+    /// <summary>The options of how the control looks (its pane: Look).</summary>
+    public IReadOnlyList<FaceOptionField> LookOptions => [.. Options.Where(option => option.Category == FaceOptionCategory.Look)];
+
+    /// <summary>The options of how the value is shown (its pane: Value).</summary>
+    public IReadOnlyList<FaceOptionField> ValueOptions => [.. Options.Where(option => option.Category == FaceOptionCategory.Value)];
+
+    /// <summary>The options of the cells of the control (its pane: Place).</summary>
+    public IReadOnlyList<FaceOptionField> PlaceOptions => [.. Options.Where(option => option.Category == FaceOptionCategory.Place)];
+
+    /// <summary>True when the control has a Value pane: a parameter control (unit, decimals, ...) or options of its value.</summary>
+    public bool HasValuePane => IsParameter || ValueOptions.Count > 0;
+
+    // the panes of the control panel, by function, each collapsed or expanded as the user left it (for every control)
+    public bool IsBindingPaneExpanded { get => owner.IsPaneExpanded("binding"); set => owner.SetPaneExpanded("binding", value); }
+
+    public bool IsValuePaneExpanded { get => owner.IsPaneExpanded("value"); set => owner.SetPaneExpanded("value", value); }
+
+    public bool IsLookPaneExpanded { get => owner.IsPaneExpanded("look"); set => owner.SetPaneExpanded("look", value); }
+
+    public bool IsPlacePaneExpanded { get => owner.IsPaneExpanded("place"); set => owner.SetPaneExpanded("place", value); }
 
     /// <summary>The device alias of the bindings in and below the control; empty to inherit it.</summary>
     public string? Device

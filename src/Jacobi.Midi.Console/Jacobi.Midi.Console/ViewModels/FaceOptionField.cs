@@ -16,6 +16,9 @@ internal sealed class FaceOptionField(FaceOption option, string? value, string i
 
     public string Name => option.Name;
 
+    /// <summary>What the option is for: the pane of the control panel it is shown in.</summary>
+    public FaceOptionCategory Category => option.Category;
+
     public string Description => option.Description;
 
     /// <summary>The name with the value it inherits, for the caption.</summary>

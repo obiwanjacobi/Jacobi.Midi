@@ -3,6 +3,22 @@ using Jacobi.Midi.Console.Core.Dashboards;
 
 namespace Jacobi.Midi.Console.Core.Faces;
 
+/// <summary>
+/// What an option is for, by function: how the control looks, how its value is shown, or where it is placed (its
+/// cells). The control panel shows the options of a category together with the other settings for that function.
+/// </summary>
+public enum FaceOptionCategory
+{
+    /// <summary>The parts of the chrome and the face: plate, label, track, pointer, ...</summary>
+    Look,
+
+    /// <summary>Where and how the value is shown.</summary>
+    Value,
+
+    /// <summary>The cells of the control (the headers of tabs).</summary>
+    Place,
+}
+
 /// <summary>The kind of value of a <see cref="FaceOption"/>.</summary>
 public enum FaceOptionType
 {
@@ -35,6 +51,9 @@ public sealed record FaceOption(string Name, FaceOptionType Type, string Default
     /// sets it, a look gives no default, so a dashboard has the same layout in every look.
     /// </summary>
     public bool IsLayout { get; init; }
+
+    /// <summary>What the option is for: how the control looks (the default), its value, or its place.</summary>
+    public FaceOptionCategory Category { get; init; }
 
     /// <summary>The names of a choice.</summary>
     public IReadOnlyList<string> Choices { get; init; } = [];
@@ -126,7 +145,7 @@ public static class FaceOptions
         FaceOption.Switch("plate", true, "The plate the control is mounted on; off: the control is on the panel (a plate color then has no effect)."),
         FaceOption.Switch("fasteners", true, "The screws or rivets that hold the plate, in a look that has them."),
         FaceOption.Choice("label", "above", LabelPlaces, "Where the label is: above or below the face, or none."),
-        FaceOption.Choice("value", "below", ValuePlaces, "Where the value is: below the face (the readout), or none. A face that shows the value itself (a number box, a text) is not changed."),
+        FaceOption.Choice("value", "below", ValuePlaces, "Where the value is: below the face (the readout), or none. A face that shows the value itself (a number box, a text) is not changed.") with { Category = FaceOptionCategory.Value },
     ];
 
     /// <summary>The options of a knob's face.</summary>
@@ -137,7 +156,7 @@ public static class FaceOptions
         FaceOption.Switch("pointer", true, "The mark on the body that points at the value."),
         FaceOption.Number("width", 5, 1, 12, "The width of the value arc and the track, in pixels (at a cell of 24)."),
         FaceOption.Choice("ends", "round", LineEnds, "The ends of the value arc and the track."),
-        FaceOption.Choice("value", "below", KnobValuePlaces, "Where the value is: below the face (the readout of the chrome), inside the arc, or none."),
+        FaceOption.Choice("value", "below", KnobValuePlaces, "Where the value is: below the face (the readout of the chrome), inside the arc, or none.") with { Category = FaceOptionCategory.Value },
     ];
 
     // the dark display or screen behind a face's text, number or plot
@@ -194,8 +213,8 @@ public static class FaceOptions
     /// <summary>The options of the headers of tabs and selector tabs.</summary>
     public static IReadOnlyList<FaceOption> Pages { get; } =
     [
-        FaceOption.Choice("headers", "top", HeaderPlaces, "Where the headers are: above the pages (in two rows) or at their left (in columns).") with { IsLayout = true },
-        FaceOption.Number("headerWidth", 0, 0, 24, "The width of a header in cells; 0: on top as wide as its name, at the left 5.") with { IsLayout = true },
+        FaceOption.Choice("headers", "top", HeaderPlaces, "Where the headers are: above the pages (in two rows) or at their left (in columns).") with { IsLayout = true, Category = FaceOptionCategory.Place },
+        FaceOption.Number("headerWidth", 0, 0, 24, "The width of a header in cells; 0: on top as wide as its name, at the left 5.") with { IsLayout = true, Category = FaceOptionCategory.Place },
     ];
 
     /// <summary>The options of a control: by its kind.</summary>

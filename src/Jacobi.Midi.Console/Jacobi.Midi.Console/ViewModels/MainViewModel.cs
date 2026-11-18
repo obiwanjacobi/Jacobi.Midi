@@ -1585,6 +1585,21 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         }
     }
 
+    // the panes of the control panel the user collapsed, by name: kept for the next control shown
+    private readonly HashSet<string> _collapsedPanes = new(StringComparer.Ordinal);
+
+    /// <summary>True when a pane of the control panel is expanded (they are, until the user collapses one).</summary>
+    public bool IsPaneExpanded(string pane) => !_collapsedPanes.Contains(pane);
+
+    /// <summary>Remembers a pane of the control panel collapsed or expanded, for every control shown.</summary>
+    public void SetPaneExpanded(string pane, bool isExpanded)
+    {
+        if (isExpanded)
+            _collapsedPanes.Remove(pane);
+        else
+            _collapsedPanes.Add(pane);
+    }
+
     // a panel shows another control or device with fresh fields (null first: the template is not reused), so that no
     // field of the previous one (a selection, a text being typed) is taken for the next
     partial void OnSelectedControlChanged(DashboardControl? value)

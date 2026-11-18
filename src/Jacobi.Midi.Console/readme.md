@@ -416,7 +416,16 @@ any of its repeat items is bound to, and fainter, a device, group or repeat with
 - A device the dashboard does not list yet is added.
 - Dragging a control from a palette creates an unbound control.
 
-**The control panel** (right panel) edits the selected control:
+**The control panel** (right panel) edits the selected control. At the top its kind (and the kinds it can change to)
+and its label; the other settings are grouped by function, each group in a pane that can be collapsed (a collapsed
+pane stays collapsed for the next control shown):
+
+- **Binding**: the device and base, the bindings of the slots, the index variables, the segments of an envelope, the pages of selector tabs;
+- **Value**: the unit, decimals and presentation, and the options of the value (`value`);
+- **Look**: the face size, the options of the plate and the face, and the three colors;
+- **Place**: the position and size, the gap and wrap of a row or column, whether a section is collapsible, and the options of the cells (`headers`, `headerWidth`).
+
+An option shows in the pane of its function (`FaceOption.Category`). In detail:
 
 - its label, position in its grid (column, row), size (columns × rows) and display settings (unit, decimals);
 - its options (see *Options* in [Composable controls](#composable-controls)): a list per switch or choice and a number field per number, each with `inherited` (the look's value, shown in its caption);

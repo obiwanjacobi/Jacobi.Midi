@@ -68,6 +68,10 @@ Issue: a third look, after the LCARS-style control design (rounded caps, pastel 
 23. **The readout of the value is a chrome option `value`: `below` or `none`**, for every control; the knob declares
     the same option with `inside` too (amends 14: the knob's `value` is the chrome's). A face that shows the value
     itself is not changed by it. *Why:* the readout is redundant on some controls; one option for where the value is.
+24. **The control panel groups the settings by function, in collapsible panes: Binding, Value, Look, Place** (not by
+    the kind of setting, e.g. colors); the kind and label stay at the top. An option declares its function
+    (`FaceOption.Category`); a collapsed pane stays collapsed for the next control. *Why:* the panel was cluttered; a
+    setting is found by what it is for.
 
 ## Loading exchange files in the console (2026-11-17)
 
