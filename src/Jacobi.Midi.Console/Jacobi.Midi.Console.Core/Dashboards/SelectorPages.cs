@@ -54,7 +54,7 @@ public static class SelectorPages
     {
         ArgumentNullException.ThrowIfNull(tabs);
         ArgumentNullException.ThrowIfNull(options);
-        var size = GridLayout.PageSize(tabs.Size ?? GridLayout.DefaultSize(tabs.Kind));
+        var size = GridLayout.PageSize(tabs, tabs.Size ?? GridLayout.DefaultSize(tabs.Kind));
         return [.. options.Select(option => new LayoutControl { Kind = LayoutControlKind.Grid, Label = option, Size = size })];
     }
 

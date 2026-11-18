@@ -66,6 +66,7 @@ public static class DashboardFile
         ConsoleFile.SetColors(element, control.Colors)
             .Set("device", control.Device)
             .Set("base", control.Base);
+        AddOptions(element, control);
 
         switch (control)
         {
@@ -88,7 +89,6 @@ public static class DashboardFile
                     .Set("decimals", parameter.Display.Decimals)
                     .Set("faceScale", parameter.Display.FaceScale == DisplaySettings.Default.FaceScale ? null : parameter.Display.FaceScale)
                     .Set("presentation", parameter.Display.Presentation == DisplaySettings.Default.Presentation ? null : FileNames.Of(parameter.Display.Presentation));
-                AddOptions(element, parameter);
                 AddSlots(element, parameter);
                 break;
         }
@@ -98,13 +98,13 @@ public static class DashboardFile
     }
 
     // the options the control sets, in the order of their declaration
-    private static void AddOptions(FileElement element, ParameterControl control)
+    private static void AddOptions(FileElement element, DashboardControl control)
     {
-        var values = control.Display.Options;
+        var values = control.Options;
         if (values.Count == 0)
             return;
         var options = new FileElement(FileRoles.Options.ElementName!, FileRoles.Options);
-        foreach (var option in FaceOptions.Of(control.Kind))
+        foreach (var option in FaceOptions.Of(control))
         {
             if (values[option.Name] is { } value)
                 options.Set(option.Name, value, option.Type switch
@@ -224,7 +224,8 @@ public static class DashboardFile
                 Wrap = element.GetFlag("wrap"),
                 Collapsible = element.GetFlag("collapsible"),
                 Variables = ReadVariables(element, children.Where(IsVariable)),
-                Children = [.. children.Where(child => !IsVariable(child)).Select(ReadControl)],
+                Children = [.. children.Where(child => !IsVariable(child) && !IsOptions(child)).Select(ReadControl)],
+                Options = ReadOptions(element, FaceOptions.Of(layoutKind), [.. children.Where(IsOptions)]),
             };
         }
         else if (FileNames.TryParse<ParameterControlKind>(element.Name, out var kind))
@@ -239,7 +240,6 @@ public static class DashboardFile
                 FaceScale = ConsoleFile.GetDecimal(element, "faceScale", DisplaySettings.MinimumFaceScale, DisplaySettings.MaximumFaceScale)
                     ?? DisplaySettings.Default.FaceScale,
                 Presentation = ConsoleFile.GetEnum<SelectorPresentation>(element, "presentation") ?? DisplaySettings.Default.Presentation,
-                Options = ReadOptions(element, kind, all.Where(IsOptions).ToList()),
             };
             control = kind switch
             {
@@ -261,6 +261,7 @@ public static class DashboardFile
                     Bindings = ReadBindings(element, kind, children),
                 },
             };
+            control.Options = ReadOptions(element, FaceOptions.Of(kind), [.. all.Where(IsOptions)]);
 
         }
         else
@@ -277,14 +278,13 @@ public static class DashboardFile
     private static bool IsOptions(FileElement element) => element.Name == FileRoles.Options.ElementName;
 
     // the options a control sets: each declared for its kind, with a value of the option
-    private static OptionValues ReadOptions(FileElement control, ParameterControlKind kind, IReadOnlyList<FileElement> elements)
+    private static OptionValues ReadOptions(FileElement control, IReadOnlyList<FaceOption> declared, IReadOnlyList<FileElement> elements)
     {
         if (elements.Count == 0)
             return OptionValues.Empty;
         if (elements.Count > 1)
             throw elements[1].Error($"'{control.Name}' has one '{FileRoles.Options.ElementName}'.");
         var element = elements[0];
-        var declared = FaceOptions.Of(kind);
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var attribute in element.Attributes)
         {

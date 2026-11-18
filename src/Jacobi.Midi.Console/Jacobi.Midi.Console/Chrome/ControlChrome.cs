@@ -12,8 +12,9 @@ namespace Jacobi.Midi.Console.Chrome;
 /// <para>
 /// The switches of the chrome's options (<see cref="FaceOptions.Chrome"/>, inherited from the control:
 /// <see cref="FaceHost.OptionsProperty"/>) are pseudo-classes by their name, set when the part is on (<c>:plate</c>,
-/// <c>:fasteners</c>), and its choices by name and value (<c>:label-below</c>), so a look's chrome theme shows, hides
-/// and places its parts with them.
+/// <c>:fasteners</c>), and its choices by name and value (<c>:label-below</c>, <c>:value-below</c>), so a look's
+/// chrome theme shows, hides and places its parts with them. A value of a face's own declaration of an option (the
+/// knob's <c>value</c> <c>inside</c>) sets none of the chrome's choices.
 /// </para>
 /// </summary>
 public class ControlChrome : ContentControl

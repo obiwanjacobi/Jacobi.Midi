@@ -492,7 +492,7 @@
                                     </StackPanel>
 
                                     <StackPanel Spacing="10" IsVisible="{Binding HasOptions}">
-                                        <TextBlock Text="Options of the plate and face (inherited: from the look)" Classes="caption" />
+                                        <TextBlock Text="Options (inherited: from the look)" Classes="caption" />
                                         <ItemsControl ItemsSource="{Binding Options}">
                                             <ItemsControl.ItemsPanel>
                                                 <ItemsPanelTemplate>

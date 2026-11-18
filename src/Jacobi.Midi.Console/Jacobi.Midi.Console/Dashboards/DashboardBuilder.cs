@@ -70,6 +70,8 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
 
     /// <summary>The theme of the headers of tabs and selector tabs: in the look's label font and colors.</summary>
     private const string TabItemTheme = "ConsoleTabItem";
+    private const string LeftTabItemTheme = "ConsoleTabItemLeft";
+    private const string LeftTabsTheme = "ConsoleTabControlLeft";
 
     private static readonly IBrush SelectionBrush = new SolidColorBrush(Color.FromRgb(0x4F, 0xA3, 0xFF));
 
@@ -412,13 +414,13 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
             return null;
         foreach (var tabs in target.Container.Children.OfType<SelectorTabsControl>())
         {
-            if (tabs == moved || tabs.Size is not { } size || _controls.GetValueOrDefault(tabs) is not TabControl { SelectedIndex: >= 0 and var shown } built
+            if (tabs == moved || tabs.Size is null || _controls.GetValueOrDefault(tabs) is not TabControl { SelectedIndex: >= 0 and var shown } built
                 || shown >= tabs.Children.Count || tabs.Children[shown] is not LayoutControl page || root.TranslatePoint(position, built) is not { } point)
             {
                 continue;
             }
-            var headers = (size.Rows - GridLayout.PageSize(size).Rows) * Cell;
-            if (point.X >= 0 && point.X < built.Bounds.Width && point.Y >= headers && point.Y < built.Bounds.Height)
+            var (headerColumns, headerRows) = GridLayout.HeaderCells(tabs);
+            if (point.X >= headerColumns * Cell && point.X < built.Bounds.Width && point.Y >= headerRows * Cell && point.Y < built.Bounds.Height)
                 return new DropTarget(page, null);
         }
         return target;
@@ -495,9 +497,9 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
         }
         // the options of the chrome and face: the control's own over the look's; a control without a plate has its label
         // on the panel, in the text for the panel's color (a plate color has no effect then)
-        if (control is ParameterControl optioned && FaceOptions.Of(optioned.Kind).Count > 0)
+        if (control is ParameterControl optioned and not SelectorTabsControl)
         {
-            var options = optioned.Display.Options.Over(editor.Look.OptionsOf(optioned.Kind));
+            var options = optioned.Options.Over(editor.Look.OptionsOf(optioned.Kind));
             FaceHost.SetOptions(built, options);
             if (!FaceOptions.Complete(optioned.Kind, options).Switch("plate"))
                 PaletteBrushes.ApplyPlateText(built.Resources, scope[ColorArea.Panel].Color);
@@ -642,17 +644,28 @@ internal sealed class DashboardBuilder(DashboardSession session, IDashboardEdito
     private TabControl BuildPages(DashboardControl holder, TabControl tabs, ColorScope scope, Func<DashboardControl, int, string> headerOf,
         Func<DashboardControl, string?> docOf)
     {
+        // the headers above the pages, or at their left in the columns they take (the look's theme of tabs with their
+        // headers at the left, e.g. the LCARS elbows); a header as wide as the option headerWidth (on top: 0 fits its name)
+        var (headerColumns, headerRows) = GridLayout.HeaderCells(holder);
+        var isLeft = headerRows == 0;
+        var headerWidth = isLeft ? headerColumns : (int)FaceOptions.Complete(holder).Number("headerWidth");
+        tabs.TabStripPlacement = isLeft ? Dock.Left : Dock.Top;
+        PagesChrome.SetLabel(tabs, holder.Label);
+        if (isLeft && Application.Current?.FindResource(LeftTabsTheme) is ControlTheme leftTabs)
+            tabs.Theme = leftTabs;
         var pages = holder.Children.Select((child, index) =>
         {
             var header = headerOf(child, index);
             var page = new TabItem
             {
                 // the headers in the look (Themes/Controls.axaml)
-                Theme = Application.Current?.FindResource(TabItemTheme) as ControlTheme,
+                Theme = Application.Current?.FindResource(isLeft ? LeftTabItemTheme : TabItemTheme) as ControlTheme,
                 Header = header,
                 Tag = child,
                 Content = Build(child, scope),
             };
+            if (headerWidth > 0)
+                page.Width = headerWidth * Cell;
             DocTip.SetTitle(page, header);
             DocTip.SetDoc(page, docOf(child));
             return page;

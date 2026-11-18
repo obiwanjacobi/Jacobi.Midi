@@ -168,20 +168,28 @@ internal sealed partial class ControlPropertiesViewModel(MainViewModel owner, Da
     }
 
     /// <summary>
-    /// The options of the control's chrome and face (<see cref="FaceOptions"/>), each with the value the control sets
-    /// or inherits from the look the dashboard is shown with; none for a control without a face.
+    /// The options of the control (<see cref="FaceOptions"/>: of a parameter control's chrome and face, of the headers
+    /// of tabs), each with the value the control sets or inherits: from the look the dashboard is shown with, else the
+    /// declared default.
     /// </summary>
     public IReadOnlyList<FaceOptionField> Options
     {
         get
         {
-            if (control is not ParameterControl parameter)
-                return [];
-            var inherited = FaceOptions.Complete(parameter.Kind, owner.ShownLook.OptionsOf(parameter.Kind));
-            return [.. FaceOptions.Of(parameter.Kind).Select(option => new FaceOptionField(option, parameter.Display.Options[option.Name],
-                inherited[option.Name]!, value => EditDisplay(parameter, $"option {option.Name}",
-                    parameter.Display with { Options = parameter.Display.Options.With(option.Name, value) }, value ?? "inherited")))];
+            var declared = FaceOptions.Of(control);
+            var look = control is ParameterControl parameter ? owner.ShownLook.OptionsOf(parameter.Kind) : OptionValues.Empty;
+            var inherited = FaceOptions.Complete(declared, look);
+            return [.. declared.Select(option => new FaceOptionField(option, control.Options[option.Name], inherited[option.Name]!, value => EditOption(option, value)))];
         }
+    }
+
+    // an option of the control; one of its cells (the headers of tabs) sizes the pages again for it
+    private void EditOption(FaceOption option, string? value)
+    {
+        owner.EditControl(control, $"option {option.Name}", () => control.Options, options => control.Options = options,
+            control.Options.With(option.Name, value), value ?? "inherited");
+        if (option.IsLayout && Current() is { } current)
+            owner.Place(control, current.At, current.Size);
     }
 
     public bool HasOptions => Options.Count > 0;

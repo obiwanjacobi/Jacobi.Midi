@@ -1,3 +1,5 @@
+using Jacobi.Midi.Console.Core.Faces;
+
 namespace Jacobi.Midi.Console.Core.Dashboards;
 
 /// <summary>
@@ -17,6 +19,23 @@ public static class GridLayout
 
     /// <summary>The rows the headers of tabs and selector tabs take above their pages.</summary>
     private const int TabHeaderRows = 2;
+
+    /// <summary>The columns the headers of tabs and selector tabs take at the left of their pages, unless set.</summary>
+    private const int TabHeaderColumns = 5;
+
+    /// <summary>
+    /// The cells the headers of tabs or selector tabs take beside their pages: rows above them (the option
+    /// <c>headers</c> <c>top</c>), or columns at their left (<c>left</c>, as wide as the option <c>headerWidth</c>).
+    /// </summary>
+    public static (int Columns, int Rows) HeaderCells(DashboardControl holder)
+    {
+        ArgumentNullException.ThrowIfNull(holder);
+        var options = FaceOptions.Complete(holder);
+        if (options.Choice("headers") != "left")
+            return (0, TabHeaderRows);
+        var width = (int)options.Number("headerWidth");
+        return (width > 0 ? width : TabHeaderColumns, 0);
+    }
 
     /// <summary>True when the layout control places its children at a position (a grid or section).</summary>
     public static bool IsGrid(LayoutControl layout) => layout.Kind is LayoutControlKind.Grid or LayoutControlKind.Section;
@@ -55,9 +74,12 @@ public static class GridLayout
             _ => new(1, 1),
         };
 
-    /// <summary>The size of a page of tabs or selector tabs of a size: below the headers.</summary>
-    public static CellSize PageSize(CellSize size)
-        => new(size.Columns, Math.Max(1, size.Rows - TabHeaderRows));
+    /// <summary>The size of a page of tabs or selector tabs of a size: beside the headers.</summary>
+    public static CellSize PageSize(DashboardControl holder, CellSize size)
+    {
+        var (columns, rows) = HeaderCells(holder);
+        return new(Math.Max(1, size.Columns - columns), Math.Max(1, size.Rows - rows));
+    }
 
     /// <summary>
     /// True when cells are wider than tall: a control with a direction (a slider, a separator) then runs horizontally,
@@ -165,7 +187,8 @@ public static class GridLayout
             var contents = control.Children
                 .Select(page => new Placement(default, page is LayoutControl layout ? ContentSize(layout) : page.Size ?? new CellSize(1, 1)))
                 .ToList();
-            return contents.Count == 0 ? new CellSize(1, TabHeaderRows + 1) : PagesSize(contents);
+            var (columns, rows) = HeaderCells(control);
+            return contents.Count == 0 ? new CellSize(columns + 1, rows + 1) : PagesSize(control, contents);
         }
         return control is LayoutControl other ? ContentSize(other) : new CellSize(1, 1);
     }
@@ -177,7 +200,7 @@ public static class GridLayout
     // the pages take the space below the headers, but not less than their controls need; true when a page needs more
     private static bool SizePages(DashboardControl holder, CellSize size, Dictionary<DashboardControl, Placement> changes)
     {
-        var space = PageSize(size);
+        var space = PageSize(holder, size);
         var needsMore = false;
         foreach (var page in holder.Children)
         {
@@ -292,7 +315,7 @@ public static class GridLayout
     {
         var children = holder.Children.Select(child => PlacementOf(child, changes)).ToList();
         if (holder is not LayoutControl layout)
-            return children.Count == 0 ? new CellSize(1, 1) : PagesSize(children);
+            return children.Count == 0 ? new CellSize(1, 1) : PagesSize(holder, children);
         if (children.Count == 0)
             return new CellSize(Math.Max(1, InsetOf(layout).Left + InsetOf(layout).Right), Math.Max(1, InsetOf(layout).Top + InsetOf(layout).Bottom));
 
@@ -304,7 +327,7 @@ public static class GridLayout
             case LayoutControlKind.Column:
                 return new CellSize(children.Max(child => child.Size.Columns), children.Sum(child => child.Size.Rows) + gaps);
             case LayoutControlKind.Tabs:
-                return PagesSize(children);
+                return PagesSize(layout, children);
             default:
                 var inset = InsetOf(layout);
                 return new CellSize(
@@ -313,9 +336,12 @@ public static class GridLayout
         }
     }
 
-    // pages shown one at a time below their headers
-    private static CellSize PagesSize(List<Placement> pages)
-        => new(pages.Max(page => page.Size.Columns), pages.Max(page => page.Size.Rows) + TabHeaderRows);
+    // pages shown one at a time beside their headers
+    private static CellSize PagesSize(DashboardControl holder, List<Placement> pages)
+    {
+        var (columns, rows) = HeaderCells(holder);
+        return new(pages.Max(page => page.Size.Columns) + columns, pages.Max(page => page.Size.Rows) + rows);
+    }
 
     private static Placement PlacementOf(DashboardControl control, Dictionary<DashboardControl, Placement> changes)
         => changes.TryGetValue(control, out var placement)

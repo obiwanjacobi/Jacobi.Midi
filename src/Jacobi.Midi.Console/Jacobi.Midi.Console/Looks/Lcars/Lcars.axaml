@@ -50,7 +50,7 @@
                                        Foreground="{DynamicResource ConsolePlateTextBrush}" FontSize="14" LetterSpacing="1.5" />
                         </chrome:LabelSlot>
                         <ContentPresenter Grid.Row="1" Name="PART_ContentPresenter" Content="{TemplateBinding Content}" />
-                        <Border Grid.Row="2" Classes="accentArea" Background="{DynamicResource ConsoleAccentBrush}" CornerRadius="10" Padding="10,1" Margin="0,6,0,0"
+                        <Border Grid.Row="2" Name="PART_Value" Classes="accentArea" Background="{DynamicResource ConsoleAccentBrush}" CornerRadius="10" Padding="10,1" Margin="0,6,0,0"
                                 HorizontalAlignment="Center"
                                 IsVisible="{TemplateBinding ValueText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                             <TextBlock Text="{TemplateBinding ValueText, Converter={x:Static chrome:UpperCaseConverter.Instance}}"
@@ -73,6 +73,10 @@
         <Style Selector="^:label-below /template/ chrome|LabelSlot#PART_Label">
             <Setter Property="Grid.Row" Value="3" />
             <Setter Property="Margin" Value="0,6,0,0" />
+        </Style>
+        <!-- the option value other than below: no readout -->
+        <Style Selector="^:not(:value-below) /template/ Border#PART_Value">
+            <Setter Property="IsVisible" Value="False" />
         </Style>
     </ControlTheme>
 
@@ -111,6 +115,77 @@
         </Style>
         <Style Selector="^:collapsed /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="IsVisible" Value="False" />
+        </Style>
+    </ControlTheme>
+
+    <!--
+        Tabs with their headers at the left: the LCARS elbow. The header column has a rounded elbow at its top and bottom
+        in the accent, joined by bars along the top and bottom edge of the page (behind it), and the headers between them
+        as blocks: the selected one in the accent, the others in the surface color, the name at the bottom right.
+    -->
+    <ControlTheme x:Key="ConsoleTabControlLeft" TargetType="TabControl">
+        <Setter Property="TabStripPlacement" Value="Left" />
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <StackPanel />
+            </ItemsPanelTemplate>
+        </Setter>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid ColumnDefinitions="Auto,*" Background="{TemplateBinding Background}">
+                    <Grid RowDefinitions="Auto,Auto,*">
+                        <Border Classes="accentArea" Height="44" Margin="0,0,0,4" CornerRadius="32,0,0,0" Background="{DynamicResource ConsoleAccentBrush}">
+                            <!-- the label of the tabs (PagesChrome.Label), at the bottom right of the elbow -->
+                            <TextBlock HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8,0,8,4" TextTrimming="CharacterEllipsis"
+                                       Text="{Binding $parent[TabControl].(chrome:PagesChrome.Label), Converter={x:Static chrome:UpperCaseConverter.Instance}}"
+                                       FontFamily="{DynamicResource ConsoleLabelFont}" FontSize="15" LetterSpacing="1"
+                                       Foreground="{DynamicResource ConsoleAccentTextBrush}" />
+                        </Border>
+                        <ItemsPresenter Grid.Row="1" Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+                        <Border Grid.Row="2" Classes="accentArea" MinHeight="44" CornerRadius="0,0,0,32" Background="{DynamicResource ConsoleAccentBrush}" />
+                    </Grid>
+                    <!-- the arms of the elbows along the page, with their inner corners -->
+                    <Border Grid.Column="1" Classes="accentArea" Height="10" VerticalAlignment="Top" CornerRadius="0,5,5,0" Background="{DynamicResource ConsoleAccentBrush}" />
+                    <Panel Grid.Column="1" Width="16" Height="16" Margin="0,10,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False">
+                        <Border Background="{DynamicResource ConsoleAccentBrush}" />
+                        <Border Background="{DynamicResource ConsoleBackgroundBrush}" CornerRadius="16,0,0,0" />
+                    </Panel>
+                    <Border Grid.Column="1" Classes="accentArea" Height="10" VerticalAlignment="Bottom" CornerRadius="0,5,5,0" Background="{DynamicResource ConsoleAccentBrush}" />
+                    <Panel Grid.Column="1" Width="16" Height="16" Margin="0,0,0,10" HorizontalAlignment="Left" VerticalAlignment="Bottom" IsHitTestVisible="False">
+                        <Border Background="{DynamicResource ConsoleAccentBrush}" />
+                        <Border Background="{DynamicResource ConsoleBackgroundBrush}" CornerRadius="0,0,0,16" />
+                    </Panel>
+                    <ContentPresenter Grid.Column="1" Name="PART_SelectedContentHost"
+                                      Content="{TemplateBinding SelectedContent}" ContentTemplate="{TemplateBinding SelectedContentTemplate}" />
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+    <ControlTheme x:Key="ConsoleTabItemLeft" TargetType="TabItem">
+        <Setter Property="Height" Value="44" />
+        <Setter Property="Margin" Value="0,0,0,4" />
+        <Setter Property="Background" Value="{DynamicResource ConsoleSurfaceBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource ConsoleDisplayBrush}" />
+        <Setter Property="HeaderTemplate">
+            <DataTemplate>
+                <TextBlock Text="{Binding Converter={x:Static chrome:UpperCaseConverter.Instance}}"
+                           FontFamily="{DynamicResource ConsoleLabelFont}" FontSize="15" LetterSpacing="1" />
+            </DataTemplate>
+        </Setter>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="PART_Block" Background="{TemplateBinding Background}" Padding="8,0,8,4">
+                    <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Header}" ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                      Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:selected">
+            <Setter Property="Background" Value="{DynamicResource ConsoleAccentBrush}" />
+        </Style>
+        <Style Selector="^:pointerover /template/ Border#PART_Block">
+            <Setter Property="Opacity" Value="0.85" />
         </Style>
     </ControlTheme>
 </ResourceDictionary>

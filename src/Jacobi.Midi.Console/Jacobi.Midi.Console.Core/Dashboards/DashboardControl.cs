@@ -41,6 +41,12 @@ public closed class DashboardControl
     public string? Base { get; set; }
 
     /// <summary>
+    /// The options the control sets (see <see cref="FaceOptions"/>: of a parameter control's chrome and face, of the
+    /// headers of tabs); the others are inherited: from the look, else their declared default.
+    /// </summary>
+    public OptionValues Options { get; set; } = OptionValues.Empty;
+
+    /// <summary>
     /// The controls this control holds, in order: the one member every walk over the controls of a dashboard uses. The
     /// children of a <see cref="LayoutControl"/>, the pages of a <see cref="SelectorTabsControl"/>; none for a control
     /// that holds no controls.
@@ -290,12 +296,6 @@ public sealed record DisplaySettings
 
     /// <summary>How a selector shows its options.</summary>
     public SelectorPresentation Presentation { get; init; }
-
-    /// <summary>
-    /// The options of the control's chrome and face it sets (see <see cref="FaceOptions"/>); the others are inherited
-    /// from the look.
-    /// </summary>
-    public OptionValues Options { get; init; } = OptionValues.Empty;
 }
 
 /// <summary>How a selector shows its options: the selected one in a display with a droplist, or a button per option.</summary>

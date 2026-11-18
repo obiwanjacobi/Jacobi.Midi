@@ -31,9 +31,17 @@ public sealed record Look(string Name, Kit Kit, Uri Theme, RgbColor Accent,
     public IReadOnlyDictionary<ParameterControlKind, OptionValues> FaceOptions { get; init; } =
         new Dictionary<ParameterControlKind, OptionValues>();
 
-    /// <summary>The look's defaults of the options of a control kind: of its face and of the chrome.</summary>
+    /// <summary>
+    /// The look's defaults of the options of a control kind: of its face and of the chrome; never of the options of the
+    /// cells (<see cref="FaceOption.IsLayout"/>), so a dashboard has the same layout in every look.
+    /// </summary>
     public OptionValues OptionsOf(ParameterControlKind kind)
-        => FaceOptions.GetValueOrDefault(kind, OptionValues.Empty).Over(ChromeOptions);
+    {
+        var options = FaceOptions.GetValueOrDefault(kind, OptionValues.Empty).Over(ChromeOptions);
+        foreach (var option in Core.Faces.FaceOptions.Of(kind).Where(option => option.IsLayout))
+            options = options.With(option.Name, null);
+        return options;
+    }
 
     public override string ToString() => Name;
 

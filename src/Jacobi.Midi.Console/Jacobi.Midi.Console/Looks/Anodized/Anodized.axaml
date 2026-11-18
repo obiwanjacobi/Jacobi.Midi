@@ -71,7 +71,7 @@
                                        Foreground="{DynamicResource ConsolePlateTextBrush}" FontSize="12" LetterSpacing="1.5" />
                         </chrome:LabelSlot>
                         <ContentPresenter Grid.Row="1" Name="PART_ContentPresenter" Content="{TemplateBinding Content}" />
-                        <Border Grid.Row="2" Background="{DynamicResource ConsoleDisplayBrush}" CornerRadius="3" Padding="8,2" Margin="0,8,0,0" HorizontalAlignment="Center"
+                        <Border Grid.Row="2" Name="PART_Value" Background="{DynamicResource ConsoleDisplayBrush}" CornerRadius="3" Padding="8,2" Margin="0,8,0,0" HorizontalAlignment="Center"
                                 BoxShadow="inset 0 1 2 0 #FF000000"
                                 IsVisible="{TemplateBinding ValueText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                             <TextBlock Text="{TemplateBinding ValueText}" Foreground="{DynamicResource ConsoleAccentDisplayBrush}"
@@ -93,6 +93,10 @@
         <Style Selector="^:label-below /template/ chrome|LabelSlot#PART_Label">
             <Setter Property="Grid.Row" Value="3" />
             <Setter Property="Margin" Value="0,8,0,0" />
+        </Style>
+        <!-- the option value other than below: no readout -->
+        <Style Selector="^:not(:value-below) /template/ Border#PART_Value">
+            <Setter Property="IsVisible" Value="False" />
         </Style>
     </ControlTheme>
 

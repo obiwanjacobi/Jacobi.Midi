@@ -172,4 +172,37 @@
         </Style>
     </ControlTheme>
 
+    <!--
+        Tabs with their headers at the left (option headers left), and those headers: the headers stacked in the
+        columns the builder gives them, otherwise as above. A look may replace both (e.g. the LCARS elbows), by these keys.
+    -->
+    <ControlTheme x:Key="ConsoleTabControlLeft" TargetType="TabControl">
+        <Setter Property="TabStripPlacement" Value="Left" />
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <StackPanel />
+            </ItemsPanelTemplate>
+        </Setter>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <!-- the header column: the label of the tabs (PagesChrome.Label) in two rows at the top, then the headers -->
+                <Grid ColumnDefinitions="Auto,*" Background="{TemplateBinding Background}">
+                    <StackPanel>
+                        <TextBlock Height="48" Padding="10,0" VerticalAlignment="Top" LineHeight="48" TextTrimming="CharacterEllipsis"
+                                   Text="{Binding $parent[TabControl].(chrome:PagesChrome.Label), Converter={x:Static chrome:UpperCaseConverter.Instance}}"
+                                   FontFamily="{DynamicResource ConsoleLabelFont}" FontSize="13" FontWeight="Bold" LetterSpacing="2"
+                                   Foreground="{DynamicResource ConsoleTextBrush}" />
+                        <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+                    </StackPanel>
+                    <ContentPresenter Grid.Column="1" Name="PART_SelectedContentHost"
+                                      Content="{TemplateBinding SelectedContent}" ContentTemplate="{TemplateBinding SelectedContentTemplate}" />
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+    <ControlTheme x:Key="ConsoleTabItemLeft" TargetType="TabItem" BasedOn="{StaticResource ConsoleTabItem}">
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+    </ControlTheme>
+
 </ResourceDictionary>

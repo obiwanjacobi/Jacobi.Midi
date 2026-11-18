@@ -138,7 +138,9 @@ When a control is moved or sized onto other controls, these are **pushed down** 
 overlap, and so on); a grid or section that no longer fits its children **grows**, and pushes in its own grid in turn.
 No control is sized smaller than its controls need (`GridLayout.MinimumSize`).
 
-The **pages** of tabs and selector tabs take the space below the headers (`GridLayout.PageSize`): sizing the tabs sizes
+The **pages** of tabs and selector tabs take the space beside the headers (`GridLayout.PageSize`): below them (two
+rows), or at their right when the headers are at the left (option `headers`; as many columns as `headerWidth`, 5
+when it is 0; `GridLayout.HeaderCells`). Sizing the tabs sizes
 all their pages, never smaller than the controls on a page need (the tabs grow around the largest). A page is not sized
 itself. A file whose pages do not fit their tabs gets that when it is opened, and the console says so.
 
@@ -147,7 +149,7 @@ itself. A file whose pages do not fit their tabs gets that when it is opened, an
 | Grid | on cells, each child at its position (`at`) in its size | the root of a dashboard; exact placement, e.g. to copy a device's panel layout |
 | Section | as a grid, inside a frame with a title; `collapsible`: in Play mode a click on the title collapses it to its title and expands it again, the controls below it in its grid moving up and back (`GridLayout.ShiftsUp`; the grid keeps its size, the positions in the file stay); it opens expanded | a group of parameters: "Filter", "Amp", a device |
 | Row, Column | next to / below each other (flex): `gap`, `wrap`; a child's `grow` shares the remaining space; the children have no position | a strip of controls that adapts when controls are added or removed |
-| Tabs | one page at a time (the headers take two rows, in the look's label font and colors); each child is a page, named by its label: a grid or section; any other control put on tabs gets a grid page of its own (`ControlCatalog.PageFor`) | many parameters on a small screen; the sections of a patch. For the parameters of the options of one parameter: [selector tabs](#selector-tabs-show-a-page-per-option) |
+| Tabs | one page at a time (the headers take two rows above the pages, or columns at their left: option `headers`; in the look's label font and colors); each child is a page, named by its label: a grid or section; any other control put on tabs gets a grid page of its own (`ControlCatalog.PageFor`) | many parameters on a small screen; the sections of a patch. For the parameters of the options of one parameter: [selector tabs](#selector-tabs-show-a-page-per-option) |
 | Spacer, Separator | — | room or a line between controls; a separator is a line along the long side of its cells (`GridLayout.IsWide`) |
 | Label | — | a text on the dashboard |
 
@@ -247,14 +249,24 @@ description). An option means the same in every kind that has it:
 
 | Kind | Options |
 |------|---------|
-| every control (the chrome) | `plate` (the plate the control is mounted on; off: on the panel), `fasteners` (its screws or rivets), `label` (`above`, `below` or `none`) |
-| knob | `track`, `body` (body and cap), `pointer`, `width` (of the arc and track), `ends` (`round` or `flat`), `value` (`below`: the chrome's readout; `inside`: drawn by the face inside the arc) |
+| every control (the chrome) | `plate` (the plate the control is mounted on; off: on the panel), `fasteners` (its screws or rivets), `label` (`above`, `below` or `none`), `value` (`below`: the readout, or `none`; a face that shows its value itself, a number box or text, does so anyway) |
+| knob | `track`, `body` (body and cap), `pointer`, `width` (of the arc and track), `ends` (`round` or `flat`), `value` (the chrome's, with one more choice: `inside`, drawn by the face inside the arc) |
 | slider | `track` (the slot, or the unlit segments), `cap`, `width` (of the slot), `segments` (a meter; 0: one fill), `ends` |
 | switch | `lamp`, `ends` (of a pair of ON/OFF keys) |
 | selector | `display` (of the list), `lamp` (an LED per key), `ends` (of each row of keys: `round` makes it a pill) |
 | number box, text | `display` |
 | XY pad | `display`, `grid`, `crosshair` |
 | envelope | `display`, `fill`, `beads` |
+| tabs, selector tabs | `headers` (`top`: two rows above the pages; `left`: columns at their left), `headerWidth` (in cells; 0: on top as wide as its name, at the left 5) |
+
+Options on layout controls are the control's own (`DashboardControl.Options`, as on parameter controls). The options
+that change the cells of a control (`headers`, `headerWidth`: `FaceOption.IsLayout`) are only set by the control: a
+look gives them no default (`Look.OptionsOf`), so a dashboard has the same layout in every look. Changing one sizes the
+pages again. Tabs with their headers at the left take the look's themes `ConsoleTabControlLeft` and
+`ConsoleTabItemLeft` (in `Themes/Controls.axaml`, the label of the tabs at the top of the header column and a list of
+headers below it; LCARS replaces them by its elbow: a rounded block in the accent above and below the headers, joined
+by bars along the page, the label of the tabs in the upper block, the selected header in the accent). The label comes
+to the theme attached to the tab control (`PagesChrome.Label`).
 
 The value of a knob is shown by the chrome (its readout, from the control's `ValueText`) or by the face: with `value`
 `inside` the control puts the value text in the face state (`RangeFaceState.Text`) and gives the chrome none, as the

@@ -113,7 +113,8 @@ public class DashboardFileTests
 
         var cutoff = Assert.IsType<ValueControl>(section.Children[0]);
         Assert.Equal(ParameterControlKind.Knob, cutoff.Kind);
-        Assert.Equal(new DisplaySettings { Unit = "Hz", Decimals = 1, Options = OptionValues.Of("body=false", "width=8", "ends=flat") }, cutoff.Display);
+        Assert.Equal(new DisplaySettings { Unit = "Hz", Decimals = 1 }, cutoff.Display);
+        Assert.Equal(OptionValues.Of("body=false", "width=8", "ends=flat"), cutoff.Options);
         Assert.Equal(new Binding("Cutoff"), cutoff.Bindings[SlotNames.Value]);
 
         var resonance = Assert.IsType<ValueControl>(section.Children[1]);
@@ -218,9 +219,29 @@ public class DashboardFileTests
         var read = DashboardFile.Read(written, format);
 
         // in their normal form
-        Assert.Equal(OptionValues.Of("plate=false", "ends=flat"), Assert.IsType<ValueControl>(read.Layout.Children[0]).Display.Options);
-        Assert.Equal(OptionValues.Empty, Assert.IsType<ValueControl>(read.Layout.Children[1]).Display.Options);
+        Assert.Equal(OptionValues.Of("plate=false", "ends=flat"), Assert.IsType<ValueControl>(read.Layout.Children[0]).Options);
+        Assert.Equal(OptionValues.Empty, Assert.IsType<ValueControl>(read.Layout.Children[1]).Options);
         Assert.Equal(1, CountOf(written, "options"));
+    }
+
+    [Theory]
+    [InlineData(FileFormat.Xml)]
+    [InlineData(FileFormat.Json)]
+    public void Write_HasTheOptionsOfTabs(FileFormat format)
+    {
+        var xml = """
+            <dashboard format="jacobi.midi.dashboard/1" name="Test">
+              <tabs size="12,10">
+                <options headers="left" headerWidth="4" />
+                <grid label="One" />
+              </tabs>
+            </dashboard>
+            """;
+
+        var read = DashboardFile.Read(DashboardFile.Write(DashboardFile.Read(xml, FileFormat.Xml), format), format);
+
+        Assert.Equal(OptionValues.Of("headers=left", "headerWidth=4"), read.Layout.Options);
+        Assert.Single(read.Layout.Children);
     }
 
     private static int CountOf(string text, string part) => (text.Length - text.Replace(part, "", StringComparison.Ordinal).Length) / part.Length;
@@ -263,7 +284,7 @@ public class DashboardFileTests
     [InlineData("""<knob faceScale="big" />""", "'faceScale': 'big' is not a number")]
     [InlineData("""<selector presentation="tiles" />""", "'presentation': 'tiles' is not one of list, buttons")]
     [InlineData("""<knob><options wheel="true" /></knob>""", "'knob' has no option 'wheel' (options: plate, fasteners, label, track, body, pointer, width, ends, value)")]
-    [InlineData("""<selector><options width="8" /></selector>""", "'selector' has no option 'width' (options: plate, fasteners, label, display, lamp, ends)")]
+    [InlineData("""<selector><options width="8" /></selector>""", "'selector' has no option 'width' (options: plate, fasteners, label, value, display, lamp, ends)")]
     [InlineData("""<numberBox><options label="left" /></numberBox>""", "'label': 'left' is not one of above, below, none")]
     [InlineData("""<knob><options body="maybe" /></knob>""", "'body': 'maybe' is not true or false")]
     [InlineData("""<knob><options width="20" /></knob>""", "'width': 20 is not from 1 to 12")]

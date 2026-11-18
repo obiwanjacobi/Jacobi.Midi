@@ -30,6 +30,12 @@ public sealed record FaceOption(string Name, FaceOptionType Type, string Default
     /// <summary>The largest value of a number.</summary>
     public decimal Maximum { get; init; }
 
+    /// <summary>
+    /// True for an option that changes the cells of the control (the place of the headers of tabs): only the control
+    /// sets it, a look gives no default, so a dashboard has the same layout in every look.
+    /// </summary>
+    public bool IsLayout { get; init; }
+
     /// <summary>The names of a choice.</summary>
     public IReadOnlyList<string> Choices { get; init; } = [];
 
@@ -105,8 +111,14 @@ public static class FaceOptions
     /// <summary>Where the label is, in the chrome.</summary>
     public static IReadOnlyList<string> LabelPlaces { get; } = ["above", "below", "none"];
 
+    /// <summary>Where the headers of tabs are.</summary>
+    public static IReadOnlyList<string> HeaderPlaces { get; } = ["top", "left"];
+
     /// <summary>Where a knob's value is: below the face (in the chrome's readout) or inside its arc (drawn by the face).</summary>
-    public static IReadOnlyList<string> KnobValuePlaces { get; } = ["below", "inside"];
+    public static IReadOnlyList<string> KnobValuePlaces { get; } = ["below", "inside", "none"];
+
+    /// <summary>Where the value is, in the chrome: below the face (its readout) or none.</summary>
+    public static IReadOnlyList<string> ValuePlaces { get; } = ["below", "none"];
 
     /// <summary>The options of the chrome around every face.</summary>
     public static IReadOnlyList<FaceOption> Chrome { get; } =
@@ -114,6 +126,7 @@ public static class FaceOptions
         FaceOption.Switch("plate", true, "The plate the control is mounted on; off: the control is on the panel (a plate color then has no effect)."),
         FaceOption.Switch("fasteners", true, "The screws or rivets that hold the plate, in a look that has them."),
         FaceOption.Choice("label", "above", LabelPlaces, "Where the label is: above or below the face, or none."),
+        FaceOption.Choice("value", "below", ValuePlaces, "Where the value is: below the face (the readout), or none. A face that shows the value itself (a number box, a text) is not changed."),
     ];
 
     /// <summary>The options of a knob's face.</summary>
@@ -124,7 +137,7 @@ public static class FaceOptions
         FaceOption.Switch("pointer", true, "The mark on the body that points at the value."),
         FaceOption.Number("width", 5, 1, 12, "The width of the value arc and the track, in pixels (at a cell of 24)."),
         FaceOption.Choice("ends", "round", LineEnds, "The ends of the value arc and the track."),
-        FaceOption.Choice("value", "below", KnobValuePlaces, "Where the value is: below the face (the readout of the chrome) or inside the arc."),
+        FaceOption.Choice("value", "below", KnobValuePlaces, "Where the value is: below the face (the readout of the chrome), inside the arc, or none."),
     ];
 
     // the dark display or screen behind a face's text, number or plot
@@ -178,21 +191,56 @@ public static class FaceOptions
         FaceOption.Switch("beads", true, "The beads or dots on the breakpoints."),
     ];
 
-    /// <summary>The options of a control kind: those of the chrome and of its face; none for a kind without a face.</summary>
+    /// <summary>The options of the headers of tabs and selector tabs.</summary>
+    public static IReadOnlyList<FaceOption> Pages { get; } =
+    [
+        FaceOption.Choice("headers", "top", HeaderPlaces, "Where the headers are: above the pages (in two rows) or at their left (in columns).") with { IsLayout = true },
+        FaceOption.Number("headerWidth", 0, 0, 24, "The width of a header in cells; 0: on top as wide as its name, at the left 5.") with { IsLayout = true },
+    ];
+
+    /// <summary>The options of a control: by its kind.</summary>
+    public static IReadOnlyList<FaceOption> Of(DashboardControl control)
+        => control switch
+        {
+            ParameterControl parameter => Of(parameter.Kind),
+            LayoutControl layout => Of(layout.Kind),
+            _ => [],
+        };
+
+    /// <summary>The options of a layout control kind: those of the headers of tabs; none for the others.</summary>
+    public static IReadOnlyList<FaceOption> Of(LayoutControlKind kind)
+        => kind == LayoutControlKind.Tabs ? Pages : [];
+
+    /// <summary>
+    /// The options of a parameter control kind: those of the chrome and of its face (the headers of selector tabs). A face
+    /// may declare an option of the chrome again with more choices (the knob's <c>value</c> also <c>inside</c>): its own
+    /// declaration is the kind's.
+    /// </summary>
     public static IReadOnlyList<FaceOption> Of(ParameterControlKind kind)
         => kind switch
         {
-            ParameterControlKind.SelectorTabs => [],
-            ParameterControlKind.Knob => [.. Chrome, .. Knob],
-            ParameterControlKind.Slider => [.. Chrome, .. Slider],
-            ParameterControlKind.Switch => [.. Chrome, .. Switch],
-            ParameterControlKind.Selector => [.. Chrome, .. Selector],
-            ParameterControlKind.NumberBox => [.. Chrome, .. NumberBox],
-            ParameterControlKind.Text => [.. Chrome, .. Text],
-            ParameterControlKind.XyPad => [.. Chrome, .. XyPad],
-            ParameterControlKind.Envelope => [.. Chrome, .. Envelope],
+            ParameterControlKind.SelectorTabs => Pages,
+            ParameterControlKind.Knob => WithChrome(Knob),
+            ParameterControlKind.Slider => WithChrome(Slider),
+            ParameterControlKind.Switch => WithChrome(Switch),
+            ParameterControlKind.Selector => WithChrome(Selector),
+            ParameterControlKind.NumberBox => WithChrome(NumberBox),
+            ParameterControlKind.Text => WithChrome(Text),
+            ParameterControlKind.XyPad => WithChrome(XyPad),
+            ParameterControlKind.Envelope => WithChrome(Envelope),
             _ => Chrome,
         };
+
+    // the options of the chrome that the face does not declare itself, then those of the face
+    private static IReadOnlyList<FaceOption> WithChrome(IReadOnlyList<FaceOption> face)
+        => [.. Chrome.Where(option => face.All(own => own.Name != option.Name)), .. face];
+
+    /// <summary>The values of all options of a control: its own, the declared defaults for the others (no look).</summary>
+    public static OptionValues Complete(DashboardControl control)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        return Complete(Of(control), control.Options);
+    }
 
     /// <summary>The option of a control kind by its name; null when the kind has none.</summary>
     public static FaceOption? Find(ParameterControlKind kind, string name)

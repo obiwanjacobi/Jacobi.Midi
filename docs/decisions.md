@@ -52,6 +52,22 @@ Issue: a third look, after the LCARS-style control design (rounded caps, pastel 
 17. **LCARS draws with the Foundry kit and its own palette and option defaults, and has one face of its own: the ON/OFF
     pair of keys (`PairSwitchFace`).** *Why:* flat parts are Foundry's parts without their materials; only the switch
     is a different drawing. (Its ▲/▼ arrows follow, in the display text color of Foundry's faces.)
+18. **Every control can have options (`DashboardControl.Options`), declared per kind:** layout controls too; for now
+    only tabs and selector tabs have some. *Why:* one mechanism for every control, in the file and the control panel.
+19. **The place of the headers of tabs and selector tabs is an option: `headers` `top` (as before) or `left`**, with
+    `headerWidth` (in cells, on top too; 0: on top as wide as its name, at the left 5 columns). At the left the headers
+    take columns instead of the two rows. *Why:* the LCARS elbow is tabs with their headers at the left.
+20. **Options that change the cells of a control (`IsLayout`: `headers`, `headerWidth`) have no default from the look.**
+    *Why:* a dashboard has the same layout in every look.
+21. **A look draws tabs with their headers at the left with its own themes (`ConsoleTabControlLeft`,
+    `ConsoleTabItemLeft`)**; LCARS defaults to `top` like the others (the elbow is chosen per control). *Why:* the
+    elbow is LCARS's drawing of the same tabs.
+22. **With the headers at the left, the label of the tabs is shown at the top of the header column** (LCARS: in the
+    upper elbow), for tabs and selector tabs alike; on top it is not shown, as before. *Why:* the column has room above
+    the headers; the pages keep all their cells.
+23. **The readout of the value is a chrome option `value`: `below` or `none`**, for every control; the knob declares
+    the same option with `inside` too (amends 14: the knob's `value` is the chrome's). A face that shows the value
+    itself is not changed by it. *Why:* the readout is redundant on some controls; one option for where the value is.
 
 ## Loading exchange files in the console (2026-11-17)
 

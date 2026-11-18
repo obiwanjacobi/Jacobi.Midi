@@ -137,7 +137,7 @@ What is planned for the console, and what was done. What the console does now is
 - [x] **Options of the chrome and the knob:** generic options declared per control kind, set per control, defaults from the look (`plate`, `fasteners`; the knob's `track`, `body`, `pointer`, `width`, `ends`); the shared arc knob for Foundry and LCARS.
 - [x] **Options of the other controls**, one by one: slider, switch, selector, number box and text, XY pad and envelope. Also the label's place (`above`, `below`, `none`) and the knob's value inside its arc.
 - [x] **LCARS look, step 2: a kit of its own.** Done as the Foundry kit with the LCARS option defaults and one face of its own, the ON/OFF pair switch (`PairSwitchFace`). Knob: a thick arc with butt ends; slider: a stacked segment meter; switch: an ON/OFF pill pair; selector: pill keys, rounded at the outer ends; envelope: the curve with pill breakpoints; number box and text: large condensed figures; XY pad: a grid with a pill crosshair.
-- [ ] **LCARS frame:** the elbows and the options on the side of the design, perhaps as a variant of the (selector) tabs.
+- [x] **LCARS frame:** the elbows and the options on the side of the design, perhaps as a variant of the (selector) tabs. Done as the option `headers` `left` of tabs and selector tabs, drawn by LCARS as the elbow.
 
 ## Browser support
 

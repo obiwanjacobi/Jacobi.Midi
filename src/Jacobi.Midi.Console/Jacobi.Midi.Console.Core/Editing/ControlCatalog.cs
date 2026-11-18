@@ -1,4 +1,5 @@
 using Jacobi.Midi.Console.Core.Dashboards;
+using Jacobi.Midi.Console.Core.Faces;
 using Jacobi.Midi.Console.Core.Parameters;
 
 namespace Jacobi.Midi.Console.Core.Editing;
@@ -132,6 +133,10 @@ public static class ControlCatalog
         changed.Colors = control.Colors;
         changed.Device = control.Device;
         changed.Base = control.Base;
+        var declared = FaceOptions.Of(changed);
+        changed.Options = new OptionValues(control.Options.Names
+            .Where(name => declared.Any(option => option.Name == name))
+            .Select(name => KeyValuePair.Create(name, control.Options[name]!)));
         return changed;
     }
 

@@ -15,8 +15,10 @@ public class FaceOptionsTests
     {
         Assert.Equal(["plate", "fasteners", "label", "track", "body", "pointer", "width", "ends", "value"],
             FaceOptions.Of(ParameterControlKind.Knob).Select(option => option.Name));
-        Assert.Equal(["plate", "fasteners", "label", "track", "cap", "width", "segments", "ends"], FaceOptions.Of(ParameterControlKind.Slider).Select(option => option.Name));
-        Assert.Empty(FaceOptions.Of(ParameterControlKind.SelectorTabs));
+        Assert.Equal(["plate", "fasteners", "label", "value", "track", "cap", "width", "segments", "ends"], FaceOptions.Of(ParameterControlKind.Slider).Select(option => option.Name));
+        Assert.Equal(["headers", "headerWidth"], FaceOptions.Of(ParameterControlKind.SelectorTabs).Select(option => option.Name));
+        Assert.Equal(["headers", "headerWidth"], FaceOptions.Of(LayoutControlKind.Tabs).Select(option => option.Name));
+        Assert.Empty(FaceOptions.Of(LayoutControlKind.Grid));
     }
 
     [Theory]
@@ -62,5 +64,17 @@ public class FaceOptionsTests
         var options = FaceOptions.Complete(ParameterControlKind.Slider, OptionValues.Empty);
 
         Assert.Throws<InvalidOperationException>(() => options.Switch("body"));
+    }
+
+    [Theory]
+    [InlineData(null, null, 12, 8)]
+    [InlineData("left", null, 7, 10)]
+    [InlineData("left", "3", 9, 10)]
+    [InlineData("top", "3", 12, 8)]
+    public void PageSize_IsBesideTheHeaders(string? headers, string? width, int columns, int rows)
+    {
+        var tabs = new LayoutControl { Kind = LayoutControlKind.Tabs, Options = OptionValues.Empty.With("headers", headers).With("headerWidth", width) };
+
+        Assert.Equal(new CellSize(columns, rows), GridLayout.PageSize(tabs, new CellSize(12, 10)));
     }
 }
