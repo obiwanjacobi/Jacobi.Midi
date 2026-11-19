@@ -27,6 +27,16 @@ public static class DashboardFile
         return ConsoleFile.Write(ToElement(dashboard), format);
     }
 
+    /// <summary>
+    /// A copy of a control with the controls inside it: everything the file has of them (written and read again), so
+    /// a copy never shares a part with the original.
+    /// </summary>
+    public static DashboardControl Copy(DashboardControl control)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        return ReadControl(ToElement(control, FileRoles.Layout));
+    }
+
     // writing
 
     private static FileElement ToElement(Dashboard dashboard)
@@ -50,7 +60,7 @@ public static class DashboardFile
         return root;
     }
 
-    private static FileElement ToElement(DashboardControl control, FileRole role)
+    internal static FileElement ToElement(DashboardControl control, FileRole role)
     {
         var name = control switch
         {
@@ -201,7 +211,7 @@ public static class DashboardFile
         return device;
     }
 
-    private static DashboardControl ReadControl(FileElement element)
+    internal static DashboardControl ReadControl(FileElement element)
     {
         // the attributes of every control
         var label = element.Get("label");

@@ -14,7 +14,8 @@ namespace Jacobi.Midi.Console.Core.Dashboards;
 /// <list type="bullet">
 /// <item>the device is the binding's own, else the nearest one of the control and the layout controls around it
 /// (<see cref="BindingScope"/>);</item>
-/// <item>a binding with its own device has a full path; otherwise its path is appended to the nearest base, if any;</item>
+/// <item>a binding with its own device has a full path; otherwise its path is appended to the nearest base, if any;
+/// so is a base (<see cref="BindingScope.FullBaseOf"/>);</item>
 /// <item>the repeat indices in the base and the path give the instance; an index variable (<c>[$patch]</c>) is the
 /// nearest declaration, with its current value (<see cref="BindingContext.Values"/>) or its starting value.</item>
 /// </list>
@@ -72,9 +73,8 @@ public static class BindingResolver
         void Visit(DashboardControl control, BindingScope outer)
         {
             var scope = outer.Inside(control);
-            // the repeats the variables in a base index (the variables are checked with the bindings)
-            if (control.Base is { } basePath && SchemaPaths.TryParse(basePath, _ => 0, out var parsedBase, out _))
-                AddRepeats(parsedBase, scope);
+            if (control.Base is not null)
+                ResolveBase(control, scope);
             switch (control)
             {
                 case LayoutControl layout:
@@ -102,23 +102,10 @@ public static class BindingResolver
                 return;
             }
 
-            if (scope.FullPathOf(binding) is not (string device, string text))
-            {
-                problems.Add(new(control, slot, $"'{binding.Path}' has no device: set the device on the binding, the control or a layout control around it."));
+            var full = scope.FullPathOf(binding);
+            if (Locate(control, slot, binding.Path, full, scope) is not var (dashboardDevice, parsed))
                 return;
-            }
-            if (dashboard.FindDevice(device) is not { } dashboardDevice)
-            {
-                problems.Add(new(control, slot, $"'{binding.Path}' refers to device '{device}', which the dashboard does not list."));
-                return;
-            }
-
-            int? Lookup(string name) => scope.Variables.TryGetValue(name, out var reference) ? ValueOf(reference) : null;
-            if (!SchemaPaths.TryParse(text, Lookup, out var parsed, out var error))
-            {
-                problems.Add(new(control, slot, error));
-                return;
-            }
+            var device = full!.Value.Device;
 
             var variables = parsed.Variables.Select(use => scope.Variables[use.Variable]).Distinct().ToList();
             AddRepeats(parsed, scope);
@@ -127,17 +114,60 @@ public static class BindingResolver
             bindings.Add(new(control, slot, new ParameterReference(device, parsed.Path, parsed.Instance), null, variables));
         }
 
+        // the base of a control must be a node of the device's schema (checked again on each resolve: e.g. a placed user
+        // control whose base becomes valid when the base around it is set); the variables in it index repeats
+        // (a base without device or with an undeclared variable is not reported here: each binding below it reports that)
+        void ResolveBase(DashboardControl control, BindingScope scope)
+        {
+            if (!SchemaPaths.TryParse(scope.Base, _ => 0, out var parsed, out _))
+                return;
+            AddRepeats(parsed, scope);
+            if (library is not null && scope.Device is { } device && dashboard.FindDevice(device) is { } dashboardDevice
+                && RootOf(control, null, dashboardDevice, parsed) is not null
+                && library.FindNode(dashboardDevice.Schema, parsed.Path) is null)
+                problems.Add(new(control, null, $"The base '{parsed.Path}' is not a node of '{dashboardDevice.Schema}'."));
+        }
+
+        // the device and the parsed full path of a binding or base (as written: text); null when it has no device, the
+        // device is not listed or the path is not valid (reported)
+        (DashboardDevice Device, ParsedPath Path)? Locate(DashboardControl control, string? slot, string text, (string Device, string Path)? full, BindingScope scope)
+        {
+            if (full is not var (device, path))
+            {
+                problems.Add(new(control, slot, $"'{text}' has no device: set the device on the binding, the control or a layout control around it."));
+                return null;
+            }
+            if (dashboard.FindDevice(device) is not { } dashboardDevice)
+            {
+                problems.Add(new(control, slot, $"'{text}' refers to device '{device}', which the dashboard does not list."));
+                return null;
+            }
+
+            int? Lookup(string name) => scope.Variables.TryGetValue(name, out var reference) ? ValueOf(reference) : null;
+            if (!SchemaPaths.TryParse(path, Lookup, out var parsed, out var error))
+            {
+                problems.Add(new(control, slot, error));
+                return null;
+            }
+            return (dashboardDevice, parsed);
+        }
+
+        // the root of the device's schema the path starts at; null when there is none (reported)
+        SchemaName? RootOf(DashboardControl control, string? slot, DashboardDevice device, ParsedPath parsed)
+        {
+            var root = library!.RootOf(device.Schema, parsed.Path);
+            if (root is null)
+                problems.Add(new(control, slot, $"'{parsed.Path}' must start at a root of the schema '{device.Schema}' of device '{device.Alias}'."));
+            return root;
+        }
+
         // the path must be a field of one of the device's roots (the roots of its schema); each variable must index a
         // repeat of that root
         bool Check(ParameterControl control, string slot, DashboardDevice device, ParsedPath parsed, BindingScope scope)
         {
-            var name = parsed.Path.Split(SchemaPath.Separator)[0];
-            if (library!.RootsOf(device.Schema).Cast<SchemaName?>().FirstOrDefault(root => String.Equals(name, root!.Value.Name, StringComparison.OrdinalIgnoreCase)) is not { } root)
-            {
-                problems.Add(new(control, slot, $"'{parsed.Path}' must start at a root of the schema '{device.Schema}' of device '{device.Alias}'."));
+            if (RootOf(control, slot, device, parsed) is not { } root)
                 return false;
-            }
-            if (!library.Schemas!.TryFindByPath(new SchemaPath($"{root.Namespace}.{parsed.Path}"), out var node) || node is not SchemaField)
+            if (library!.FindNode(device.Schema, parsed.Path) is not SchemaField)
             {
                 problems.Add(new(control, slot, $"'{parsed.Path}' is not a field of '{device.Schema}'."));
                 return false;

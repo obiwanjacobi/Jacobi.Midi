@@ -7,6 +7,7 @@ using Jacobi.Midi.Console.Core.Dashboards;
 using Jacobi.Midi.Console.Core.Devices;
 using Jacobi.Midi.Console.Core.Editing;
 using Jacobi.Midi.Console.Core.Files;
+using Jacobi.Midi.Console.Core.Libraries;
 using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Core.Parameters;
 using Jacobi.Midi.Console.Core.Rigs;
@@ -266,6 +267,79 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     public IReadOnlyList<PaletteItem> LayoutPalette { get; }
         = [.. ControlCatalog.LayoutKinds.Select(kind => new PaletteItem(kind, IsAvailable: true))];
 
+    /// <summary>The user controls of the libraries of the rig (<see cref="Rig.Libraries"/>), to drag onto a dashboard.</summary>
+    public ObservableCollection<UserControlItem> UserControls { get; } = [];
+
+    /// <summary>True when the rig has user controls to show.</summary>
+    public bool HasUserControls => UserControls.Count > 0;
+
+    // the libraries read, by full path; read again when the rig refers to others or a library is saved
+    private readonly Dictionary<string, ControlLibrary?> _libraries = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Shows the user controls of the libraries of the rig. A library is read when the rig refers to it for the first
+    /// time, or again with <paramref name="reread"/>; one that cannot be read (not found, invalid, a relative path of a
+    /// rig not saved yet) is reported once.
+    /// </summary>
+    private void LoadLibraries(bool reread = false)
+    {
+        var paths = _rig.Libraries.Select(path => FilePaths.Resolve(path, RigOrigin.Directory)).ToList();
+        foreach (var path in paths.Where(path => reread || !_libraries.ContainsKey(path)))
+            _libraries[path] = ReadLibrary(path);
+        foreach (var path in _libraries.Keys.Except(paths, StringComparer.OrdinalIgnoreCase).ToList())
+            _libraries.Remove(path);
+
+        var schemas = Rig?.Library.Schemas?.Documents.Select(document => document.Name).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+        UserControls.Clear();
+        foreach (var path in paths)
+        {
+            foreach (var control in _libraries[path]?.Controls ?? [])
+                UserControls.Add(new UserControlItem(control, Path.GetFileName(path), schemas.Contains(control.NodeDef.Namespace)));
+        }
+        OnPropertyChanged(nameof(HasUserControls));
+
+        ControlLibrary? ReadLibrary(string path)
+        {
+            var what = $"Library '{Path.GetFileName(path)}'";
+            if (!Path.IsPathRooted(path))
+            {
+                Report(what, $"'{path}' is relative to the rig, which is not saved yet: its user controls are not shown.");
+                return null;
+            }
+            try
+            {
+                return ControlLibraryFile.Read(File.ReadAllText(path), FileFormats.FromPath(path));
+            }
+            catch (Exception exception) when (exception is FileFormatException or IOException or UnauthorizedAccessException)
+            {
+                Report(what, $"'{path}' cannot be read: {exception.Message}");
+                return null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Adds a library of user controls to the rig (<see cref="Rig.Libraries"/>, relative to the rig file when it has
+    /// one), as an edit of the rig; its user controls are shown. A library the rig has is not added again.
+    /// </summary>
+    private void AddRigLibrary(IStorageFile file)
+    {
+        if (file.TryGetLocalPath() is not { } path)
+        {
+            Report($"'{file.Name}'", "a library is a file on this computer; here the file has no path.");
+            return;
+        }
+        var rig = _rig;
+        if (rig.Libraries.Any(other => FilePaths.AreSame(FilePaths.Resolve(other, RigOrigin.Directory), path)))
+        {
+            Status = $"The rig has the library '{file.Name}'.";
+            return;
+        }
+        var reference = RigOrigin.Directory is { } directory ? FilePaths.RelativeTo(path, directory) : path;
+        if (DoRigEdit(new ValueEdit<IReadOnlyList<string>>("libraries of the rig", () => rig.Libraries, value => rig.Libraries = value, [.. rig.Libraries, reference])))
+            Status = $"Library '{file.Name}' added to the rig: {_libraries.GetValueOrDefault(path)?.Controls.Count ?? 0} user control(s). Save the rig to keep it.";
+    }
+
     /// <summary>The schemas of the library a device can be (with device data, see <see cref="SchemaLibrary.DeviceSchemas"/>).</summary>
     public IReadOnlyList<string> DeviceSchemas => Rig?.Library.DeviceSchemas ?? [];
 
@@ -349,6 +423,9 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
                 break;
             case ConsoleFileKind.Dump:
                 await LoadDump(file);
+                break;
+            case ConsoleFileKind.Library:
+                AddRigLibrary(file);
                 break;
             default:
                 await ShowMessage("CANNOT OPEN", $"'{file.Name}'",
@@ -761,11 +838,13 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         var entry = EntryOf(container);
         if (entry is null || entry.Session is not { } session)
             return;
+        var problems = new List<string>();
         var plan = item switch
         {
             ParameterDragItem parameter => ControlDrops.Drop(entry.Dashboard, session.Resolution, parameter.Source, container),
             ControlDragItem { Kind: ParameterControlKind kind } => new DropPlan { Control = ControlCatalog.Create(kind) },
             ControlDragItem { Kind: LayoutControlKind kind } => new DropPlan { Control = ControlCatalog.Create(kind) },
+            UserControlDragItem user => Place(user.Control),
             _ => null,
         };
         if (plan?.Control is not { } control || control.Size is not { } size)
@@ -784,6 +863,18 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
             return;
         SelectedControl = control;
         Status = $"'{ControlCatalog.NameOf(control)}' added to '{ControlCatalog.NameOf(container)}'{Declared(plan)}{Others(moved)}. Save to keep it.";
+        foreach (var problem in problems)
+            Report($"Place '{((UserControlDragItem)item).Control.Name}'", problem);
+
+        // a user control: a copy of its section, on the base around the drop (UserControlPlace)
+        DropPlan? Place(UserControlDefinition user)
+        {
+            if (Rig?.Library is not { } library)
+                return null;
+            var placed = UserControlPlace.Plan(entry.Dashboard, container, user, library);
+            problems.AddRange(placed.Problems);
+            return new DropPlan { Control = placed.Section };
+        }
     }
 
     /// <summary>Binds the first slot of a control to the field dropped on it, as one edit (<see cref="ControlDrops.Bind"/>).</summary>
@@ -879,6 +970,92 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     {
         if (IsEditing && SelectedControl is { } control)
             DeleteControl(control);
+    }
+
+    /// <summary>Tells that a schema path of the rig tree was copied to the clipboard, or that there is no clipboard.</summary>
+    public void ReportCopy(string path, bool copied)
+    {
+        if (copied)
+            Status = $"Copied '{path}'.";
+        else
+            Report("Copy path", $"there is no clipboard here: '{path}' is not copied.");
+    }
+
+    /// <summary>True when the control can be saved as a user control: a section that is not the root of its dashboard.</summary>
+    public bool CanSaveAsUserControl(DashboardControl control)
+        => control is LayoutControl { Kind: LayoutControlKind.Section } && !IsRoot(control);
+
+    /// <summary>
+    /// Saves a section as a user control (<see cref="UserControlSave"/>; named by its label) in the first library of the
+    /// rig; a rig without a library gets a new one where the user picks (a change of the rig). A user control with the
+    /// same name is replaced. A section that does not fit a user control is reported and not saved. The library file is
+    /// written at once; the dashboard does not change.
+    /// </summary>
+    public async Task SaveAsUserControl(LayoutControl section)
+    {
+        ArgumentNullException.ThrowIfNull(section);
+        var what = $"Save '{ControlCatalog.NameOf(section)}' as user control";
+        if (EntryOf(section)?.Dashboard is not { } dashboard || Rig?.Library is not { } library)
+            return;
+        var plan = UserControlSave.Plan(dashboard, section, library);
+        foreach (var problem in plan.Problems)
+            Report(what, problem);
+        if (plan.Control is not { } control)
+            return;
+
+        // the library: the first of the rig, or a new one
+        var rig = _rig;
+        string path;
+        ControlLibrary controls;
+        if (rig.Libraries.Count > 0)
+        {
+            path = FilePaths.Resolve(rig.Libraries[0], RigOrigin.Directory);
+            if (!Path.IsPathRooted(path))
+            {
+                Report(what, $"the library '{rig.Libraries[0]}' is relative to the rig, which is not saved yet: save the rig first.");
+                return;
+            }
+            try
+            {
+                controls = File.Exists(path) ? ControlLibraryFile.Read(await File.ReadAllTextAsync(path), FileFormats.FromPath(path)) : new ControlLibrary();
+            }
+            catch (Exception exception) when (exception is FileFormatException or IOException or UnauthorizedAccessException)
+            {
+                Report(what, $"the library '{path}' cannot be read: {exception.Message}");
+                return;
+            }
+        }
+        else
+        {
+            if (await PickSaveFile(ConsoleFileKind.Library, "User controls.library.xml") is not { } file)
+                return;
+            if (file.TryGetLocalPath() is not { } local)
+            {
+                Report(what, "a library is a file on this computer; here the file has no path.");
+                return;
+            }
+            path = local;
+            controls = new ControlLibrary();
+        }
+
+        var replaced = controls.Put(control);
+        try
+        {
+            await File.WriteAllTextAsync(path, ControlLibraryFile.Write(controls, FileFormats.FromPath(path)));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            Report(what, $"the library '{path}' cannot be saved: {exception.Message}");
+            return;
+        }
+
+        if (rig.Libraries.Count == 0)
+        {
+            var reference = RigOrigin.Directory is { } directory ? FilePaths.RelativeTo(path, directory) : path;
+            DoRigEdit(new ValueEdit<IReadOnlyList<string>>("libraries of the rig", () => rig.Libraries, value => rig.Libraries = value, [reference]));
+        }
+        LoadLibraries(reread: true);
+        Status = $"User control '{control.Name}' ({control.NodeDef}) {(replaced ? "replaced in" : "saved in")} '{Path.GetFileName(path)}'.";
     }
 
     /// <summary>Takes a control and the controls inside it out of its dashboard, as one edit; the root stays.</summary>
@@ -1443,7 +1620,11 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     }
 
     // every rig session that is opened is connected, when MIDI is
-    partial void OnRigChanged(RigSession? value) => Midi.SetRig(value);
+    partial void OnRigChanged(RigSession? value)
+    {
+        Midi.SetRig(value);
+        LoadLibraries();
+    }
 
     // the changes the user makes to the values of the rig's devices are sent to them
     partial void OnRigChanged(RigSession? oldValue, RigSession? newValue)
@@ -1965,7 +2146,7 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     {
         if (SelectedDashboard is not { Dashboard: var dashboard, Origin: var origin })
             return false;
-        return await SaveFile(ConsoleFileKind.Dashboard, origin, saveAs, [dashboard.Sources], (format, directory) =>
+        return await SaveFile(ConsoleFileKind.Dashboard, origin, saveAs, dashboard.Sources.All, (format, directory) =>
         {
             // the dashboard is made with the open rig: it refers to it, when both have a place
             if (LocalPath(RigOrigin) is { } rig && directory is not null)
@@ -1977,12 +2158,12 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
     private async Task<bool> WriteRig(bool saveAs)
     {
         var rig = _rig;
-        return await SaveFile(ConsoleFileKind.Rig, RigOrigin, saveAs, [rig.Sources], (format, _) => RigFile.Write(rig, format));
+        return await SaveFile(ConsoleFileKind.Rig, RigOrigin, saveAs, rig.Sources.All.Concat(rig.Libraries), (format, _) => RigFile.Write(rig, format));
     }
 
     // writes a file to where it was read from, or where the user picks (Save as, or a file not saved before);
     // the format follows the extension
-    private async Task<bool> SaveFile(ConsoleFileKind kind, FileOrigin origin, bool saveAs, IReadOnlyList<SchemaSources> sources, Func<FileFormat, string?, string> write)
+    private async Task<bool> SaveFile(ConsoleFileKind kind, FileOrigin origin, bool saveAs, IEnumerable<string> references, Func<FileFormat, string?, string> write)
     {
         var file = saveAs || origin.File is null ? await PickSaveFile(kind, origin.Name) : origin.File;
         if (file is null)
@@ -2005,9 +2186,9 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
         }
 
         var saved = FileOrigin.Of(file);
-        // relative source paths are read relative to the file: in another folder they point elsewhere
-        if (saved.Directory != origin.Directory && sources.Any(source => source.All.Any(path => !Path.IsPathRooted(path))))
-            Inform($"'{file.Name}'", $"it refers to schema files, exchange files or assemblies by a relative path, which is now relative to {saved.Directory ?? "the new location"}.");
+        // relative paths of the files it refers to are read relative to the file: in another folder they point elsewhere
+        if (saved.Directory != origin.Directory && references.Any(path => !Path.IsPathRooted(path)))
+            Inform($"'{file.Name}'", $"it refers to schema files, exchange files, assemblies or libraries by a relative path, which is now relative to {saved.Directory ?? "the new location"}.");
         origin.File = file;
         origin.Name = saved.Name;
         origin.Directory = saved.Directory;

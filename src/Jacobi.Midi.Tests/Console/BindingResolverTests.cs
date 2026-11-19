@@ -30,10 +30,11 @@ public class BindingResolverTests
     }
 
     [Fact]
-    public void NearestBase_Wins_BasesDoNotStack()
+    public void BaseWithItsOwnDevice_IsAFullPath()
     {
         var knob = new ValueControl(ParameterControlKind.Knob)
         {
+            Device = "synth",
             Base = "AddressMap.Edit.Amp",
             Bindings = new Dictionary<string, Binding> { [SlotNames.Value] = new("Level") },
         };
@@ -42,6 +43,31 @@ public class BindingResolverTests
         var binding = Assert.Single(BindingResolver.Resolve(dashboard).Bindings);
 
         Assert.Equal("AddressMap.Edit.Amp.Level", binding.Parameter!.Path);
+    }
+
+    [Fact]
+    public void RelativeBase_IsAppendedToTheBaseAround()
+    {
+        var knob = Knob(new Binding("Zones[2].Level"));
+        var inner = new LayoutControl { Kind = LayoutControlKind.Section, Base = "Program", Children = [knob] };
+        var dashboard = Dashboard(Section("synth", "AddressMap.Programs[5]", inner));
+
+        var resolution = BindingResolver.Resolve(dashboard);
+
+        Assert.Empty(resolution.Problems);
+        var binding = Assert.Single(resolution.Bindings);
+        Assert.Equal(new ParameterReference("synth", "AddressMap.Programs.Program.Zones.Level", new InstancePath([5, 2])), binding.Parameter);
+    }
+
+    [Fact]
+    public void BaseWithoutABaseAround_IsAFullPath()
+    {
+        var inner = new LayoutControl { Kind = LayoutControlKind.Section, Base = "AddressMap.Edit.Filter", Children = [Knob(new Binding("Cutoff"))] };
+        var dashboard = Dashboard(Section("synth", null, inner));
+
+        var binding = Assert.Single(BindingResolver.Resolve(dashboard).Bindings);
+
+        Assert.Equal("AddressMap.Edit.Filter.Cutoff", binding.Parameter!.Path);
     }
 
     [Fact]

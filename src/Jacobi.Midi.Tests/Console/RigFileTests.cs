@@ -18,6 +18,7 @@ public class RigFileTests
           <assembly path="Acme.Midi.dll" />
           <schema path="C:/Schemas/Acme.xml" />
           <exchange path="C:/Schemas/Acme.exchange.xml" />
+          <library path="Effects.library.xml" />
           <device alias="synth" name="Acme S-1" schema="Acme" color="#3D8BFD">
             <deviceValue name="deviceId" value="0x10" />
             <deviceValue name="groupId" value="7F1CH" />
@@ -33,6 +34,7 @@ public class RigFileTests
           "assemblies": [ "Acme.Midi.dll" ],
           "schemas": [ "C:/Schemas/Acme.xml" ],
           "exchanges": [ "C:/Schemas/Acme.exchange.xml" ],
+          "libraries": [ "Effects.library.xml" ],
           "devices": [
             {
               "alias": "synth", "name": "Acme S-1", "schema": "Acme", "color": "#3D8BFD",
@@ -52,6 +54,7 @@ public class RigFileTests
         Assert.Equal(["Acme.Midi.dll"], rig.Sources.Assemblies);
         Assert.Equal(["C:/Schemas/Acme.xml"], rig.Sources.Schemas);
         Assert.Equal(["C:/Schemas/Acme.exchange.xml"], rig.Sources.Exchanges);
+        Assert.Equal(["Effects.library.xml"], rig.Libraries);
         Assert.Equal(2, rig.Devices.Count);
 
         var synth = rig.Find("SYNTH")!;
@@ -157,6 +160,8 @@ public class RigFileTests
     [InlineData("""<rig format="jacobi.midi.rig/1"><device alias="a" /></rig>""", "'schema' is required")]
     [InlineData("""<rig format="jacobi.midi.rig/1"><device alias="a" schema="X" /><device alias="a" schema="Y" /></rig>""", "used more than once")]
     [InlineData("""<rig format="jacobi.midi.rig/1"><dashboard /></rig>""", "a rig cannot contain 'dashboard'")]
+    [InlineData("""<rig format="jacobi.midi.rig/1"><library path="A.library.xml" /><library path="a.LIBRARY.xml" /></rig>""", "referred to more than once")]
+    [InlineData("""<rig format="jacobi.midi.rig/1"><library /></rig>""", "'path' is required")]
     public void Read_ReportsAnInvalidRig(string xml, string message)
     {
         var exception = Assert.Throws<FileFormatException>(() => RigFile.Read(xml, FileFormat.Xml));

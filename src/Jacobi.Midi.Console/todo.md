@@ -11,15 +11,24 @@ What is planned for the console, and what was done. What the console does now is
 - [x] Add option to have tabs be Selector control.
 - [x] Edit/Play switch also switches when pressing on the selected option. When in Play, clicking on Play switches to Edit.
 - [x] A dashboard file should have references to its dependent files and assembly resources. Loading a dashboard file should make everything work and prompt the user if files cannot be found.
+- [ ] Copy path on rig-tree is obscured by two up/down buttons.
 - [ ] A rig (or dashboard) whose schema files or assemblies are not found: prompt the user to locate them, and refer to them there.
 - [x] A rig-device does not need its own schema/exchange files. A device can only be created from an existing (global) schema/exchange definition.
 - [ ] Additional Section options as an (settings) option (default off):
   - [x] collapse/expand
   - [ ] Side (top/bottom) panel slide-in
   - [ ] Dockable/Float (in main window) / New Window
-- [ ] Analyze option to make a dashboard design on a NodeDef and let the user select the actual base (incl exchange send/recv). Example: Patch-dashboard can be used on user-memory, preset (read-only) and temporary areas - because they all use the Patch definition.
 - [ ] Add an option to select the schema files and assemblies to load on startup. Saved in (user) settings file.
-- [ ] Dashboard user-controls: A reusable layout that can be dropped in to compose new dashboards.
+- [ ] Add droplist to device on control properties. List all devices in rig.
+- [x] Analyze option to make a dashboard design on a NodeDef and let the user select the actual base (incl exchange send/recv). Example: Patch-dashboard can be used on user-memory, preset (read-only) and temporary areas - because they all use the Patch definition.
+- [ ] Dashboard user-controls: A reusable layout that can be dropped in to compose new dashboards. (see decision *User controls in the console* in [decisions.md](../../docs/decisions.md))
+  - [x] Relative base: a `base` starting with `.` is relative to the base around it, on any section.
+  - [x] Relative base without the `.`: a base follows the rule of a binding (relative without its own device); the example dashboards converted.
+  - [x] *Copy path* in the context menu of the rig tree.
+  - [x] Library file: a file kind with many user controls (name, contract: schema + nodeDef, one section); the rig refers to the library files.
+  - [x] Save as user control on a section: the nodeDef from the base's schema node, bases and bindings made relative; bindings with their own device and outer index variables are reported. The first creates the library file; a user control with the same name is replaced.
+  - [x] Place a user control: a section of user controls in the edit pane; dropped as a section (without label) with the `device` and `base` of the target; the nodeDef is checked on placing.
+  - [x] The section of a user control keeps the last node of its base (relative); placed, its full base is the target's base followed by that node, where the nodeDef is checked.
 - [x] Dashoboard name in top-bar droplist is not changed after name change in props-pane or file save.
 - [x] Make the Selector's presentation Droplist or radio-buttons an explicit option.
 - [x] Control label Tooltip cuts of last letter(s)?

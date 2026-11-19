@@ -2,7 +2,7 @@
   <device alias="generalmidisynth" schema="GeneralMIDISynth" />
   <grid size="56,223">
     <section label="DeviceInfo" size="46,34" at="0,0" device="generalmidisynth" base="DeviceInfo">
-      <section label="manufacturerId" size="13,10" at="0,0" base="DeviceInfo.manufacturerId[$manufacturerId]">
+      <section label="manufacturerId" size="13,10" at="0,0" base="manufacturerId[$manufacturerId]">
         <variable name="manufacturerId" value="0" />
         <numberBox label="manufacturerId" size="6,4" at="0,0">
           <bind slot="value" parameter="$manufacturerId" />
@@ -11,7 +11,7 @@
           <bind slot="value" parameter="item" />
         </knob>
       </section>
-      <section label="familyId" size="13,10" at="13,0" base="DeviceInfo.familyId[$familyId]">
+      <section label="familyId" size="13,10" at="13,0" base="familyId[$familyId]">
         <variable name="familyId" value="0" />
         <numberBox label="familyId" size="6,4" at="0,0">
           <bind slot="value" parameter="$familyId" />
@@ -20,7 +20,7 @@
           <bind slot="value" parameter="item" />
         </knob>
       </section>
-      <section label="modelId" size="13,10" at="26,0" base="DeviceInfo.modelId[$modelId]">
+      <section label="modelId" size="13,10" at="26,0" base="modelId[$modelId]">
         <variable name="modelId" value="0" />
         <numberBox label="modelId" size="6,4" at="0,0">
           <bind slot="value" parameter="$modelId" />
@@ -29,7 +29,7 @@
           <bind slot="value" parameter="item" />
         </knob>
       </section>
-      <section label="versionId" size="13,10" at="0,10" base="DeviceInfo.versionId[$versionId]">
+      <section label="versionId" size="13,10" at="0,10" base="versionId[$versionId]">
         <variable name="versionId" value="0" />
         <numberBox label="versionId" size="6,4" at="0,0">
           <bind slot="value" parameter="$versionId" />
@@ -53,7 +53,7 @@
       <text size="9,4" at="9,20">
         <bind slot="value" parameter="serialNumber" />
       </text>
-      <section label="links" size="44,7" at="0,24" base="DeviceInfo.links[$links]">
+      <section label="links" size="44,7" at="0,24" base="links[$links]">
         <variable name="links" value="0" />
         <numberBox label="links" size="6,4" at="0,0">
           <bind slot="value" parameter="$links" />
@@ -73,7 +73,7 @@
       </section>
     </section>
     <section label="ChannelList" size="51,37" at="0,34" device="generalmidisynth" base="ChannelList">
-      <section label="items" size="49,34" at="0,0" base="ChannelList.items[$items]">
+      <section label="items" size="49,34" at="0,0" base="items[$items]">
         <variable name="items" value="0" />
         <numberBox label="items" size="6,4" at="0,0">
           <bind slot="value" parameter="$items" />
@@ -87,7 +87,7 @@
         <text size="9,4" at="20,0">
           <bind slot="value" parameter="programTitle" />
         </text>
-        <section label="bankPC" size="13,10" at="29,0" base="ChannelList.items[$items].bankPC[$bankPC]">
+        <section label="bankPC" size="13,10" at="29,0" base="bankPC[$bankPC]">
           <variable name="bankPC" value="0" />
           <numberBox label="bankPC" size="6,4" at="0,0">
             <bind slot="value" parameter="$bankPC" />
@@ -108,7 +108,7 @@
         <selector size="6,4" at="10,10">
           <bind slot="value" parameter="clusterType" />
         </selector>
-        <section label="links" size="44,7" at="0,17" base="ChannelList.items[$items].links[$links]">
+        <section label="links" size="44,7" at="0,17" base="links[$links]">
           <variable name="links" value="0" />
           <numberBox label="links" size="6,4" at="0,0">
             <bind slot="value" parameter="$links" />
@@ -141,9 +141,9 @@
       </section>
     </section>
     <section label="ProgramList" size="53,66" at="0,71" device="generalmidisynth" base="ProgramList">
-      <section label="resId" size="51,63" at="0,0" base="ProgramList.resId">
-        <section label="melodic" size="49,30" at="0,0" base="ProgramList.resId.melodic">
-          <section label="items" size="47,27" at="0,0" base="ProgramList.resId.melodic.items[$items]">
+      <section label="resId" size="51,63" at="0,0" base="resId">
+        <section label="melodic" size="49,30" at="0,0" base="melodic">
+          <section label="items" size="47,27" at="0,0" base="items[$items]">
             <variable name="items" value="0" />
             <numberBox label="items" size="6,4" at="0,0">
               <bind slot="value" parameter="$items" />
@@ -151,7 +151,7 @@
             <text size="9,4" at="6,0">
               <bind slot="value" parameter="title" />
             </text>
-            <section label="bankPC" size="13,10" at="15,0" base="ProgramList.resId.melodic.items[$items].bankPC[$bankPC]">
+            <section label="bankPC" size="13,10" at="15,0" base="bankPC[$bankPC]">
               <variable name="bankPC" value="0" />
               <numberBox label="bankPC" size="6,4" at="0,0">
                 <bind slot="value" parameter="$bankPC" />
@@ -160,7 +160,7 @@
                 <bind slot="value" parameter="item" />
               </knob>
             </section>
-            <section label="category" size="17,7" at="28,0" base="ProgramList.resId.melodic.items[$items].category[$category]">
+            <section label="category" size="17,7" at="28,0" base="category[$category]">
               <variable name="category" value="0" />
               <numberBox label="category" size="6,4" at="0,0">
                 <bind slot="value" parameter="$category" />
@@ -169,7 +169,7 @@
                 <bind slot="value" parameter="item" />
               </text>
             </section>
-            <section label="tags" size="17,7" at="0,10" base="ProgramList.resId.melodic.items[$items].tags[$tags]">
+            <section label="tags" size="17,7" at="0,10" base="tags[$tags]">
               <variable name="tags" value="0" />
               <numberBox label="tags" size="6,4" at="0,0">
                 <bind slot="value" parameter="$tags" />
@@ -178,7 +178,7 @@
                 <bind slot="value" parameter="item" />
               </text>
             </section>
-            <section label="links" size="44,7" at="0,17" base="ProgramList.resId.melodic.items[$items].links[$links]">
+            <section label="links" size="44,7" at="0,17" base="links[$links]">
               <variable name="links" value="0" />
               <numberBox label="links" size="6,4" at="0,0">
                 <bind slot="value" parameter="$links" />
@@ -198,8 +198,8 @@
             </section>
           </section>
         </section>
-        <section label="drums" size="49,30" at="0,30" base="ProgramList.resId.drums">
-          <section label="items" size="47,27" at="0,0" base="ProgramList.resId.drums.items[$items]">
+        <section label="drums" size="49,30" at="0,30" base="drums">
+          <section label="items" size="47,27" at="0,0" base="items[$items]">
             <variable name="items" value="0" />
             <numberBox label="items" size="6,4" at="0,0">
               <bind slot="value" parameter="$items" />
@@ -207,7 +207,7 @@
             <text size="9,4" at="6,0">
               <bind slot="value" parameter="title" />
             </text>
-            <section label="bankPC" size="13,10" at="15,0" base="ProgramList.resId.drums.items[$items].bankPC[$bankPC]">
+            <section label="bankPC" size="13,10" at="15,0" base="bankPC[$bankPC]">
               <variable name="bankPC" value="0" />
               <numberBox label="bankPC" size="6,4" at="0,0">
                 <bind slot="value" parameter="$bankPC" />
@@ -216,7 +216,7 @@
                 <bind slot="value" parameter="item" />
               </knob>
             </section>
-            <section label="category" size="17,7" at="28,0" base="ProgramList.resId.drums.items[$items].category[$category]">
+            <section label="category" size="17,7" at="28,0" base="category[$category]">
               <variable name="category" value="0" />
               <numberBox label="category" size="6,4" at="0,0">
                 <bind slot="value" parameter="$category" />
@@ -225,7 +225,7 @@
                 <bind slot="value" parameter="item" />
               </text>
             </section>
-            <section label="tags" size="17,7" at="0,10" base="ProgramList.resId.drums.items[$items].tags[$tags]">
+            <section label="tags" size="17,7" at="0,10" base="tags[$tags]">
               <variable name="tags" value="0" />
               <numberBox label="tags" size="6,4" at="0,0">
                 <bind slot="value" parameter="$tags" />
@@ -234,7 +234,7 @@
                 <bind slot="value" parameter="item" />
               </text>
             </section>
-            <section label="links" size="44,7" at="0,17" base="ProgramList.resId.drums.items[$items].links[$links]">
+            <section label="links" size="44,7" at="0,17" base="links[$links]">
               <variable name="links" value="0" />
               <numberBox label="links" size="6,4" at="0,0">
                 <bind slot="value" parameter="$links" />
@@ -257,9 +257,9 @@
       </section>
     </section>
     <section label="ChCtrlList" size="56,86" at="0,137" device="generalmidisynth" base="ChCtrlList">
-      <section label="resId" size="54,83" at="0,0" base="ChCtrlList.resId">
-        <section label="channel" size="52,40" at="0,0" base="ChCtrlList.resId.channel">
-          <section label="items" size="50,37" at="0,0" base="ChCtrlList.resId.channel.items[$items]">
+      <section label="resId" size="54,83" at="0,0" base="resId">
+        <section label="channel" size="52,40" at="0,0" base="channel">
+          <section label="items" size="50,37" at="0,0" base="items[$items]">
             <variable name="items" value="0" />
             <numberBox label="items" size="6,4" at="0,0">
               <bind slot="value" parameter="$items" />
@@ -273,7 +273,7 @@
             <selector size="6,4" at="24,0">
               <bind slot="value" parameter="ctrlType" />
             </selector>
-            <section label="ctrlIndex" size="13,10" at="30,0" base="ChCtrlList.resId.channel.items[$items].ctrlIndex[$ctrlIndex]">
+            <section label="ctrlIndex" size="13,10" at="30,0" base="ctrlIndex[$ctrlIndex]">
               <variable name="ctrlIndex" value="0" />
               <numberBox label="ctrlIndex" size="6,4" at="0,0">
                 <bind slot="value" parameter="$ctrlIndex" />
@@ -312,7 +312,7 @@
             <numberBox size="6,4" at="9,17">
               <bind slot="value" parameter="stepCount" />
             </numberBox>
-            <section label="minMax" size="13,10" at="15,17" base="ChCtrlList.resId.channel.items[$items].minMax[$minMax]">
+            <section label="minMax" size="13,10" at="15,17" base="minMax[$minMax]">
               <variable name="minMax" value="0" />
               <numberBox label="minMax" size="6,4" at="0,0">
                 <bind slot="value" parameter="$minMax" />
@@ -324,7 +324,7 @@
             <switch size="4,7" at="28,17">
               <bind slot="value" parameter="defaultCCMap" />
             </switch>
-            <section label="links" size="44,7" at="0,27" base="ChCtrlList.resId.channel.items[$items].links[$links]">
+            <section label="links" size="44,7" at="0,27" base="links[$links]">
               <variable name="links" value="0" />
               <numberBox label="links" size="6,4" at="0,0">
                 <bind slot="value" parameter="$links" />
@@ -344,8 +344,8 @@
             </section>
           </section>
         </section>
-        <section label="drums" size="52,40" at="0,40" base="ChCtrlList.resId.drums">
-          <section label="items" size="50,37" at="0,0" base="ChCtrlList.resId.drums.items[$items]">
+        <section label="drums" size="52,40" at="0,40" base="drums">
+          <section label="items" size="50,37" at="0,0" base="items[$items]">
             <variable name="items" value="0" />
             <numberBox label="items" size="6,4" at="0,0">
               <bind slot="value" parameter="$items" />
@@ -359,7 +359,7 @@
             <selector size="6,4" at="24,0">
               <bind slot="value" parameter="ctrlType" />
             </selector>
-            <section label="ctrlIndex" size="13,10" at="30,0" base="ChCtrlList.resId.drums.items[$items].ctrlIndex[$ctrlIndex]">
+            <section label="ctrlIndex" size="13,10" at="30,0" base="ctrlIndex[$ctrlIndex]">
               <variable name="ctrlIndex" value="0" />
               <numberBox label="ctrlIndex" size="6,4" at="0,0">
                 <bind slot="value" parameter="$ctrlIndex" />
@@ -398,7 +398,7 @@
             <numberBox size="6,4" at="9,17">
               <bind slot="value" parameter="stepCount" />
             </numberBox>
-            <section label="minMax" size="13,10" at="15,17" base="ChCtrlList.resId.drums.items[$items].minMax[$minMax]">
+            <section label="minMax" size="13,10" at="15,17" base="minMax[$minMax]">
               <variable name="minMax" value="0" />
               <numberBox label="minMax" size="6,4" at="0,0">
                 <bind slot="value" parameter="$minMax" />
@@ -410,7 +410,7 @@
             <switch size="4,7" at="28,17">
               <bind slot="value" parameter="defaultCCMap" />
             </switch>
-            <section label="links" size="44,7" at="0,27" base="ChCtrlList.resId.drums.items[$items].links[$links]">
+            <section label="links" size="44,7" at="0,27" base="links[$links]">
               <variable name="links" value="0" />
               <numberBox label="links" size="6,4" at="0,0">
                 <bind slot="value" parameter="$links" />

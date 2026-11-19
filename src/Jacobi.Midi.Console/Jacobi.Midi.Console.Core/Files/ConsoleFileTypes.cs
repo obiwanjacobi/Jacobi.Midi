@@ -7,6 +7,7 @@ public enum ConsoleFileKind
 {
     Rig,
     Dashboard,
+    Library,
     Schema,
     Exchange,
     Dump,
@@ -24,7 +25,7 @@ public sealed record ConsoleFileType(ConsoleFileKind Kind, string Name, string E
 
 /// <summary>
 /// The convention of the names of the files the console opens: the end of a file name tells its kind
-/// (<c>*.rig.xml</c>, <c>*.dashboard.json</c>, <c>*.schema.xml</c>, <c>*.exchange.xml</c>, <c>*.syx</c>, ...). The
+/// (<c>*.rig.xml</c>, <c>*.dashboard.json</c>, <c>*.library.xml</c>, <c>*.schema.xml</c>, <c>*.exchange.xml</c>, <c>*.syx</c>, ...). The
 /// single description of the file types, used by the file pickers and to tell the kind of a picked file.
 /// </summary>
 public static class ConsoleFileTypes
@@ -36,6 +37,8 @@ public static class ConsoleFileTypes
         new(ConsoleFileKind.Rig, "Rig (JSON)", ".rig.json"),
         new(ConsoleFileKind.Dashboard, "Dashboard (XML)", ".dashboard.xml"),
         new(ConsoleFileKind.Dashboard, "Dashboard (JSON)", ".dashboard.json"),
+        new(ConsoleFileKind.Library, "Library (XML)", ".library.xml"),
+        new(ConsoleFileKind.Library, "Library (JSON)", ".library.json"),
         new(ConsoleFileKind.Schema, "Schema (XML)", ".schema.xml"),
         new(ConsoleFileKind.Schema, "Schema (JSON)", ".schema.json"),
         .. ExchangeDefinitions.Extensions.Select(extension =>

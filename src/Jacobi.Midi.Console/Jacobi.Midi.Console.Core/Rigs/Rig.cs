@@ -16,8 +16,14 @@ public sealed class Rig
 
     public IReadOnlyList<DeviceInstance> Devices { get; set; } = [];
 
-    /// <summary>True when the rig has no devices and no sources: replacing it loses nothing.</summary>
-    public bool IsEmpty => Devices.Count == 0 && Sources.IsEmpty;
+    /// <summary>
+    /// The paths of the libraries of user controls (<see cref="Libraries.ControlLibrary"/>) for the dashboards of the
+    /// rig: relative to the rig file, or absolute.
+    /// </summary>
+    public IReadOnlyList<string> Libraries { get; set; } = [];
+
+    /// <summary>True when the rig has no devices, no sources and no libraries: replacing it loses nothing.</summary>
+    public bool IsEmpty => Devices.Count == 0 && Sources.IsEmpty && Libraries.Count == 0;
 
     /// <summary>The device instance with the alias (case-insensitive), or null.</summary>
     public DeviceInstance? Find(string alias)

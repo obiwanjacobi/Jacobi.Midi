@@ -30,7 +30,7 @@
       <selector size="6,4" at="19,0">
         <bind slot="value" parameter="audioOut" />
       </selector>
-      <section label="links" size="26,7" at="0,8" base="XGlobset.links[$links]">
+      <section label="links" size="26,7" at="0,8" base="links[$links]">
         <variable name="links" value="0" />
         <numberBox label="links" size="6,4" at="0,0">
           <bind slot="value" parameter="$links" />
@@ -44,8 +44,8 @@
       </section>
     </section>
     <section label="XProgramEdit" size="38,32" at="0,25" device="jacobitestdevice" base="XProgramEdit">
-      <grid label="resId" size="36,29" at="0,0" base="XProgramEdit.resId">
-        <section label="patch1" size="35,13" at="0,0" base="XProgramEdit.resId.patch1">
+      <grid label="resId" size="36,29" at="0,0" base="resId">
+        <section label="patch1" size="35,13" at="0,0" base="patch1">
           <text size="9,4" at="0,0">
             <bind slot="value" parameter="name" />
           </text>
@@ -55,7 +55,7 @@
           <selector size="6,4" at="14,0">
             <bind slot="value" parameter="lfoWaveform" />
           </selector>
-          <section label="rates" size="13,10" at="20,0" base="XProgramEdit.resId.patch1.rates[$rates]">
+          <section label="rates" size="13,10" at="20,0" base="rates[$rates]">
             <variable name="rates" value="0" />
             <numberBox label="rates" size="6,4" at="0,0">
               <bind slot="value" parameter="$rates" />
@@ -65,7 +65,7 @@
             </knob>
           </section>
         </section>
-        <section label="patch2" size="35,13" at="0,14" base="XProgramEdit.resId.patch2">
+        <section label="patch2" size="35,13" at="0,14" base="patch2">
           <text size="9,4" at="0,0">
             <bind slot="value" parameter="name" />
           </text>
@@ -75,7 +75,7 @@
           <selector size="6,4" at="14,0">
             <bind slot="value" parameter="lfoWaveform" />
           </selector>
-          <section label="rates" size="13,10" at="20,0" base="XProgramEdit.resId.patch2.rates[$rates]">
+          <section label="rates" size="13,10" at="20,0" base="rates[$rates]">
             <variable name="rates" value="0" />
             <numberBox label="rates" size="6,4" at="0,0">
               <bind slot="value" parameter="$rates" />

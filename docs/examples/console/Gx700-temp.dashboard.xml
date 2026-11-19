@@ -1,11 +1,11 @@
 <dashboard format="jacobi.midi.dashboard/1" name="GX-700" cellSize="20" look="Foundry" rig="Gx700.rig.xml">
   <device alias="gx700" schema="Gx700" receive="requestData" send="sendTemporary" />
   <grid label="GX-700" size="83,197" color="#6E8FB3" plateColor="#C9A55A" device="gx700" base="AddressMap.Temporary">
-    <section label="Common" size="48,21" at="0,0" base="AddressMap.Temporary.Common">
+    <section label="Common" size="48,21" at="0,0" base="Common">
       <knob size="5,7" at="0,0">
         <bind slot="value" parameter="OutputLevel" />
       </knob>
-      <section label="Chain" size="14,7" at="5,0" base="AddressMap.Temporary.Common.Chain[$chain]">
+      <section label="Chain" size="14,7" at="5,0" base="Chain[$chain]">
         <variable name="chain" value="0" />
         <numberBox label="Chain" size="6,4" at="0,0">
           <bind slot="value" parameter="$chain" />
@@ -17,7 +17,7 @@
       <text size="9,4" at="19,0">
         <bind slot="value" parameter="Name" />
       </text>
-      <section label="Assign" size="46,10" at="0,8" base="AddressMap.Temporary.Common.Assign[$assign]">
+      <section label="Assign" size="46,10" at="0,8" base="Assign[$assign]">
         <variable name="assign" value="0" />
         <numberBox label="Assign" size="6,4" at="0,0">
           <bind slot="value" parameter="$assign" />
@@ -45,7 +45,7 @@
         </knob>
       </section>
     </section>
-    <section label="Compressor" size="42,10" at="0,21" base="AddressMap.Temporary.Compressor">
+    <section label="Compressor" size="42,10" at="0,21" base="Compressor">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
@@ -71,7 +71,7 @@
         <bind slot="value" parameter="EffectLevel" />
       </knob>
     </section>
-    <section label="Wah" size="49,17" at="0,31" base="AddressMap.Temporary.Wah">
+    <section label="Wah" size="49,17" at="0,31" base="Wah">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
@@ -112,7 +112,7 @@
         <bind slot="value" parameter="EffectLevel" />
       </knob>
     </section>
-    <section label="OverdriveDistortion" size="32,10" at="0,48" base="AddressMap.Temporary.OverdriveDistortion">
+    <section label="OverdriveDistortion" size="32,10" at="0,48" base="OverdriveDistortion">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
@@ -132,7 +132,7 @@
         <bind slot="value" parameter="EffectLevel" />
       </knob>
     </section>
-    <section label="Preamp" size="46,11" at="0,58" base="AddressMap.Temporary.Preamp">
+    <section label="Preamp" size="46,11" at="0,58" base="Preamp">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
@@ -164,7 +164,7 @@
         <bind slot="value" parameter="Gain" />
       </selector>
     </section>
-    <section label="Loop" size="22,10" at="0,69" base="AddressMap.Temporary.Loop">
+    <section label="Loop" size="22,10" at="0,69" base="Loop">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
@@ -178,7 +178,7 @@
         <bind slot="value" parameter="Mode" />
       </selector>
     </section>
-    <section label="Equalizer" size="38,10" at="0,79" base="AddressMap.Temporary.Equalizer">
+    <section label="Equalizer" size="38,10" at="0,79" base="Equalizer">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
@@ -201,7 +201,7 @@
         <bind slot="value" parameter="Level" />
       </knob>
     </section>
-    <section label="SpeakerSimulator" size="27,10" at="0,89" base="AddressMap.Temporary.SpeakerSimulator">
+    <section label="SpeakerSimulator" size="27,10" at="0,89" base="SpeakerSimulator">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
@@ -218,7 +218,7 @@
         <bind slot="value" parameter="DirectLevel" />
       </knob>
     </section>
-    <section label="NoiseSuppressor" size="27,10" at="0,99" base="AddressMap.Temporary.NoiseSuppressor">
+    <section label="NoiseSuppressor" size="27,10" at="0,99" base="NoiseSuppressor">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
@@ -235,7 +235,7 @@
         <bind slot="value" parameter="EffectLevel" />
       </knob>
     </section>
-    <section label="Modulation" size="50,41" at="0,109" base="AddressMap.Temporary.Modulation">
+    <section label="Modulation" size="50,41" at="0,109" base="Modulation">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
@@ -353,7 +353,7 @@
       <knob size="5,7" at="20,28">
         <bind slot="value" parameter="TotalLevel" />
       </knob>
-      <section label="HarmonistScale" size="23,10" at="25,28" base="AddressMap.Temporary.Modulation.HarmonistScale[$harmonistScale]">
+      <section label="HarmonistScale" size="23,10" at="25,28" base="HarmonistScale[$harmonistScale]">
         <variable name="harmonistScale" value="0" />
         <numberBox label="HarmonistScale" size="6,4" at="0,0">
           <bind slot="value" parameter="$harmonistScale" />
@@ -369,7 +369,7 @@
         </knob>
       </section>
     </section>
-    <section label="Delay" size="49,17" at="0,150" base="AddressMap.Temporary.Delay">
+    <section label="Delay" size="49,17" at="0,150" base="Delay">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
@@ -422,7 +422,7 @@
         <bind slot="value" parameter="DirectLevel" />
       </knob>
     </section>
-    <section label="Chorus" size="49,10" at="0,167" base="AddressMap.Temporary.Chorus">
+    <section label="Chorus" size="49,10" at="0,167" base="Chorus">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
@@ -451,7 +451,7 @@
         <bind slot="value" parameter="EffectLevel" />
       </knob>
     </section>
-    <section label="TremoloPan" size="27,10" at="0,177" base="AddressMap.Temporary.TremoloPan">
+    <section label="TremoloPan" size="27,10" at="0,177" base="TremoloPan">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>
@@ -468,7 +468,7 @@
         <bind slot="value" parameter="Balance" />
       </knob>
     </section>
-    <section label="Reverb" size="49,10" at="0,187" base="AddressMap.Temporary.Reverb">
+    <section label="Reverb" size="49,10" at="0,187" base="Reverb">
       <switch size="4,7" at="0,0">
         <bind slot="value" parameter="On" />
       </switch>

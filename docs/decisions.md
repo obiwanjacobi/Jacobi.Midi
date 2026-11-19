@@ -3,6 +3,56 @@
 The user design decisions made for the project, per topic: the issue, the decided direction and briefly why. The code
 is the source of truth for how a decision was implemented; this file keeps the *why*.
 
+## User controls in the console (2026-11-18)
+
+Issue: a part of a dashboard (e.g. the controls of a GX-700 patch, or of one of its sections) is wanted in several
+places: the schema uses the same nodeDef for several nodes (`patch` for the user, preset and temporary patches). A
+**user control** is a collection of controls that is defined once and placed on dashboards, bound to a target that
+must match.
+
+1. **A placed user control is a template:** placing it copies its controls; a later change of the user control does
+   not change the placements. *Why:* close to what copying a section and changing its `base` already does; no live
+   link to maintain. A placed user control keeps no reference to its file. *Why:* nothing needs it.
+   **A placed user control stays a unit: a plain section** (with the label of the section it was saved from, which is
+   also the user control's name) holds the copied controls; the `device`
+   and (full) `base` of the placement are set on it like on any section, and changing its `base` rebases it. It has no marker
+   (no contract) of its own. *Why:* the user keeps working with it as a whole; loose controls cannot be turned back
+   into a unit later without much refactoring; a plain section needs no new concept in the dashboard.
+   **The section keeps the last node of its base** (with its repeat index, e.g. `Compressor` or `Chain[$chain]`) as a
+   base relative to the placement; the contract stays the nodeDef of that node, checked at the base around the drop
+   followed by that node. A section without a base of its own keeps none. *Why:* the user control is dropped on the
+   node that holds it (e.g. a patch), not on the node itself; the contract stays the most specific node.
+2. **The contract of a user control is a nodeDef, kept in the user control file:** it is checked when the user control
+   is placed (the schema node at the base has that nodeDef). A later change of the section's `base` is checked by its
+   full paths existing. *Why:* explicit, and cheap to check (the schema node keeps its nodeDef); a placed section does
+   not need to know its origin.
+   **A placement that does not fit the contract is placed anyway:** the section gets no device and full base of its
+   own; it keeps the base of the user control (the node it keeps, relative to the base around it). Only a node that
+   exists with another nodeDef is reported when placing. A base or binding that does not resolve (no device or base
+   around it yet, not a node) is a problem of the dashboard: the binding resolution checks every base and binding on
+   each change, so it is gone once the base around it is set. *Why:* placing first and setting the base after is a
+   normal way of working; a one-time report would stay after it no longer applies. *Why:* refusing would require a section with exactly the right base to
+   drop it in first; rebasing is setting the base anyway.
+3. **A base follows the rule of a binding:** without its own device it is relative to the base around it (e.g.
+   `Compressor`); with its own device, or without a base around it, it is a full path from a root. So the bases inside
+   a user control are relative. The example dashboards were converted (no new format version). *Why:* the user control
+   does not know where it is placed; one rule for bases and bindings (an earlier notation with a leading `.` was
+   inconsistent with the bindings).
+4. **A binding with its own device is not allowed in a user control** (its file). *Why:* the device comes from the
+   placement; a fixed device would break the contract. Once placed, the section is the dashboard's.
+5. **Index variables do not cross the boundary:** the bindings in a user control (its file) use only the variables
+   declared inside it; an outer variable can only be used in the base it is placed on. *Why:* the user control is
+   self-contained.
+6. **User controls are kept in a library file: one file, many user controls,** referred to by the rig (next to its
+   schema sources). An opened library makes its user controls available in the console (in the edit pane). *Why:*
+   reused across dashboards; the rig already decides what is loaded. A dashboard does not depend on the library: a
+   placed user control is a copy.
+7. **A user control is made with "Save as" on a section:** the first one creates the library file, later ones are
+   added to it; a user control with the same name is replaced. Editing in the library itself is left for later.
+   *Why:* simplest start; a placed copy can be edited and saved again.
+8. **One mechanism:** the idea of a dashboard designed on a nodeDef whose base the user selects is covered by user
+   controls; there is no separate mechanism for it. *Why:* one place of truth.
+
 ## The LCARS look in the console (2026-11-17)
 
 Issue: a third look, after the LCARS-style control design (rounded caps, pastel bars, condensed capitals on black).

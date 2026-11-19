@@ -1,0 +1,30 @@
+<library format="jacobi.midi.library/1">
+  <userControl name="Compressor" nodeDef="Gx700.compressor">
+    <section label="Compressor" size="42,10" base="Compressor">
+      <switch size="4,7" at="0,0">
+        <bind slot="value" parameter="On" />
+      </switch>
+      <selector size="6,4" at="4,0">
+        <bind slot="value" parameter="Type" />
+      </selector>
+      <knob size="5,7" at="10,0">
+        <bind slot="value" parameter="Sustain" />
+      </knob>
+      <knob size="5,7" at="15,0">
+        <bind slot="value" parameter="Attack" />
+      </knob>
+      <knob size="5,7" at="20,0">
+        <bind slot="value" parameter="Threshold" />
+      </knob>
+      <knob size="5,7" at="25,0">
+        <bind slot="value" parameter="Release" />
+      </knob>
+      <knob size="5,7" at="30,0">
+        <bind slot="value" parameter="Tone" />
+      </knob>
+      <knob size="5,7" at="35,0">
+        <bind slot="value" parameter="EffectLevel" />
+      </knob>
+    </section>
+  </userControl>
+</library>

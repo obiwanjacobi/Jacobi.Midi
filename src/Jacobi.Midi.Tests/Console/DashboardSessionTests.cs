@@ -177,10 +177,10 @@ public class DashboardSessionTests
               <device alias="doc" schema="Documented" />
               <column device="doc" base="Settings">
                 <variable name="slot" value="0" />
-                <section label="Left" base="Settings.Left"><knob><bind slot="value" parameter="Level" /></knob></section>
+                <section label="Left" base="Left"><knob><bind slot="value" parameter="Level" /></knob></section>
                 <tabs>
-                  <grid label="Right" base="Settings.Right" />
-                  <grid label="Slot" base="Settings.Slot[$slot]" />
+                  <grid label="Right" base="Right" />
+                  <grid label="Slot" base="Slot[$slot]" />
                   <grid label="Inherited" />
                 </tabs>
               </column>

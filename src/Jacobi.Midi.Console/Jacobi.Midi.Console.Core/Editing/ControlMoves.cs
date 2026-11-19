@@ -5,8 +5,9 @@ namespace Jacobi.Midi.Console.Core.Editing;
 /// <summary>
 /// Plans what moving a control into another layout control changes so that its bindings, and those of the controls
 /// inside it, stay bound to the same parameters: the device, base and variables around it change
-/// (<see cref="BindingScope"/>). A moved layout control keeps the device and base it inherited (it gets them as its
-/// own); a binding that would point elsewhere is written again for its new place (<see cref="BindingScope.BindingOf"/>).
+/// (<see cref="BindingScope"/>). A moved layout control keeps the device and base it inherited, and a control its own
+/// base (relative to the base around it): they are written for the new place (<see cref="BindingScope.BaseOf"/>); a
+/// binding that would point elsewhere is written again for its new place (<see cref="BindingScope.BindingOf"/>).
 /// An index variable that is not declared around the new place (or is another variable there) cannot be kept: it is
 /// reported. Nothing is changed yet.
 /// </summary>
@@ -26,25 +27,39 @@ public static class ControlMoves
         var newOuter = BindingScope.Of(root, target)
             ?? throw new ArgumentException("The target is not in the dashboard.", nameof(target));
 
+        // a layout control keeps the device it inherited; a control with a base of its own keeps its (full) base, a
+        // layout control also the base it inherited: written for the new place (BindingScope.BaseOf)
         string? device = null, basePath = null;
-        if (control is LayoutControl)
+        var before = oldOuter.Inside(control);
+        var newInside = newOuter.Inside(control);
+        var needsDevice = control is LayoutControl && control.Device is null && before.Device is not null
+            && !String.Equals(before.Device, newOuter.Device, StringComparison.OrdinalIgnoreCase);
+        var keepsBase = before.Base is not null && (control.Base is not null || control is LayoutControl);
+        if (keepsBase && control.Device is not null)
         {
-            if (control.Device is null && oldOuter.Device is not null && !String.Equals(oldOuter.Device, newOuter.Device, StringComparison.OrdinalIgnoreCase))
-                device = oldOuter.Device;
-            if (control.Base is null && oldOuter.Base is not null && oldOuter.Base != newOuter.Base)
-                basePath = oldOuter.Base;
+            if (newInside.Base != before.Base)
+                basePath = before.Base;
+        }
+        else if (keepsBase && before.Device is { } kept && (needsDevice || newInside.Base != before.Base))
+        {
+            (device, basePath) = newOuter.BaseOf(kept, before.Base!);
+        }
+        else if (needsDevice)
+        {
+            device = before.Device;
         }
 
         var slots = new List<SlotsChange>();
         var problems = new List<string>();
-        var newInside = newOuter.Inside(control);
-        newInside = newInside with { Device = device ?? newInside.Device, Base = basePath ?? newInside.Base };
-        Visit(control, oldOuter.Inside(control), newInside);
+        newInside = newInside with { Device = device ?? newInside.Device, Base = basePath is null ? newInside.Base : before.Base };
+        Visit(control, before, newInside);
         return new MovePlan { Device = device, Base = basePath, Slots = slots, Problems = problems };
 
         void Visit(DashboardControl current, BindingScope before, BindingScope after)
         {
-            if (current.Base is { } own && SchemaPaths.TryParse(own, _ => 0, out var parsedBase, out _))
+            // the variables in the (full) base of a control with a base of its own, or that gets one
+            var hasBase = current.Base is not null || (current == control && basePath is not null);
+            if (hasBase && SchemaPaths.TryParse(before.Base, _ => 0, out var parsedBase, out _))
                 CheckVariables(current, parsedBase.Variables.Select(use => use.Variable), before, after);
 
             if (current is ParameterControl parameter)

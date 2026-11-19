@@ -3,6 +3,7 @@ using Avalonia.Media;
 using Jacobi.Midi.Console.Core.Connections;
 using Jacobi.Midi.Console.Core.Devices;
 using Jacobi.Midi.Console.Core.Editing;
+using Jacobi.Midi.Console.Core.Libraries;
 using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Core.Parameters;
 using Jacobi.Midi.Console.Core.Rigs;
@@ -179,6 +180,21 @@ internal sealed record PaletteItem(Enum Kind, bool IsAvailable)
     public string Name => Kind.ToString();
 
     public string Tip => IsAvailable ? $"Drag onto the dashboard to add a {Name}" : $"Drag onto the dashboard to add a {Name}: it is shown as a placeholder until its face is made";
+
+    public double Opacity => IsAvailable ? 1 : 0.6;
+}
+
+/// <summary>
+/// A user control of a library of the rig in Edit mode, to drag onto a dashboard (placed as a copy). One whose nodeDef
+/// is of a schema the rig does not have (<see cref="IsAvailable"/>) is shown fainter: it cannot fit a base.
+/// </summary>
+internal sealed record UserControlItem(UserControlDefinition Control, string Library, bool IsAvailable)
+{
+    public string Name => Control.Name;
+
+    public string Tip => IsAvailable
+        ? $"Drag onto the dashboard to place a copy of '{Name}', on a base that is a '{Control.NodeDef}' ({Library})"
+        : $"'{Name}' is for a '{Control.NodeDef}', of a schema the rig does not have ({Library})";
 
     public double Opacity => IsAvailable ? 1 : 0.6;
 }

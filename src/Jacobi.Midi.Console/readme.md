@@ -155,7 +155,7 @@ itself. A file whose pages do not fit their tabs gets that when it is opened, an
 
 A layout control can set what its children inherit:
 
-- `device` and `base`: the device alias and the schema path that the bindings inside it are relative to. A section "Filter" with the base `AddressMap.Edit.Filter` holds knobs bound to `Cutoff` and `Resonance`. This is the same `base` a multi-slot control (the envelope) uses for its slots: one mechanism. A `base` is always a full path from a root of the device; bases do not stack.
+- `device` and `base`: the device alias and the schema path that the bindings inside it are relative to. A section "Filter" with the base `AddressMap.Edit.Filter` holds knobs bound to `Cutoff` and `Resonance`. This is the same `base` a multi-slot control (the envelope) uses for its slots: one mechanism. A `base` follows the rule of a binding: relative to the base around it (a section "Compressor" with the base `Compressor` inside a section with the base `AddressMap.Temporary` has the base `AddressMap.Temporary.Compressor`), a full path from a root of the device on a control with its own `device` or without a base around it (`BindingScope.FullBaseOf`). A section with bases inside it is moved to another part of the device by changing its own base only.
 - index variables: see below.
 - the palette: by default the palette of its `device` (see [Color](#color)).
 
@@ -338,7 +338,7 @@ A pick applies at once. The dashboard or the rig is then changed. The file menu 
 the end of the file's name tells its kind (`ConsoleFileTypes`), and the file picker has a filter for each:
 `*.rig.xml`/`*.rig.json` (a rig, in place of the open one), `*.dashboard.xml`/`*.dashboard.json` (a dashboard, next to
 the open ones), `*.schema.xml`/`*.schema.json` and `*.exchange.xml`/`*.exchange.json` (a schema or exchange file, into
-the rig: see *The device panel* in [Edit and Play](#edit-and-play)), `*.syx` (a dump, offline only). A file whose name ends otherwise is not
+the rig: see *The device panel* in [Edit and Play](#edit-and-play)), `*.syx` (a dump, offline only), `*.library.xml`/`*.library.json` (a [library](#library) of user controls, into the rig: its user controls are shown in Edit mode). A file whose name ends otherwise is not
 opened: a message box tells why, and so does a dump opened with MIDI. *Load assembly…* loads an assembly into the rig
 with all it embeds (schemas, exchange files, processors). *Save › Dashboard* or *Rig* writes *Save › Dashboard* or *Rig* writes
 that one, *Save › All* (Ctrl+S) writes the selected dashboard and the rig when they changed, *Save as* writes one of them to
@@ -397,6 +397,8 @@ In *Edit* mode:
 - dragging a control in a grid or section moves it, dragging the handle at the bottom right of the selection sizes it, by whole cells, not smaller than its controls need (the handle takes the press before the controls inside the selection); the control follows the pointer and is placed when it is let go (controls in the way are pushed down, grids grow); the cells of the grid the selected control is in are drawn over it, with the column and row numbers every five cells;
 - dragging a control over another grid, section, row, column or tabs moves it into it; its bindings stay bound to the same parameters (`ControlMoves`: a moved layout control keeps the device and base it inherited, a binding that would point elsewhere is written again; a variable that is not around its new place is reported). A palette item dropped in a grid or section goes to the cell under the pointer, elsewhere after the other controls;
 - Delete (or *Delete* in the panel) deletes the selected control and the controls inside it; the root stays, and so does the only page of selector tabs;
+- *USER CONTROLS* in the left panel shows the user controls of the rig's libraries (read when the rig refers to them; one whose nodeDef is of a schema the rig does not have is fainter). Dragged onto the dashboard, a copy of its section is placed (`UserControlPlace`). Its full base there is the base of the layout control it is dropped in, followed by the node the section keeps as its base (if any, e.g. `Compressor`). When that is a node with the user control's nodeDef, the section gets the device and that full base as its own. Otherwise it is placed as in the user control (no device, its node as a relative base): only a node with another nodeDef is reported when placing; a base or binding that does not resolve yet (e.g. dropped on a grid without device and base) is a problem of the dashboard, checked again on each change, so it goes away once the base around it is set. A placed user control is an ordinary section; changing its base moves it, with the bases inside it, to another node;
+- *Save as user control* in the panel of a section saves a copy of it as a user control in the rig's first [library](#library) (a rig without one gets a new library file the user picks: a change of the rig); a user control with the same name is replaced. Its name is the section's label, its contract the nodeDef of the schema node at the section's base (`UserControlSave`); the copy keeps the label and the last node of its base (e.g. `Compressor` of `AddressMap.Temporary.Compressor`; none when the section has no base of its own), but has no position or device, and its bases and bindings are made relative. A control or binding of another device, a base or binding outside the section's base and an index variable declared outside the section are reported, and nothing is saved. The dashboard does not change;
 - tabs and selector tabs: a click on a tab header shows its page and selects it, a click on the header of the selected page selects the tabs themselves (their headers may cover a small control); the page shown stays shown when the dashboard is built again, and selecting a control shows the pages it is on. Drop on the page to add to it; on the headers of tabs to add a page, on those of selector tabs a field binds them. A page has no handle: it has the size of its tabs; a page of selector tabs is not moved out of them either;
 - a label or separator has only an accent: it is drawn in the look's text or outline color until it is given a color (right-click, or the panel);
 - the left and right panels are sized with the splitters between them and the dashboard (at least 180 pixels; kept while Play mode closes them).
@@ -411,6 +413,7 @@ any of its repeat items is bound to, and fainter, a device, group or repeat with
 
 - Dragging a field onto the dashboard creates the suggested control (`ControlCatalog.Suggest`: options a selector, a `sys.bool` a switch, a string a text, a number with a range a knob, else a number box), bound to it.
 - Dragging a group, a repeat or a device creates a section with its `device` and `base`, a control per field and a nested section per group, laid out by `GridLayout.Complete`.
+- The context menu of a node of the rig tree (right-click) has *Copy path*: its schema path from its root, without repeat indices (`AddressMap.Memory.Patch.Compressor`), to paste in a base or binding.
 - Dropping a field on a parameter control binds its slot (`ControlDrops`). A binding is relative to the base around it when it can be (`BindingScope.BindingOf`).
 - A repeat in the path gets the index the base around it gives, else an index variable in scope that indexes the same repeat (`BindingResolution.Repeats`), else a new variable named after the repeat: on the nearest grid or section around a dropped field, on the new section of a dropped group with a number box bound to it.
 - A device the dashboard does not list yet is added.
@@ -621,6 +624,7 @@ The same rig in XML:
 ```
 
 - `assemblies`, `schemas`, `exchanges`: on the rig for all its devices (see [Schemas](#schemas)); a relative path is relative to the rig file. A dashboard has them too; a device does not (reported when it has).
+- `libraries`: the libraries of user controls for the dashboards of the rig (see [Library](#library)); a relative path is relative to the rig file. Only on the rig.
 - `deviceValues`: in the notation of the schemas (`0x10`, `10H` or decimal); written in hex.
 - `endpoint`: the endpoint is matched by its **name** and UMP group (0-15 in the file, shown as 1-16). Endpoint ids are not portable (native Windows ids) and do not identify an instrument behind a DIN port. When no endpoint with that name is found, the device is shown as not connected and the user can pick another endpoint.
 - `color`, `plateColor`, `panelColor`: the colors of the device's controls (see [Color](#color)).
@@ -705,14 +709,36 @@ The same dashboard in XML:
 - `size` (columns,rows) and, inside a grid or section, `at` (column,row) are written for every control; a file without them gets them when it is opened (see [Layout controls](#layout-controls)). `grow` is only used inside a row or column.
 - Every file names its kind and version in `format`; a file of another kind or version is not read.
 
+### Library
+
+A library holds **user controls**: sections of controls that are defined once and placed on dashboards as a copy
+(see the decision *User controls in the console* in [decisions.md](../../docs/decisions.md)). One file, many user
+controls; the rig refers to it (`libraries`). A user control is made with *Save as user control* on a section, and
+placed from *USER CONTROLS* in the left panel (see [Edit and Play](#edit-and-play)).
+
+```xml
+<library format="jacobi.midi.library/1">
+  <userControl name="Filter" nodeDef="Acme.filter">
+    <section size="12,10">
+      <knob label="Cutoff" at="0,0" size="5,7"><bind slot="value" parameter="Cutoff" /></knob>
+      <section label="Envelope" at="6,0" size="6,10" base="Env">...</section>
+    </section>
+  </userControl>
+</library>
+```
+
+- `name`: unique in the library (case-insensitive).
+- `nodeDef`: the contract, the full name of a nodeDef (`document.nodeDef`): the user control is placed on a base whose schema node has that nodeDef.
+- The section is written as in a dashboard (`DashboardFile`) and must fit a user control (`UserControlDefinition.Check`): it has no `device` and its `base` is at most one node (the placement gives the device and the base around it), no control or binding inside it has a device of its own (so its bases and bindings are relative), and the bindings and bases use only the index variables declared inside it.
+
 ### One model, two formats
 
-The model is independent of the format (`RigFile`, `DashboardFile`). The mappers turn the model into a tree of
+The model is independent of the format (`RigFile`, `DashboardFile`, `ControlLibraryFile`). The mappers turn the model into a tree of
 format-neutral elements (a name, attributes and child elements) and back; one XML and one JSON implementation turn
 such a tree into text and back:
 
 - In **XML** an element is an element: its attributes are attributes, its children child elements, without wrappers.
-- In **JSON** an element is an object: its attributes are properties, its children are grouped in a property by their role (`children`, `segments`, `devices`, `variables` as arrays; `layout`, `endpoint`, `options` as an object; `bind`, `deviceValues` as an object of key and value; `assemblies`, `schemas`, `exchanges` as an array of values). Elements of different kinds in one role (the controls) give their kind in `type`. These roles are listed in one place (`FileRoles`).
+- In **JSON** an element is an object: its attributes are properties, its children are grouped in a property by their role (`children`, `segments`, `devices`, `variables` as arrays; `layout`, `endpoint`, `options` as an object; `bind`, `deviceValues` as an object of key and value; `assemblies`, `schemas`, `exchanges`, `libraries` as an array of values; `userControls` as an array). Elements of different kinds in one role (the controls) give their kind in `type`. These roles are listed in one place (`FileRoles`).
 
 Reading is strict: an unknown attribute or element, a missing required value, an invalid value (a binding, a color,
 a size) or a duplicate (a device alias, a slot) is reported with its location in the file, e.g.

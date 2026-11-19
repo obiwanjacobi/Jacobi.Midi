@@ -97,9 +97,7 @@ public static class ControlDrops
         var section = new LayoutControl { Kind = LayoutControlKind.Section, Label = node.Name };
         var own = new List<DeclaredVariable>();
         var basePath = new Indexer(outer, device, repeats, section, own).PathOf(node);
-        section.Base = basePath;
-        if (!String.Equals(outer.Device, device, StringComparison.OrdinalIgnoreCase))
-            section.Device = device;
+        (section.Device, section.Base) = outer.BaseOf(device, basePath);
         section.Variables = [.. own.Select(variable => variable.Variable)];
 
         var scope = outer.Inside(section);

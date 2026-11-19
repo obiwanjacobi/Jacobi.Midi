@@ -108,7 +108,7 @@
                         </Panel>
                         <Button.Flyout>
                             <MenuFlyout Placement="BottomEdgeAlignedLeft">
-                                <MenuItem Header="Open…" ToolTip.Tip="Open a rig, a dashboard (next to the open ones), a schema or exchange file (into the rig) or a dump (the values of the devices, offline)" Command="{Binding OpenCommand}" />
+                                <MenuItem Header="Open…" ToolTip.Tip="Open a rig, a dashboard (next to the open ones), a schema or exchange file or a library of user controls (into the rig) or a dump (the values of the devices, offline)" Command="{Binding OpenCommand}" />
                                 <MenuItem Header="Load assembly…" ToolTip.Tip="Load an assembly into the rig: its schemas, exchange files and processors" Command="{Binding LoadAssemblyCommand}" />
                                 <MenuItem Header="Save">
                                     <MenuItem Header="Dashboard" Command="{Binding SaveDashboardCommand}">
@@ -245,7 +245,7 @@
         <Grid x:Name="Panes" ColumnDefinitions="300,Auto,*,Auto,320">
         <!-- the rig with the parameters of its devices, and the palettes of controls: what is dragged onto the dashboard -->
         <Border Grid.Column="0" Padding="12" Background="#50000000" IsVisible="{Binding IsEditing}">
-            <Grid RowDefinitions="Auto,*,Auto,Auto,Auto,Auto" RowSpacing="6">
+            <Grid RowDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6">
                 <!-- the rig's file name, trimmed when it does not fit (in full in its tooltip) -->
                 <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" ColumnSpacing="6">
                     <TextBlock Text="RIG" Classes="heading" VerticalAlignment="Center" Margin="0" />
@@ -258,6 +258,12 @@
                     <TreeView.ItemTemplate>
                         <TreeDataTemplate x:DataType="vm:RigTreeItem" ItemsSource="{Binding Children}">
                             <Border Background="Transparent" PointerPressed="OnDragSourcePressed" chrome:DocTip.Title="{Binding Name}" chrome:DocTip.Doc="{Binding Doc}">
+                                <Border.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Copy path" Click="OnCopyPathClicked" IsEnabled="{Binding Node, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                  ToolTip.Tip="Copy the schema path of the node (from its root, without repeat indices) to the clipboard" />
+                                    </ContextMenu>
+                                </Border.ContextMenu>
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <Border Width="10" Height="10" CornerRadius="5" VerticalAlignment="Center"
                                             Background="{Binding ColorBrush}" IsVisible="{Binding IsDevice}"
@@ -302,6 +308,23 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:PaletteItem">
                             <Border Classes="paletteItem" PointerPressed="OnDragSourcePressed" ToolTip.Tip="{Binding Tip}">
+                                <TextBlock Text="{Binding Name}" FontSize="12" />
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- the user controls of the libraries of the rig: placed as a copy -->
+                <TextBlock Grid.Row="6" Text="USER CONTROLS" Classes="heading" IsVisible="{Binding HasUserControls}" />
+                <ItemsControl Grid.Row="7" ItemsSource="{Binding UserControls}" IsVisible="{Binding HasUserControls}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel ItemSpacing="4" LineSpacing="4" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:UserControlItem">
+                            <Border Classes="paletteItem" PointerPressed="OnDragSourcePressed" ToolTip.Tip="{Binding Tip}" Opacity="{Binding Opacity}">
                                 <TextBlock Text="{Binding Name}" FontSize="12" />
                             </Border>
                         </DataTemplate>
@@ -458,6 +481,8 @@
                                         <TextBlock Text="{Binding Kind}" FontSize="18" FontWeight="SemiBold" />
                                         <Button Grid.Column="1" Content="Delete" ToolTip.Tip="Delete the control and the controls inside it (Delete)" Command="{Binding DeleteCommand}" />
                                     </Grid>
+                                    <Button Content="Save as user control" IsVisible="{Binding CanSaveAsUserControl}" Command="{Binding SaveAsUserControlCommand}"
+                                            ToolTip.Tip="Save the section as a user control, named by its label, in the library of the rig (a new library when the rig has none); a user control with the same name is replaced. Its contract is the nodeDef of the section's base." />
                                     <StackPanel Spacing="6" IsVisible="{Binding CanChangeKind}">
                                         <TextBlock Text="Change to" Classes="caption" />
                                         <ItemsControl ItemsSource="{Binding Kinds}">

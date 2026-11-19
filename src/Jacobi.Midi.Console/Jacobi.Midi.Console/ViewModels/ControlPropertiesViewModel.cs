@@ -229,7 +229,10 @@ internal sealed partial class ControlPropertiesViewModel(MainViewModel owner, Da
     /// <summary>The device the control inherits, shown when it has none of its own.</summary>
     public string InheritedDevice => owner.ScopeAround(control).Device is { } device ? $"inherited: {device}" : "none";
 
-    /// <summary>The full path the bindings in and below the control are relative to; empty to inherit it.</summary>
+    /// <summary>
+    /// The path the bindings in and below the control are relative to: relative to the base around it, or a full path
+    /// when the control has its own device or there is no base around it; empty to inherit it.
+    /// </summary>
     public string? Base
     {
         get => control.Base;
@@ -378,6 +381,14 @@ internal sealed partial class ControlPropertiesViewModel(MainViewModel owner, Da
     private void Delete() => owner.DeleteControl(control);
 
     private bool CanDelete() => owner.CanDelete(control);
+
+    /// <summary>True for a section: it can be saved as a user control.</summary>
+    public bool CanSaveAsUserControl => owner.CanSaveAsUserControl(control);
+
+    /// <summary>Saves the section as a user control in the library of the rig (see <see cref="MainViewModel.SaveAsUserControl"/>).</summary>
+    [RelayCommand]
+    private Task SaveAsUserControl()
+        => control is LayoutControl section ? owner.SaveAsUserControl(section) : Task.CompletedTask;
 
     /// <summary>Declares a new index variable, starting at the first item.</summary>
     [RelayCommand]

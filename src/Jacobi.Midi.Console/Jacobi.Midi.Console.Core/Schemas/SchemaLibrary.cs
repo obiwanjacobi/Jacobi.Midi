@@ -71,6 +71,34 @@ public sealed class SchemaLibrary
             ? [.. found.Roots.Select(root => new SchemaName($"{found.Name}{SchemaName.Separator}{root.Name}"))]
             : [];
 
+    /// <summary>
+    /// The root of the schema a path starts at (its first name, e.g. <c>AddressMap</c>, case-insensitive); null when
+    /// it starts at none.
+    /// </summary>
+    /// <param name="schema">The schema document of a device.</param>
+    /// <param name="path">A schema path from a root, without repeat indices.</param>
+    public SchemaName? RootOf(string schema, string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        var name = path.Split(SchemaName.Separator)[0];
+        return RootsOf(schema).Cast<SchemaName?>().FirstOrDefault(root => String.Equals(name, root!.Value.Name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>The schema node at a path (from a root, without repeat indices) of the schema; null when it has none.</summary>
+    public SchemaNode? FindNode(string schema, string path)
+        => RootOf(schema, path) is { } root && Schemas!.TryFindByPath(new SchemaPath($"{root.Namespace}{SchemaName.Separator}{path}"), out var node)
+            ? node
+            : null;
+
+    /// <summary>
+    /// The full name (<c>document.nodeDef</c>) of the nodeDef of the node at a path (from a root, without repeat
+    /// indices) of the schema; null when there is no such node or it has no nodeDef.
+    /// </summary>
+    public SchemaName? NodeDefOf(string schema, string path)
+        => FindNode(schema, path) is { NodeDef: { } nodeDef } node
+            ? nodeDef.Qualify(Schemas!.FindDocument(node)?.Name)
+            : (SchemaName?)null;
+
     /// <summary>True when a root of the schema is a Property Exchange root (<c>midi.role="pe"</c>).</summary>
     public bool HasPropertyRoots(string schema)
         => Schemas is { } schemas && RootsOf(schema).Any(root => MidiProperties.IsPropertyRoot(schemas.FindRoot(root)));

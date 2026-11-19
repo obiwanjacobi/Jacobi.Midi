@@ -35,6 +35,8 @@ public static class RigFile
     {
         var root = new FileElement(RootName).Set(ConsoleFile.FormatAttribute, Format);
         ConsoleFile.AddSources(root, rig.Sources);
+        foreach (var path in rig.Libraries)
+            root.Add(new FileElement(FileRoles.Libraries.ElementName!, FileRoles.Libraries).Set(FileRoles.Libraries.ValueAttribute!, path));
 
         foreach (var device in rig.Devices)
         {
@@ -68,13 +70,22 @@ public static class RigFile
 
         var sources = SchemaSources.None;
         var devices = new List<DeviceInstance>();
+        var libraries = new List<string>();
         foreach (var child in root.TakeChildren())
         {
             if (ConsoleFile.TryReadSource(child, ref sources))
             {
                 continue;
             }
-            if (child.Name == DeviceName)
+            if (child.Name == FileRoles.Libraries.ElementName)
+            {
+                var path = child.GetRequired(FileRoles.Libraries.ValueAttribute!);
+                if (libraries.Contains(path, StringComparer.OrdinalIgnoreCase))
+                    throw child.Error($"the library '{path}' is referred to more than once.");
+                libraries.Add(path);
+                child.EnsureAllRead();
+            }
+            else if (child.Name == DeviceName)
             {
                 var device = ReadDevice(child);
                 if (devices.Any(other => String.Equals(other.Alias, device.Alias, StringComparison.OrdinalIgnoreCase)))
@@ -92,6 +103,7 @@ public static class RigFile
         {
             Sources = sources,
             Devices = devices,
+            Libraries = libraries,
         };
     }
 

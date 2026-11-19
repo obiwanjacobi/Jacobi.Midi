@@ -35,7 +35,7 @@ public class DashboardDesignTests
             <section label="Filter" at="0,0" size="12,10">
               <knob label="Sens" at="0,0" size="5,7"><bind slot="value" parameter="DynamicFilter.Sens" /></knob>
             </section>
-            <section label="Other" at="13,0" size="12,10" base="AddressMap.Temporary" />
+            <section label="Other" at="13,0" size="12,10" device="gp8" base="AddressMap.Temporary" />
           </grid>
         </dashboard>
         """;
@@ -168,7 +168,7 @@ public class DashboardDesignTests
         var plan = ControlDrops.Drop(session.Dashboard, session.Resolution, Source(session, "AddressMap.Memory.Patch.Phaser"), session.Dashboard.Layout);
 
         var section = Assert.IsType<LayoutControl>(plan.Control);
-        Assert.Equal((LayoutControlKind.Section, "Phaser", "AddressMap.Memory[$patch].Patch.Phaser", null), (section.Kind, section.Label, section.Base, section.Device));
+        Assert.Equal((LayoutControlKind.Section, "Phaser", "Phaser", null), (section.Kind, section.Label, section.Base, section.Device));
         Assert.Empty(section.Variables);
         Assert.All(section.Children, child => Assert.NotNull(child.At));
         Assert.NotNull(section.Size);
@@ -190,9 +190,9 @@ public class DashboardDesignTests
         var numberBox = Assert.IsType<ValueControl>(section.Children[0]);
         Assert.Equal((ParameterControlKind.NumberBox, "Memory", "$memory"), (numberBox.Kind, numberBox.Label, numberBox.Bindings[SlotNames.Value].ToString()));
         var patch = Assert.IsType<LayoutControl>(section.Children[1]);
-        Assert.Equal("AddressMap.Memory[$memory].Patch", patch.Base);
+        Assert.Equal(("Patch", null), (patch.Base, patch.Device));
         var filter = patch.Children.OfType<LayoutControl>().First(child => child.Label == "DynamicFilter");
-        Assert.Equal("AddressMap.Memory[$memory].Patch.DynamicFilter", filter.Base);
+        Assert.Equal("DynamicFilter", filter.Base);
     }
 
     [Fact]
@@ -458,7 +458,7 @@ public class DashboardDesignTests
     public void Move_OfASection_KeepsTheBaseItInherited()
     {
         using var session = Open();
-        var empty = new LayoutControl { Kind = LayoutControlKind.Grid, Size = new CellSize(10, 10), Base = "AddressMap.Temporary" };
+        var empty = new LayoutControl { Kind = LayoutControlKind.Grid, Size = new CellSize(10, 10), Device = "gp8", Base = "AddressMap.Temporary" };
         session.Dashboard.Layout.Children = [.. session.Dashboard.Layout.Children, empty];
         var inherits = new LayoutControl
         {
@@ -469,9 +469,39 @@ public class DashboardDesignTests
 
         var plan = ControlMoves.Move(session.Dashboard.Layout, inherits, empty);
 
-        Assert.Equal("AddressMap.Memory[$patch].Patch", plan.Base);
-        Assert.Null(plan.Device);
+        Assert.Equal(("gp8", "AddressMap.Memory[$patch].Patch"), (plan.Device, plan.Base));
         Assert.Empty(plan.Slots);
+    }
+
+    [Fact]
+    public void Move_OfASectionWithARelativeBase_OutOfItsBase_GetsItsFullBaseWithItsDevice()
+    {
+        using var session = Open();
+        var relative = new LayoutControl
+        {
+            Kind = LayoutControlKind.Section,
+            Base = "DynamicFilter",
+            Children = [new ValueControl(ParameterControlKind.Knob) { Bindings = new Dictionary<string, Binding> { [SlotNames.Value] = new("Q") } }],
+        };
+        Filter(session).Children = [.. Filter(session).Children, relative];
+
+        var plan = ControlMoves.Move(session.Dashboard.Layout, relative, Other(session));
+
+        Assert.Equal(("gp8", "AddressMap.Memory[$patch].Patch.DynamicFilter"), (plan.Device, plan.Base));
+        Assert.Empty(plan.Slots);
+        Assert.Empty(plan.Problems);
+    }
+
+    [Fact]
+    public void Move_OfASectionWithARelativeBase_WithinTheSameBase_KeepsItRelative()
+    {
+        using var session = Open();
+        var relative = new LayoutControl { Kind = LayoutControlKind.Section, Base = "DynamicFilter" };
+        session.Dashboard.Layout.Children = [.. session.Dashboard.Layout.Children, relative];
+
+        var plan = ControlMoves.Move(session.Dashboard.Layout, relative, Filter(session));
+
+        Assert.Null(plan.Base);
     }
 
     [Fact]

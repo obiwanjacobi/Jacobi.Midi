@@ -35,8 +35,10 @@ public closed class DashboardControl
     public string? Device { get; set; }
 
     /// <summary>
-    /// The full schema path (from a root of the device, with repeat indices) that the binding paths in and below this control
-    /// are relative to; inherited by the controls inside it. Bases do not stack: the nearest one is used.
+    /// The schema path (with repeat indices) that the binding paths in and below this control are relative to;
+    /// inherited by the controls inside it. Like a binding: relative to the base around it, or a full path from a root
+    /// of the device when the control has its own <see cref="Device"/> or there is no base around it
+    /// (<see cref="BindingScope.FullBaseOf"/>).
     /// </summary>
     public string? Base { get; set; }
 

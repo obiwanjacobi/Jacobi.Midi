@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Jacobi.Midi.Console.Core.Palettes;
 using Jacobi.Midi.Console.Core.Schemas;
@@ -163,6 +164,20 @@ internal partial class MainView : UserControl
         menu.ShowAt(button);
     }
 
+    // the context menu of a node of the rig tree: its schema path to the clipboard
+    private async void OnCopyPathClicked(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control { DataContext: RigTreeItem { Node: { } node } } || _viewModel is not { } viewModel)
+            return;
+        if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
+        {
+            viewModel.ReportCopy(node.Path, copied: false);
+            return;
+        }
+        await clipboard.SetTextAsync(node.Path);
+        viewModel.ReportCopy(node.Path, copied: true);
+    }
+
     // a press on an item of the rig tree or a palette: it may become a drag
     private void OnDragSourcePressed(object? sender, PointerPressedEventArgs e)
     {
@@ -173,6 +188,7 @@ internal partial class MainView : UserControl
         {
             RigTreeItem { Source: { } dropSource } => new ParameterDragItem(dropSource),
             PaletteItem palette => new ControlDragItem(palette.Kind),
+            UserControlItem user => new UserControlDragItem(user.Control),
             _ => null,
         };
         if (item is not null)
