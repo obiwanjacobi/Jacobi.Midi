@@ -226,6 +226,9 @@ internal sealed partial class ControlPropertiesViewModel(MainViewModel owner, Da
         }
     }
 
+    /// <summary>The devices of the rig, to choose the <see cref="Device"/> from.</summary>
+    public IReadOnlyList<string> DeviceAliases => owner.RigAliases;
+
     /// <summary>The device the control inherits, shown when it has none of its own.</summary>
     public string InheritedDevice => owner.ScopeAround(control).Device is { } device ? $"inherited: {device}" : "none";
 

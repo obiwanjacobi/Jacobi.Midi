@@ -19,7 +19,7 @@ What is planned for the console, and what was done. What the console does now is
   - [ ] Side (top/bottom) panel slide-in
   - [ ] Dockable/Float (in main window) / New Window
 - [ ] Add an option to select the schema files and assemblies to load on startup. Saved in (user) settings file.
-- [ ] Add droplist to device on control properties. List all devices in rig.
+- [x] Add droplist to device on control properties. List all devices in rig.
 - [x] Analyze option to make a dashboard design on a NodeDef and let the user select the actual base (incl exchange send/recv). Example: Patch-dashboard can be used on user-memory, preset (read-only) and temporary areas - because they all use the Patch definition.
 - [ ] Dashboard user-controls: A reusable layout that can be dropped in to compose new dashboards. (see decision *User controls in the console* in [decisions.md](../../docs/decisions.md))
   - [x] Relative base: a `base` starting with `.` is relative to the base around it, on any section.

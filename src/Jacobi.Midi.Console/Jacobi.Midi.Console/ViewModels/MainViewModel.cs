@@ -1197,6 +1197,9 @@ internal sealed partial class MainViewModel : ViewModelBase, IDashboardEditor, I
 
     public bool IsDeviceOfRig(string alias) => _rig.Find(alias) is not null;
 
+    /// <summary>The aliases of the devices of the rig, in the order of the rig: the devices a control can be bound to.</summary>
+    public IReadOnlyList<string> RigAliases => [.. _rig.Devices.Select(device => device.Alias)];
+
     public DeviceInstance? FindDevice(string alias) => _rig.Find(alias);
 
     /// <summary>

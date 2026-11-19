@@ -423,7 +423,7 @@ any of its repeat items is bound to, and fainter, a device, group or repeat with
 and its label; the other settings are grouped by function, each group in a pane that can be collapsed (a collapsed
 pane stays collapsed for the next control shown):
 
-- **Binding**: the device and base, the bindings of the slots, the index variables, the segments of an envelope, the pages of selector tabs;
+- **Binding**: the device (chosen from the devices of the rig, or typed; empty inherits it) and base, the bindings of the slots, the index variables, the segments of an envelope, the pages of selector tabs;
 - **Value**: the unit, decimals and presentation, and the options of the value (`value`);
 - **Look**: the face size, the options of the plate and the face, and the three colors;
 - **Place**: the position and size, the gap and wrap of a row or column, whether a section is collapsible, and the options of the cells (`headers`, `headerWidth`).

@@ -507,7 +507,9 @@
                                     <Expander Header="Binding" IsExpanded="{Binding IsBindingPaneExpanded}" HorizontalAlignment="Stretch">
                                         <StackPanel Spacing="10">
                                             <TextBlock Text="Device (alias)" Classes="caption" />
-                                            <TextBox Text="{Binding Device, UpdateSourceTrigger=LostFocus}" PlaceholderText="{Binding InheritedDevice}" />
+                                            <ComboBox IsEditable="True" ItemsSource="{Binding DeviceAliases}" Text="{Binding Device, UpdateSourceTrigger=LostFocus}"
+                                                      HorizontalAlignment="Stretch" PlaceholderText="{Binding InheritedDevice}"
+                                                      ToolTip.Tip="A device of the rig; empty: the device around the control" />
                                             <TextBlock Text="Base (the path the bindings are relative to)" Classes="caption" />
                                             <TextBox Text="{Binding Base, UpdateSourceTrigger=LostFocus}" PlaceholderText="{Binding InheritedBase}" TextWrapping="Wrap" />
                                             <StackPanel Spacing="8" IsVisible="{Binding IsParameter}">
